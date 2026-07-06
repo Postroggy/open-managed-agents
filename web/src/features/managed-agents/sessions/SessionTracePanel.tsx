@@ -653,7 +653,7 @@ export function SessionTraceDetail({
   return (
     <div
       className={clsx(
-        'flex flex-col overflow-hidden bg-secondary',
+        'relative flex flex-col overflow-hidden bg-secondary',
         placement === 'overlay'
           ? 'absolute inset-0 z-10'
           : 'min-h-[420px] border-t border-border lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
@@ -726,7 +726,7 @@ export function EventDetailPanel({
   return (
     <div
       className={clsx(
-        'flex flex-col overflow-hidden bg-secondary',
+        'relative flex flex-col overflow-hidden bg-secondary',
         placement === 'overlay'
           ? 'absolute inset-0 z-10'
           : 'min-h-[420px] border-t border-border lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
