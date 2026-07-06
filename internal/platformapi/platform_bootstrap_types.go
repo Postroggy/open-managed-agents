@@ -1,4 +1,4 @@
-package httpapi
+package platformapi
 
 type Account struct {
 	TaggedID                  string         `json:"tagged_id"`

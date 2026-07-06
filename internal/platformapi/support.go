@@ -1,4 +1,4 @@
-package httpapi
+package platformapi
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
+	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -63,12 +64,8 @@ type workbenchAccount struct {
 	DisplayName  *string
 }
 
-func RegisterOrgWorkbenchRoutes(r chi.Router, store OrganizationStore) {
-	registerOrgWorkbenchRoutes(r, store)
-}
-
 func writeJSON(w http.ResponseWriter, status int, body any) {
-	WriteJSON(w, status, body)
+	httpapi.WriteJSON(w, status, body)
 }
 
 func readJSONObject(r *http.Request) (map[string]any, error) {

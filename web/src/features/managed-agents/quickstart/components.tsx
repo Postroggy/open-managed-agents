@@ -2102,7 +2102,7 @@ export function BrowseTemplatesPanel({
 
         <div
           ref={listRef}
-          className="subtle-scrollbar mt-4 grid min-h-0 flex-1 content-start grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3 overflow-y-auto pr-1"
+          className="subtle-scrollbar mt-4 grid min-h-0 flex-1 content-start items-start grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3 overflow-y-auto pr-1"
         >
           {visibleTemplates.map((template) => (
             <TemplateCard key={template.id} template={template} onClick={() => onTemplateClick(template)} />

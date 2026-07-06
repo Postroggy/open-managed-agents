@@ -659,6 +659,11 @@ func stablePublicEventID(codeSessionID, seed string) string {
 	return "sevt_" + hex.EncodeToString(sum[:16])
 }
 
+func derivedPrimarySessionEventID(codeSessionID, eventID, eventType string) string {
+	sum := sha256.Sum256([]byte(codeSessionID + "\x00" + eventID + "\x00" + eventType + "\x00primary"))
+	return "sevt_" + hex.EncodeToString(sum[:16])
+}
+
 func formatTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }

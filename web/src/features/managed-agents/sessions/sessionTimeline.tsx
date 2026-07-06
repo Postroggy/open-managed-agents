@@ -12,6 +12,9 @@ import { outcomeStatusChipClass, outcomeStatusLabel } from './sessionTraceRows';
 
 export const SESSION_MAIN_LANE_ID = '';
 const SESSION_MAIN_LANE_TAB_VALUE = '__oma_main_lane__';
+const SESSION_TIMELINE_SINGLE_LANE_HEIGHT_PX = 36;
+const SESSION_TIMELINE_LANE_HEIGHT_PX = 28;
+const SESSION_TIMELINE_LANE_GAP_PX = 4;
 
 export const SESSION_ARCHIVED_LANES_STORAGE_KEY = 'oma.sessionDetail.showArchivedLanes';
 
@@ -81,7 +84,9 @@ export function EventsMinimap({
   });
   const hoveredTick = hoveredTickId ? ticks.find((tick) => tick.id === hoveredTickId) ?? null : null;
   const activeLaneTicks = useMemo(() => ticks.filter((tick) => tick.lane.id === activeLane), [activeLane, ticks]);
-  const timelineMinHeight = isMultiLane ? 32 + 24 + (Math.max(0, lanes.length - 2) * 20) - 4 : undefined;
+  const timelineMinHeight = isMultiLane
+    ? (lanes.length * SESSION_TIMELINE_LANE_HEIGHT_PX) + ((lanes.length - 1) * SESSION_TIMELINE_LANE_GAP_PX)
+    : undefined;
 
   const suppressScrollSync = useCallback(() => {
     suppressScrollSeekUntilRef.current = sessionTimelineNow() + 200;
@@ -356,14 +361,14 @@ export function EventsMinimap({
   };
 
   return (
-    <div className="relative z-10 shrink-0 px-8 pb-2" aria-label="Session event timeline" data-testid="events-minimap">
+    <div className="oma-session-timeline relative z-10 shrink-0 px-0 pb-2" aria-label="Session event timeline" data-testid="events-minimap">
       <div className={clsx(isMultiLane && 'mb-5')} style={timelineMinHeight ? { minHeight: `${timelineMinHeight}px` } : undefined}>
         <div
           ref={trackRef}
           data-boundary-lock={boundaryLock ?? undefined}
           data-dragging={isDragging || undefined}
           className={clsx(
-            'relative flex touch-none select-none flex-col',
+            'relative flex touch-none select-none flex-col gap-1',
             isDragging ? 'cursor-grabbing' : 'cursor-grab active:cursor-grabbing'
           )}
           onPointerDown={handlePointerDown}
@@ -376,19 +381,19 @@ export function EventsMinimap({
           onClick={handleClick}
         >
           {!isMultiLane ? (
-            <div className="pointer-events-none absolute inset-y-0 z-10 rounded bg-foreground/10" style={{ left: `${windowRange.leftPct}%`, width: `${windowRange.widthPct}%` }} aria-hidden />
+            <div className="pointer-events-none invisible absolute inset-y-0 rounded" style={{ left: `${windowRange.leftPct}%`, width: `${windowRange.widthPct}%` }} aria-hidden />
           ) : null}
-          {isMultiLane && playhead.visible ? (
+          {isMultiLane && playhead.visible && isDragging ? (
             <div
               className="pointer-events-none absolute z-20 -translate-x-1/2"
               style={{ left: `${playhead.leftPct}%`, top: `${playhead.topPx}px` }}
               aria-hidden
             >
-              <div className="absolute left-1/2 top-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted shadow-sm transition-opacity duration-150" />
+              <div className="oma-session-timeline-playhead-dot absolute left-1/2 top-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-sm transition-opacity duration-150" />
               {playhead.label ? (
                 <div
                   className={clsx(
-                    'pointer-events-auto absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded bg-accent px-1.5 py-0.5 font-mono text-[10px] font-medium tabular-nums text-muted-foreground shadow-sm ring-2 ring-muted/80 transition-transform',
+                    'oma-session-timeline-playhead-label pointer-events-auto absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-[10px] font-medium tabular-nums shadow-sm ring-2 transition-transform',
                     isDragging ? 'scale-105 cursor-grabbing' : 'cursor-grab active:cursor-grabbing'
                   )}
                 >
@@ -397,7 +402,19 @@ export function EventsMinimap({
               ) : null}
             </div>
           ) : null}
-          {lanes.map((lane, index) => (
+          {!isMultiLane ? (
+            <div className="oma-session-timeline-track-active relative h-9 rounded" style={{ height: `${SESSION_TIMELINE_SINGLE_LANE_HEIGHT_PX}px` }}>
+              {ticks.map((tick) => (
+                <SessionTimelineTickMark
+                  key={tick.id}
+                  tick={tick}
+                  selected={tick.id === selectedEntryId}
+                  hovered={tick.id === hoveredTickId}
+                  hidden={Boolean(visibleIds && !visibleIds.has(tick.id))}
+                />
+              ))}
+            </div>
+          ) : lanes.map((lane, index) => (
             <div
               key={lane.id || 'main'}
               ref={(node) => {
@@ -408,32 +425,28 @@ export function EventsMinimap({
                 }
               }}
               data-lane-index={index}
-              style={sessionTimelineLaneSlotStyle(lane.id, activeLane)}
               className={clsx(
-                "relative shrink-0 after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-1 after:h-1 after:content-['']",
+                "relative h-7 shrink-0 rounded transition-[background-color,opacity] duration-100 ease-out after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-1 after:h-1 after:content-['']",
+                lane.id === activeLane
+                  ? 'oma-session-timeline-track-active'
+                  : lane.id === hoveredLaneId
+                    ? 'oma-session-timeline-track-hover'
+                    : 'oma-session-timeline-track-inactive',
                 lane.id !== activeLane && 'cursor-pointer'
               )}
               onPointerDown={(event) => handleInactiveLanePointerDown(lane.id, event)}
               onPointerEnter={() => handleLanePointerEnter(lane.id)}
               onPointerLeave={(event) => handleLanePointerLeave(lane.id, event)}
             >
-              <div
-                className={clsx(
-                  'absolute inset-x-0 top-1/2 -translate-y-1/2 rounded transition-[height,background-color,opacity] duration-100 ease-out',
-                  lane.id === activeLane ? 'bg-accent' : lane.id === hoveredLaneId ? 'bg-accent/50 opacity-100' : 'bg-accent/40 opacity-85'
-                )}
-                style={sessionTimelineLaneVisualStyle(lane.id, activeLane, hoveredLaneId)}
-              >
-                {ticks.filter((tick) => tick.lane.id === lane.id).map((tick) => (
-                  <SessionTimelineTickMark
-                    key={tick.id}
-                    tick={tick}
-                    selected={tick.id === selectedEntryId}
-                    hovered={tick.id === hoveredTickId}
-                    hidden={Boolean(visibleIds && !visibleIds.has(tick.id))}
-                  />
-                ))}
-              </div>
+              {ticks.filter((tick) => tick.lane.id === lane.id).map((tick) => (
+                <SessionTimelineTickMark
+                  key={tick.id}
+                  tick={tick}
+                  selected={tick.id === selectedEntryId}
+                  hovered={tick.id === hoveredTickId}
+                  hidden={Boolean(visibleIds && !visibleIds.has(tick.id))}
+                />
+              ))}
             </div>
           ))}
           {hoveredTick ? <SessionTimelineTooltip tick={hoveredTick} row={rowRefs.current.get(hoveredTick.lane.id) ?? null} /> : null}
@@ -449,17 +462,18 @@ export function SessionTimelineTickMark({ tick, selected, hovered, hidden }: { t
     width: `${tick.widthPct}%`
   };
   if (tick.type === 'status_idle') {
-    style.backgroundColor = 'var(--accent)';
-    style.backgroundImage = 'repeating-linear-gradient(-45deg, transparent 0, transparent 6px, var(--card) 6px, var(--card) 12px)';
+    style.backgroundColor = 'hsl(var(--oma-session-timeline-bg-200))';
+    style.backgroundImage = 'repeating-linear-gradient(-45deg, transparent 0, transparent 6px, hsl(var(--oma-session-timeline-bg-000)) 6px, hsl(var(--oma-session-timeline-bg-000)) 12px)';
   }
   return (
     <span
       data-timeline-tick-id={tick.id}
+      data-timeline-tick-type={tick.type}
       className={clsx(
         'pointer-events-none absolute bottom-0.5 top-0.5 rounded-sm transition-[left,width,opacity] duration-150',
         sessionTimelineTickClass(tick.type),
-        selected && 'z-30 opacity-100 outline outline-[1.5px] outline-offset-1 outline-ring',
-        !selected && hovered && 'z-30 opacity-100 outline outline-[1.5px] outline-offset-1 outline-ring/50',
+        selected && 'oma-session-timeline-tick-selected z-30',
+        !selected && hovered && 'oma-session-timeline-tick-hovered z-30',
         !selected && !hovered && 'opacity-90',
         hidden && '!opacity-0'
       )}
@@ -471,54 +485,35 @@ export function SessionTimelineTickMark({ tick, selected, hovered, hidden }: { t
 
 export function SessionTimelineTooltip({ tick, row }: { tick: SessionTimelineTick; row: HTMLDivElement | null }) {
   const topPx = row ? row.offsetTop : 0;
-  const heightPx = row?.offsetHeight ?? 20;
   const centerPct = timelineTickCenterPct(tick);
-  const triggerId = `session-timeline-tooltip-${tick.id}`;
+  const tooltipId = `session-timeline-tooltip-${tick.id}`;
+  const title = tick.preview ?? tick.label;
+  const duration = formatTimelineDuration(tick.durationMs);
   return (
-    <Tooltip open triggerId={triggerId}>
-      <TooltipTrigger
-        render={
-          <span
-            id={triggerId}
-            aria-hidden
-            className="pointer-events-none absolute z-30"
-            style={{
-              left: `${centerPct}%`,
-              top: `${topPx}px`,
-              height: `${heightPx}px`,
-              width: '1px',
-              transform: 'translateX(-50%)'
-            }}
-          />
-        }
-      />
-      <TooltipContent
-        side="top"
-        sideOffset={8}
-        className="max-w-[280px] flex-col items-start gap-1 px-2.5 py-2 text-left"
+    <div
+      id={tooltipId}
+      role="tooltip"
+      className="oma-session-timeline-tooltip pointer-events-none absolute z-40 flex max-w-[min(520px,calc(100%-1rem))] items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs shadow-md"
+      style={{
+        left: `${centerPct}%`,
+        top: `${topPx}px`,
+        transform: `translate(calc(-${centerPct}% + ${(centerPct - 50) * 0.5}px), calc(-100% - 4px))`
+      }}
+    >
+      <span
+        className={clsx(
+          'inline-flex h-4 shrink-0 rounded-sm px-1 text-[10px] font-semibold uppercase leading-4',
+          sessionTimelineTickClass(tick.type)
+        )}
       >
-        <div className="flex items-center gap-1.5">
-          <span
-            className={clsx(
-              'inline-flex h-4 rounded-sm px-1 text-[10px] font-semibold uppercase leading-4 text-foreground',
-              sessionTimelineTickClass(tick.type)
-            )}
-          >
-            {sessionTimelineTypeLabel(tick.type)}
-          </span>
-          <span className="text-background/70">{tick.relativeTime}</span>
-        </div>
-        <div className="font-medium text-background">
-          {tick.label || tick.preview || sessionTimelineTypeLabel(tick.type)}
-        </div>
-        {tick.preview && tick.preview !== tick.label ? (
-          <div className="line-clamp-2 text-background/70">{tick.preview}</div>
-        ) : null}
-        {tick.durationMs > 0 ? (
-          <div className="text-[11px] text-background/60">{formatTimelineDuration(tick.durationMs)}</div>
-        ) : null}
-      </TooltipContent>
-    </Tooltip>
+        {sessionTimelineTypeLabel(tick.type)}
+      </span>
+      {title ? <span className="oma-session-timeline-tooltip-title min-w-0 max-w-[260px] truncate">{title}</span> : null}
+      <span className="oma-session-timeline-tooltip-time shrink-0 font-mono text-xs tabular-nums">
+        {duration ? `${duration} · ` : null}
+        {tick.relativeTime}
+      </span>
+    </div>
   );
 }
 
@@ -535,17 +530,16 @@ function TimelineTooltip({ label, children }: { label?: string; children: ReactE
 }
 
 export function sessionTimelineLaneVisualHeightPx(laneId: string, activeLane: string, hoveredLaneId: string | null) {
-  if (laneId === activeLane) {
-    return 28;
-  }
-  if (laneId === hoveredLaneId) {
-    return 20;
-  }
-  return 16;
+  void laneId;
+  void activeLane;
+  void hoveredLaneId;
+  return SESSION_TIMELINE_LANE_HEIGHT_PX;
 }
 
 export function sessionTimelineLaneSlotHeightPx(laneId: string, activeLane: string) {
-  return laneId === activeLane ? 28 : 20;
+  void laneId;
+  void activeLane;
+  return SESSION_TIMELINE_LANE_HEIGHT_PX;
 }
 
 export function sessionTimelineLaneSlotStyle(laneId: string, activeLane: string): CSSProperties {
@@ -561,24 +555,23 @@ export function sessionTimelineLaneVisualStyle(laneId: string, activeLane: strin
 export function sessionTimelineTickClass(type: DisplayEventType) {
   switch (type) {
     case 'user':
-      return 'bg-destructive/75';
+      return 'oma-session-timeline-tick-user';
     case 'error':
-      return 'bg-destructive';
+      return 'oma-session-timeline-tick-error';
     case 'agent':
     case 'thinking':
-      return 'bg-accent/80';
+      return 'oma-session-timeline-tick-agent';
     case 'subagent':
-      return 'bg-emerald-500/80';
+      return 'oma-session-timeline-tick-subagent';
     case 'status_idle':
-      return 'bg-accent';
+      return 'oma-session-timeline-tick-neutral';
     case 'tool_use':
     case 'result':
-      return 'bg-muted/70';
+      return 'oma-session-timeline-tick-tool';
     case 'thread':
-      return 'bg-emerald-500/70';
+      return 'oma-session-timeline-tick-subagent';
     case 'status_rescheduled':
     case 'interrupt':
-      return 'bg-amber-500/70';
     case 'model_request':
     case 'outcome':
     case 'status_running':
@@ -587,7 +580,7 @@ export function sessionTimelineTickClass(type: DisplayEventType) {
     case 'system_message':
     case 'unknown':
     default:
-      return 'bg-accent';
+      return 'oma-session-timeline-tick-neutral';
   }
 }
 
@@ -908,7 +901,7 @@ export function LaneTabStrip({
     scroller.scrollBy({ left: direction === 'left' ? -Math.floor(scroller.clientWidth * 0.8) : Math.floor(scroller.clientWidth * 0.8), behavior: 'smooth' });
   };
   return (
-    <div className="flex items-center gap-2 border-b border-border px-8 py-2" data-testid="lane-tab-strip">
+    <div className="flex items-center gap-2 border-b border-border px-0 py-2" data-testid="lane-tab-strip">
       {scrollState.canScroll ? (
         <Button
           type="button"
@@ -1064,8 +1057,8 @@ export function HeaderRow({
       data-transcript-header
       aria-pressed={isSelected}
       className={clsx(
-        'flex h-9 w-[calc(100%+4rem)] cursor-pointer justify-start rounded-none border-0 bg-transparent px-8 text-left font-normal active:translate-y-0',
-        '-mx-8',
+        'flex h-9 w-[calc(100%+2rem)] cursor-pointer justify-start rounded-none border-0 bg-transparent px-4 text-left font-normal active:translate-y-0',
+        '-mx-4',
         isSelected ? 'bg-accent [[data-panel-focused=true]_&]:bg-accent' : 'hover:bg-accent'
       )}
       onClick={onSelect}

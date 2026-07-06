@@ -1,4 +1,4 @@
-package httpapi
+package workbench
 
 import (
 	"bytes"

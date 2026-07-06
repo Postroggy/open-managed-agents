@@ -261,7 +261,7 @@ export function TemplateCard({
       type="button"
       variant="ghost"
       aria-label={label}
-      className="h-auto min-h-[118px] w-full flex-col items-start justify-start gap-0 overflow-hidden whitespace-normal rounded-xl border border-border bg-card p-3 text-left shadow-sm transition-colors hover:border-border hover:bg-card"
+      className="h-auto min-h-[118px] w-full self-start flex-col items-start justify-start gap-0 overflow-hidden whitespace-normal rounded-xl border border-border bg-card p-3 text-left shadow-sm transition-colors hover:border-border hover:bg-card"
       onClick={onClick}
     >
       <div className="w-full min-w-0 text-[15px] font-medium leading-5 text-foreground">{title}</div>

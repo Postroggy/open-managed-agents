@@ -1,4 +1,4 @@
-package httpapi
+package platformapi
 
 import (
 	"encoding/json"

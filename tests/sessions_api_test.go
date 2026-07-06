@@ -1634,8 +1634,22 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 	if eventPageContains(publicEvents, "control-weather-ask-"+suffix) {
 		t.Fatalf("control_request leaked into public session events: %+v", publicEvents.Data)
 	}
+	toolEvent := sessionEventObjectByType(t, publicEvents, "agent.mcp_tool_use")
+	toolEventID, ok := toolEvent["id"].(string)
+	if !ok || toolEventID == "" {
+		t.Fatalf("agent.mcp_tool_use id = %#v, want non-empty string: %#v", toolEvent["id"], toolEvent)
+	}
+	statusEvent := sessionEventObjectByType(t, publicEvents, "session.status_idle")
+	stopReason, ok := statusEvent["stop_reason"].(map[string]any)
+	if !ok {
+		t.Fatalf("session.status_idle stop_reason = %#v, want object: %#v", statusEvent["stop_reason"], statusEvent)
+	}
+	eventIDs := stringArrayField(stopReason, "event_ids")
+	if len(eventIDs) != 1 || eventIDs[0] != toolEventID {
+		t.Fatalf("stop_reason.event_ids = %#v, want [%s]; status=%#v tool=%#v", eventIDs, toolEventID, statusEvent, toolEvent)
+	}
 
-	resp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","tool_use_id":`+quoteJSON(toolUseID)+`,"result":"allow"}]}`), defaultTestKey, true)
+	resp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","tool_use_id":`+quoteJSON(toolEventID)+`,"result":"allow"}]}`), defaultTestKey, true)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("send tool confirmation status = %d, want 200: %s", resp.StatusCode, readAll(t, resp.Body))
@@ -1655,6 +1669,171 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 	nested := response["response"].(map[string]any)
 	if nested["behavior"] != "allow" || nested["toolUseID"] != toolUseID {
 		t.Fatalf("confirmation response nested = %#v, want allow for %s; payload=%s", nested, toolUseID, payload)
+	}
+
+	var beforeCompatCount int
+	if err := app.db.Pool.QueryRow(context.Background(), `
+		select count(*)
+		from code_session_inbound_events
+		where code_session_external_id = $1 and source = 'tool-confirmation' and deleted_at is null
+	`, codeSessionID).Scan(&beforeCompatCount); err != nil {
+		t.Fatalf("count tool confirmation inbound events before compat send: %v", err)
+	}
+	compatResp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","tool_use_id":`+quoteJSON(toolUseID)+`,"result":"allow"}]}`), defaultTestKey, true)
+	defer compatResp.Body.Close()
+	if compatResp.StatusCode != http.StatusOK {
+		t.Fatalf("send legacy tool confirmation status = %d, want 200: %s", compatResp.StatusCode, readAll(t, compatResp.Body))
+	}
+	var afterCompatCount int
+	if err := app.db.Pool.QueryRow(context.Background(), `
+		select count(*)
+		from code_session_inbound_events
+		where code_session_external_id = $1 and source = 'tool-confirmation' and deleted_at is null
+	`, codeSessionID).Scan(&afterCompatCount); err != nil {
+		t.Fatalf("count tool confirmation inbound events after compat send: %v", err)
+	}
+	if afterCompatCount != beforeCompatCount+1 {
+		t.Fatalf("legacy tool confirmation inbound count = %d, want %d", afterCompatCount, beforeCompatCount+1)
+	}
+}
+
+func TestCodeSessionMCPDefaultAskPreservesSubagentThreadForConfirmation(t *testing.T) {
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-mcp-default-ask-thread-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{
+		"model":"claude-opus-4-6",
+		"name":"sessions-worker-mcp-default-ask-thread-agent",
+		"mcp_servers":[{"type":"url","name":"weather_service","url":"http://host.docker.internal:39090/mcp"}],
+		"tools":[
+			{"type":"agent_toolset_20260401"},
+			{
+				"type":"mcp_toolset",
+				"mcp_server_name":"weather_service",
+				"configs":[],
+				"default_config":{"enabled":true,"permission_policy":{"type":"always_ask"}}
+			}
+		]
+	}`)
+	defer cleanupAgentRows(t, app.db, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-worker-mcp-default-ask-thread-env"}`)
+	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
+	suffix := strings.TrimPrefix(session.ID, "sesn_")
+	childThreadID := "sthr_approval_" + suffix
+	toolUseID := "toolu_weather_thread_" + suffix
+	requestID := "req_weather_thread_" + suffix
+
+	postCodeSessionWorkerEvents(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(workerEpoch)+`,"events":[{"payload":{`+
+		`"type":"session.thread_created",`+
+		`"uuid":"thread-created-approval-`+suffix+`",`+
+		`"session_thread_id":`+quoteJSON(childThreadID)+`,`+
+		`"agent_name":"reporter",`+
+		`"created_at":"2026-06-16T01:00:00Z"`+
+		`}}]}`)
+	threads := listSessionThreads(t, app, session.ID, defaultTestKey)
+	foundChildThread := false
+	for _, thread := range threads.Data {
+		if thread.ID == childThreadID {
+			foundChildThread = true
+			break
+		}
+	}
+	if !foundChildThread {
+		t.Fatalf("child thread %s was not created: %+v", childThreadID, threads.Data)
+	}
+
+	postCodeSessionWorkerEvents(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(workerEpoch)+`,"events":[{"payload":{`+
+		`"type":"control_request",`+
+		`"uuid":"control-weather-thread-`+suffix+`",`+
+		`"session_thread_id":`+quoteJSON(childThreadID)+`,`+
+		`"request_id":`+quoteJSON(requestID)+`,`+
+		`"request":{"subtype":"can_use_tool","session_thread_id":`+quoteJSON(childThreadID)+`,"tool_name":"mcp__weather_service__get_weather","tool_use_id":`+quoteJSON(toolUseID)+`,"input":{"location":"Beijing"}}`+
+		`}}]}`)
+
+	primaryEvents := listSessionEvents(t, app, session.ID, "order=asc&limit=100", defaultTestKey)
+	for _, want := range []string{
+		`"type":"agent.mcp_tool_use"`,
+		`"session_thread_id":"` + childThreadID + `"`,
+		`"tool_use_id":"` + toolUseID + `"`,
+		`"type":"requires_action"`,
+		`"request_id":"` + requestID + `"`,
+	} {
+		if !eventPageContains(primaryEvents, want) {
+			t.Fatalf("primary events missing %q: %+v", want, primaryEvents.Data)
+		}
+	}
+	primaryToolEvent := sessionEventObjectByType(t, primaryEvents, "agent.mcp_tool_use")
+	primaryToolEventID, ok := primaryToolEvent["id"].(string)
+	if !ok || primaryToolEventID == "" {
+		t.Fatalf("primary agent.mcp_tool_use id = %#v, want non-empty string: %#v", primaryToolEvent["id"], primaryToolEvent)
+	}
+	if primaryToolEvent["session_thread_id"] != childThreadID {
+		t.Fatalf("primary blocking tool event session_thread_id = %v, want %s: %#v", primaryToolEvent["session_thread_id"], childThreadID, primaryToolEvent)
+	}
+	primaryStatusEvent := sessionEventObjectByType(t, primaryEvents, "session.status_idle")
+	primaryStopReason, ok := primaryStatusEvent["stop_reason"].(map[string]any)
+	if !ok {
+		t.Fatalf("primary status stop_reason = %#v, want object: %#v", primaryStatusEvent["stop_reason"], primaryStatusEvent)
+	}
+	primaryEventIDs := stringArrayField(primaryStopReason, "event_ids")
+	if len(primaryEventIDs) != 1 || primaryEventIDs[0] != primaryToolEventID {
+		t.Fatalf("primary stop_reason.event_ids = %#v, want [%s]; status=%#v tool=%#v", primaryEventIDs, primaryToolEventID, primaryStatusEvent, primaryToolEvent)
+	}
+
+	childEvents := listThreadEvents(t, app, session.ID, childThreadID, defaultTestKey)
+	for _, want := range []string{
+		`"type":"agent.mcp_tool_use"`,
+		`"session_thread_id":"` + childThreadID + `"`,
+		`"tool_use_id":"` + toolUseID + `"`,
+		`"evaluated_permission":"ask"`,
+	} {
+		if !eventPageContains(childEvents, want) {
+			t.Fatalf("child events missing %q: %+v", want, childEvents.Data)
+		}
+	}
+
+	resp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","session_thread_id":`+quoteJSON(childThreadID)+`,"tool_use_id":`+quoteJSON(primaryToolEventID)+`,"result":"deny","deny_message":"Reporter cannot call external weather"}]}`), defaultTestKey, true)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("send child tool confirmation status = %d, want 200: %s", resp.StatusCode, readAll(t, resp.Body))
+	}
+
+	childEvents = listThreadEvents(t, app, session.ID, childThreadID, defaultTestKey)
+	for _, want := range []string{
+		`"type":"user.tool_confirmation"`,
+		`"session_thread_id":"` + childThreadID + `"`,
+		`"tool_use_id":"` + primaryToolEventID + `"`,
+		`Reporter cannot call external weather`,
+	} {
+		if !eventPageContains(childEvents, want) {
+			t.Fatalf("child events after confirmation missing %q: %+v", want, childEvents.Data)
+		}
+	}
+
+	source, eventType, payload := latestCodeSessionInboundEventForSource(t, app, codeSessionID, "tool-confirmation")
+	if source != "tool-confirmation" || eventType != "control_response" {
+		t.Fatalf("confirmation response source/event_type = %q/%q, want tool-confirmation/control_response payload=%s", source, eventType, payload)
+	}
+	var object map[string]any
+	if err := json.Unmarshal(payload, &object); err != nil {
+		t.Fatalf("decode confirmation response payload: %v", err)
+	}
+	if object["session_thread_id"] != childThreadID {
+		t.Fatalf("confirmation response session_thread_id = %v, want %s; payload=%s", object["session_thread_id"], childThreadID, payload)
+	}
+	response := object["response"].(map[string]any)
+	if response["request_id"] != requestID {
+		t.Fatalf("confirmation response request_id = %v, want %s; payload=%s", response["request_id"], requestID, payload)
+	}
+	nested := response["response"].(map[string]any)
+	if nested["behavior"] != "deny" || nested["toolUseID"] != toolUseID || nested["sessionThreadID"] != childThreadID {
+		t.Fatalf("confirmation response nested = %#v, want deny for %s on %s; payload=%s", nested, toolUseID, childThreadID, payload)
+	}
+	if nested["denyMessage"] != "Reporter cannot call external weather" {
+		t.Fatalf("confirmation deny message = %v, want custom deny message; payload=%s", nested["denyMessage"], payload)
 	}
 }
 
@@ -3016,6 +3195,33 @@ func eventPageContains(events sessionEventPageAPIResponse, needle string) bool {
 		}
 	}
 	return false
+}
+
+func sessionEventObjectByType(t *testing.T, events sessionEventPageAPIResponse, eventType string) map[string]any {
+	t.Helper()
+	for _, raw := range events.Data {
+		var object map[string]any
+		if err := json.Unmarshal(raw, &object); err != nil {
+			t.Fatalf("decode session event %s: %v", raw, err)
+		}
+		if object["type"] == eventType {
+			return object
+		}
+	}
+	t.Fatalf("session event type %q not found in %+v", eventType, events.Data)
+	return nil
+}
+
+func stringArrayField(object map[string]any, field string) []string {
+	items, _ := object[field].([]any)
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		value, ok := item.(string)
+		if ok && value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func eventPageContainsCount(events sessionEventPageAPIResponse, needle string) int {

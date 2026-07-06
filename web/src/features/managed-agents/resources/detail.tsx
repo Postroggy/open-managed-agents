@@ -117,7 +117,7 @@ export function ManagedEntityDetailPage({ config, entityId }: { config: Resource
   if (loading) {
     return (
       <section className="min-h-[calc(100vh-48px)] text-foreground">
-        <ManagedDetailBreadcrumb listHref={listHref} listLabel={config.title} showBackIcon />
+        <ManagedDetailBreadcrumb listHref={listHref} listLabel={config.title} />
         <div className="mt-14 text-sm text-muted-foreground">Loading {entityKindLabel(config.section)}...</div>
       </section>
     );
@@ -126,7 +126,7 @@ export function ManagedEntityDetailPage({ config, entityId }: { config: Resource
   if (!entity || loadError) {
     return (
       <section className="min-h-[calc(100vh-48px)] text-foreground">
-        <ManagedDetailBreadcrumb listHref={listHref} listLabel={config.title} showBackIcon />
+        <ManagedDetailBreadcrumb listHref={listHref} listLabel={config.title} />
         <Alert variant="destructive" className="mt-6 max-w-xl">
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <AlertDescription>{loadError || `${titleCase(entityKindLabel(config.section))} not found`}</AlertDescription>

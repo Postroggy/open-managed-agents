@@ -730,6 +730,21 @@ func (d *DB) AppendSessionEventsIfAbsent(ctx context.Context, workspaceID int64,
 	return created, nil
 }
 
+func (d *DB) GetSessionEvent(ctx context.Context, workspaceID int64, sessionExternalID string, eventExternalID string) (SessionEvent, error) {
+	eventExternalID = strings.TrimSpace(eventExternalID)
+	if eventExternalID == "" {
+		return SessionEvent{}, ErrNotFound
+	}
+	return scanSessionEvent(d.Pool.QueryRow(ctx, `
+		select `+sessionEventColumns()+`
+		from session_events
+		where workspace_id = $1
+			and session_external_id = $2
+			and external_id = $3
+			and deleted_at is null
+	`, workspaceID, sessionExternalID, eventExternalID))
+}
+
 func insertSessionEventsTx(ctx context.Context, tx pgx.Tx, session Session, events []SessionEvent, ignoreExisting bool) ([]SessionEvent, error) {
 	primary, err := scanSessionThread(tx.QueryRow(ctx, `
 		select `+sessionThreadColumns()+`

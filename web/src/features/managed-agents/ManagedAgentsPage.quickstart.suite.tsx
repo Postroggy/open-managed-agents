@@ -144,10 +144,13 @@ export function registerManagedAgentsQuickstartTests() {
     expect(screen.getByRole('button', { name: /Deep researcher/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Send message/i }).hasAttribute('disabled')).toBe(true);
     const fieldMonitorTemplate = screen.getByRole('button', { name: /Field monitor/i });
+    const templateGrid = fieldMonitorTemplate.parentElement as HTMLElement | null;
     const fieldMonitorDescription = within(fieldMonitorTemplate).getByText(/Scans software blogs for a topic/i);
     expect(fieldMonitorTemplate.className).toContain('min-h-[118px]');
     expect(fieldMonitorTemplate.className).toContain('h-auto');
+    expect(fieldMonitorTemplate.className).toContain('self-start');
     expect(fieldMonitorTemplate.className).toContain('overflow-hidden');
+    expect(templateGrid?.className).toContain('items-start');
     expect(fieldMonitorDescription.className).toContain('min-h-[54px]');
     expect(fieldMonitorTemplate.querySelector('[title="notion"]')).toBeTruthy();
 

@@ -139,6 +139,7 @@ export function registerManagedAgentsResourceTests() {
 
   test('renders the official-style session detail trace workspace', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+    window.localStorage.removeItem('oma.sessionDetail.showArchivedLanes');
     const api = mockManagedResourceApi();
     const clipboardWrites: string[] = [];
     Object.defineProperty(navigator, 'clipboard', {
@@ -152,10 +153,13 @@ export function registerManagedAgentsResourceTests() {
 
     renderManagedAgentsPage('sessions');
 
-    expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
+    const page = await screen.findByTestId('session-detail-page');
+    expect(page.firstElementChild?.getAttribute('data-slot')).toBe('breadcrumb');
     const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(breadcrumb.dataset.slot).toBe('breadcrumb');
-    expect(within(breadcrumb).getByRole('link', { name: 'Sessions' }).getAttribute('href')).toBe('/workspaces/default/sessions');
+    const sessionsLink = within(breadcrumb).getByRole('link', { name: 'Sessions' });
+    expect(sessionsLink.getAttribute('href')).toBe('/workspaces/default/sessions');
+    expect(sessionsLink.querySelector('svg')).toBeNull();
     expect(breadcrumb.querySelector('[data-slot="breadcrumb-page"]')?.textContent).toBe('sesn_one123456');
     expect(screen.getByRole('heading', { name: 'Session one' })).toBeTruthy();
     expect(screen.getAllByText('Running')[0]?.className).toContain('bg-emerald-500/10');
@@ -165,9 +169,15 @@ export function registerManagedAgentsResourceTests() {
     expect(screen.getByRole('button', { name: 'All events' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy all' })).toBeTruthy();
     expect(screen.getByTestId('events-tab')).toBeTruthy();
+    expect(screen.getByTestId('events-tab').className).not.toContain('bg-secondary');
+    expect(Array.from(page.children).some((child) => child.getAttribute('data-testid') === 'events-tab')).toBe(true);
+    expect(screen.getByTestId('session-trace-shell').className).not.toContain('bg-card');
+    expect(screen.getByTestId('session-trace-list-pane').className).toContain('overflow-x-hidden');
+    expect(screen.getByTestId('session-trace-list-pane').className).toContain('px-0');
     expect(screen.getByTestId('events-minimap')).toBeTruthy();
     const laneTabStrip = screen.getByTestId('lane-tab-strip');
     expect(laneTabStrip).toBeTruthy();
+    expect(laneTabStrip.className).toContain('px-0');
     const laneTabList = within(laneTabStrip).getByRole('tablist', { name: 'Session threads' });
     expect(laneTabList.dataset.slot).toBe('tabs-list');
     expect(screen.getByRole('tab', { name: 'reporter' })).toBeTruthy();
@@ -186,10 +196,12 @@ export function registerManagedAgentsResourceTests() {
     const minimap = screen.getByTestId('events-minimap');
     const minimapTicks = minimap.querySelectorAll<HTMLElement>('[data-timeline-tick-id]');
     const minimapRows = minimap.querySelectorAll<HTMLElement>('[data-lane-index]');
-    const minimapVisualRows = Array.from(minimapRows, (row) => row.firstElementChild as HTMLElement);
     expect(minimapRows.length).toBe(4);
     expect(within(minimap).queryByText('Orchestrator')).toBeNull();
-    expect(minimapVisualRows[0].className).toContain('bg-accent');
+    expect(minimap.className).toContain('oma-session-timeline');
+    expect(minimap.className).toContain('px-0');
+    expect(minimapRows[0].className).toContain('oma-session-timeline-track-active');
+    expect(minimapRows[0].className).toContain('h-7');
     expect(minimapRows[0].className).not.toContain('border');
     const minimapTrack = minimap.firstElementChild?.firstElementChild as HTMLDivElement | null;
     expect(minimapTrack).toBeTruthy();
@@ -204,30 +216,28 @@ export function registerManagedAgentsResourceTests() {
       height: 80,
       toJSON: () => ({})
     });
-    const secondLaneSlotHeight = minimapRows[1].style.height;
     fireEvent.pointerEnter(minimapRows[1]);
-    await waitFor(() => expect(minimapVisualRows[1].className).toContain('bg-accent/50'));
-    expect(minimapRows[1].style.height).toBe(secondLaneSlotHeight);
-    expect(minimapVisualRows[1].style.height).toBe('20px');
+    await waitFor(() => expect(minimapRows[1].className).toContain('oma-session-timeline-track-hover'));
+    expect(minimapRows[1].className).toContain('h-7');
     const secondLaneTick = minimapRows[1].querySelector<HTMLElement>('[data-timeline-tick-id]');
     expect(secondLaneTick).toBeTruthy();
     const hoverPct = Number.parseFloat(secondLaneTick!.style.left) + (Number.parseFloat(secondLaneTick!.style.width) / 2);
     fireEvent.mouseMove(minimapTrack, { clientX: hoverPct * 10, clientY: 260 });
-    expect(minimapVisualRows[1].className).toContain('bg-accent/50');
+    expect(minimapRows[1].className).toContain('oma-session-timeline-track-hover');
     await waitFor(() => expect(document.querySelector('[id^="session-timeline-tooltip-"]')).toBeTruthy());
     fireEvent.pointerLeave(minimapRows[1], { relatedTarget: minimap });
-    await waitFor(() => expect(minimapVisualRows[1].className).toContain('bg-accent/40'));
+    await waitFor(() => expect(minimapRows[1].className).toContain('oma-session-timeline-track-inactive'));
     await waitFor(() => expect(document.querySelector('[id^="session-timeline-tooltip-"]')).toBeNull());
-    expect(minimapRows[1].style.height).toBe(secondLaneSlotHeight);
-    expect(minimapVisualRows[1].style.height).toBe('16px');
+    expect(minimapRows[1].className).toContain('h-7');
     expect(minimapTicks.length).toBeGreaterThan(6);
     expect(minimapTicks[0].style.left.endsWith('%')).toBe(true);
     expect(Number.parseFloat(minimapTicks[0].style.width)).toBeGreaterThanOrEqual(0.4);
-	    expect(screen.getByText("I'll start by unzipping the dataset, then prepare the unified CSV files.")).toBeTruthy();
-	    const agentPrepareRow = document.querySelector('[data-event-id^="evt_agent_prepare-"][data-entry-kind="message"]') as HTMLElement;
-	    expect(agentPrepareRow?.textContent).toContain('18.2k');
-	    expect(agentPrepareRow?.textContent).toContain('425');
-	    expect(screen.getAllByText('Bash').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("I'll start by unzipping the dataset, then prepare the unified CSV files.")).toBeTruthy();
+    const agentPrepareRow = document.querySelector('[data-event-id^="evt_agent_prepare-"][data-entry-kind="message"]') as HTMLElement;
+    expect(agentPrepareRow.querySelector('[data-transcript-header]')?.className).toContain('px-4');
+    expect(agentPrepareRow?.textContent).toContain('18.2k');
+    expect(agentPrepareRow?.textContent).toContain('425');
+    expect(screen.getAllByText('Bash').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Write')).toBeTruthy();
     expect(document.querySelector('[data-entry-kind="tool_call"]')).toBeTruthy();
     expect(document.querySelector('[data-entry-kind="tool_batch"]')).toBeTruthy();
@@ -260,6 +270,9 @@ export function registerManagedAgentsResourceTests() {
     expect(screen.queryByText('Archive extracted.')).toBeNull();
     fireEvent.click(screen.getByText('unzip /mnt/session/uploads/orders.zip -d /workspace/data/'));
     const toolDetail = await screen.findByTestId('session-trace-detail');
+    expect(toolDetail.getAttribute('data-placement')).toBe('side');
+    expect(toolDetail.className).not.toContain('bg-secondary');
+    expect(toolDetail.className).not.toContain('min-h-[420px]');
     expect(toolDetail.textContent).toContain('Tool result');
     expect(toolDetail.textContent).toContain('Archive extracted.');
     fireEvent.click(within(toolDetail).getByRole('button', { name: 'Close detail panel' }));
@@ -306,15 +319,18 @@ export function registerManagedAgentsResourceTests() {
     expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_archived123456/events?'))).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: '+1 archived' }));
+    await waitFor(() => expect(new URL(window.location.href).searchParams.get('archived_lanes')).toBe('true'));
     expect(await screen.findByRole('tab', { name: 'archived' })).toBeTruthy();
     await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_archived123456/events?'))).toBe(true));
     fireEvent.click(screen.getByRole('tab', { name: 'archived' }));
+    await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_archived123456'));
     await waitFor(() => {
       const archivedRow = document.querySelector('[data-event-id^="evt_archived-"]') as HTMLElement | null;
       expect(archivedRow?.textContent).toContain('Archived thread details.');
     });
     expect(screen.getByTestId('session-event-detail-panel').textContent).toContain('Archived thread details.');
     fireEvent.click(screen.getByRole('tab', { name: 'Orchestrator' }));
+    await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBeNull());
 
     fireEvent.click(screen.getByRole('button', { name: 'Open search filter' }));
     fireEvent.change(screen.getByLabelText('Filter events'), { target: { value: 'unzip' } });
@@ -325,6 +341,7 @@ export function registerManagedAgentsResourceTests() {
     expect(visibleToolRows().some((row) => row.textContent?.includes('Weather Service'))).toBe(false);
 
     fireEvent.click(screen.getByRole('tab', { name: 'reporter' }));
+    await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_reporter123456'));
     const reporterSubagentRow = document.querySelector('[data-event-id^="evt_subagent_reporter-"]') as HTMLElement;
     expect(reporterSubagentRow?.textContent).toContain('reporter');
     expect(screen.getByText('Reporter is summarizing order cohorts.')).toBeTruthy();
@@ -426,6 +443,78 @@ export function registerManagedAgentsResourceTests() {
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: /Delete session/i })).toBeNull());
   });
 
+  test('renders transcript idle gaps with the original striped separator', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+    window.localStorage.removeItem('oma.sessionDetail.showArchivedLanes');
+    const api = mockManagedResourceApi();
+    const base = Date.now() - 180_000;
+    api.resources.sessionThreads = [
+      {
+        id: 'sthr_idle_gap_worker123456',
+        type: 'session_thread',
+        role: 'worker',
+        parent_thread_id: 'sthr_orchestrator123456',
+        archived_at: null,
+        created_at: new Date(base + 1_000).toISOString(),
+        updated_at: new Date(base + 88_000).toISOString()
+      }
+    ];
+    api.resources.sessionEvents = [
+      {
+        id: 'evt_idle_gap_user_before',
+        type: 'user.message',
+        created_at: new Date(base).toISOString(),
+        content: [{ type: 'text', text: 'Start the idle gap fixture.' }]
+      },
+      {
+        id: 'evt_idle_gap_agent_before',
+        type: 'agent.message',
+        created_at: new Date(base + 2_000).toISOString(),
+        content: [{ type: 'text', text: 'I will pause before continuing.' }]
+      },
+      {
+        id: 'evt_idle_gap_idle',
+        type: 'session.status_idle',
+        created_at: new Date(base + 4_000).toISOString()
+      },
+      {
+        id: 'evt_idle_gap_user_after',
+        type: 'user.message',
+        created_at: new Date(base + 88_000).toISOString(),
+        content: [{ type: 'text', text: 'Continue after the idle gap.' }]
+      }
+    ];
+
+    renderManagedAgentsPage('sessions');
+
+    expect(await screen.findByText('Continue after the idle gap.')).toBeTruthy();
+    const idleGapRow = document.querySelector('[data-entry-kind="idle_gap"]') as HTMLElement;
+    expect(idleGapRow).toBeTruthy();
+    expect(idleGapRow.className).toContain('oma-session-idle-gap');
+    expect(idleGapRow.querySelector('.oma-session-idle-gap-stripes')).toBeTruthy();
+    expect(idleGapRow.textContent).toContain('Session idle');
+    const minimap = screen.getByTestId('events-minimap');
+    const minimapRows = minimap.querySelectorAll<HTMLElement>('[data-lane-index]');
+    expect(minimapRows.length).toBe(2);
+    const idleTimelineTick = minimapRows[0].querySelector<HTMLElement>('[data-timeline-tick-type="status_idle"]');
+    expect(idleTimelineTick).toBeTruthy();
+    expect(Number.parseFloat(idleTimelineTick!.style.width)).toBeGreaterThan(20);
+  });
+
+  test('restores the session detail lane from the URL query', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456?lane=sthr_reporter123456&event=evt_reporter');
+    window.localStorage.removeItem('oma.sessionDetail.showArchivedLanes');
+    mockManagedResourceApi();
+
+    renderManagedAgentsPage('sessions');
+
+    expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'reporter' }).getAttribute('aria-selected')).toBe('true'));
+    expect(screen.getAllByText('Reporter is summarizing order cohorts.').length).toBeGreaterThan(0);
+    expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_reporter123456');
+    expect(new URL(window.location.href).searchParams.get('event')).toBe('evt_reporter');
+  });
+
   test('uses shared alerts for missing sessions and failed session mutations', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_missing123456');
     mockManagedResourceApi();
@@ -484,6 +573,15 @@ export function registerManagedAgentsResourceTests() {
         input: { command: 'npm test -- --watch=false' }
       },
       {
+        id: 'evt_tool_policy_object_wait',
+        type: 'agent.tool_use',
+        created_at: new Date(base + 1_500).toISOString(),
+        name: 'Bash',
+        status: 'running',
+        permission_policy: { type: 'always_ask' },
+        input: { command: 'echo permission policy' }
+      },
+      {
         id: 'evt_tool_allow',
         type: 'agent.tool_use',
         created_at: new Date(base + 2_000).toISOString(),
@@ -505,6 +603,14 @@ export function registerManagedAgentsResourceTests() {
         name: 'mcp__github__search_repositories',
         evaluated_permission: 'ask',
         input: { query: 'private repository scan' }
+      },
+      {
+        id: 'evt_tool_requires_action_details_wait',
+        type: 'agent.mcp_tool_use',
+        created_at: new Date(base + 3_250).toISOString(),
+        name: 'mcp__weather_service__get_weather',
+        requires_action_details: { type: 'requires_action' },
+        input: { location: 'Beijing' }
       },
       {
         id: 'evt_tool_deny_confirmation',
@@ -548,16 +654,29 @@ export function registerManagedAgentsResourceTests() {
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
     expect(await screen.findByText('npm test -- --watch=false')).toBeTruthy();
+    const singleLaneMinimap = screen.getByTestId('events-minimap');
+    expect(singleLaneMinimap.querySelectorAll('[data-lane-index]').length).toBe(0);
+    const singleLaneTrack = singleLaneMinimap.querySelector<HTMLElement>('.oma-session-timeline-track-active');
+    expect(singleLaneTrack).toBeTruthy();
+    expect(singleLaneTrack?.className).toContain('h-9');
+    expect(singleLaneTrack?.className).toContain('rounded');
+    expect(singleLaneTrack?.querySelectorAll('[data-timeline-tick-id]').length).toBeGreaterThan(2);
     const waitingRow = document.querySelector('[data-event-id^="evt_tool_wait-"][data-entry-kind="tool_call"]') as HTMLElement;
+    const policyObjectWaitingRow = document.querySelector('[data-event-id^="evt_tool_policy_object_wait-"][data-entry-kind="tool_call"]') as HTMLElement;
     const allowedRow = document.querySelector('[data-event-id^="evt_tool_allow-"][data-entry-kind="tool_call"]') as HTMLElement;
     const deniedRow = document.querySelector('[data-event-id^="evt_tool_denied-"][data-entry-kind="tool_call"]') as HTMLElement;
+    const requiresActionWaitingRow = document.querySelector('[data-event-id^="evt_tool_requires_action_details_wait-"][data-entry-kind="tool_call"]') as HTMLElement;
     const batchRow = document.querySelector('[data-entry-kind="tool_batch"]') as HTMLElement;
 
     expect(waitingRow.textContent).toContain('awaiting approval');
+    expect(policyObjectWaitingRow.textContent).toContain('echo permission policy');
+    expect(policyObjectWaitingRow.textContent).toContain('awaiting approval');
     expect(allowedRow.textContent).toContain('npm run build');
     expect(allowedRow.textContent).not.toContain('awaiting approval');
     expect(deniedRow.textContent).toContain('denied');
     expect(deniedRow.textContent).toContain(' Github  Search Repositories');
+    expect(requiresActionWaitingRow.textContent).toContain('Beijing');
+    expect(requiresActionWaitingRow.textContent).toContain('awaiting approval');
     expect(screen.queryByText('Needs owner approval')).toBeNull();
     expect(batchRow.textContent).toContain('Read, Glob');
     expect(screen.getByText('I will inspect both files before editing.')).toBeTruthy();
@@ -573,6 +692,182 @@ export function registerManagedAgentsResourceTests() {
     const confirmationDebugRow = document.querySelector('[data-event-id^="evt_tool_deny_confirmation-"][data-entry-kind="debug"]') as HTMLElement;
     expect(confirmationDebugRow).toBeTruthy();
     expect(confirmationDebugRow.textContent).toContain('Tool confirmation submitted.');
+  });
+
+  test('keeps subagent tool confirmations on the originating lane', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+    const api = mockManagedResourceApi();
+    api.resources.sessions[0].status = 'idle';
+    const base = Date.now() - 60_000;
+    api.resources.sessionThreads = [
+      {
+        id: 'sthr_reporter123456',
+        type: 'session_thread',
+        role: 'reporter',
+        parent_thread_id: 'sthr_orchestrator123456',
+        archived_at: null,
+        created_at: new Date(Date.now() - 45_000).toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+    api.resources.sessionThreadEvents = {
+      sthr_reporter123456: [
+        {
+          id: 'evt_reporter_shared_permission_child',
+          type: 'agent.mcp_tool_use',
+          tool_use_id: 'toolu_shared_permission',
+          created_at: new Date(base + 2_000).toISOString(),
+          name: 'mcp__weather_service__get_forecast',
+          evaluated_permission: 'ask',
+          input: { location: 'Paris' }
+        }
+      ]
+    };
+    api.resources.sessionEvents = [
+      {
+        id: 'evt_subagent_approval_user',
+        type: 'user.message',
+        created_at: new Date(base).toISOString(),
+        content: [{ type: 'text', text: 'Check lane-scoped approvals' }]
+      },
+      {
+        id: 'evt_main_shared_permission',
+        type: 'agent.mcp_tool_use',
+        tool_use_id: 'toolu_shared_permission',
+        created_at: new Date(base + 1_000).toISOString(),
+        name: 'mcp__filesystem__write_file',
+        evaluated_permission: 'ask',
+        input: { path: '/workspace/main.txt' }
+      },
+      {
+        id: 'evt_reporter_shared_permission',
+        type: 'agent.mcp_tool_use',
+        session_thread_id: 'sthr_reporter123456',
+        tool_use_id: 'toolu_shared_permission',
+        created_at: new Date(base + 2_000).toISOString(),
+        name: 'mcp__weather_service__get_forecast',
+        evaluated_permission: 'ask',
+        input: { location: 'Paris' }
+      },
+      {
+        id: 'evt_reporter_shared_confirmation',
+        type: 'user.tool_confirmation',
+        session_thread_id: 'sthr_reporter123456',
+        tool_use_id: 'toolu_shared_permission',
+        created_at: new Date(base + 2_500).toISOString(),
+        result: 'deny',
+        deny_message: 'Reporter cannot call external weather'
+      },
+      {
+        id: 'evt_subagent_approval_idle',
+        type: 'session.status_idle',
+        created_at: new Date(base + 3_000).toISOString()
+      }
+    ];
+
+    renderManagedAgentsPage('sessions');
+
+    expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
+    let mainRow: HTMLElement | null = null;
+    await waitFor(() => {
+      mainRow = document.querySelector<HTMLElement>('[data-event-id^="evt_main_shared_permission-"][data-entry-kind="tool_call"]');
+      expect(mainRow).toBeTruthy();
+    });
+    expect(mainRow?.textContent).toContain('/workspace/main.txt');
+    expect(mainRow?.textContent).toContain('awaiting approval');
+    expect(screen.queryByText('Paris')).toBeNull();
+    expect(screen.queryByText('Reporter cannot call external weather')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'reporter' }));
+    await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_reporter123456'));
+    let reporterRow: HTMLElement | null = null;
+    await waitFor(() => {
+      reporterRow = Array.from(document.querySelectorAll<HTMLElement>('[data-entry-kind="tool_call"]')).find((row) => row.textContent?.includes('Paris')) ?? null;
+      expect(reporterRow).toBeTruthy();
+    });
+    expect(reporterRow?.textContent).toContain('Paris');
+    expect(reporterRow?.textContent).toContain('denied');
+    expect(Array.from(document.querySelectorAll<HTMLElement>('[data-entry-kind="tool_call"]')).filter((row) => row.textContent?.includes('Paris')).length).toBe(1);
+    expect(screen.queryByText('/workspace/main.txt')).toBeNull();
+    expect(screen.queryByText('Reporter cannot call external weather')).toBeNull();
+
+    fireEvent.click(reporterRow?.querySelector('[data-transcript-header]') as HTMLElement);
+    const reporterDetail = await screen.findByTestId('session-trace-detail');
+    expect(within(reporterDetail).getByText('Tool confirmation')).toBeTruthy();
+    expect(reporterDetail.textContent).toContain('Reporter cannot call external weather');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Debug' }));
+    const confirmationDebugRow = document.querySelector('[data-event-id^="evt_reporter_shared_confirmation-"][data-entry-kind="debug"]') as HTMLElement;
+    expect(confirmationDebugRow).toBeTruthy();
+    expect(confirmationDebugRow.textContent).toContain('Tool confirmation submitted.');
+  });
+
+  test('keeps transcript tool batches scoped to each lane', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+    const api = mockManagedResourceApi();
+    api.resources.sessions[0].status = 'idle';
+    api.resources.sessionThreads = [
+      {
+        id: 'sthr_reporter123456',
+        type: 'session_thread',
+        role: 'reporter',
+        parent_thread_id: 'sthr_orchestrator123456',
+        archived_at: null,
+        created_at: new Date(Date.now() - 45_000).toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+    api.resources.sessionThreadEvents = {};
+    const base = Date.now() - 60_000;
+    api.resources.sessionEvents = [
+      {
+        id: 'evt_lane_batch_user',
+        type: 'user.message',
+        created_at: new Date(base).toISOString(),
+        content: [{ type: 'text', text: 'Compare lane scoped tool batches' }]
+      },
+      {
+        id: 'evt_lane_batch_main_tool',
+        type: 'agent.tool_use',
+        bracket_id: 'span_shared_lane_batch',
+        created_at: new Date(base + 1_000).toISOString(),
+        name: 'Read',
+        input: { file_path: '/workspace/main.json' }
+      },
+      {
+        id: 'evt_lane_batch_reporter_tool',
+        type: 'agent.tool_use',
+        session_thread_id: 'sthr_reporter123456',
+        bracket_id: 'span_shared_lane_batch',
+        created_at: new Date(base + 1_100).toISOString(),
+        name: 'Bash',
+        input: { command: 'echo reporter lane' }
+      },
+      {
+        id: 'evt_lane_batch_idle',
+        type: 'session.status_idle',
+        created_at: new Date(base + 3_000).toISOString()
+      }
+    ];
+
+    renderManagedAgentsPage('sessions');
+
+    expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
+    await waitFor(() => {
+      const mainToolRow = document.querySelector<HTMLElement>('[data-event-id^="evt_lane_batch_main_tool-"][data-entry-kind="tool_call"]');
+      expect(mainToolRow?.textContent).toContain('/workspace/main.json');
+    });
+    expect(document.querySelector('[data-entry-kind="tool_batch"]')).toBeNull();
+    expect(screen.queryByText('echo reporter lane')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'reporter' }));
+    await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_reporter123456'));
+    await waitFor(() => {
+      const reporterToolRow = document.querySelector<HTMLElement>('[data-event-id^="evt_lane_batch_reporter_tool-"][data-entry-kind="tool_call"]');
+      expect(reporterToolRow?.textContent).toContain('echo reporter lane');
+    });
+    expect(document.querySelector('[data-entry-kind="tool_batch"]')).toBeNull();
+    expect(screen.queryByText('/workspace/main.json')).toBeNull();
   });
 
   test('subscribes to session streams after a running session detail loads', async () => {

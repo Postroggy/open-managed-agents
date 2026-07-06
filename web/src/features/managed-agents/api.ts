@@ -1117,7 +1117,58 @@ export function sessionDetailDeltaFrames(queryClient: QueryClient, workspaceId: 
 
 export function mergeSessionEventsById(events: QuickstartSessionEvent[]) {
   const cache = mergeSessionEventCache(undefined, events);
-  return [...cache.events].sort(compareSessionEvents);
+  return coalesceSessionCrossPostedToolEvents(cache.events).sort(compareSessionEvents);
+}
+
+export function coalesceSessionCrossPostedToolEvents(events: QuickstartSessionEvent[]) {
+  const output: QuickstartSessionEvent[] = [];
+  const indexByKey = new Map<string, number>();
+  events.forEach((event) => {
+    const canonicalKey = sessionCrossPostedToolEventKey(event);
+    if (!canonicalKey) {
+      output.push(event);
+      return;
+    }
+    const existingIndex = indexByKey.get(canonicalKey);
+    if (existingIndex === undefined) {
+      indexByKey.set(canonicalKey, output.length);
+      output.push(event);
+      return;
+    }
+    output[existingIndex] = event;
+  });
+  return output;
+}
+
+export function sessionCrossPostedToolEventKey(event: QuickstartSessionEvent) {
+  const type = sessionEventType(event);
+  if (type !== 'agent.tool_use' && type !== 'agent.mcp_tool_use' && type !== 'agent.custom_tool_use') {
+    return '';
+  }
+  const threadId = sessionEventOwnerThreadId(event);
+  const toolUseId = sessionEventToolUseId(event);
+  if (!threadId || !toolUseId) {
+    return '';
+  }
+  return `${type}:${threadId}:${toolUseId}`;
+}
+
+export function sessionEventOwnerThreadId(event: QuickstartSessionEvent) {
+  return sessionEventStringField(event, 'session_thread_id') || sessionEventStringField(event, 'thread_id');
+}
+
+export function sessionEventToolUseId(event: QuickstartSessionEvent) {
+  return (
+    sessionEventStringField(event, 'tool_use_id') ||
+    sessionEventStringField(event, 'mcp_tool_use_id') ||
+    sessionEventStringField(event, 'custom_tool_use_id') ||
+    sessionEventStringField(event, 'id')
+  );
+}
+
+export function sessionEventStringField(event: QuickstartSessionEvent, field: string) {
+  const value = event[field];
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 export function sessionStreamShouldStop(error: unknown) {

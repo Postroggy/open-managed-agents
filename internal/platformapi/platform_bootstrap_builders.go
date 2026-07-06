@@ -1,4 +1,4 @@
-package httpapi
+package platformapi
 
 func buildAccount(user UserRecord, orgs []UserOrganizationRecord, preferredOrgUUID string) (Account, string, error) {
 	if len(orgs) == 0 {

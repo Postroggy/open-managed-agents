@@ -1,4 +1,4 @@
-package httpapi
+package platformapi
 
 import (
 	"context"
@@ -74,17 +74,20 @@ type loginMethodsResponse struct {
 
 type platformMagicLinkStore interface {
 	bootstrapAccountStore
+}
+
+type platformMagicLinkService interface {
 	FindOrCreateUserContextByEmail(ctx context.Context, email string) (userUUID string, orgUUID string, err error)
 	ResolvePlatformSessionIdentity(ctx context.Context, input platformsession.CreateInput) (platformsession.Session, error)
 }
 
-func RegisterPlatformEmailLoginRoutes(r chi.Router, store OrganizationStore, sessions platformsession.Store) {
+func RegisterPlatformEmailLoginRoutes(r chi.Router, store OrganizationStore, authService platformMagicLinkService, sessions platformsession.Store) {
 	r.Get("/api/auth/login_methods", handleAuthLoginMethods)
 	r.Post("/api/auth/send_magic_link", handleSendMagicLink)
-	r.Post("/api/auth/verify_magic_link", handleVerifyMagicLink(store, sessions, false))
+	r.Post("/api/auth/verify_magic_link", handleVerifyMagicLink(store, authService, sessions, false))
 	r.Post("/api/auth/logout", handleWebLogout(store, sessions))
 	r.Post("/auth/send_magic_link", handleSendMagicLink)
-	r.Post("/auth/verify_magic_link", handleVerifyMagicLink(store, sessions, true))
+	r.Post("/auth/verify_magic_link", handleVerifyMagicLink(store, authService, sessions, true))
 	r.Post("/auth/logout", handleAndroidLogout(store, sessions))
 }
 
@@ -100,16 +103,16 @@ func handleSendMagicLink(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, SendMagicLinkResponse{Sent: true})
 }
 
-func handleVerifyMagicLink(store OrganizationStore, sessions platformsession.Store, androidShape bool) http.HandlerFunc {
+func handleVerifyMagicLink(store OrganizationStore, authService platformMagicLinkService, sessions platformsession.Store, androidShape bool) http.HandlerFunc {
 	magicLinkStore, _ := store.(platformMagicLinkStore)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if magicLinkStore == nil || sessions == nil {
+		if magicLinkStore == nil || authService == nil || sessions == nil {
 			internalError(w, "organization store is not configured")
 			return
 		}
 
 		request := readVerifyMagicLinkRequest(r)
-		userUUID, orgUUID, err := magicLinkStore.FindOrCreateUserContextByEmail(r.Context(), verifyMagicLinkEmail(request))
+		userUUID, orgUUID, err := authService.FindOrCreateUserContextByEmail(r.Context(), verifyMagicLinkEmail(request))
 		if err != nil {
 			internalError(w, "failed to verify magic link")
 			return
@@ -124,7 +127,7 @@ func handleVerifyMagicLink(store OrganizationStore, sessions platformsession.Sto
 		created := true
 		sessionKey := "sk-ant-sid-session-key-" + uuid.NewString()
 		expiresAt := time.Now().UTC().Add(time.Duration(25920000) * time.Second)
-		session, err := magicLinkStore.ResolvePlatformSessionIdentity(r.Context(), platformsession.CreateInput{
+		session, err := authService.ResolvePlatformSessionIdentity(r.Context(), platformsession.CreateInput{
 			SessionKey: sessionKey,
 			UserUUID:   account.UUID,
 			OrgUUID:    selectedOrgUUID,

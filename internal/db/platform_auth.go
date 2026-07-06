@@ -2,33 +2,110 @@ package db
 
 import (
 	"context"
-	"errors"
 	"strings"
 
-	"github.com/superduck-ai/open-managed-agents/internal/auth"
-	"github.com/superduck-ai/open-managed-agents/internal/ids"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-func (d *DB) FindOrCreateUserContextByEmail(ctx context.Context, email string) (string, string, error) {
-	if d == nil || d.Pool == nil {
-		return "", "", ErrNotFound
-	}
-	normalizedEmail := normalizeLoginEmail(email)
+type PlatformAuthUserContext struct {
+	UserExternalID string
+	OrgUUID        string
+}
 
+type PlatformAuthOrganizationInput struct {
+	ExternalID string
+	Name       string
+}
+
+type PlatformAuthOrganizationRef struct {
+	ID   int64
+	UUID string
+}
+
+type PlatformAuthUserInput struct {
+	UUID           string
+	ExternalID     string
+	OrganizationID int64
+	Email          string
+	Name           string
+	Role           string
+}
+
+type PlatformAuthUserRef struct {
+	ID int64
+}
+
+type PlatformAuthWorkspaceInput struct {
+	UUID           string
+	ExternalID     string
+	OrganizationID int64
+	Name           string
+	CompartmentID  string
+}
+
+type PlatformAuthWorkspaceRef struct {
+	ID int64
+}
+
+type PlatformAuthWorkspaceMemberInput struct {
+	ExternalID          string
+	OrganizationID      int64
+	WorkspaceID         int64
+	WorkspaceExternalID string
+	UserID              int64
+	UserExternalID      string
+	WorkspaceRole       string
+}
+
+type PlatformAuthAPIKeyInput struct {
+	ExternalID      string
+	WorkspaceID     int64
+	KeyHash         string
+	Status          string
+	CreatedByUserID int64
+	Name            string
+	PartialKeyHint  string
+}
+
+type PlatformAuthTx struct {
+	tx pgx.Tx
+}
+
+type PlatformAuthTxStore interface {
+	FindUserContextByEmail(ctx context.Context, email string) (PlatformAuthUserContext, error)
+	UpdateEmptyUserName(ctx context.Context, userExternalID string, defaultName string) error
+	InsertOrganization(ctx context.Context, input PlatformAuthOrganizationInput) (PlatformAuthOrganizationRef, error)
+	InsertUser(ctx context.Context, input PlatformAuthUserInput) (PlatformAuthUserRef, error)
+	InsertWorkspace(ctx context.Context, input PlatformAuthWorkspaceInput) (PlatformAuthWorkspaceRef, error)
+	InsertWorkspaceMember(ctx context.Context, input PlatformAuthWorkspaceMemberInput) error
+	InsertAPIKey(ctx context.Context, input PlatformAuthAPIKeyInput) error
+}
+
+func (d *DB) WithPlatformAuthTx(ctx context.Context, fn func(PlatformAuthTxStore) error) error {
+	if d == nil || d.Pool == nil {
+		return ErrNotFound
+	}
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	defaultName := defaultPlatformUserName(normalizedEmail)
-	var orgUUID string
-	var userExternalID string
-	err = tx.QueryRow(ctx, `
+	if err := fn(PlatformAuthTx{tx: tx}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (tx PlatformAuthTx) FindUserContextByEmail(ctx context.Context, email string) (PlatformAuthUserContext, error) {
+	var out PlatformAuthUserContext
+	if strings.TrimSpace(email) == "" {
+		return out, ErrNotFound
+	}
+	err := tx.tx.QueryRow(ctx, `
 		select u.external_id, o.uuid::text
 		from users u
 		join organizations o on o.id = u.organization_id
@@ -40,102 +117,96 @@ func (d *DB) FindOrCreateUserContextByEmail(ctx context.Context, email string) (
 			where wm.organization_id = o.id
 			  and wm.user_id = u.id
 			  and wm.deleted_at is null
-		  )
+		)
 		order by u.added_at asc, u.id asc
 		limit 1
-	`, normalizedEmail).Scan(&userExternalID, &orgUUID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		var createErr error
-		userExternalID, orgUUID, createErr = createPlatformUserOrganization(ctx, tx, normalizedEmail, defaultName)
-		if createErr != nil {
-			return "", "", createErr
-		}
-	} else if err != nil {
-		return "", "", err
-	} else {
-		if _, err := tx.Exec(ctx, `
+	`, strings.TrimSpace(email)).Scan(&out.UserExternalID, &out.OrgUUID)
+	if err != nil {
+		return PlatformAuthUserContext{}, mapNoRows(err)
+	}
+	return out, nil
+}
+
+func (tx PlatformAuthTx) UpdateEmptyUserName(ctx context.Context, userExternalID string, defaultName string) error {
+	_, err := tx.tx.Exec(ctx, `
 			update users
 			set name = $2,
 				updated_at = now()
 			where external_id = $1
 			  and name = ''
-		`, userExternalID, defaultName); err != nil {
-			return "", "", err
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return "", "", err
-	}
-	return userExternalID, orgUUID, nil
+		`, strings.TrimSpace(userExternalID), strings.TrimSpace(defaultName))
+	return err
 }
 
-func createPlatformUserOrganization(ctx context.Context, tx pgx.Tx, email string, defaultName string) (string, string, error) {
-	orgExternalID, err := ids.New("org_")
-	if err != nil {
-		return "", "", err
-	}
-	workspaceExternalID, err := ids.New("wrkspc_")
-	if err != nil {
-		return "", "", err
-	}
-	memberExternalID, err := ids.New("wmem_")
-	if err != nil {
-		return "", "", err
-	}
-	apiKeyExternalID, err := ids.New("api_key_")
-	if err != nil {
-		return "", "", err
-	}
-
-	var organizationID int64
-	var orgUUID string
-	if err := tx.QueryRow(ctx, `
+func (tx PlatformAuthTx) InsertOrganization(ctx context.Context, input PlatformAuthOrganizationInput) (PlatformAuthOrganizationRef, error) {
+	var out PlatformAuthOrganizationRef
+	if err := tx.tx.QueryRow(ctx, `
 		insert into organizations (external_id, name)
 		values ($1, $2)
 		returning id, uuid::text
-	`, orgExternalID, defaultPlatformOrganizationName(email)).Scan(&organizationID, &orgUUID); err != nil {
-		return "", "", err
+	`, input.ExternalID, input.Name).Scan(&out.ID, &out.UUID); err != nil {
+		return PlatformAuthOrganizationRef{}, err
 	}
+	return out, nil
+}
 
-	userUUID := uuid.NewString()
-	userExternalID := taggedExternalUserID(userUUID)
-	var userID int64
-	if err := tx.QueryRow(ctx, `
+func (tx PlatformAuthTx) InsertUser(ctx context.Context, input PlatformAuthUserInput) (PlatformAuthUserRef, error) {
+	var out PlatformAuthUserRef
+	role := strings.TrimSpace(input.Role)
+	if role == "" {
+		role = "admin"
+	}
+	if err := tx.tx.QueryRow(ctx, `
 		insert into users (uuid, external_id, organization_id, email, name, role)
-		values ($1, $2, $3, $4, $5, 'admin')
+		values ($1, $2, $3, $4, $5, $6)
 		returning id
-	`, userUUID, userExternalID, organizationID, email, defaultName).Scan(&userID); err != nil {
-		return "", "", err
+	`, input.UUID, input.ExternalID, input.OrganizationID, input.Email, input.Name, role).Scan(&out.ID); err != nil {
+		return PlatformAuthUserRef{}, err
 	}
+	return out, nil
+}
 
-	workspaceUUID := uuid.NewString()
-	var workspaceID int64
-	if err := tx.QueryRow(ctx, `
+func (tx PlatformAuthTx) InsertWorkspace(ctx context.Context, input PlatformAuthWorkspaceInput) (PlatformAuthWorkspaceRef, error) {
+	var out PlatformAuthWorkspaceRef
+	if err := tx.tx.QueryRow(ctx, `
 		insert into workspaces (uuid, external_id, organization_id, name, compartment_id)
-		values ($1, $2, $3, 'default', $4)
+		values ($1, $2, $3, $4, $5)
 		returning id
-	`, workspaceUUID, workspaceExternalID, organizationID, uuid.NewString()).Scan(&workspaceID); err != nil {
-		return "", "", err
+	`, input.UUID, input.ExternalID, input.OrganizationID, input.Name, input.CompartmentID).Scan(&out.ID); err != nil {
+		return PlatformAuthWorkspaceRef{}, err
 	}
-	if _, err := tx.Exec(ctx, `
+	return out, nil
+}
+
+func (tx PlatformAuthTx) InsertWorkspaceMember(ctx context.Context, input PlatformAuthWorkspaceMemberInput) error {
+	workspaceRole := strings.TrimSpace(input.WorkspaceRole)
+	if workspaceRole == "" {
+		workspaceRole = "workspace_admin"
+	}
+	_, err := tx.tx.Exec(ctx, `
 		insert into workspace_members (
 			external_id, organization_id, workspace_id, workspace_external_id,
 			user_id, user_external_id, workspace_role
 		)
-		values ($1, $2, $3, $4, $5, $6, 'workspace_admin')
-	`, memberExternalID, organizationID, workspaceID, workspaceExternalID, userID, userExternalID); err != nil {
-		return "", "", err
-	}
+		values ($1, $2, $3, $4, $5, $6, $7)
+	`, input.ExternalID, input.OrganizationID, input.WorkspaceID, input.WorkspaceExternalID, input.UserID, input.UserExternalID, workspaceRole)
+	return err
+}
 
-	rawKey := "sk-ant-api03-" + consoleRandomToken(32)
-	if _, err := tx.Exec(ctx, `
-		insert into api_keys (external_id, workspace_id, key_hash, status, created_by_user_id, name, partial_key_hint)
-		values ($1, $2, $3, 'active', $4, $5, $6)
-	`, apiKeyExternalID, workspaceID, auth.HashAPIKey(rawKey), userID, "default", partialAPIKeyHint(rawKey)); err != nil {
-		return "", "", err
+func (tx PlatformAuthTx) InsertAPIKey(ctx context.Context, input PlatformAuthAPIKeyInput) error {
+	status := strings.TrimSpace(input.Status)
+	if status == "" {
+		status = "active"
 	}
-	return userExternalID, orgUUID, nil
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		name = "default"
+	}
+	_, err := tx.tx.Exec(ctx, `
+		insert into api_keys (external_id, workspace_id, key_hash, status, created_by_user_id, name, partial_key_hint)
+		values ($1, $2, $3, $4, $5, $6, $7)
+	`, input.ExternalID, input.WorkspaceID, input.KeyHash, status, input.CreatedByUserID, name, input.PartialKeyHint)
+	return err
 }
 
 func (d *DB) ResolvePlatformSessionIdentity(ctx context.Context, input platformsession.CreateInput) (platformsession.Session, error) {
@@ -191,37 +262,4 @@ func (d *DB) ResolvePlatformSessionIdentity(ctx context.Context, input platforms
 	session.ExternalID = "platform_session_" + strings.ReplaceAll(sessionUUID, "-", "")
 	session.ExpiresAt = input.ExpiresAt
 	return session, nil
-}
-
-func normalizeLoginEmail(email string) string {
-	normalized := strings.ToLower(strings.TrimSpace(email))
-	if normalized == "" {
-		return "test@qq.com"
-	}
-	return normalized
-}
-
-func defaultPlatformUserName(email string) string {
-	localPart, _, _ := strings.Cut(strings.TrimSpace(email), "@")
-	localPart = strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(localPart)
-	if localPart == "" {
-		return "Local User"
-	}
-	return localPart
-}
-
-func defaultPlatformOrganizationName(email string) string {
-	name := defaultPlatformUserName(email)
-	if name == "Local User" {
-		return "Local Organization"
-	}
-	return name
-}
-
-func taggedExternalUserID(userUUID string) string {
-	compact := strings.ReplaceAll(userUUID, "-", "")
-	if len(compact) > 24 {
-		compact = compact[:24]
-	}
-	return "user_" + compact
 }

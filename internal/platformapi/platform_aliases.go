@@ -1,4 +1,4 @@
-package httpapi
+package platformapi
 
 import "github.com/superduck-ai/open-managed-agents/internal/platform"
 

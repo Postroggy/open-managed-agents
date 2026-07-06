@@ -22,12 +22,16 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
 	memoryapi "github.com/superduck-ai/open-managed-agents/internal/memory"
 	modelsapi "github.com/superduck-ai/open-managed-agents/internal/models"
+	"github.com/superduck-ai/open-managed-agents/internal/platform"
+	platformapi "github.com/superduck-ai/open-managed-agents/internal/platformapi"
+	"github.com/superduck-ai/open-managed-agents/internal/platformauth"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
 	sessionsapi "github.com/superduck-ai/open-managed-agents/internal/sessions"
 	skillsapi "github.com/superduck-ai/open-managed-agents/internal/skills"
 	"github.com/superduck-ai/open-managed-agents/internal/storage"
 	vaultsapi "github.com/superduck-ai/open-managed-agents/internal/vaults"
 	webhooksapi "github.com/superduck-ai/open-managed-agents/internal/webhooks"
+	workbenchapi "github.com/superduck-ai/open-managed-agents/internal/workbench"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -159,7 +163,7 @@ func (s *Server) platformAPIRouter() chi.Router {
 	router.Route("/v1", func(r chi.Router) {
 		r.NotFound(notFound)
 		r.MethodNotAllowed(notFound)
-		httpapi.RegisterPlatformPrivacyConsentRoutes(r)
+		platformapi.RegisterPlatformPrivacyConsentRoutes(r)
 		r.Group(func(r chi.Router) {
 			r.Use(s.platformAuthMiddleware)
 			s.mountPlatformV1Resources(r)
@@ -174,35 +178,35 @@ func (s *Server) platformConsoleAPIRouter() chi.Router {
 	router.MethodNotAllowed(notFound)
 	router.Group(func(r chi.Router) {
 		r.Use(s.optionalPlatformAuthMiddleware)
-		httpapi.RegisterDirectoryRoutes(r)
-		httpapi.RegisterPlatformAccountRoutes(r, s.db)
-		httpapi.RegisterPlatformEmailLoginRoutes(r, s.db, s.platformStore)
-		httpapi.RegisterPlatformBillingRoutes(r)
+		platformapi.RegisterDirectoryRoutes(r)
+		platformapi.RegisterPlatformAccountRoutes(r, s.db)
+		platformapi.RegisterPlatformEmailLoginRoutes(r, s.db, platformauth.New(s.db), s.platformStore)
+		platformapi.RegisterPlatformBillingRoutes(r)
 	})
 	router.Get("/oauth/vault/success", s.handlePlatformMCPVaultAuthCallback)
 	router.Group(func(r chi.Router) {
 		r.Use(s.platformAuthMiddleware)
 		r.Route("/api/organizations/{orgUuid}", func(r chi.Router) {
-			httpapi.RegisterOrganizationRootRoutes(r, s.db)
-			httpapi.RegisterOrganizationProfileRoutes(r, s.db)
-			httpapi.RegisterOrganizationSSORoutes(r)
-			httpapi.RegisterOrganizationOnboardingRoutes(r)
-			httpapi.RegisterOrganizationExperienceRoutes(r)
-			httpapi.RegisterOrganizationBillingRoutes(r)
-			httpapi.RegisterOrganizationAnalyticsRoutes(r)
-			httpapi.RegisterOrganizationProxyRoutes(r, s.cfg)
-			httpapi.RegisterOrgWorkbenchRoutes(r, s.db)
+			platformapi.RegisterOrganizationRootRoutes(r, s.db)
+			platformapi.RegisterOrganizationProfileRoutes(r, s.db)
+			platformapi.RegisterOrganizationSSORoutes(r)
+			platformapi.RegisterOrganizationOnboardingRoutes(r)
+			platformapi.RegisterOrganizationExperienceRoutes(r)
+			platformapi.RegisterOrganizationBillingRoutes(r)
+			platformapi.RegisterOrganizationAnalyticsRoutes(r)
+			platformapi.RegisterOrganizationProxyRoutes(r, s.cfg)
+			workbenchapi.RegisterOrgWorkbenchRoutes(r, s.db)
 			r.Post("/mcp/vault-auth/start", s.handlePlatformMCPVaultAuthStart)
 		})
 		r.Route("/api/oauth/organizations/{orgUuid}", func(r chi.Router) {
-			httpapi.RegisterOrganizationOAuthEnvironmentRoutes(r)
+			platformapi.RegisterOrganizationOAuthEnvironmentRoutes(r)
 		})
 		r.Route("/api/console/organizations/{orgUuid}", func(r chi.Router) {
-			httpapi.RegisterConsoleOrganizationWorkspaceRoutes(r, s.db)
-			httpapi.RegisterConsoleOrganizationAdminRequestRoutes(r, s.db)
-			httpapi.RegisterConsoleOrganizationAPIKeyRoutes(r, s.db)
-			httpapi.RegisterConsoleOrganizationMemberRoutes(r, s.db)
-			httpapi.RegisterConsoleOrganizationInviteRoutes(r, s.db)
+			platformapi.RegisterConsoleOrganizationWorkspaceRoutes(r, s.db)
+			platformapi.RegisterConsoleOrganizationAdminRequestRoutes(r, s.db)
+			platformapi.RegisterConsoleOrganizationAPIKeyRoutes(r, s.db)
+			platformapi.RegisterConsoleOrganizationMemberRoutes(r, s.db)
+			platformapi.RegisterConsoleOrganizationInviteRoutes(r, s.db)
 		})
 		r.Route("/api/{orgUuid}", func(r chi.Router) {
 			s.files.RegisterPlatformRoutes(r)
@@ -494,7 +498,7 @@ func (s *Server) recoverPlatformMirrorSession(r *http.Request) (auth.Principal, 
 			}
 		}
 		if err != nil {
-			if errors.Is(err, db.ErrNotFound) || errors.Is(err, httpapi.ErrNotFound) {
+			if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 				return auth.Principal{}, "", httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Invalid session"), true
 			}
 			log.Printf("recover platform session context: %v", err)
@@ -507,7 +511,7 @@ func (s *Server) recoverPlatformMirrorSession(r *http.Request) (auth.Principal, 
 		OrgUUID:    orgUUID,
 	})
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) || errors.Is(err, httpapi.ErrNotFound) {
+		if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 			return auth.Principal{}, "", httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Invalid session"), true
 		}
 		log.Printf("recover platform session identity: %v", err)
@@ -532,7 +536,7 @@ func (s *Server) applyPlatformOrganizationOverride(r *http.Request, principal au
 	}
 	org, err := s.db.GetPlatformOrganization(r.Context(), orgID)
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) || errors.Is(err, httpapi.ErrNotFound) {
+		if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 			return auth.Principal{}, httpapi.NewError(http.StatusForbidden, "permission_error", "Organization not found")
 		}
 		log.Printf("load platform organization override: %v", err)
@@ -561,7 +565,7 @@ func (s *Server) platformMirrorOrganizationAlias(r *http.Request, principal auth
 		}
 		return ""
 	}
-	if errors.Is(err, db.ErrNotFound) || errors.Is(err, httpapi.ErrNotFound) {
+	if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 		return orgID
 	}
 	log.Printf("load platform mirror organization alias: %v", err)
