@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe('Workspace API keys page', () => {
-  test('renders the wide workspace-scoped API keys shell with Open Managed Agents branding', async () => {
+  test('renders the wide workspace-scoped API keys shell with the workspace switcher', async () => {
     resetTestDom('https://oma.duck.ai/settings/workspaces/default/keys');
     mockWorkspaceApiKeys([activeKey, archivedKey]);
 
@@ -39,8 +39,11 @@ describe('Workspace API keys page', () => {
       </WorkspaceApiKeysHarness>
     );
 
-    expect(screen.getByText('Open Managed Agents')).toBeTruthy();
-    expect(screen.getByRole('combobox', { name: /Default/i })).toBeTruthy();
+    expect(
+      screen
+        .getAllByRole('button', { name: /Default/i })
+        .some((button) => button.getAttribute('aria-label') === 'Default')
+    ).toBe(true);
     expect(screen.getByRole('heading', { name: 'API keys' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Create key' })).toBeTruthy();
     expect(screen.getByText(/API keys are owned by workspaces/i)).toBeTruthy();

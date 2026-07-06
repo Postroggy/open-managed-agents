@@ -37,7 +37,11 @@ describe('Workspace webhooks page', () => {
       </WorkspaceWebhooksHarness>
     );
 
-    expect(screen.getByText('Open Managed Agents')).toBeTruthy();
+    expect(
+      screen
+        .getAllByRole('button', { name: /Default/i })
+        .some((button) => button.getAttribute('aria-label') === 'Default')
+    ).toBe(true);
     expect(screen.getByRole('heading', { name: 'Webhooks' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add webhook endpoint' })).toBeTruthy();
     expect(screen.getByText('Webhook endpoints receive event notifications when things happen in your workspace.')).toBeTruthy();

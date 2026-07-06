@@ -27,8 +27,7 @@ describe('ConsoleShell', () => {
       </ConsoleShell>
     );
 
-    expect(screen.getByText('Open Managed Agents')).toBeTruthy();
-    expect(screen.getByRole('combobox', { name: /Default/i })).toBeTruthy();
+    expect(getWorkspaceMenuButton(/Default/i)).toBeTruthy();
     expect(screen.getByText('Dashboard')).toBeTruthy();
     expect(screen.getByText('API keys')).toBeTruthy();
     expect(screen.getByText('Build')).toBeTruthy();
@@ -65,13 +64,13 @@ describe('ConsoleShell', () => {
       </ConsoleShell>
     );
 
-    expect(screen.getByRole('combobox', { name: /Default/i }).closest('[data-sidebar-scroll-area="true"]')).toBeNull();
+    expect(getWorkspaceMenuButton(/Default/i).closest('[data-sidebar-scroll-area="true"]')).toBeNull();
     const scrollArea = screen.getByRole('navigation', { name: /Console navigation/i }).closest('[data-sidebar-scroll-area="true"]');
     expect(scrollArea).toBeTruthy();
     expect(scrollArea?.classList.contains('sidebar-scroll-area')).toBe(true);
   });
 
-  test('collapses and expands the desktop sidebar from the header button', () => {
+  test('collapses and expands the desktop sidebar from the sidebar rail', () => {
     resetTestDom('https://oma.duck.ai/dashboard');
     renderWithWorkspaces(
       <ConsoleShell
@@ -90,15 +89,16 @@ describe('ConsoleShell', () => {
     expect(sidebar?.getAttribute('data-collapsible')).toBe('');
     expect(main?.getAttribute('data-slot')).toBe('sidebar-inset');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }));
+    const sidebarRail = screen.getByRole('button', { name: 'Toggle Sidebar' });
+
+    fireEvent.click(sidebarRail);
 
     expect(sidebar?.getAttribute('data-state')).toBe('collapsed');
     expect(sidebar?.getAttribute('data-collapsible')).toBe('icon');
-    expect(screen.getByRole('button', { name: 'Expand' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Build' }).getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('link', { name: 'Files' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
+    fireEvent.click(sidebarRail);
 
     expect(sidebar?.getAttribute('data-state')).toBe('expanded');
     expect(sidebar?.getAttribute('data-collapsible')).toBe('');
@@ -262,7 +262,7 @@ describe('ConsoleShell', () => {
     expect(screen.getByText('Dashboard')).toBeTruthy();
   });
 
-  test('opens the workspace selector with disabled all workspaces and selectable workspaces', async () => {
+  test('opens the workspace selector with labeled workspace items and create action', async () => {
     resetTestDom('https://oma.duck.ai/dashboard');
 
     renderWithWorkspaces(
@@ -276,14 +276,13 @@ describe('ConsoleShell', () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('combobox', { name: /Default/i }));
+      fireEvent.click(getWorkspaceMenuButton(/Default/i));
     });
 
-    expect(screen.getByText('All workspaces')).toBeTruthy();
-    expect(screen.getByText('Only available on Cost and Logs')).toBeTruthy();
-    expect(screen.getByRole('option', { name: /Default/i }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('option', { name: /foo/i })).toBeTruthy();
-    expect(screen.getByText('Create workspace')).toBeTruthy();
+    expect(screen.getByText('Workspaces')).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /Default/i }).getAttribute('aria-current')).toBe('true');
+    expect(screen.getByRole('menuitem', { name: /foo/i })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Create workspace' })).toBeTruthy();
   });
 
   test('closes the workspace selector when clicking outside', async () => {
@@ -299,13 +298,13 @@ describe('ConsoleShell', () => {
       </ConsoleShell>
     );
 
-    fireEvent.click(screen.getByRole('combobox', { name: /Default/i }));
-    expect(screen.getByRole('listbox')).toBeTruthy();
+    fireEvent.click(getWorkspaceMenuButton(/Default/i));
+    expect(screen.getAllByRole('menu').length).toBeGreaterThan(0);
 
     fireEvent.mouseDown(document.body);
     fireEvent.click(document.body);
 
-    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('menuitem', { name: /Default/i })).toBeNull());
   });
 
   test('selects a workspace and updates the account subtitle', async () => {
@@ -322,13 +321,13 @@ describe('ConsoleShell', () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('combobox', { name: /Default/i }));
+      fireEvent.click(getWorkspaceMenuButton(/Default/i));
     });
-    await waitFor(() => expect(screen.getByRole('option', { name: /foo/i })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: /foo/i })).toBeTruthy());
     await act(async () => {
-      fireEvent.click(screen.getByRole('option', { name: /foo/i }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /foo/i }));
     });
-    expect(screen.getByRole('combobox', { name: /foo/i })).toBeTruthy();
+    expect(getWorkspaceMenuButton(/foo/i)).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /test/i }));
@@ -351,11 +350,11 @@ describe('ConsoleShell', () => {
       </ConsoleShell>
     );
 
-    fireEvent.click(screen.getByRole('combobox', { name: /Default/i }));
-    fireEvent.click(screen.getByRole('option', { name: /foo/i }));
+    fireEvent.click(getWorkspaceMenuButton(/Default/i));
+    fireEvent.click(screen.getByRole('menuitem', { name: /foo/i }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/workspaces/wrkspc_foo/agents'));
-    expect(screen.getByRole('combobox', { name: /foo/i })).toBeTruthy();
+    expect(getWorkspaceMenuButton(/foo/i)).toBeTruthy();
   });
 
   test('syncs the workspace selector from workspace-scoped routes', async () => {
@@ -371,7 +370,7 @@ describe('ConsoleShell', () => {
       </ConsoleShell>
     );
 
-    await waitFor(() => expect(screen.getByRole('combobox', { name: /foo/i })).toBeTruthy());
+    await waitFor(() => expect(getWorkspaceMenuButton(/foo/i)).toBeTruthy());
   });
 
   test('creates a workspace with color and US residency', async () => {
@@ -396,8 +395,8 @@ describe('ConsoleShell', () => {
       { createWorkspace }
     );
 
-    fireEvent.click(screen.getByRole('combobox', { name: /Default/i }));
-    fireEvent.click(screen.getByText('Create workspace'));
+    fireEvent.click(getWorkspaceMenuButton(/Default/i));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create workspace' }));
 
     expect(screen.getByRole('button', { name: 'Create' }).hasAttribute('disabled')).toBe(true);
 
@@ -413,9 +412,25 @@ describe('ConsoleShell', () => {
         workspace_geo: 'us'
       }
     });
-    expect(screen.getByRole('combobox', { name: /bar/i })).toBeTruthy();
+    expect(getWorkspaceMenuButton(/bar/i)).toBeTruthy();
   });
 });
+
+function getWorkspaceMenuButton(name: RegExp | string) {
+  const matches = screen.getAllByRole('button', { name });
+  const match = matches.find((button) => matchesName(button.getAttribute('aria-label'), name));
+  if (!match) {
+    throw new Error(`Workspace menu button ${String(name)} was not found.`);
+  }
+  return match;
+}
+
+function matchesName(value: string | null, expected: RegExp | string) {
+  if (!value) {
+    return false;
+  }
+  return typeof expected === 'string' ? value === expected : expected.test(value);
+}
 
 function renderWithWorkspaces(
   children: ReactNode,
