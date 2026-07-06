@@ -7,7 +7,7 @@ import { cn } from "@/shared/lib/utils"
 import { Button } from "@/shared/ui/button"
 
 const sheetVariants = cva(
-  "fixed z-50 flex flex-col gap-4 bg-background text-foreground shadow-lg ring-1 ring-foreground/10 outline-none duration-150 data-open:animate-in data-closed:animate-out",
+  "fixed z-50 flex flex-col gap-4 border-border bg-background text-foreground shadow-lg ring-1 ring-foreground/10 outline-none duration-150 data-open:animate-in data-closed:animate-out",
   {
     variants: {
       side: {
