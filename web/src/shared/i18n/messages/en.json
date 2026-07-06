@@ -1092,5 +1092,6 @@
   "workspace.geo": "Workspace geo",
   "workspace.geoHelp": "Control where your workspace data, including files, conversation history, and workspace artifacts, is stored. This can't be changed after creation.",
   "workspace.loading": "Loading workspaces...",
-  "workspace.onlyCostLogs": "Only available on Cost and Logs"
+  "workspace.onlyCostLogs": "Only available on Cost and Logs",
+  "workspace.switcher": "Switch workspace"
 }
