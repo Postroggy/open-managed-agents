@@ -7,13 +7,15 @@
 #     -t ghcr.io/postroggy/open-managed-agents:latest --push .
 #
 # 国内容户可用 --build-arg GOPROXY=https://goproxy.cn,direct 加速。
+# 如需使用国内镜像源: --build-arg REGISTRY=docker.1ms.run/library
+
+ARG REGISTRY=docker.io/library
 
 # ---- Go 后端编译 ------------------------------------------------------------
-FROM docker.1ms.run/library/golang:1.26.2 AS go-builder
+FROM ${REGISTRY}/golang:1.26.2 AS go-builder
 
 ARG GOPROXY=https://proxy.golang.org,direct
 ENV GOPROXY=${GOPROXY}
-ENV GONOSUMDB=github.com/superduck-ai/*
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -22,7 +24,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /oma-server .
 
 # ---- 前端构建 (Bun) ---------------------------------------------------------
-FROM docker.1ms.run/library/node:22 AS web-builder
+FROM ${REGISTRY}/node:22 AS web-builder
 
 WORKDIR /web
 COPY web/package.json web/bun.lock ./
@@ -31,7 +33,7 @@ COPY web/ .
 RUN bun run build
 
 # ---- 运行镜像 ----------------------------------------------------------------
-FROM docker.1ms.run/library/debian:bookworm-slim
+FROM ${REGISTRY}/debian:bookworm-slim
 
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends ca-certificates curl \
@@ -47,6 +49,10 @@ COPY --from=web-builder /web/dist /web-dist
 # - assets/skills/public: 当前仓库无内置 skills，服务启动时会优雅降级（log "disabled"）。
 #   后续若添加 skills，需在 Dockerfile 中增加 COPY assets/skills/public 。
 # - environment-manager: 由 e2b-local 容器提供，不在本镜像中。
+
+RUN useradd --no-create-home --shell /bin/false oma \
+    && chown -R oma:oma /web-dist
+USER oma
 
 ENV ADDR=:8080
 EXPOSE 8080

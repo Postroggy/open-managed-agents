@@ -7,31 +7,10 @@
 	encode gzip
 
 	# ---- 平台 Console API 反向代理 → oma-server ----
-	handle /api* {
-		reverse_proxy oma-server:8080 {
-			flush_interval -1
-		}
+	@backend {
+		path /api* /v1* /auth* /oauth* /web-api*
 	}
-
-	handle /v1* {
-		reverse_proxy oma-server:8080 {
-			flush_interval -1
-		}
-	}
-
-	handle /auth* {
-		reverse_proxy oma-server:8080 {
-			flush_interval -1
-		}
-	}
-
-	handle /oauth* {
-		reverse_proxy oma-server:8080 {
-			flush_interval -1
-		}
-	}
-
-	handle /web-api* {
+	handle @backend {
 		reverse_proxy oma-server:8080 {
 			flush_interval -1
 		}

@@ -6,7 +6,7 @@
 # __ENVD_BIN_DIR__ 是占位符 — docker-compose 启动时通过 entrypoint wrapper
 # 替换为宿主机上 envd-bin 目录的真实绝对路径。
 server:
-  addr: "127.0.0.1:3099"
+  addr: "0.0.0.0:3099"
 
 runtime:
   type: "docker"

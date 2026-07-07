@@ -118,13 +118,17 @@ PR: https://github.com/superduck-ai/open-managed-agents/pull/6
 
 1. 拉取 sandbox 模板镜像（由 e2b-local 使用）：
    ```bash
-   docker pull claude-code-interpreter:latest
+   # sandbox 模板镜像需从 e2b-local 对应的镜像仓库拉取。
+   # 具体镜像名和 tag 取决于 e2b-local 的 E2B_TEMPLATE 配置。
+   docker pull ghcr.io/postroggy/claude-code-interpreter:latest
    ```
 
 2. 配置上游 Anthropic API（在 `.env` 中）：
    ```bash
    ANTHROPIC_UPSTREAM_API_KEY=sk-ant-...
    ```
+
+> **平台要求**：`e2b-local` 使用 `network_mode: host`，仅支持 Linux Docker Engine。Docker Desktop（macOS/Windows）不支持 host 网络模式。
 
 ## 7. 启动
 
