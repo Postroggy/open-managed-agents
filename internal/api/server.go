@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 
@@ -294,7 +293,7 @@ func (s *Server) platformAuthMiddleware(next http.Handler) http.Handler {
 					return
 				}
 			}
-			if isPlatformHost(r.Host) && auth.ExtractPlatformSessionKey(r) != "" {
+			if auth.ExtractPlatformSessionKey(r) != "" {
 				clearPlatformSessionCookies(w)
 			}
 			httpapi.WriteError(w, r, err)
@@ -332,7 +331,7 @@ func (s *Server) authenticated(next http.Handler, authenticate func(*http.Reques
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		principal, err := authenticate(r)
 		if err != nil {
-			if isPlatformHost(r.Host) && auth.ExtractPlatformSessionKey(r) != "" {
+			if auth.ExtractPlatformSessionKey(r) != "" {
 				clearPlatformSessionCookies(w)
 			}
 			httpapi.WriteError(w, r, err)
@@ -481,7 +480,7 @@ func (s *Server) authenticatePlatformSession(r *http.Request) (auth.Principal, *
 
 func (s *Server) recoverPlatformMirrorSession(r *http.Request) (auth.Principal, string, *httpapi.Error, bool) {
 	sessionKey := auth.ExtractPlatformSessionKey(r)
-	if sessionKey == "" || !isPlatformHost(r.Host) || s.db == nil || s.platformStore == nil {
+	if sessionKey == "" || s.db == nil || s.platformStore == nil {
 		return auth.Principal{}, "", nil, false
 	}
 	preferredOrgID := platformSessionRecoveryOrgID(r)
@@ -552,7 +551,7 @@ func (s *Server) applyPlatformOrganizationOverride(r *http.Request, principal au
 }
 
 func (s *Server) platformMirrorOrganizationAlias(r *http.Request, principal auth.Principal) string {
-	if !isPlatformHost(r.Host) || s.db == nil {
+	if s.db == nil {
 		return ""
 	}
 	orgID := platformAPIPathOrganizationID(r.URL.Path)
@@ -649,34 +648,6 @@ func isPlatformAPIRequestPath(path string) bool {
 		}
 	}
 	return false
-}
-
-func isPlatformHost(host string) bool {
-	normalizedHost, port := normalizedRequestHostParts(host)
-	switch normalizedHost {
-	case "oma.duck.ai":
-		return true
-	case "localhost", "127.0.0.1", "::1":
-		return port == "5173"
-	default:
-		return false
-	}
-}
-
-func normalizedRequestHost(host string) string {
-	normalizedHost, _ := normalizedRequestHostParts(host)
-	return normalizedHost
-}
-
-func normalizedRequestHostParts(host string) (string, string) {
-	host = strings.TrimSpace(strings.ToLower(host))
-	if host == "" {
-		return "", ""
-	}
-	if parsedHost, port, err := net.SplitHostPort(host); err == nil {
-		return strings.Trim(parsedHost, "[]"), port
-	}
-	return strings.Trim(host, "[]"), ""
 }
 
 func isEnvironmentWorkPath(path string) bool {
