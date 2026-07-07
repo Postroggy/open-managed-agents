@@ -201,6 +201,9 @@ services:
     restart: unless-stopped
 
 volumes:
+  # 数据持久化通过 Docker named volumes 实现，重启后数据不丢失。
+  # 如需要将数据存放在宿主机指定路径，替换为 bind mount：
+  #   pgdata:   driver: local  →  - ./data/postgres:/var/lib/postgresql/data
   pgdata:
   redisdata:
   miniodata:
