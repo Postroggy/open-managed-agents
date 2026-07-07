@@ -296,7 +296,70 @@ func normalizePublicWorkerPayload(codeSessionID string, event db.CodeSessionEven
 			}
 		}
 	}
+	normalizePublicIdleStopReason(payload)
 	return marshalRaw(payload)
+}
+
+func normalizePublicIdleStopReason(payload map[string]any) {
+	switch stringField(payload, "type") {
+	case "session.status_idle", "session.thread_status_idle":
+	default:
+		return
+	}
+	raw, ok := payload["stop_reason"]
+	if !ok || raw == nil {
+		payload["stop_reason"] = map[string]any{"type": "end_turn"}
+		return
+	}
+	if reason, ok := raw.(string); ok {
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
+			reason = "end_turn"
+		}
+		payload["stop_reason"] = map[string]any{"type": reason}
+		return
+	}
+	if reason, ok := raw.(map[string]any); ok {
+		reasonType := strings.TrimSpace(stringField(reason, "type"))
+		if reasonType == "" {
+			reasonType = "end_turn"
+		}
+		normalized := map[string]any{"type": reasonType}
+		if reasonType != "requires_action" {
+			if detail := strings.TrimSpace(stringField(reason, "detail")); detail != "" {
+				normalized["detail"] = detail
+			}
+		}
+		if eventIDs := publicStopReasonEventIDs(reason["event_ids"]); len(eventIDs) > 0 {
+			normalized["event_ids"] = eventIDs
+		}
+		payload["stop_reason"] = normalized
+	}
+}
+
+func publicStopReasonEventIDs(raw any) []string {
+	switch values := raw.(type) {
+	case []string:
+		eventIDs := make([]string, 0, len(values))
+		for _, value := range values {
+			if value = strings.TrimSpace(value); value != "" {
+				eventIDs = append(eventIDs, value)
+			}
+		}
+		return eventIDs
+	case []any:
+		eventIDs := make([]string, 0, len(values))
+		for _, value := range values {
+			if text, ok := value.(string); ok {
+				if text = strings.TrimSpace(text); text != "" {
+					eventIDs = append(eventIDs, text)
+				}
+			}
+		}
+		return eventIDs
+	default:
+		return nil
+	}
 }
 
 func publicPayloadWithType(object map[string]any, eventType string) map[string]any {

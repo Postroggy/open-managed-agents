@@ -12,8 +12,8 @@ export function buildSessionTraceEntries(
   msg?: I18nMsg,
   options: SessionTraceBuildOptions = {}
 ): SessionTraceEntry[] {
-  const toolResults = new Map<string, QuickstartSessionEvent>();
-  const toolConfirmations = new Map<string, QuickstartSessionEvent>();
+  const toolResults = new Map<string, QuickstartSessionEvent[]>();
+  const toolConfirmations = new Map<string, QuickstartSessionEvent[]>();
   const displayEvents = events.map(sessionCanonicalDisplayEvent);
   const threadHints = buildSessionThreadHints(displayEvents);
   // Transcript 使用只读回放模型：result / confirmation 先按 tool use id 建索引，
@@ -22,14 +22,14 @@ export function buildSessionTraceEntries(
     if (sessionIsToolResultEvent(event)) {
       const toolUseId = sessionToolResultToolUseId(event);
       if (toolUseId) {
-        toolResults.set(toolUseId, event);
+        addSessionToolCompanionEvent(toolResults, toolUseId, event);
       }
     }
 
     if (sessionEventType(event) === 'user.tool_confirmation') {
       const toolUseId = sessionToolConfirmationToolUseId(event);
       if (toolUseId) {
-        toolConfirmations.set(toolUseId, event);
+        addSessionToolCompanionEvent(toolConfirmations, toolUseId, event);
       }
     }
   });
@@ -47,10 +47,86 @@ export function buildSessionTraceEntries(
 
     const family = sessionEventFamily(enrichedEvent);
     const toolUseId = sessionToolUseId(enrichedEvent);
-    const resultEvent = family === 'tool_use' && toolUseId ? toolResults.get(toolUseId) : undefined;
-    const confirmationEvent = family === 'tool_use' && toolUseId ? toolConfirmations.get(toolUseId) : undefined;
+    const resultEvent =
+      family === 'tool_use' && toolUseId
+        ? selectSessionToolCompanionEvent(toolResults.get(toolUseId), enrichedEvent, threadHints.byToolUseId)
+        : undefined;
+    const confirmationEvent =
+      family === 'tool_use' && toolUseId
+        ? selectSessionToolCompanionEvent(toolConfirmations.get(toolUseId), enrichedEvent, threadHints.byToolUseId)
+        : undefined;
     return [sessionTraceEntryFromEvent(enrichedEvent, index, family, resultEvent, confirmationEvent, traceStartMs, msg)];
   });
+}
+
+function addSessionToolCompanionEvent(
+  eventsByToolUseId: Map<string, QuickstartSessionEvent[]>,
+  toolUseId: string,
+  event: QuickstartSessionEvent
+) {
+  const existing = eventsByToolUseId.get(toolUseId);
+  if (existing) {
+    existing.push(event);
+    return;
+  }
+  eventsByToolUseId.set(toolUseId, [event]);
+}
+
+function selectSessionToolCompanionEvent(
+  events: QuickstartSessionEvent[] | undefined,
+  toolEvent: QuickstartSessionEvent,
+  threadHintsByToolUseId: Map<string, SessionThreadHint>
+): QuickstartSessionEvent | undefined {
+  if (!events?.length) {
+    return undefined;
+  }
+  const toolThreadId = sessionToolCompanionThreadId(toolEvent, threadHintsByToolUseId);
+  if (!toolThreadId) {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      if (!sessionToolCompanionThreadId(events[index], threadHintsByToolUseId)) {
+        return events[index];
+      }
+    }
+    return undefined;
+  }
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (sessionSubagentThreadId(events[index]) === toolThreadId) {
+      return events[index];
+    }
+  }
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (sessionToolCompanionThreadId(events[index], threadHintsByToolUseId) === toolThreadId) {
+      return events[index];
+    }
+  }
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (!sessionToolCompanionThreadId(events[index], threadHintsByToolUseId)) {
+      return events[index];
+    }
+  }
+  return events[events.length - 1];
+}
+
+function sessionToolCompanionThreadId(
+  event: QuickstartSessionEvent,
+  threadHintsByToolUseId: Map<string, SessionThreadHint>
+) {
+  const explicitThreadId = sessionSubagentThreadId(event);
+  if (explicitThreadId) {
+    return explicitThreadId;
+  }
+  if (sessionIsToolUseEvent(event)) {
+    return '';
+  }
+  const toolUseId = sessionToolCompanionToolUseId(event);
+  if (!toolUseId) {
+    return '';
+  }
+  return threadHintsByToolUseId.get(toolUseId)?.id ?? '';
+}
+
+function sessionToolCompanionToolUseId(event: QuickstartSessionEvent) {
+  return sessionToolConfirmationToolUseId(event) || sessionToolResultToolUseId(event) || (sessionIsToolUseEvent(event) ? sessionToolUseId(event) : '');
 }
 
 export function buildSessionEventEntries(
@@ -452,9 +528,9 @@ export function idleGapEntry(idleAtMs: number, nextAtMs: number, traceStartMs: n
     id: `idle-gap-${idleAtMs}-${nextAtMs}`,
     kind: 'idle_gap',
     durationMs,
-    createdAtMs: nextAtMs,
-    processedAtMs: nextAtMs,
-    relativeTime: sessionEventElapsedTime({ created_at: new Date(nextAtMs).toISOString() }, traceStartMs),
+    createdAtMs: idleAtMs,
+    processedAtMs: idleAtMs,
+    relativeTime: sessionEventElapsedTime({ created_at: new Date(idleAtMs).toISOString() }, traceStartMs),
     searchText: `idle gap ${durationMs}`,
     isError: false
   };
@@ -598,8 +674,27 @@ export function sessionToolResultIsError(event?: QuickstartSessionEvent) {
 export function normalizedToolPermission(event: QuickstartSessionEvent): 'ask' | 'allow' | 'deny' {
   const data = toRecord(event.data);
   const metadata = toRecord(event.metadata);
-  const permissionRecord = toRecord(event.evaluated_permission) ?? toRecord(event.permission) ?? toRecord(event.confirmation);
-  const raw = [
+  const permissionRecord =
+    toRecord(event.evaluated_permission) ??
+    toRecord(event.permission) ??
+    toRecord(event.permission_policy) ??
+    toRecord(event.permission_decision) ??
+    toRecord(event.confirmation) ??
+    (data ? toRecord(data.evaluated_permission) : null) ??
+    (data ? toRecord(data.permission) : null) ??
+    (data ? toRecord(data.permission_policy) : null) ??
+    (metadata ? toRecord(metadata.evaluated_permission) : null) ??
+    (metadata ? toRecord(metadata.permission) : null) ??
+    (metadata ? toRecord(metadata.permission_policy) : null);
+  const requiresActionDetails =
+    toRecord(event.requires_action_details) ??
+    (data ? toRecord(data.requires_action_details) : null) ??
+    (metadata ? toRecord(metadata.requires_action_details) : null);
+  const stopReason =
+    toRecord(event.stop_reason) ??
+    (data ? toRecord(data.stop_reason) : null) ??
+    (metadata ? toRecord(metadata.stop_reason) : null);
+  const permissionRaw = [
     event.evaluated_permission,
     event.permission,
     event.permission_policy,
@@ -607,19 +702,51 @@ export function normalizedToolPermission(event: QuickstartSessionEvent): 'ask' |
     event.confirmation,
     data?.evaluated_permission,
     data?.permission,
+    data?.permission_policy,
+    data?.permission_decision,
     metadata?.evaluated_permission,
     metadata?.permission,
+    metadata?.permission_policy,
+    metadata?.permission_decision,
     permissionRecord?.result,
     permissionRecord?.decision,
     permissionRecord?.type,
-    permissionRecord?.policy
+    permissionRecord?.policy,
+    permissionRecord?.state,
+    permissionRecord?.status
   ]
     .map(normalizedStringValue)
     .find(Boolean);
+  const requiresActionRaw = [
+    requiresActionDetails?.type,
+    requiresActionDetails?.status,
+    stopReason?.type,
+    stopReason?.status
+  ]
+    .map(normalizedStringValue)
+    .find(Boolean);
+  const statusRaw = [
+    event.status,
+    event.lifecycle,
+    data?.status,
+    data?.lifecycle,
+    metadata?.status,
+    metadata?.lifecycle
+  ]
+    .map(normalizedStringValue)
+    .find(Boolean);
+  const raw = permissionRaw || requiresActionRaw || statusRaw;
 
   switch (raw) {
     case 'ask':
     case 'always_ask':
+    case 'await_permission':
+    case 'awaiting_permission':
+    case 'awaiting_approval':
+    case 'needs_permission':
+    case 'needs_approval':
+    case 'permission_required':
+    case 'approval_required':
     case 'requires_action':
       return 'ask';
     case 'deny':
@@ -676,8 +803,8 @@ export function sessionEventIsQueuedUserMessage(event: QuickstartSessionEvent) {
 export function sessionContentBlockEntries(
   event: QuickstartSessionEvent,
   index: number,
-  toolResults: Map<string, QuickstartSessionEvent>,
-  toolConfirmations: Map<string, QuickstartSessionEvent>,
+  toolResults: Map<string, QuickstartSessionEvent[]>,
+  toolConfirmations: Map<string, QuickstartSessionEvent[]>,
   view: SessionTraceView,
   traceStartMs: number,
   threadHintsByToolUseId: Map<string, { id: string; name: string }>,
@@ -732,7 +859,17 @@ export function sessionContentBlockEntries(
       if (view === 'transcript' && sessionIsAgentSubagentToolUse(toolEvent)) {
         return;
       }
-      entries.push(sessionTraceEntryFromEvent(toolEvent, index, 'tool_use', toolResults.get(id), toolConfirmations.get(id), traceStartMs, msg));
+      entries.push(
+        sessionTraceEntryFromEvent(
+          toolEvent,
+          index,
+          'tool_use',
+          selectSessionToolCompanionEvent(toolResults.get(id), toolEvent, threadHintsByToolUseId),
+          selectSessionToolCompanionEvent(toolConfirmations.get(id), toolEvent, threadHintsByToolUseId),
+          traceStartMs,
+          msg
+        )
+      );
       return;
     }
     if (record.type === 'tool_result' && view === 'debug') {
@@ -793,7 +930,7 @@ export function buildSessionThreadHints(events: QuickstartSessionEvent[]) {
 
   const byToolUseId = new Map<string, SessionThreadHint>();
   events.forEach((event) => {
-    const toolUseId = typeof event.tool_use_id === 'string' ? event.tool_use_id.trim() : '';
+    const toolUseId = sessionThreadHintToolUseId(event);
     if (!toolUseId) {
       return;
     }
@@ -808,6 +945,13 @@ export function buildSessionThreadHints(events: QuickstartSessionEvent[]) {
     }
   });
   return { byThreadId, byToolUseId };
+}
+
+export function sessionThreadHintToolUseId(event: QuickstartSessionEvent) {
+  if (sessionIsToolUseEvent(event)) {
+    return sessionToolUseId(event);
+  }
+  return sessionToolConfirmationToolUseId(event) || sessionToolResultToolUseId(event);
 }
 
 export function sessionEventWithThreadHint(event: QuickstartSessionEvent, threadHintsByThreadId: Map<string, SessionThreadHint>) {

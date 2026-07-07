@@ -51,7 +51,11 @@ describe('Organization settings', () => {
       </OrganizationSettingsHarness>
     );
 
-    expect(screen.getByText('Open Managed Agents')).toBeTruthy();
+    expect(
+      screen
+        .getAllByRole('button', { name: /Default/i })
+        .some((button) => button.getAttribute('aria-label') === 'Default')
+    ).toBe(true);
     expect(screen.getByText('Back to app')).toBeTruthy();
     expect(screen.getByText('Organization settings')).toBeTruthy();
     expect(screen.getByText('Workload identity')).toBeTruthy();

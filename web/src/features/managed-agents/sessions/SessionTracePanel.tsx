@@ -653,10 +653,10 @@ export function SessionTraceDetail({
   return (
     <div
       className={clsx(
-        'flex flex-col overflow-hidden bg-secondary',
+        'relative flex flex-col overflow-hidden',
         placement === 'overlay'
-          ? 'absolute inset-0 z-10'
-          : 'min-h-[420px] border-t border-border lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
+          ? 'absolute inset-0 z-10 bg-secondary'
+          : 'border-t border-border bg-transparent lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
       )}
       data-placement={placement}
       data-testid="session-trace-detail"
@@ -726,10 +726,10 @@ export function EventDetailPanel({
   return (
     <div
       className={clsx(
-        'flex flex-col overflow-hidden bg-secondary',
+        'relative flex flex-col overflow-hidden',
         placement === 'overlay'
-          ? 'absolute inset-0 z-10'
-          : 'min-h-[420px] border-t border-border lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
+          ? 'absolute inset-0 z-10 bg-secondary'
+          : 'border-t border-border bg-transparent lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
       )}
       data-placement={placement}
       data-testid="session-trace-detail"

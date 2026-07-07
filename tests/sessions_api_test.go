@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1634,8 +1636,30 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 	if eventPageContains(publicEvents, "control-weather-ask-"+suffix) {
 		t.Fatalf("control_request leaked into public session events: %+v", publicEvents.Data)
 	}
+	toolEvent := sessionEventObjectByType(t, publicEvents, "agent.mcp_tool_use")
+	toolEventID, ok := toolEvent["id"].(string)
+	if !ok || toolEventID == "" {
+		t.Fatalf("agent.mcp_tool_use id = %#v, want non-empty string: %#v", toolEvent["id"], toolEvent)
+	}
+	statusEvent := sessionEventObjectByType(t, publicEvents, "session.status_idle")
+	stopReason, ok := statusEvent["stop_reason"].(map[string]any)
+	if !ok {
+		t.Fatalf("session.status_idle stop_reason = %#v, want object: %#v", statusEvent["stop_reason"], statusEvent)
+	}
+	eventIDs := stringArrayField(stopReason, "event_ids")
+	if len(eventIDs) != 1 || eventIDs[0] != toolEventID {
+		t.Fatalf("stop_reason.event_ids = %#v, want [%s]; status=%#v tool=%#v", eventIDs, toolEventID, statusEvent, toolEvent)
+	}
+	assertRequiresActionStopReasonSDKShape(t, stopReason)
+	requiresActionDetails, ok := statusEvent["requires_action_details"].(map[string]any)
+	if !ok {
+		t.Fatalf("session.status_idle requires_action_details = %#v, want object: %#v", statusEvent["requires_action_details"], statusEvent)
+	}
+	if requiresActionDetails["tool_use_id"] != toolUseID || requiresActionDetails["request_id"] != requestID || requiresActionDetails["tool_name"] != "mcp__weather_service__get_weather" {
+		t.Fatalf("requires_action_details = %#v, want compatibility tool_use_id/request_id/tool_name", requiresActionDetails)
+	}
 
-	resp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","tool_use_id":`+quoteJSON(toolUseID)+`,"result":"allow"}]}`), defaultTestKey, true)
+	resp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","tool_use_id":`+quoteJSON(toolEventID)+`,"result":"allow"}]}`), defaultTestKey, true)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("send tool confirmation status = %d, want 200: %s", resp.StatusCode, readAll(t, resp.Body))
@@ -1655,6 +1679,179 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 	nested := response["response"].(map[string]any)
 	if nested["behavior"] != "allow" || nested["toolUseID"] != toolUseID {
 		t.Fatalf("confirmation response nested = %#v, want allow for %s; payload=%s", nested, toolUseID, payload)
+	}
+
+	var beforeCompatCount int
+	if err := app.db.Pool.QueryRow(context.Background(), `
+		select count(*)
+		from code_session_inbound_events
+		where code_session_external_id = $1 and source = 'tool-confirmation' and deleted_at is null
+	`, codeSessionID).Scan(&beforeCompatCount); err != nil {
+		t.Fatalf("count tool confirmation inbound events before compat send: %v", err)
+	}
+	compatResp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","tool_use_id":`+quoteJSON(toolUseID)+`,"result":"allow"}]}`), defaultTestKey, true)
+	defer compatResp.Body.Close()
+	if compatResp.StatusCode != http.StatusOK {
+		t.Fatalf("send legacy tool confirmation status = %d, want 200: %s", compatResp.StatusCode, readAll(t, compatResp.Body))
+	}
+	var afterCompatCount int
+	if err := app.db.Pool.QueryRow(context.Background(), `
+		select count(*)
+		from code_session_inbound_events
+		where code_session_external_id = $1 and source = 'tool-confirmation' and deleted_at is null
+	`, codeSessionID).Scan(&afterCompatCount); err != nil {
+		t.Fatalf("count tool confirmation inbound events after compat send: %v", err)
+	}
+	if afterCompatCount != beforeCompatCount+1 {
+		t.Fatalf("legacy tool confirmation inbound count = %d, want %d", afterCompatCount, beforeCompatCount+1)
+	}
+}
+
+func TestCodeSessionMCPDefaultAskPreservesSubagentThreadForConfirmation(t *testing.T) {
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-mcp-default-ask-thread-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{
+		"model":"claude-opus-4-6",
+		"name":"sessions-worker-mcp-default-ask-thread-agent",
+		"mcp_servers":[{"type":"url","name":"weather_service","url":"http://host.docker.internal:39090/mcp"}],
+		"tools":[
+			{"type":"agent_toolset_20260401"},
+			{
+				"type":"mcp_toolset",
+				"mcp_server_name":"weather_service",
+				"configs":[],
+				"default_config":{"enabled":true,"permission_policy":{"type":"always_ask"}}
+			}
+		]
+	}`)
+	defer cleanupAgentRows(t, app.db, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-worker-mcp-default-ask-thread-env"}`)
+	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
+	suffix := strings.TrimPrefix(session.ID, "sesn_")
+	childThreadID := "sthr_approval_" + suffix
+	toolUseID := "toolu_weather_thread_" + suffix
+	requestID := "req_weather_thread_" + suffix
+
+	postCodeSessionWorkerEvents(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(workerEpoch)+`,"events":[{"payload":{`+
+		`"type":"session.thread_created",`+
+		`"uuid":"thread-created-approval-`+suffix+`",`+
+		`"session_thread_id":`+quoteJSON(childThreadID)+`,`+
+		`"agent_name":"reporter",`+
+		`"created_at":"2026-06-16T01:00:00Z"`+
+		`}}]}`)
+	threads := listSessionThreads(t, app, session.ID, defaultTestKey)
+	foundChildThread := false
+	for _, thread := range threads.Data {
+		if thread.ID == childThreadID {
+			foundChildThread = true
+			break
+		}
+	}
+	if !foundChildThread {
+		t.Fatalf("child thread %s was not created: %+v", childThreadID, threads.Data)
+	}
+
+	postCodeSessionWorkerEvents(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(workerEpoch)+`,"events":[{"payload":{`+
+		`"type":"control_request",`+
+		`"uuid":"control-weather-thread-`+suffix+`",`+
+		`"session_thread_id":`+quoteJSON(childThreadID)+`,`+
+		`"request_id":`+quoteJSON(requestID)+`,`+
+		`"request":{"subtype":"can_use_tool","session_thread_id":`+quoteJSON(childThreadID)+`,"tool_name":"mcp__weather_service__get_weather","tool_use_id":`+quoteJSON(toolUseID)+`,"input":{"location":"Beijing"}}`+
+		`}}]}`)
+
+	primaryEvents := listSessionEvents(t, app, session.ID, "order=asc&limit=100", defaultTestKey)
+	for _, want := range []string{
+		`"type":"agent.mcp_tool_use"`,
+		`"session_thread_id":"` + childThreadID + `"`,
+		`"tool_use_id":"` + toolUseID + `"`,
+		`"type":"requires_action"`,
+		`"request_id":"` + requestID + `"`,
+	} {
+		if !eventPageContains(primaryEvents, want) {
+			t.Fatalf("primary events missing %q: %+v", want, primaryEvents.Data)
+		}
+	}
+	primaryToolEvent := sessionEventObjectByType(t, primaryEvents, "agent.mcp_tool_use")
+	primaryToolEventID, ok := primaryToolEvent["id"].(string)
+	if !ok || primaryToolEventID == "" {
+		t.Fatalf("primary agent.mcp_tool_use id = %#v, want non-empty string: %#v", primaryToolEvent["id"], primaryToolEvent)
+	}
+	if primaryToolEvent["session_thread_id"] != childThreadID {
+		t.Fatalf("primary blocking tool event session_thread_id = %v, want %s: %#v", primaryToolEvent["session_thread_id"], childThreadID, primaryToolEvent)
+	}
+	primaryStatusEvent := sessionEventObjectByType(t, primaryEvents, "session.status_idle")
+	primaryStopReason, ok := primaryStatusEvent["stop_reason"].(map[string]any)
+	if !ok {
+		t.Fatalf("primary status stop_reason = %#v, want object: %#v", primaryStatusEvent["stop_reason"], primaryStatusEvent)
+	}
+	primaryEventIDs := stringArrayField(primaryStopReason, "event_ids")
+	if len(primaryEventIDs) != 1 || primaryEventIDs[0] != primaryToolEventID {
+		t.Fatalf("primary stop_reason.event_ids = %#v, want [%s]; status=%#v tool=%#v", primaryEventIDs, primaryToolEventID, primaryStatusEvent, primaryToolEvent)
+	}
+	assertRequiresActionStopReasonSDKShape(t, primaryStopReason)
+	primaryRequiresActionDetails, ok := primaryStatusEvent["requires_action_details"].(map[string]any)
+	if !ok {
+		t.Fatalf("primary status requires_action_details = %#v, want object: %#v", primaryStatusEvent["requires_action_details"], primaryStatusEvent)
+	}
+	if primaryRequiresActionDetails["tool_use_id"] != toolUseID || primaryRequiresActionDetails["request_id"] != requestID || primaryRequiresActionDetails["session_thread_id"] != childThreadID {
+		t.Fatalf("primary requires_action_details = %#v, want compatibility tool_use_id/request_id/session_thread_id", primaryRequiresActionDetails)
+	}
+
+	childEvents := listThreadEvents(t, app, session.ID, childThreadID, defaultTestKey)
+	for _, want := range []string{
+		`"type":"agent.mcp_tool_use"`,
+		`"session_thread_id":"` + childThreadID + `"`,
+		`"tool_use_id":"` + toolUseID + `"`,
+		`"evaluated_permission":"ask"`,
+	} {
+		if !eventPageContains(childEvents, want) {
+			t.Fatalf("child events missing %q: %+v", want, childEvents.Data)
+		}
+	}
+
+	resp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.tool_confirmation","session_thread_id":`+quoteJSON(childThreadID)+`,"tool_use_id":`+quoteJSON(primaryToolEventID)+`,"result":"deny","deny_message":"Reporter cannot call external weather"}]}`), defaultTestKey, true)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("send child tool confirmation status = %d, want 200: %s", resp.StatusCode, readAll(t, resp.Body))
+	}
+
+	childEvents = listThreadEvents(t, app, session.ID, childThreadID, defaultTestKey)
+	for _, want := range []string{
+		`"type":"user.tool_confirmation"`,
+		`"session_thread_id":"` + childThreadID + `"`,
+		`"tool_use_id":"` + primaryToolEventID + `"`,
+		`Reporter cannot call external weather`,
+	} {
+		if !eventPageContains(childEvents, want) {
+			t.Fatalf("child events after confirmation missing %q: %+v", want, childEvents.Data)
+		}
+	}
+
+	source, eventType, payload := latestCodeSessionInboundEventForSource(t, app, codeSessionID, "tool-confirmation")
+	if source != "tool-confirmation" || eventType != "control_response" {
+		t.Fatalf("confirmation response source/event_type = %q/%q, want tool-confirmation/control_response payload=%s", source, eventType, payload)
+	}
+	var object map[string]any
+	if err := json.Unmarshal(payload, &object); err != nil {
+		t.Fatalf("decode confirmation response payload: %v", err)
+	}
+	if object["session_thread_id"] != childThreadID {
+		t.Fatalf("confirmation response session_thread_id = %v, want %s; payload=%s", object["session_thread_id"], childThreadID, payload)
+	}
+	response := object["response"].(map[string]any)
+	if response["request_id"] != requestID {
+		t.Fatalf("confirmation response request_id = %v, want %s; payload=%s", response["request_id"], requestID, payload)
+	}
+	nested := response["response"].(map[string]any)
+	if nested["behavior"] != "deny" || nested["toolUseID"] != toolUseID || nested["sessionThreadID"] != childThreadID {
+		t.Fatalf("confirmation response nested = %#v, want deny for %s on %s; payload=%s", nested, toolUseID, childThreadID, payload)
+	}
+	if nested["denyMessage"] != "Reporter cannot call external weather" {
+		t.Fatalf("confirmation deny message = %v, want custom deny message; payload=%s", nested["denyMessage"], payload)
 	}
 }
 
@@ -2093,8 +2290,106 @@ func TestCodeSessionWorkerEpochValidationRejectsInvalidValues(t *testing.T) {
 		assertError(t, resp, http.StatusBadRequest, "invalid_request_error")
 	}
 
-	resp = doCodeSessionWorkerRequest(t, app, codeSessionID, "otlp/metrics", `test`)
+	resp = doCodeSessionWorkerOTLPRequest(t, app, codeSessionID, "metrics", "abc", "application/x-protobuf", nil)
 	assertError(t, resp, http.StatusBadRequest, "invalid_request_error")
+}
+
+func TestCodeSessionWorkerOTLPAcceptsMissingEpoch(t *testing.T) {
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-otlp-missing-epoch-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-otlp-missing-epoch-agent"}`)
+	defer cleanupAgentRows(t, app.db, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-worker-otlp-missing-epoch-env"}`)
+	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+	_ = registerCodeSessionWorker(t, app, codeSessionID)
+
+	assertCodeSessionWorkerOTLP(t, app, codeSessionID, "metrics", "")
+	assertCodeSessionWorkerOTLPJSON(t, app, codeSessionID, "metrics", "")
+	assertCodeSessionWorkerOTLP(t, app, codeSessionID, "logs", "")
+}
+
+func TestCodeSessionWorkerOTLPFileLogWritesAcceptedTelemetry(t *testing.T) {
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	cfg.CodeSessionOTLPFileLogEnabled = true
+	cfg.CodeSessionOTLPLogRoot = t.TempDir()
+	cfg.CodeSessionOTLPLogBodyPreviewBytes = 128
+	app := newTestAppWithStore(t, &cfg, newFakeStore("sessions-code-worker-otlp-file-log-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-otlp-file-log-agent"}`)
+	defer cleanupAgentRows(t, app.db, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-worker-otlp-file-log-env"}`)
+	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+	epoch1 := registerCodeSessionWorker(t, app, codeSessionID)
+
+	metricsBody := []byte(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"claude-code"}}]},"scopeMetrics":[{"scope":{"name":"com.anthropic.claude_code"},"metrics":[{"name":"claude_code.integration.counter","sum":{"aggregationTemporality":"AGGREGATION_TEMPORALITY_CUMULATIVE","isMonotonic":true,"dataPoints":[{"timeUnixNano":"1783348800000000000","asInt":"3","attributes":[{"key":"phase","value":{"stringValue":"handler-test"}}]}]}}]}]}]}`)
+	resp := doCodeSessionWorkerOTLPRequest(t, app, codeSessionID, "metrics", "", "application/json", metricsBody)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("post missing-epoch metrics status = %d, want 200: %s", resp.StatusCode, readAll(t, resp.Body))
+	}
+
+	logsBody := []byte(`{"resourceLogs":[{"scopeLogs":[{"scope":{"name":"com.anthropic.claude_code.events"},"logRecords":[{"timeUnixNano":"1783348860000000000","severityNumber":"SEVERITY_NUMBER_INFO","severityText":"INFO","body":{"stringValue":"claude_code.integration_event"},"attributes":[{"key":"event.name","value":{"stringValue":"integration_event"}}]}]}]}]}`)
+	resp = doCodeSessionWorkerOTLPRequest(t, app, codeSessionID, "logs", epoch1, "application/json", logsBody)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("post current-epoch logs status = %d, want 200: %s", resp.StatusCode, readAll(t, resp.Body))
+	}
+
+	otlpDir := filepath.Join(cfg.CodeSessionOTLPLogRoot, codeSessionID, "otlp")
+	requestLines := readJSONLObjectsForTest(t, filepath.Join(otlpDir, "requests.jsonl"))
+	if len(requestLines) != 2 {
+		t.Fatalf("request jsonl lines = %d, want 2: %#v", len(requestLines), requestLines)
+	}
+	firstEpoch := requestLines[0]["worker_epoch"].(map[string]any)
+	if firstEpoch["present"] != false {
+		t.Fatalf("missing epoch request worker_epoch = %#v, want present=false", firstEpoch)
+	}
+	secondEpoch := requestLines[1]["worker_epoch"].(map[string]any)
+	if secondEpoch["present"] != true || secondEpoch["value"] != epoch1 {
+		t.Fatalf("current epoch request worker_epoch = %#v, want epoch %s", secondEpoch, epoch1)
+	}
+
+	metricLines := readJSONLObjectsForTest(t, filepath.Join(otlpDir, "metrics.jsonl"))
+	if len(metricLines) != 1 {
+		t.Fatalf("metrics jsonl lines = %d, want 1: %#v", len(metricLines), metricLines)
+	}
+	metric := metricLines[0]["metric"].(map[string]any)
+	if metric["name"] != "claude_code.integration.counter" {
+		t.Fatalf("metric name = %#v, want claude_code.integration.counter", metric)
+	}
+	point := metricLines[0]["point"].(map[string]any)
+	if point["value"].(float64) != 3 {
+		t.Fatalf("metric point = %#v, want value=3", point)
+	}
+
+	logLines := readJSONLObjectsForTest(t, filepath.Join(otlpDir, "logs.jsonl"))
+	if len(logLines) != 1 {
+		t.Fatalf("logs jsonl lines = %d, want 1: %#v", len(logLines), logLines)
+	}
+	record := logLines[0]["log"].(map[string]any)
+	if record["body"] != "claude_code.integration_event" {
+		t.Fatalf("log record = %#v, want integration event body", record)
+	}
+
+	epoch2 := registerCodeSessionWorker(t, app, codeSessionID)
+	if epoch2 == epoch1 {
+		t.Fatalf("epoch2 = %q, want new epoch", epoch2)
+	}
+	resp = doCodeSessionWorkerOTLPRequest(t, app, codeSessionID, "logs", epoch1, "application/json", logsBody)
+	assertError(t, resp, http.StatusConflict, "conflict_error")
+	afterConflictRequests := readJSONLObjectsForTest(t, filepath.Join(otlpDir, "requests.jsonl"))
+	if len(afterConflictRequests) != len(requestLines) {
+		t.Fatalf("request jsonl lines after stale epoch = %d, want %d", len(afterConflictRequests), len(requestLines))
+	}
 }
 
 func TestCodeSessionWorkerHeartbeatRejectsInvalidRequests(t *testing.T) {
@@ -3018,6 +3313,45 @@ func eventPageContains(events sessionEventPageAPIResponse, needle string) bool {
 	return false
 }
 
+func sessionEventObjectByType(t *testing.T, events sessionEventPageAPIResponse, eventType string) map[string]any {
+	t.Helper()
+	for _, raw := range events.Data {
+		var object map[string]any
+		if err := json.Unmarshal(raw, &object); err != nil {
+			t.Fatalf("decode session event %s: %v", raw, err)
+		}
+		if object["type"] == eventType {
+			return object
+		}
+	}
+	t.Fatalf("session event type %q not found in %+v", eventType, events.Data)
+	return nil
+}
+
+func stringArrayField(object map[string]any, field string) []string {
+	items, _ := object[field].([]any)
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		value, ok := item.(string)
+		if ok && value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+func assertRequiresActionStopReasonSDKShape(t *testing.T, stopReason map[string]any) {
+	t.Helper()
+	if stopReason["type"] != "requires_action" {
+		t.Fatalf("stop_reason.type = %v, want requires_action: %#v", stopReason["type"], stopReason)
+	}
+	for _, field := range []string{"tool_name", "tool_use_id", "request_id", "session_thread_id"} {
+		if _, ok := stopReason[field]; ok {
+			t.Fatalf("stop_reason contains compatibility field %q, want SDK shape only: %#v", field, stopReason)
+		}
+	}
+}
+
 func eventPageContainsCount(events sessionEventPageAPIResponse, needle string) int {
 	count := 0
 	for _, event := range events.Data {
@@ -3682,6 +4016,24 @@ func doCodeSessionWorkerOTLPRequest(t *testing.T, app *testApp, codeSessionID st
 		t.Fatalf("do code session worker otlp request: %v", err)
 	}
 	return resp
+}
+
+func readJSONLObjectsForTest(t *testing.T, path string) []map[string]any {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read jsonl %s: %v", path, err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte("\n"))
+	result := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		var object map[string]any
+		if err := json.Unmarshal(line, &object); err != nil {
+			t.Fatalf("decode jsonl line %q: %v", string(line), err)
+		}
+		result = append(result, object)
+	}
+	return result
 }
 
 func readCodeSessionWorkerSSEFrames(t *testing.T, app *testApp, codeSessionID string, waitFor string) []string {

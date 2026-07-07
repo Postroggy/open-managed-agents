@@ -328,6 +328,7 @@ func TestPublicPayloadsFromWorkerEventMapsClaudeResultToModelSpansAndIdle(t *tes
 		"type":            "result",
 		"uuid":            "result-uuid",
 		"created_at":      "2026-06-16T01:11:00Z",
+		"stop_reason":     "end_turn",
 		"duration_ms":     float64(9000),
 		"duration_api_ms": float64(12000),
 		"result":          "Done.",
@@ -380,6 +381,103 @@ func TestPublicPayloadsFromWorkerEventMapsClaudeResultToModelSpansAndIdle(t *tes
 	}
 	if objects[2]["result"] != "Done." {
 		t.Fatalf("status idle should preserve result payload: %#v", objects[2])
+	}
+	stopReason, ok := objects[2]["stop_reason"].(map[string]any)
+	if !ok || stopReason["type"] != "end_turn" {
+		t.Fatalf("status idle stop_reason = %#v, want {type:end_turn}", objects[2]["stop_reason"])
+	}
+}
+
+func TestPublicPayloadFromWorkerEventNormalizesIdleStopReasonVariants(t *testing.T) {
+	cases := []struct {
+		name         string
+		eventType    string
+		stopReason   any
+		includeField bool
+		wantType     string
+		wantEventID  string
+	}{
+		{
+			name:      "missing stop reason",
+			eventType: "session.status_idle",
+			wantType:  "end_turn",
+		},
+		{
+			name:         "empty string stop reason",
+			eventType:    "session.status_idle",
+			stopReason:   "  ",
+			includeField: true,
+			wantType:     "end_turn",
+		},
+		{
+			name:      "map stop reason keeps only sdk fields",
+			eventType: "session.status_idle",
+			stopReason: map[string]any{
+				"type":              "requires_action",
+				"event_ids":         []any{"sevt_blocking", ""},
+				"tool_name":         "Bash",
+				"request_id":        "req_worker",
+				"session_thread_id": "sthr_worker",
+			},
+			includeField: true,
+			wantType:     "requires_action",
+			wantEventID:  "sevt_blocking",
+		},
+		{
+			name:      "thread idle map stop reason without type",
+			eventType: "session.thread_status_idle",
+			stopReason: map[string]any{
+				"event_ids":   []string{"sevt_thread_blocking"},
+				"tool_use_id": "tool_worker",
+			},
+			includeField: true,
+			wantType:     "end_turn",
+			wantEventID:  "sevt_thread_blocking",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			object := map[string]any{
+				"type": tc.eventType,
+				"uuid": "idle-stop-reason-" + tc.name,
+			}
+			if tc.includeField {
+				object["stop_reason"] = tc.stopReason
+			}
+			payload, ok, err := publicPayloadFromWorkerEvent("cse_test", db.CodeSessionEvent{
+				ExternalID:     "csev_" + tc.name,
+				EventType:      tc.eventType,
+				IdempotencyKey: tc.name,
+				CreatedAt:      time.Date(2026, 6, 16, 1, 11, 0, 0, time.UTC),
+			}, object)
+			if err != nil {
+				t.Fatalf("publicPayloadFromWorkerEvent returned error: %v", err)
+			}
+			if !ok {
+				t.Fatal("publicPayloadFromWorkerEvent ok = false, want true")
+			}
+			objects := decodePublicPayloads(t, []json.RawMessage{payload})
+			stopReason, ok := objects[0]["stop_reason"].(map[string]any)
+			if !ok || stopReason["type"] != tc.wantType {
+				t.Fatalf("stop_reason = %#v, want type %q", objects[0]["stop_reason"], tc.wantType)
+			}
+			for _, field := range []string{"tool_name", "tool_use_id", "request_id", "session_thread_id"} {
+				if _, ok := stopReason[field]; ok {
+					t.Fatalf("stop_reason leaked %s: %#v", field, stopReason)
+				}
+			}
+			eventIDs, ok := stopReason["event_ids"].([]any)
+			if tc.wantEventID == "" {
+				if ok {
+					t.Fatalf("stop_reason event_ids = %#v, want absent", eventIDs)
+				}
+				return
+			}
+			if !ok || len(eventIDs) != 1 || eventIDs[0] != tc.wantEventID {
+				t.Fatalf("stop_reason event_ids = %#v, want [%s]", stopReason["event_ids"], tc.wantEventID)
+			}
+		})
 	}
 }
 

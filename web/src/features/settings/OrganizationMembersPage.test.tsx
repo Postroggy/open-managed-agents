@@ -41,7 +41,11 @@ describe('Organization members settings', () => {
       </OrganizationMembersHarness>
     );
 
-    expect(screen.getByText('Open Managed Agents')).toBeTruthy();
+    expect(
+      screen
+        .getAllByRole('button', { name: /Default/i })
+        .some((button) => button.getAttribute('aria-label') === 'Default')
+    ).toBe(true);
     expect(screen.getByText('Organization settings')).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Members 3' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Invite' })).toBeTruthy();
