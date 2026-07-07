@@ -1,0 +1,189 @@
+# =============================================================================
+# Open Managed Agents — 一键启动 docker-compose
+# =============================================================================
+#
+# 启动：
+#   docker compose up -d                     # 启动全部服务
+#   docker compose down                      # 停止并清理
+#   docker compose down -v                   # 同时删除数据卷
+#
+# 访问入口：
+#   控制台前端: http://localhost
+#   oma API:    http://localhost:38080
+#   e2b-local:  http://localhost:3099
+#   MinIO Web:  http://localhost:9001
+#
+# 配置上游 Anthropic API（在 .env 中设置）：
+#   ANTHROPIC_UPSTREAM_API_KEY=sk-ant-...
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # 一次性初始化 — 从 OCI 镜像中提取宿主机需要的文件
+  # ===========================================================================
+
+  # 从 oma-server 镜像提取前端静态产物，挂载给 Caddy 使用。
+  init-web:
+    image: ghcr.io/postroggy/open-managed-agents:latest
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ ! -f /dist-out/index.html ]; then
+          cp -r /web-dist/* /dist-out/
+          echo "web-dist extracted"
+        else
+          echo "web-dist already present, skip"
+        fi
+    volumes:
+      - webdist:/dist-out
+    restart: "no"
+
+  # 从 e2b-local 镜像提取 envd 二进制到宿主机。
+  # Docker daemon 需要宿主机路径才能 bind-mount envd 到 sandbox 容器。
+  init-envd:
+    image: ghcr.io/postroggy/e2b-local:latest
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ ! -f /envd-out/envd-linux-amd64 ]; then
+          cp /app/envd-bin/* /envd-out/
+          echo "envd-bin extracted"
+        else
+          echo "envd-bin already present, skip"
+        fi
+    volumes:
+      - ./envd-bin:/envd-out
+    restart: "no"
+
+  # ===========================================================================
+  # 基础设施
+  # ===========================================================================
+
+  postgres:
+    image: docker.io/library/postgres:17
+    environment:
+      POSTGRES_USER: claude
+      POSTGRES_PASSWORD: "123456"
+      POSTGRES_DB: claude_api
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claude -d claude_api"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  redis:
+    image: docker.io/library/redis:8
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: docker.io/pgsty/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 应用服务
+  # ===========================================================================
+
+  # e2b-local — 沙箱网关（host 网络，管理宿主机 sandbox 容器）
+  e2b-local:
+    image: ghcr.io/postroggy/e2b-local:latest
+    network_mode: host
+    depends_on:
+      init-envd:
+        condition: service_completed_successfully
+    environment:
+      - ENVD_BIN_DIR=${PWD}/envd-bin
+    command: >
+      sh -c '
+        sed "s|__ENVD_BIN_DIR__|$${ENVD_BIN_DIR}|g" /etc/e2b-local/config.yaml > /tmp/e2b-config.yaml &&
+        exec /usr/local/bin/e2b-local --config /tmp/e2b-config.yaml
+      '
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./configs/e2b-local.yaml:/etc/e2b-local/config.yaml:ro
+      - ${PWD}/envd-bin:${PWD}/envd-bin:ro
+    restart: unless-stopped
+
+  # oma-server — Open Managed Agents 主 API 服务
+  oma-server:
+    image: ghcr.io/postroggy/open-managed-agents:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "38080:8080"
+    environment:
+      APP_ENV: production
+      ADDR: ":8080"
+      DATABASE_URL: postgresql://claude:123456@postgres:5432/claude_api?sslmode=disable
+      DB_AUTO_MIGRATE: "true"
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: claude-files
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_FORCE_PATH_STYLE: "true"
+      E2B_DEBUG: "true"
+      E2B_API_URL: http://host.docker.internal:3099
+      E2B_SANDBOX_URL: http://host.docker.internal:3099
+      E2B_TEMPLATE: claude-code-interpreter
+      ANTHROPIC_UPSTREAM_API_KEY: ${ANTHROPIC_UPSTREAM_API_KEY:-}
+      ANTHROPIC_UPSTREAM_BASE_URL: ${ANTHROPIC_UPSTREAM_BASE_URL:-https://api.anthropic.com}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # caddy — 前端静态文件 + API 反向代理
+  caddy:
+    image: docker.io/library/caddy:alpine
+    depends_on:
+      init-web:
+        condition: service_completed_successfully
+      oma-server:
+        condition: service_started
+    ports:
+      - "80:80"
+    volumes:
+      - ./configs/Caddyfile:/etc/caddy/Caddyfile:ro
+      - webdist:/usr/share/caddy/html:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  webdist:
