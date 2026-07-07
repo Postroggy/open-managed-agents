@@ -3,11 +3,13 @@ package codesessions
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -569,23 +571,35 @@ func (s *Service) handleCodeSessionWorkerOTLP(w http.ResponseWriter, r *http.Req
 	if !s.authorizeIngress(w, r, codeSessionID) {
 		return
 	}
-	if _, err := readCodeSessionWorkerBody(w, r); err != nil {
+	body, err := readCodeSessionWorkerBody(w, r)
+	if err != nil {
+		logCodeSessionWorkerOTLPRequest(r, codeSessionID, body, 0, false, "", "", "body_read_error", err)
 		writeCodeSessionWorkerBodyReadError(w, r, err)
 		return
 	}
-	epoch, found, err := parseOptionalWorkerEpochFromRequest(r)
+	epoch, found, epochSource, epochValue, err := parseOptionalWorkerEpochFromRequestWithSource(r)
 	if err != nil {
+		logCodeSessionWorkerOTLPRequest(r, codeSessionID, body, epoch, found, epochSource, epochValue, "epoch_parse_error", err)
 		httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadRequest, "invalid_request_error", err.Error()))
 		return
 	}
 	if !found {
-		httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadRequest, "invalid_request_error", "worker_epoch is required in query parameter or header for OTLP endpoints"))
+		if err := s.db.TouchCodeSessionWorkerActivity(r.Context(), codeSessionID); err != nil {
+			logCodeSessionWorkerOTLPRequest(r, codeSessionID, body, 0, false, "", "", "activity_touch_error", err)
+			s.writeWorkerEpochDBError(w, r, codeSessionID, err, "Could not record code session worker OTLP activity")
+			return
+		}
+		logCodeSessionWorkerOTLPRequest(r, codeSessionID, body, 0, false, "", "", "missing_epoch_best_effort", nil)
+		s.recordCodeSessionWorkerOTLP(r, codeSessionID, body, false, "", "")
+		writeOTLPSuccess(w, r)
 		return
 	}
 	if err := s.db.TouchCodeSessionWorkerActivityForEpoch(r.Context(), codeSessionID, epoch); err != nil {
+		logCodeSessionWorkerOTLPRequest(r, codeSessionID, body, epoch, true, epochSource, epochValue, "epoch_activity_touch_error", err)
 		s.writeWorkerEpochDBError(w, r, codeSessionID, err, "Could not record code session worker OTLP activity")
 		return
 	}
+	s.recordCodeSessionWorkerOTLP(r, codeSessionID, body, true, epochSource, epochValue)
 	writeOTLPSuccess(w, r)
 }
 
@@ -1134,11 +1148,90 @@ func logCodeSessionWorkerInternalEventsBadRequest(r *http.Request, codeSessionID
 	)
 }
 
+func logCodeSessionWorkerOTLPRequest(r *http.Request, codeSessionID string, body []byte, epoch int64, epochFound bool, epochSource string, epochRawValue string, reason string, err error) {
+	bodyText, bodyEncoding, truncated := loggedOTLPRequestBody(r, body)
+	query := ""
+	path := ""
+	if r.URL != nil {
+		query = r.URL.RawQuery
+		path = r.URL.Path
+	}
+	epochValue := strings.TrimSpace(epochRawValue)
+	if epochValue == "" && epochFound && epoch > 0 {
+		epochValue = strconv.FormatInt(epoch, 10)
+	}
+	log.Printf("code session worker otlp request_id=%s signal=%s method=%s path=%s query=%q code_session_id=%s content_type=%q accept=%q user_agent=%q content_length=%d body_bytes=%d body_encoding=%s body_truncated=%t epoch_found=%t epoch_value=%q epoch_source=%q reason=%s error=%v body=%q",
+		httpapi.RequestID(r.Context()),
+		otlpSignalFromPath(path),
+		r.Method,
+		path,
+		query,
+		codeSessionID,
+		r.Header.Get("Content-Type"),
+		r.Header.Get("Accept"),
+		r.Header.Get("User-Agent"),
+		r.ContentLength,
+		len(body),
+		bodyEncoding,
+		truncated,
+		epochFound,
+		epochValue,
+		epochSource,
+		reason,
+		err,
+		bodyText,
+	)
+}
+
 func loggedWorkerRequestBody(body []byte) (string, bool) {
 	if len(body) <= maxLoggedWorkerRequestBytes {
 		return strings.ToValidUTF8(string(body), ""), false
 	}
 	return strings.ToValidUTF8(string(body[:maxLoggedWorkerRequestBytes]), ""), true
+}
+
+func loggedOTLPRequestBody(r *http.Request, body []byte) (string, string, bool) {
+	truncated := len(body) > maxLoggedWorkerRequestBytes
+	if truncated {
+		body = body[:maxLoggedWorkerRequestBytes]
+	}
+	if otlpBodyLooksText(r) {
+		return strings.ToValidUTF8(string(body), ""), "utf8", truncated
+	}
+	return base64.StdEncoding.EncodeToString(body), "base64", truncated
+}
+
+func otlpBodyLooksText(r *http.Request) bool {
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = strings.TrimSpace(strings.Split(contentType, ";")[0])
+	}
+	mediaType = strings.ToLower(mediaType)
+	if strings.HasPrefix(mediaType, "text/") {
+		return true
+	}
+	if strings.HasSuffix(mediaType, "+json") || strings.HasSuffix(mediaType, "+xml") {
+		return true
+	}
+	for _, exact := range []string{"application/json", "application/xml", "application/yaml", "application/x-yaml", "text/csv"} {
+		if mediaType == exact {
+			return true
+		}
+	}
+	return false
+}
+
+func otlpSignalFromPath(path string) string {
+	switch {
+	case strings.HasSuffix(path, "/metrics"):
+		return "metrics"
+	case strings.HasSuffix(path, "/logs"):
+		return "logs"
+	default:
+		// Only the metrics and logs worker OTLP HTTP endpoints are registered today.
+		return ""
+	}
 }
 
 func writeOTLPSuccess(w http.ResponseWriter, r *http.Request) {
@@ -1193,23 +1286,36 @@ func parseWorkerEpochFromJSONBody(body []byte) (int64, bool, error) {
 }
 
 func parseOptionalWorkerEpochFromRequest(r *http.Request) (int64, bool, error) {
-	value := strings.TrimSpace(r.URL.Query().Get("worker_epoch"))
+	epoch, found, _, _, err := parseOptionalWorkerEpochFromRequestWithSource(r)
+	return epoch, found, err
+}
+
+func parseOptionalWorkerEpochFromRequestWithSource(r *http.Request) (int64, bool, string, string, error) {
+	value := ""
+	source := ""
+	if r.URL != nil {
+		value = strings.TrimSpace(r.URL.Query().Get("worker_epoch"))
+		if value != "" {
+			source = "query:worker_epoch"
+		}
+	}
 	if value == "" {
 		for _, headerName := range []string{"x-worker-epoch", "worker-epoch", "worker_epoch"} {
 			value = strings.TrimSpace(r.Header.Get(headerName))
 			if value != "" {
+				source = "header:" + headerName
 				break
 			}
 		}
 	}
 	if value == "" {
-		return 0, false, nil
+		return 0, false, "", "", nil
 	}
 	epoch, err := parseWorkerEpochString(value)
 	if err != nil {
-		return 0, true, err
+		return 0, true, source, value, err
 	}
-	return epoch, true, nil
+	return epoch, true, source, value, nil
 }
 
 func parseCodeSessionWorkerStreamFromSequence(r *http.Request) (int64, error) {
