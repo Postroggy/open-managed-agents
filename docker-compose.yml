@@ -145,6 +145,12 @@ services:
         condition: service_healthy
     ports:
       - "38080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     environment:
       APP_ENV: production
       ADDR: ":8080"
@@ -174,7 +180,7 @@ services:
       init-web:
         condition: service_completed_successfully
       oma-server:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "80:80"
     volumes:

@@ -4,7 +4,7 @@
 
 ## 1. 架构总览
 
-```
+```text
 docker compose
 ├── caddy (:80)          — 前端 SPA + API 反向代理
 ├── oma-server (:38080)  — Open Managed Agents 主 API 服务
@@ -16,7 +16,7 @@ docker compose
 
 **依赖关系**：
 
-```
+```text
 caddy ──→ oma-server ──→ postgres / redis / minio
                     └──→ e2b-local (host.docker.internal:3099)
                               └──→ Docker daemon (宿主机)
