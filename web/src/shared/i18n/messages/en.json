@@ -599,6 +599,7 @@
   "managedAgents.quickstart.scrollMoreTemplates": "Scroll to see more templates",
   "managedAgents.quickstart.searchTemplates": "Search templates",
   "managedAgents.quickstart.selectEnvironment": "Select an environment",
+  "managedAgents.quickstart.selectLanguage": "Select language",
   "managedAgents.quickstart.selected": "Selected",
   "managedAgents.quickstart.selectingEnvironment": "Selecting environment",
   "managedAgents.quickstart.sendMessage": "Send message",
@@ -1092,5 +1093,6 @@
   "workspace.geo": "Workspace geo",
   "workspace.geoHelp": "Control where your workspace data, including files, conversation history, and workspace artifacts, is stored. This can't be changed after creation.",
   "workspace.loading": "Loading workspaces...",
-  "workspace.onlyCostLogs": "Only available on Cost and Logs"
+  "workspace.onlyCostLogs": "Only available on Cost and Logs",
+  "workspace.switcher": "Switch workspace"
 }

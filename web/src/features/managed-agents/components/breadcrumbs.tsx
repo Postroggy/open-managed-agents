@@ -1,7 +1,6 @@
 import { useI18n } from '../../../shared/i18n';
 import { cn } from '../../../shared/lib/utils';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '../../../shared/ui/breadcrumb';
-import { ArrowLeft } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 export function ManagedDetailBreadcrumb({
@@ -9,15 +8,13 @@ export function ManagedDetailBreadcrumb({
   listLabel,
   currentLabel,
   className,
-  currentClassName,
-  showBackIcon = false
+  currentClassName
 }: {
   listHref: string;
   listLabel: string;
   currentLabel?: ReactNode;
   className?: string;
   currentClassName?: string;
-  showBackIcon?: boolean;
 }) {
   const { msg } = useI18n();
 
@@ -25,10 +22,7 @@ export function ManagedDetailBreadcrumb({
     <Breadcrumb aria-label={msg('navigation.breadcrumb', 'Breadcrumb')} className={className}>
       <BreadcrumbList className="min-w-0">
         <BreadcrumbItem>
-          <BreadcrumbLink href={listHref} className={cn(showBackIcon && 'inline-flex items-center gap-2')}>
-            {showBackIcon ? <ArrowLeft className="size-4" aria-hidden /> : null}
-            {listLabel}
-          </BreadcrumbLink>
+          <BreadcrumbLink href={listHref}>{listLabel}</BreadcrumbLink>
         </BreadcrumbItem>
         {currentLabel ? (
           <>

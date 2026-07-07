@@ -189,7 +189,7 @@ export function AgentDetailPage({ agentId, routeWorkspaceId }: { agentId: string
   if (loading) {
     return (
       <section className="min-h-[calc(100vh-48px)] text-foreground">
-        <ManagedDetailBreadcrumb listHref={listHref} listLabel={msg('managedAgents.agents.title', 'Agents')} showBackIcon />
+        <ManagedDetailBreadcrumb listHref={listHref} listLabel={msg('managedAgents.agents.title', 'Agents')} />
         <div className="mt-14 text-sm text-muted-foreground">{msg('managedAgents.agents.loadingSingle', 'Loading agent...')}</div>
       </section>
     );

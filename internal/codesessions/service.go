@@ -33,6 +33,8 @@ type Service struct {
 	mu      sync.Mutex
 	sink    PublicEventSink
 	workers map[string]*workerClient
+
+	otlpLogMu sync.Mutex
 }
 
 type ManagedAgentCreateInput struct {
@@ -656,6 +658,11 @@ func requestIDString(requestID *string) string {
 
 func stablePublicEventID(codeSessionID, seed string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(codeSessionID) + "\x00public\x00" + strings.TrimSpace(seed)))
+	return "sevt_" + hex.EncodeToString(sum[:16])
+}
+
+func derivedPrimarySessionEventID(codeSessionID, eventID, eventType string) string {
+	sum := sha256.Sum256([]byte(codeSessionID + "\x00" + eventID + "\x00" + eventType + "\x00primary"))
 	return "sevt_" + hex.EncodeToString(sum[:16])
 }
 

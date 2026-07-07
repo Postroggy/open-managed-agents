@@ -18,6 +18,7 @@ import {
   renderManagedAgentsPage,
   resetTestDom,
   screen,
+  selectManagedComboboxOption,
   serverAgent,
   sessionStatusValuesFromUrl,
   setAgentConfigEditorValue,
@@ -144,17 +145,20 @@ export function registerManagedAgentsQuickstartTests() {
     expect(screen.getByRole('button', { name: /Deep researcher/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Send message/i }).hasAttribute('disabled')).toBe(true);
     const fieldMonitorTemplate = screen.getByRole('button', { name: /Field monitor/i });
+    const templateGrid = fieldMonitorTemplate.parentElement as HTMLElement | null;
     const fieldMonitorDescription = within(fieldMonitorTemplate).getByText(/Scans software blogs for a topic/i);
     expect(fieldMonitorTemplate.className).toContain('min-h-[118px]');
     expect(fieldMonitorTemplate.className).toContain('h-auto');
+    expect(fieldMonitorTemplate.className).toContain('self-start');
     expect(fieldMonitorTemplate.className).toContain('overflow-hidden');
+    expect(templateGrid?.className).toContain('items-start');
     expect(fieldMonitorDescription.className).toContain('min-h-[54px]');
     expect(fieldMonitorTemplate.querySelector('[title="notion"]')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
 
     expect(screen.getByRole('button', { name: 'Back to templates' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'YAML' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Code format' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy code' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Use template' })).toBeTruthy();
     expect(screen.getByText(/name:/)).toBeTruthy();
@@ -174,11 +178,19 @@ export function registerManagedAgentsQuickstartTests() {
     expect(promptInput.className).toContain('pt-4');
     expect(promptInput.className).toContain('pb-2');
     expect(promptInput.className).toContain('max-h-52');
-    expect(promptGroup?.className).toContain('rounded-[16px]');
+    expect(promptGroup?.className).toContain('rounded-lg');
+    expect(promptGroup?.className).toContain('border-input');
+    expect(promptGroup?.className).toContain('shadow-xs');
+    expect(promptGroup?.className).toContain('dark:bg-input/30');
+    expect(promptGroup?.className).not.toContain('bg-popover');
+    expect(promptGroup?.className).not.toContain('dark:bg-[rgb(56_56_53)]');
+    expect(promptGroup?.className).toContain('ring-ring/50');
     expect(promptGroup?.className).toContain('gap-0');
     expect(promptGroup?.className).toContain('p-0');
     expect(promptAddon?.dataset.align).toBe('block-end');
-    expect(promptSendButton.className).toContain('rounded-[8px]');
+    expect(promptSendButton.className).toContain('rounded-md');
+    expect(promptSendButton.className).toContain('bg-primary');
+    expect(promptSendButton.className).toContain('text-primary-foreground');
     expect(promptSendButton.className).not.toContain('rounded-full');
   });
 
@@ -455,10 +467,8 @@ export function registerManagedAgentsQuickstartTests() {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'YAML' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'JSON' }));
-
-    expect(screen.getByRole('button', { name: 'JSON' })).toBeTruthy();
+    await selectManagedComboboxOption(document.body, 'Code format', 'JSON');
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Code format' }).textContent).toContain('JSON'));
     expectPageTextToContain('"metadata":');
     const templateJsonBlock = codeBlockContaining('"metadata":');
     expect(templateJsonBlock?.querySelector('code.language-json')).toBeTruthy();
@@ -487,7 +497,7 @@ export function registerManagedAgentsQuickstartTests() {
     await waitFor(() =>
       expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(true)
     );
-    expect(screen.getByRole('button', { name: 'Test run' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Test run' }).hasAttribute('disabled')).toBe(true);
     expect(await screen.findByText("Let's configure the environment.")).toBeTruthy();
     const panelTabs = screen.getByRole('tablist', { name: 'Agent panel views' });
     const agentPanel = panelTabs.closest('aside') as HTMLElement | null;
@@ -1159,9 +1169,17 @@ export function registerManagedAgentsQuickstartTests() {
     const previewSendButton = screen.getByRole('button', { name: 'Send' });
     expect(previewMessage.className).toContain('focus-visible:ring-0');
     expect(previewMessage.parentElement?.dataset.slot).toBe('input-group');
-    expect(previewComposer?.className).toContain('rounded-[16px]');
+    expect(previewComposer?.className).toContain('rounded-lg');
+    expect(previewComposer?.className).toContain('border-input');
+    expect(previewComposer?.className).toContain('shadow-xs');
+    expect(previewComposer?.className).toContain('dark:bg-input/30');
+    expect(previewComposer?.className).not.toContain('bg-popover');
+    expect(previewComposer?.className).not.toContain('dark:bg-[rgb(56_56_53)]');
+    expect(previewComposer?.className).toContain('ring-ring/50');
     expect(previewComposer?.className).toContain('gap-2');
-    expect(previewSendButton.className).toContain('rounded-[8px]');
+    expect(previewSendButton.className).toContain('rounded-md');
+    expect(previewSendButton.className).toContain('bg-primary');
+    expect(previewSendButton.className).toContain('text-primary-foreground');
     expect(previewSendButton.className).not.toContain('rounded-full');
     expect(previewMessage.value).toBe('Say hello from the test run.');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -1251,7 +1269,7 @@ export function registerManagedAgentsQuickstartTests() {
     expect((integrationMessage as HTMLElement).querySelector('[data-slot="message-avatar"]')).toBeTruthy();
     expect(screen.getAllByText(/agent_created123456/).length).toBeGreaterThan(0);
     expect(screen.queryAllByText(/agent_model_wrong123456/)).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Python' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Python' }));
     expectPageTextToContain('from anthropic import Anthropic');
     expectPageTextToContain('client.beta.sessions.events.stream');
     const pythonCodeBlock = codeBlockContaining('from anthropic import Anthropic');

@@ -109,6 +109,30 @@ export function sessionEventEntryLaneId(entry: SessionEventListEntry, laneIdByTh
   return sessionEventLaneId(entry.event, laneIdByThreadId);
 }
 
+export function buildSessionEventsByLane(
+  lanes: SessionDetailLane[],
+  events: QuickstartSessionEvent[],
+  laneIdByThreadId: Map<string, string>
+) {
+  const eventsByLaneId = new Map<string, QuickstartSessionEvent[]>();
+  lanes.forEach((lane) => eventsByLaneId.set(lane.id, []));
+  events.forEach((event) => {
+    const laneId = sessionEventLaneId(event, laneIdByThreadId);
+    const laneEvents = eventsByLaneId.get(laneId);
+    if (laneEvents) {
+      laneEvents.push(event);
+    }
+  });
+  return eventsByLaneId;
+}
+
+export function flattenSessionEntriesByLane(
+  lanes: SessionDetailLane[],
+  entriesByLaneId: Map<string, SessionEventListEntry[]>
+) {
+  return lanes.flatMap((lane) => entriesByLaneId.get(lane.id) ?? []);
+}
+
 export function buildSessionDetailLaneState(threads: SessionThreadApiResponse[], msg: I18nMsg, showArchivedLanes: boolean): SessionDetailLaneState {
   const sortedChildren = [...threads]
     .filter(sessionThreadIsChild)
@@ -162,25 +186,13 @@ export function uniqueSessionThreadLabels(threads: SessionThreadApiResponse[], m
 
 export function buildSessionTimeline(
   lanes: SessionDetailLane[],
-  entries: SessionEventListEntry[],
-  laneIdByThreadId: Map<string, string>
+  entriesByLaneId: Map<string, SessionEventListEntry[]>
 ): SessionTimelineLane[] {
-  const itemsByLaneId = new Map<string, SessionTimelineItem[]>();
-  lanes.forEach((lane) => itemsByLaneId.set(lane.id, []));
-  entries.forEach((entry) => {
-    const laneId = sessionEventEntryLaneId(entry, laneIdByThreadId);
-    const laneItems = itemsByLaneId.get(laneId);
-    if (!laneItems) {
-      return;
-    }
-    const item = sessionTimelineItemFromEntry(entry);
-    if (item) {
-      laneItems.push(item);
-    }
-  });
   return lanes.map((lane) => ({
     ...lane,
-    items: itemsByLaneId.get(lane.id) ?? []
+    items: (entriesByLaneId.get(lane.id) ?? [])
+      .map(sessionTimelineItemFromEntry)
+      .filter((item): item is SessionTimelineItem => Boolean(item))
   }));
 }
 
@@ -266,9 +278,10 @@ export function sessionTimelineItemType(type: DisplayEventType): DisplayEventTyp
 }
 
 export function buildSessionTimelineVisibleIds(
-  entries: SessionEventListEntry[],
+  entriesByLaneId: Map<string, SessionEventListEntry[]>,
+  filteredActiveEntries: SessionEventListEntry[],
+  timeline: SessionTimelineLane[],
   activeLane: string,
-  laneIdByThreadId: Map<string, string>,
   selectedTypes: string[],
   query: string,
   view: SessionTraceView
@@ -279,17 +292,24 @@ export function buildSessionTimelineVisibleIds(
     return undefined;
   }
   const ids = new Set<string>();
-  entries.forEach((entry) => {
-    const laneId = sessionEventEntryLaneId(entry, laneIdByThreadId);
-    if (laneId !== activeLane) {
-      ids.add(entry.id);
+  if (view === 'debug') {
+    entriesByLaneId.forEach((entries) => {
+      entries.forEach((entry) => {
+        const matchesType = selected.size === 0 || selected.has(sessionEventListFilterValue(entry, view));
+        const matchesQuery = !needle || entry.searchText.includes(needle);
+        if (matchesType && matchesQuery) {
+          ids.add(entry.id);
+        }
+      });
+    });
+    return ids;
+  }
+  filteredActiveEntries.forEach((entry) => ids.add(entry.id));
+  timeline.forEach((lane) => {
+    if (lane.id === activeLane) {
       return;
     }
-    const matchesType = selected.size === 0 || selected.has(sessionEventListFilterValue(entry, view));
-    const matchesQuery = !needle || entry.searchText.includes(needle);
-    if (matchesType && matchesQuery) {
-      ids.add(entry.id);
-    }
+    lane.items.forEach((item) => ids.add(item.id));
   });
   return ids;
 }
@@ -335,6 +355,10 @@ export function sessionEventEntrySelectionId(entry: SessionEventListEntry) {
 
 export function sessionEventEntryMatchesSelectedId(entry: SessionEventListEntry, selectedId: string | null) {
   return Boolean(selectedId && (entry.id === selectedId || sessionEventEntrySourceIds(entry).includes(selectedId)));
+}
+
+export function sessionEventEntryRowId(entry: SessionEventListEntry) {
+  return 'traceEntry' in entry ? entry.traceEntry.id : entry.id;
 }
 
 export function sessionEventEntrySourceIds(entry: SessionEventListEntry): string[] {
@@ -484,7 +508,15 @@ export function readSessionDetailInitialEventId() {
   return eventId && eventId.trim() ? eventId.trim() : null;
 }
 
-export function writeSessionDetailUrlState(view: SessionTraceView, eventId: string | null) {
+export function readSessionDetailInitialLaneId() {
+  if (typeof window === 'undefined') {
+    return SESSION_MAIN_LANE_ID;
+  }
+  const laneId = new URLSearchParams(window.location.search).get('lane');
+  return laneId && laneId.trim() ? laneId.trim() : SESSION_MAIN_LANE_ID;
+}
+
+export function writeSessionDetailUrlState(view: SessionTraceView, eventId: string | null, laneId: string, showArchivedLanes: boolean) {
   if (typeof window === 'undefined') {
     return;
   }
@@ -499,6 +531,16 @@ export function writeSessionDetailUrlState(view: SessionTraceView, eventId: stri
   } else {
     url.searchParams.delete('event');
   }
+  if (laneId) {
+    url.searchParams.set('lane', laneId);
+  } else {
+    url.searchParams.delete('lane');
+  }
+  if (showArchivedLanes) {
+    url.searchParams.set('archived_lanes', 'true');
+  } else {
+    url.searchParams.delete('archived_lanes');
+  }
   const next = `${url.pathname}${url.search}${url.hash}`;
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (next !== current) {
@@ -507,6 +549,13 @@ export function writeSessionDetailUrlState(view: SessionTraceView, eventId: stri
 }
 
 export function readSessionArchivedLanePreference() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const archivedLanes = new URLSearchParams(window.location.search).get('archived_lanes');
+  if (archivedLanes !== null) {
+    return archivedLanes === 'true' || archivedLanes === '1';
+  }
   try {
     return window.localStorage.getItem(SESSION_ARCHIVED_LANES_STORAGE_KEY) === 'true';
   } catch {

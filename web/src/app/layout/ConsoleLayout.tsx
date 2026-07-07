@@ -3,9 +3,9 @@ import {
   BookOpen,
   Box,
   Building2,
-  Check,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   CircleHelp,
   Gauge,
   Globe2,
@@ -53,7 +53,6 @@ import {
   SidebarMenuSubItem,
   SidebarProvider,
   SidebarRail,
-  SidebarSeparator,
   useSidebar
 } from '@/shared/ui/sidebar';
 import {
@@ -65,12 +64,12 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/shared/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { useAuth } from '../../shared/auth/context';
 import type { AuthAccount } from '../../shared/auth/api';
 import { useWorkspace } from '../../shared/workspaces/context';
@@ -79,7 +78,6 @@ import { CreateWorkspaceDialog } from '../../shared/workspaces/CreateWorkspaceDi
 import {
   buildCreateWorkspaceInput,
   workspaceApiKeysPath,
-  workspaceColor,
   workspaceIdFromPath,
   workspaceWebhooksPath
 } from '../../shared/workspaces/presentation';
@@ -256,11 +254,7 @@ function ConsoleSidebar({
       className="border-r border-sidebar-border"
       data-sidebar-state={collapsed ? 'collapsed' : 'expanded'}
     >
-      <ShellSidebarHeader collapsed={collapsed} onNavigate={onNavigate} />
-      <div className="shrink-0 px-2 py-2">
-        <WorkspaceSwitcher currentPath={currentPath} onNavigate={onNavigate} />
-      </div>
-      <SidebarSeparator />
+      <ShellSidebarHeader currentPath={currentPath} onNavigate={onNavigate} />
       <AppSidebarContent
         className="sidebar-scroll-area px-2 py-2"
         data-sidebar-scroll-area="true"
@@ -290,12 +284,12 @@ function ConsoleSidebar({
                     <SidebarMenuItem key={item.label} className="pt-1">
                       <SidebarMenuButton
                         type="button"
-                      isActive={groupActive}
-                      tooltip={msg(item.labelId, item.label)}
-                      className={interactiveMotionClass}
-                      aria-label={collapsed ? msg(item.labelId, item.label) : undefined}
-                      aria-expanded={collapsed ? false : isOpen}
-                      onClick={() => {
+                        isActive={groupActive}
+                        tooltip={msg(item.labelId, item.label)}
+                        className={interactiveMotionClass}
+                        aria-label={collapsed ? msg(item.labelId, item.label) : undefined}
+                        aria-expanded={collapsed ? false : isOpen}
+                        onClick={() => {
                           if (collapsed) {
                             setOpen(true);
                             setExpanded((value) => ({ ...value, [item.label]: true }));
@@ -349,7 +343,6 @@ function ConsoleSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </AppSidebarContent>
-      <SidebarSeparator />
       <SidebarFooter account={account} collapsed={collapsed} onLogout={onLogout} onNavigate={onNavigate} />
       <SidebarRail />
     </AppSidebar>
@@ -372,7 +365,7 @@ function SettingsSidebar({
       className="border-r border-sidebar-border"
       data-sidebar-state={collapsed ? 'collapsed' : 'expanded'}
     >
-      <ShellSidebarHeader collapsed={collapsed} onNavigate={onNavigate} />
+      <ShellSidebarHeader currentPath={currentPath} onNavigate={onNavigate} />
       <AppSidebarContent className="sidebar-scroll-area px-2 py-2" data-sidebar-scroll-area="true">
         <SidebarGroup className="p-0">
           <SidebarGroupContent>
@@ -402,12 +395,12 @@ function SettingsSidebar({
                 {settingsNavigation.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
-                    render={<ShellLink href={item.href} onNavigate={onNavigate} />}
-                    isActive={isActivePath(currentPath, item.href)}
-                    tooltip={msg(item.labelId, item.label)}
-                    className={interactiveMotionClass}
-                    aria-label={collapsed ? msg(item.labelId, item.label) : undefined}
-                  >
+                      render={<ShellLink href={item.href} onNavigate={onNavigate} />}
+                      isActive={isActivePath(currentPath, item.href)}
+                      tooltip={msg(item.labelId, item.label)}
+                      className={interactiveMotionClass}
+                      aria-label={collapsed ? msg(item.labelId, item.label) : undefined}
+                    >
                       <SettingsNavigationIcon href={item.href} />
                       {collapsed ? null : <span className="truncate">{msg(item.labelId, item.label)}</span>}
                     </SidebarMenuButton>
@@ -418,7 +411,6 @@ function SettingsSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </AppSidebarContent>
-      <SidebarSeparator />
       <SidebarFooter account={account} collapsed={collapsed} onLogout={onLogout} onNavigate={onNavigate} />
       <SidebarRail />
     </AppSidebar>
@@ -468,39 +460,15 @@ function ShellMobileBar({
 }
 
 function ShellSidebarHeader({
-  collapsed,
+  currentPath,
   onNavigate
 }: {
-  collapsed?: boolean;
+  currentPath: string;
   onNavigate?: NavigateHandler;
 }) {
-  const { msg } = useI18n();
-  const { toggleSidebar } = useSidebar();
-
   return (
-    <AppSidebarHeader className="gap-0 border-b px-2 py-2">
-      <div className={clsx('flex min-h-10 items-center gap-2', collapsed ? 'justify-center' : 'justify-between')}>
-        {collapsed ? null : (
-          <ShellLink
-            href="/dashboard"
-            onNavigate={onNavigate}
-            className="min-w-0 truncate px-2 text-base font-semibold tracking-[-0.01em] text-sidebar-foreground"
-          >
-            {msg('app.productName', 'Open Managed Agents')}
-          </ShellLink>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          aria-label={collapsed ? msg('common.expand', 'Expand') : msg('common.collapse', 'Collapse')}
-          aria-pressed={collapsed}
-          onClick={toggleSidebar}
-        >
-          <ListTree className="size-4" aria-hidden />
-        </Button>
-      </div>
+    <AppSidebarHeader>
+      <WorkspaceSwitcher currentPath={currentPath} onNavigate={onNavigate} />
     </AppSidebarHeader>
   );
 }
@@ -513,10 +481,10 @@ function WorkspaceSwitcher({
   onNavigate?: NavigateHandler;
 }) {
   const { msg } = useI18n();
-  const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const { isMobile, state } = useSidebar();
+  const collapsed = state === 'collapsed';
   const { workspaces, activeWorkspace, activeWorkspaceId, selectWorkspace, isLoading, createWorkspace } =
     useWorkspace();
 
@@ -534,98 +502,89 @@ function WorkspaceSwitcher({
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          render={
-            <SidebarMenuButton
-              type="button"
-              size="lg"
-              role="combobox"
-              aria-label={activeWorkspace.name}
-              aria-expanded={open}
-              aria-controls="workspace-switcher-listbox"
-              className={clsx(
-                'h-10 text-sidebar-foreground aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground',
-                interactiveMotionClass,
-                collapsed ? 'justify-center' : 'justify-between'
-              )}
-            />
-          }
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            <Box className="size-4 shrink-0" style={{ color: workspaceColor(activeWorkspace) }} aria-hidden />
-            {collapsed ? null : <span className="truncate">{activeWorkspace.name}</span>}
-          </span>
-          {collapsed ? null : <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-        </PopoverTrigger>
-        <PopoverContent
-          id="workspace-switcher-listbox"
-          role="listbox"
-          align="start"
-          side={collapsed ? 'right' : 'bottom'}
-          sideOffset={8}
-          className="w-[calc(var(--anchor-width)+2rem)] min-w-[264px] max-w-[calc(100vw-2rem)] gap-0 p-2"
-        >
-          <div className="subtle-scrollbar max-h-[264px] overflow-y-auto pr-0.5">
-            <Button
-              type="button"
-              role="option"
-              aria-disabled="true"
-              disabled
-              variant="ghost"
-              className="h-auto w-full items-start justify-start gap-3 rounded-md px-3 py-2 text-left text-sm font-normal text-muted-foreground/70"
-            >
-              <Box className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <span>
-                <span className="block text-muted-foreground">{msg('workspace.all', 'All workspaces')}</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground/70">
-                  {msg('workspace.onlyCostLogs', 'Only available on Cost and Logs')}
-                </span>
-              </span>
-            </Button>
-
-            {workspaces.map((workspace) => {
-              const selected = workspace.id === activeWorkspaceId;
-              return (
-                <Button
-                  key={workspace.id}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  variant="ghost"
-                  className="mt-1 h-9 w-full justify-start gap-3 rounded-md px-3 text-left text-sm font-normal text-foreground hover:bg-accent"
-                  onClick={() => handleSelect(workspace)}
-                >
-                  <Box className="size-4 shrink-0" style={{ color: workspaceColor(workspace) }} aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-                  {selected ? <Check className="size-4 text-primary" aria-hidden /> : null}
-                </Button>
-              );
-            })}
-          </div>
-
-          <div className="mx-3 my-2 h-px bg-border" />
-
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-9 w-full justify-start gap-3 rounded-md px-3 text-left text-sm font-normal text-foreground hover:bg-accent"
-            onClick={() => {
-              setOpen(false);
-              setCreateOpen(true);
-            }}
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuButton
+                type="button"
+                size="lg"
+                tooltip={msg('workspace.switcher', 'Switch workspace')}
+                className={clsx(
+                  'text-sidebar-foreground data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground',
+                  interactiveMotionClass,
+                  collapsed ? 'justify-center' : 'justify-start'
+                )}
+                aria-label={activeWorkspace.name}
+              />
+            }
           >
-            <Plus className="size-4" aria-hidden />
-            {msg('workspace.create.title', 'Create workspace')}
-          </Button>
+            <span className="grid aspect-square size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground">
+              <Box className="size-4" aria-hidden />
+            </span>
+            {collapsed ? null : (
+              <>
+                <span className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">{activeWorkspace.name}</span>
+                  <span className="truncate text-xs text-sidebar-foreground/70">
+                    {msg('settings.workspaces.workspace', 'Workspace')}
+                  </span>
+                </span>
+                <ChevronsUpDown className="ml-auto size-4 shrink-0 text-sidebar-foreground/70" aria-hidden />
+              </>
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            side={isMobile ? 'bottom' : 'right'}
+            sideOffset={4}
+            className="w-(--anchor-width) min-w-56 max-w-[calc(100vw-2rem)] rounded-lg p-1"
+          >
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                {msg('nav.workspaces', 'Workspaces')}
+              </DropdownMenuLabel>
+              <div className="subtle-scrollbar max-h-[240px] overflow-y-auto pr-0.5">
+                {workspaces.map((workspace, index) => (
+                  <DropdownMenuItem
+                    key={workspace.id}
+                    aria-current={workspace.id === activeWorkspaceId ? 'true' : undefined}
+                    className="gap-2 p-2"
+                    onClick={() => handleSelect(workspace)}
+                  >
+                    <span className="grid size-6 shrink-0 place-items-center rounded-md border bg-background text-muted-foreground">
+                      <Box className="size-4" aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+                    <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            </DropdownMenuGroup>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              className="gap-2 p-2"
+              onClick={() => {
+                setOpen(false);
+                setCreateOpen(true);
+              }}
+            >
+              <span className="grid size-6 shrink-0 place-items-center rounded-md border bg-background">
+                <Plus className="size-4" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium text-muted-foreground">
+                {msg('workspace.create.title', 'Create workspace')}
+              </span>
+            </DropdownMenuItem>
 
             {isLoading ? (
               <div className="px-3 pt-2 text-xs text-muted-foreground">
                 {msg('workspace.loading', 'Loading workspaces...')}
               </div>
             ) : null}
-          </PopoverContent>
-      </Popover>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarMenuItem>
 
       <CreateWorkspaceDialog open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreate} />

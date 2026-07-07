@@ -21,13 +21,10 @@ export function IdleGapRow({ entry }: { entry: IdleGapEntry }) {
       role="separator"
       aria-label={msg('managedAgents.sessions.trace.sessionIdleGap', 'Session idle for {duration}', { duration })}
       data-entry-kind="idle_gap"
-      className="relative my-2 flex h-6 items-center justify-center overflow-hidden rounded-md border border-border/10 text-xs text-muted-foreground"
+      className="oma-session-idle-gap relative my-2 flex h-6 items-center justify-center overflow-hidden rounded-md border text-xs"
     >
       <span
-        className="absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage: 'repeating-linear-gradient(-45deg, transparent 0 8px, var(--border) 8px 16px)'
-        }}
+        className="oma-session-idle-gap-stripes absolute inset-0"
         aria-hidden
       />
       <span className="relative">
