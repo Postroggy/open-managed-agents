@@ -118,7 +118,7 @@ PR: https://github.com/superduck-ai/open-managed-agents/pull/6
 
 1. 拉取 sandbox 模板镜像（由 e2b-local 使用）：
    ```bash
-   docker pull registry.gz.cvte.cn/ccloud/claude-code-interpreter:latest
+   docker pull claude-code-interpreter:latest
    ```
 
 2. 配置上游 Anthropic API（在 `.env` 中）：

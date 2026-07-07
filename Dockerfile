@@ -43,6 +43,11 @@ COPY --from=go-builder /oma-server /usr/local/bin/oma-server
 # 前端产物（Caddy 通过 compose volume 挂载使用）
 COPY --from=web-builder /web/dist /web-dist
 
+# 运行时资产说明：
+# - assets/skills/public: 当前仓库无内置 skills，服务启动时会优雅降级（log "disabled"）。
+#   后续若添加 skills，需在 Dockerfile 中增加 COPY assets/skills/public 。
+# - environment-manager: 由 e2b-local 容器提供，不在本镜像中。
+
 ENV ADDR=:8080
 EXPOSE 8080
 
