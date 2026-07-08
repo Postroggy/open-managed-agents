@@ -4,7 +4,7 @@
 #
 # 构建：
 #   docker buildx build --platform linux/amd64,linux/arm64 --provenance=false \
-#     -t ghcr.io/postroggy/open-managed-agents:latest --push .
+#     -t ghcr.io/superduck-ai/open-managed-agents:latest --push .
 #
 # 国内容户可用 --build-arg GOPROXY=https://goproxy.cn,direct 加速。
 # 如需使用国内镜像源: --build-arg REGISTRY=docker.1ms.run/library
