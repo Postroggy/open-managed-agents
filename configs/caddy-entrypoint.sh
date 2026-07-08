@@ -7,7 +7,7 @@
 # 如果端口冲突，设置 CADDY_HOST_PORT=0 让 Docker 分配随机端口，
 # 然后通过 `docker compose port caddy 80` 查看实际端口。
 
-PORT="${CADDY_HOST_PORT:-8080}"
+PORT="${CADDY_HOST_PORT:-28080}"
 
 echo ""
 echo "  ┌──────────────────────────────────────────────────────┐"

@@ -6,7 +6,7 @@
 
 ```text
 docker compose
-├── caddy (:8080)          — 前端 SPA + API 反向代理
+├── caddy (:28080)         — 前端 SPA + API 反向代理
 ├── oma-server (:38080)  — Open Managed Agents 主 API 服务
 ├── e2b-local (:3099)    — 沙箱网关（host 网络，管理 sandbox 容器）
 ├── postgres (:5432)     — 元数据存储
@@ -84,6 +84,21 @@ e2b-local 创建 sandbox 容器后需要访问其动态映射端口（如 `127.0
 
 oma-server 在 compose 网络中，e2b-local 在 host 网络中。`extra_hosts` 添加 `host.docker.internal:host-gateway` 实现跨网络通信。
 
+**`host.docker.internal` 兼容性**：
+
+`host-gateway` 是 Docker 20.10+ 引入的特性，在不同环境下自动解析为正确的宿主 IP：
+
+| Docker 环境 | `host-gateway` 解析到 | 是否支持 |
+|---|---|---|
+| OrbStack（macOS） | `0.250.250.254`（OrbStack 宿主 IP） | ✅ |
+| Docker Desktop for Mac | `192.168.65.254`（VM 网关） | ⚠️ host 网络模式不支持 |
+| Docker Engine for Linux 20.10+ | `172.17.0.1`（docker0 网桥网关） | ✅ |
+| Rootless Docker | 取决于 slirp4netns 配置 | ⚠️ 未测试 |
+
+> **注意**：`extra_hosts` 中的 `host.docker.internal` 会覆盖 Docker Desktop/OrbStack 内置的同名 DNS 记录。在 OrbStack 上实测两者解析到相同 IP（`0.250.250.254`），不影响使用。
+
+**e2b-local 必须监听 `0.0.0.0`**：从 compose bridge 网络过来的流量目标地址是 `host-gateway` IP（如 `172.17.0.1`），而非 `127.0.0.1`。因此 `configs/e2b-local.yaml` 中 `server.addr` 需设为 `0.0.0.0:3099`（已完成）。
+
 ### 4.3 envd_binary 占位符替换
 
 e2b-local 配置文件 `configs/e2b-local.yaml` 使用 `__ENVD_BIN_DIR__` 占位符。启动时通过 `sed` 替换为宿主机真实路径，确保 Docker daemon 能找到 envd 二进制。
@@ -142,7 +157,7 @@ docker compose down -v     # 同时删除数据卷
 
 | 入口 | 地址 |
 |------|------|
-| 控制台前端 | `http://localhost:${CADDY_HOST_PORT:-8080}`（默认 8080） |
+| 控制台前端 | `http://localhost:${CADDY_HOST_PORT:-28080}`（默认 28080） |
 | oma API | `http://localhost:38080` |
 | e2b-local | `http://localhost:3099` |
 | MinIO Web | `http://localhost:9001` |

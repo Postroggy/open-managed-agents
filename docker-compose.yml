@@ -2,8 +2,9 @@
 # Open Managed Agents — 一键启动 docker-compose
 # =============================================================================
 #
-# 平台要求：仅支持 Linux Docker Engine（e2b-local 使用 host 网络）。
+# 平台要求：仅支持 Linux Docker Engine 20.10+（e2b-local 使用 host 网络）。
 # Docker Desktop（macOS/Windows）不支持 host 网络模式，无法运行此 compose。
+# OrbStack（macOS）支持 host 网络并可正常工作，详见 docs/design/。
 #
 # 启动：
 #   docker compose up -d                     # 启动全部服务
@@ -11,12 +12,12 @@
 #   docker compose down -v                   # 同时删除数据卷
 #
 # 访问入口：
-#   控制台前端: http://localhost:8080（可通过 CADDY_HOST_PORT 自定义）
+#   控制台前端: http://localhost:28080（可通过 CADDY_HOST_PORT 自定义）
 #   oma API:    http://localhost:38080
 #   e2b-local:  http://localhost:3099
 #   MinIO Web:  http://localhost:9001
 #
-# Caddy 默认使用 8080 端口（非特权端口）。如果 8080 被占用：
+# Caddy 默认使用 28080 端口（非特权端口）。如果 28080 被占用：
 #   - 在 .env 中设置 CADDY_HOST_PORT=<其他端口>
 #   - 或设置 CADDY_HOST_PORT=0，Docker 自动分配随机端口（用 `docker compose port caddy 80` 查看）
 #
@@ -195,9 +196,9 @@ services:
       oma-server:
         condition: service_healthy
     ports:
-      - "${CADDY_HOST_PORT:-8080}:80"
+      - "${CADDY_HOST_PORT:-28080}:80"
     environment:
-      - CADDY_HOST_PORT=${CADDY_HOST_PORT:-8080}
+      - CADDY_HOST_PORT=${CADDY_HOST_PORT:-28080}
     volumes:
       - ./configs/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./configs/caddy-entrypoint.sh:/entrypoint.sh:ro
