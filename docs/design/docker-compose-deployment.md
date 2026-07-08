@@ -149,9 +149,31 @@ docker compose down -v     # 同时删除数据卷
 
 ## 8. 本地开发模式
 
-如果只需要基础设施，后端用 `go run .` 开发：
+如果已经安装了 Go 和 Bun，可以只启动基础设施，后端和前端在本地开发运行。
+
+### 8.1 后端开发
 
 ```bash
-docker compose up -d postgres redis minio
+# 启动基础设施
+docker compose up -d postgres redis minio e2b-local
+
+# 本地启动 oma-server
 go run .
 ```
+
+### 8.2 前端开发（HMR 热更新）
+
+```bash
+# 启动后端（如果还没启动）
+docker compose up -d postgres redis minio e2b-local
+go run .
+
+# 另开终端，启动 Vite dev server
+cd web
+bun install
+bun run dev
+```
+
+Vite dev server 默认监听 `http://127.0.0.1:5173`，`vite.config.ts` 中已配置 proxy 将 `/api`、`/v1`、`/auth`、`/oauth`、`/web-api` 请求自动转发到 `http://127.0.0.1:38080`（可通过 `VITE_API_PROXY_TARGET` 环境变量覆盖）。
+
+> **注意**：前端开发模式下不需要启动 Caddy 和 oma-server 容器（`docker compose up` 时不要包含它们）。Vite 的 proxy 替代了 Caddy 的反向代理功能，本地 `go run .` 替代了 oma-server 容器。
