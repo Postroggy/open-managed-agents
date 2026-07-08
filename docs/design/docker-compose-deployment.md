@@ -44,7 +44,7 @@ caddy ──→ oma-server ──→ postgres / redis / minio
 
 ```yaml
 init-web:
-  image: ghcr.io/postroggy/open-managed-agents:latest
+  image: ghcr.io/superduck-ai/open-managed-agents:latest
   entrypoint: ["sh", "-c"]
   command:
     - |

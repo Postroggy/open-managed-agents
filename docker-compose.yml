@@ -32,7 +32,7 @@ services:
 
   # 从 oma-server 镜像提取前端静态产物，挂载给 Caddy 使用。
   init-web:
-    image: ghcr.io/postroggy/open-managed-agents:latest
+    image: ghcr.io/superduck-ai/open-managed-agents:latest
     user: root
     entrypoint: ["sh", "-c"]
     command:
@@ -147,7 +147,7 @@ services:
 
   # oma-server — Open Managed Agents 主 API 服务
   oma-server:
-    image: ghcr.io/postroggy/open-managed-agents:latest
+    image: ghcr.io/superduck-ai/open-managed-agents:latest
     depends_on:
       postgres:
         condition: service_healthy
