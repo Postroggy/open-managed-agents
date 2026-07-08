@@ -11,13 +11,14 @@
 #   docker compose down -v                   # 同时删除数据卷
 #
 # 访问入口：
-#   控制台前端: http://localhost
+#   控制台前端: http://localhost:8080（可通过 CADDY_HOST_PORT 自定义）
 #   oma API:    http://localhost:38080
 #   e2b-local:  http://localhost:3099
 #   MinIO Web:  http://localhost:9001
 #
-# Caddy 监听 80 端口（特权端口）。如果 80 已被占用，改为其他端口：
-#   ports: - "8080:80"
+# Caddy 默认使用 8080 端口（非特权端口）。如果 8080 被占用：
+#   - 在 .env 中设置 CADDY_HOST_PORT=<其他端口>
+#   - 或设置 CADDY_HOST_PORT=0，Docker 自动分配随机端口（用 `docker compose port caddy 80` 查看）
 #
 # 配置上游 Anthropic API（在 .env 中设置）：
 #   ANTHROPIC_UPSTREAM_API_KEY=sk-ant-...
@@ -194,10 +195,14 @@ services:
       oma-server:
         condition: service_healthy
     ports:
-      - "80:80"
+      - "${CADDY_HOST_PORT:-8080}:80"
+    environment:
+      - CADDY_HOST_PORT=${CADDY_HOST_PORT:-8080}
     volumes:
       - ./configs/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./configs/caddy-entrypoint.sh:/entrypoint.sh:ro
       - webdist:/usr/share/caddy/html:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     restart: unless-stopped
 
 volumes:

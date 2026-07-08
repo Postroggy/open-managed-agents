@@ -6,7 +6,7 @@
 
 ```text
 docker compose
-├── caddy (:80)          — 前端 SPA + API 反向代理
+├── caddy (:8080)          — 前端 SPA + API 反向代理
 ├── oma-server (:38080)  — Open Managed Agents 主 API 服务
 ├── e2b-local (:3099)    — 沙箱网关（host 网络，管理 sandbox 容器）
 ├── postgres (:5432)     — 元数据存储
@@ -142,7 +142,7 @@ docker compose down -v     # 同时删除数据卷
 
 | 入口 | 地址 |
 |------|------|
-| 控制台前端 | `http://localhost` |
+| 控制台前端 | `http://localhost:${CADDY_HOST_PORT:-8080}`（默认 8080） |
 | oma API | `http://localhost:38080` |
 | e2b-local | `http://localhost:3099` |
 | MinIO Web | `http://localhost:9001` |
