@@ -59,6 +59,7 @@ assets/
 # ghcr.io/superduck-ai/e2b-local image.  Docker daemon needs host-accessible
 # envd to bind-mount into sandbox containers.
 envd-bin/
+logs/
 
 # AI agent 个人本地覆盖文件（不提交）
 # Claude Code 读 CLAUDE.local.md；Codex 读 AGENTS.override.md（覆盖同级 AGENTS.md）。
