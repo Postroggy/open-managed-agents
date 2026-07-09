@@ -1,0 +1,49 @@
+name: Design Doc Surface Audit
+
+# Soft-fail coverage findings while the surface map is being curated.
+# Extraction / integrity failures (exit 2) still fail the job.
+
+on:
+  pull_request:
+    paths:
+      - "internal/**"
+      - "web/src/app/router.tsx"
+      - "docs/design/**"
+      - "scripts/docs-audit/**"
+  push:
+    branches: [main, master]
+    paths:
+      - "internal/**"
+      - "web/src/app/router.tsx"
+      - "docs/design/**"
+      - "scripts/docs-audit/**"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests
+        run: python3 scripts/docs-audit/test_audit_design_docs.py
+
+      - name: Surface coverage audit
+        id: audit
+        run: |
+          set +e
+          python3 scripts/docs-audit/audit_design_docs.py --diff
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Fail loud on extraction / integrity errors
+        if: steps.audit.outputs.exit_code == '2'
+        run: |
+          echo "audit exited 2 (extraction floor or completeness accounting failed)"
+          exit 2
+
+      - name: Soft reminder on coverage findings
+        if: steps.audit.outputs.exit_code == '1'
+        run: |
+          echo "::warning::Design doc surface coverage findings (soft). Update scripts/docs-audit/surface_map.md or docs/design/. Tighten this step to hard-fail once noise is gone."

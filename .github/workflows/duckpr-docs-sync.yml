@@ -1,0 +1,166 @@
+name: DuckPR Docs Sync
+
+# Design-doc sync agent (docubot equivalent for same-repo docs/design/).
+# Reuses the private Pullfrog runtime from DuckPR review, with push enabled
+# and constrained by .agents/skills/docs-sync/SKILL.md.
+#
+# Trigger manually for now:
+#   gh workflow run "DuckPR Docs Sync" -f pr_number=<N>
+# Not auto-wired on every PR while surface_map still has many gated entries.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to sync design docs for
+        type: string
+        required: true
+      model:
+        description: Model id (same family as DuckPR review)
+        type: string
+        required: false
+        default: ""
+      llm_base_url:
+        description: Optional LLM base URL override
+        type: string
+        required: false
+        default: ""
+      prompt:
+        description: Optional extra instructions appended to the docs-sync skill
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  checks: read
+
+jobs:
+  docs-sync:
+    name: Design docs sync (opencode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: duckpr-docs-sync-${{ inputs.pr_number }}
+      cancel-in-progress: true
+    steps:
+      - name: Resolve PR head
+        id: pr-context
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const prNumber = Number(process.env.INPUT_PR_NUMBER);
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              throw new Error(`Invalid PR number: ${process.env.INPUT_PR_NUMBER}`);
+            }
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            core.setOutput("head_sha", pullRequest.head.sha);
+            core.setOutput("title", pullRequest.title || "");
+            core.setOutput("html_url", pullRequest.html_url || "");
+        env:
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.pr-context.outputs.head_sha }}
+          persist-credentials: false
+
+      - name: Checkout private Pullfrog source
+        uses: actions/checkout@v6
+        with:
+          repository: superduck-ai/pullfrog-private
+          ref: main
+          token: ${{ secrets.PULLFROG_PRIVATE_REPO_TOKEN }}
+          path: .duckpr/pullfrog-private
+          persist-credentials: false
+
+      - name: Hide private Pullfrog checkout from git status
+        run: echo ".duckpr/" >> .git/info/exclude
+
+      - name: Create DuckPR GitHub App token
+        id: duckpr-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DUCKPR_APP_ID }}
+          private-key: ${{ secrets.DUCKPR_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-checks: read
+          permission-actions: read
+
+      - name: Build docs-sync prompt
+        id: prompt
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          PR_TITLE: ${{ steps.pr-context.outputs.title }}
+          PR_URL: ${{ steps.pr-context.outputs.html_url }}
+          EXTRA_PROMPT: ${{ inputs.prompt }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("node:fs");
+            const skillPath = ".agents/skills/docs-sync/SKILL.md";
+            if (!fs.existsSync(skillPath)) {
+              throw new Error(`missing ${skillPath}`);
+            }
+            const prNumber = Number(process.env.PR_NUMBER);
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            const skill = fs.readFileSync(skillPath, "utf8");
+            const extra = String(process.env.EXTRA_PROMPT || "").trim();
+            const parts = [
+              "Follow the docs-sync skill below exactly.",
+              "",
+              `PR number: #${process.env.PR_NUMBER}`,
+              `PR URL: ${process.env.PR_URL}`,
+              `PR title: ${process.env.PR_TITLE}`,
+              "",
+              "<pr_body>",
+              pullRequest.body || "",
+              "</pr_body>",
+              "",
+            ];
+            if (extra) {
+              parts.push("<extra_instructions>", extra, "</extra_instructions>", "");
+            }
+            parts.push("----- BEGIN SKILL -----", skill, "----- END SKILL -----");
+            const prompt = parts.join("\n");
+            core.setOutput("text", prompt);
+            core.info(`prompt_bytes=${Buffer.byteLength(prompt, "utf8")}`);
+
+      - name: Configure git identity for docs commits
+        run: |
+          set -euo pipefail
+          git config user.name "DuckPR Docs Sync"
+          git config user.email "duckpr-docs-sync[bot]@users.noreply.github.com"
+
+      - name: Run private Pullfrog docs-sync
+        uses: ./.duckpr/pullfrog-private
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          model: ${{ inputs.model || vars.DUCKPR_DOCS_MODEL || vars.DUCKPR_MODEL || 'anthropic/claude-sonnet-4-6' }}
+          token: ${{ steps.duckpr-token.outputs.token }}
+          push: enabled
+        env:
+          LLM_BASE_URL: ${{ inputs.llm_base_url || vars.LLM_BASE_URL || vars.ANTHROPIC_BASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.ANTHROPIC_AUTH_TOKEN || secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ inputs.llm_base_url || vars.LLM_BASE_URL || vars.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.LLM_API_KEY || secrets.ANTHROPIC_AUTH_TOKEN || secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PULLFROG_MODEL: ${{ inputs.model || vars.DUCKPR_DOCS_MODEL || vars.DUCKPR_MODEL || 'anthropic/claude-sonnet-4-6' }}
+          PULLFROG_AGENT: opencode
+          LOG_LEVEL: info
+          PULLFROG_SELF_HOSTED: "1"
+          PULLFROG_FORCE_LOCAL_CLI: "1"
