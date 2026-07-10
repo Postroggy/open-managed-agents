@@ -205,6 +205,7 @@ jobs:
     steps:
       - name: Create DuckPR GitHub App token
         id: duckpr-token
+        if: ${{ secrets.DUCKPR_APP_ID != '' && secrets.DUCKPR_PRIVATE_KEY != '' }}
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.DUCKPR_APP_ID }}
@@ -214,13 +215,26 @@ jobs:
           permission-checks: read
           permission-actions: read
 
+      - name: Resolve push token
+        id: token
+        run: |
+          set -euo pipefail
+          # Prefer DuckPR App token; fall back to GITHUB_TOKEN for private-fork smoke.
+          if [ -n "${{ steps.duckpr-token.outputs.token }}" ]; then
+            echo "token=${{ steps.duckpr-token.outputs.token }}" >> "$GITHUB_OUTPUT"
+            echo "Using DuckPR App token"
+          else
+            echo "token=${{ github.token }}" >> "$GITHUB_OUTPUT"
+            echo "Using GITHUB_TOKEN fallback (no DUCKPR_APP_ID)"
+          fi
+
       - uses: actions/checkout@v6
         with:
           # Must check out the branch name (not detached SHA) so agent can push.
           repository: ${{ github.repository }}
           ref: ${{ needs.audit-comment.outputs.head_ref }}
           fetch-depth: 0
-          token: ${{ steps.duckpr-token.outputs.token }}
+          token: ${{ steps.token.outputs.token }}
           persist-credentials: true
 
       - name: Checkout private Pullfrog source
@@ -303,7 +317,7 @@ jobs:
           if [ -z "${model}" ]; then model="${VAR_DOCS_MODEL:-}"; fi
           if [ -z "${model}" ]; then model="${VAR_MODEL:-}"; fi
           if [ -z "${model}" ]; then
-            echo "::error::Pass -f model=anthropic/glm-5.2 (or set vars.DUCKPR_DOCS_MODEL). Matching DuckPR Review is required."
+            echo "::error::Pass -f model=... (e.g. kimi-k2.5 / moonshot-v1-128k) or set vars.DUCKPR_DOCS_MODEL."
             exit 1
           fi
           echo "model=${model}" >> "$GITHUB_OUTPUT"
@@ -314,7 +328,7 @@ jobs:
         with:
           prompt: ${{ steps.prompt.outputs.text }}
           model: ${{ steps.model.outputs.model }}
-          token: ${{ steps.duckpr-token.outputs.token }}
+          token: ${{ steps.token.outputs.token }}
           push: restricted
         env:
           # Exact env surface from successful DuckPR Review run 29026091063
