@@ -1,0 +1,330 @@
+name: DuckPR Docs Sync
+
+# Design-doc sync for same-repo docs/design/.
+#
+# Two jobs:
+#   1) audit-comment — deterministic (no LLM). Always posts audit --diff result.
+#   2) docs-sync     — optional LLM agent via private Pullfrog (push: restricted).
+#
+# Triggers (aligned with prior discussion: manual first, no auto-spam):
+#   - workflow_dispatch with pr_number
+#   - PR comment containing "@duckpr docs" or "@pullfrog docs"
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to sync design docs for
+        type: string
+        required: true
+      model:
+        description: Model id (same family as DuckPR review)
+        type: string
+        required: false
+        default: ""
+      llm_base_url:
+        description: Optional LLM base URL override
+        type: string
+        required: false
+        default: ""
+      prompt:
+        description: Optional extra instructions appended to the docs-sync skill
+        type: string
+        required: false
+        default: ""
+      skip_agent:
+        description: If true, only post the deterministic audit comment (no LLM)
+        type: boolean
+        required: false
+        default: false
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+  checks: read
+  id-token: write
+
+concurrency:
+  group: duckpr-docs-sync-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Always-on deterministic path (no DuckPR / no LLM)
+  # ---------------------------------------------------------------------------
+  audit-comment:
+    name: Post design-doc audit
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        github.actor != 'github-actions[bot]' &&
+        (
+          contains(github.event.comment.body, '@duckpr docs') ||
+          contains(github.event.comment.body, '@pullfrog docs')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      pr_number: ${{ steps.ctx.outputs.pr_number }}
+      head_ref: ${{ steps.ctx.outputs.head_ref }}
+      head_sha: ${{ steps.ctx.outputs.head_sha }}
+      run_agent: ${{ steps.ctx.outputs.run_agent }}
+    steps:
+      - name: Resolve PR context
+        id: ctx
+        uses: actions/github-script@v7
+        env:
+          INPUT_PR_NUMBER: ${{ inputs.pr_number || '' }}
+          SKIP_AGENT: ${{ inputs.skip_agent || false }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            let prNumber;
+            if (context.eventName === "issue_comment") {
+              prNumber = context.payload.issue.number;
+            } else {
+              prNumber = Number(process.env.INPUT_PR_NUMBER);
+            }
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              throw new Error(`Invalid PR number: ${prNumber}`);
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            if (!pr.head.ref) {
+              throw new Error(`PR #${prNumber} has no head.ref`);
+            }
+            const skipAgent = String(process.env.SKIP_AGENT || "false") === "true";
+            core.setOutput("pr_number", String(prNumber));
+            core.setOutput("head_ref", pr.head.ref);
+            core.setOutput("head_sha", pr.head.sha);
+            core.setOutput("head_repo", pr.head.repo.full_name);
+            core.setOutput("title", pr.title || "");
+            core.setOutput("html_url", pr.html_url || "");
+            // Only run LLM agent on same-repo PRs (fork PRs cannot be pushed safely).
+            const sameRepo = pr.head.repo.full_name === `${context.repo.owner}/${context.repo.repo}`;
+            core.setOutput("run_agent", (!skipAgent && sameRepo) ? "true" : "false");
+            if (!sameRepo) {
+              core.warning(`PR head is ${pr.head.repo.full_name}; skipping LLM agent (push unsafe on forks).`);
+            }
+
+      - uses: actions/checkout@v6
+        with:
+          # Checkout the PR branch tip so audit matches what the agent will see.
+          ref: ${{ steps.ctx.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Run surface audit
+        id: audit
+        run: |
+          set +e
+          python3 scripts/docs-audit/test_audit_design_docs.py
+          test_code=$?
+          python3 scripts/docs-audit/audit_design_docs.py --diff --output /tmp/docs-audit.json > /tmp/docs-audit.txt 2>&1
+          audit_code=$?
+          set -e
+          echo "test_code=$test_code" >> "$GITHUB_OUTPUT"
+          echo "audit_code=$audit_code" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Design doc surface audit"
+            echo
+            echo "- unit tests exit: \`$test_code\`"
+            echo "- audit --diff exit: \`$audit_code\` (0 clean / 1 coverage findings / 2 integrity)"
+            echo
+            echo "<details><summary>Audit report</summary>"
+            echo
+            echo '```'
+            # Keep comment size bounded
+            head -c 12000 /tmp/docs-audit.txt
+            echo
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "Trigger docs agent (same-repo PRs only): comment \`@duckpr docs\` or re-run this workflow."
+            echo
+            echo "<!-- design-doc-audit -->"
+          } > /tmp/audit-comment.md
+          cat /tmp/docs-audit.txt
+
+      - name: Comment audit on PR
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("node:fs");
+            const body = fs.readFileSync("/tmp/audit-comment.md", "utf8");
+            const prNumber = Number(process.env.PR_NUMBER);
+            // Upsert: replace previous bot audit comment if present.
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const marker = "<!-- design-doc-audit -->";
+            const existing = comments.find(
+              (c) => c.user?.type === "Bot" && String(c.body || "").includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
+
+  # ---------------------------------------------------------------------------
+  # Optional LLM path (DuckPR / private Pullfrog) — coding + push restricted
+  # ---------------------------------------------------------------------------
+  docs-sync:
+    name: Design docs sync (opencode)
+    needs: audit-comment
+    if: needs.audit-comment.outputs.run_agent == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Create DuckPR GitHub App token
+        id: duckpr-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DUCKPR_APP_ID }}
+          private-key: ${{ secrets.DUCKPR_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-checks: read
+          permission-actions: read
+
+      - uses: actions/checkout@v6
+        with:
+          # Must check out the branch name (not detached SHA) so agent can push.
+          repository: ${{ github.repository }}
+          ref: ${{ needs.audit-comment.outputs.head_ref }}
+          fetch-depth: 0
+          token: ${{ steps.duckpr-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Checkout private Pullfrog source
+        uses: actions/checkout@v6
+        with:
+          repository: superduck-ai/pullfrog-private
+          ref: main
+          token: ${{ secrets.PULLFROG_PRIVATE_REPO_TOKEN }}
+          path: .duckpr/pullfrog-private
+          persist-credentials: false
+
+      - name: Hide private Pullfrog checkout from git status
+        run: echo ".duckpr/" >> .git/info/exclude
+
+      - name: Build docs-sync prompt
+        id: prompt
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.audit-comment.outputs.pr_number }}
+          EXTRA_PROMPT: ${{ inputs.prompt || '' }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("node:fs");
+            const skillPath = ".agents/skills/docs-sync/SKILL.md";
+            if (!fs.existsSync(skillPath)) {
+              throw new Error(`missing ${skillPath}`);
+            }
+            const prNumber = Number(process.env.PR_NUMBER);
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            const skill = fs.readFileSync(skillPath, "utf8");
+            const extra = String(process.env.EXTRA_PROMPT || "").trim();
+            const comment = String(process.env.COMMENT_BODY || "").trim();
+            const parts = [
+              "Follow the docs-sync skill below exactly.",
+              "",
+              `PR number: #${prNumber}`,
+              `PR URL: ${pr.html_url}`,
+              `PR title: ${pr.title || ""}`,
+              `PR head branch: ${pr.head.ref}`,
+              "",
+              "<pr_body>",
+              pr.body || "",
+              "</pr_body>",
+              "",
+            ];
+            if (comment) {
+              parts.push("<trigger_comment>", comment, "</trigger_comment>", "");
+            }
+            if (extra) {
+              parts.push("<extra_instructions>", extra, "</extra_instructions>", "");
+            }
+            parts.push("----- BEGIN SKILL -----", skill, "----- END SKILL -----");
+            core.setOutput("text", parts.join("\n"));
+
+      - name: Configure git identity
+        run: |
+          set -euo pipefail
+          git config user.name "DuckPR Docs Sync"
+          git config user.email "duckpr-docs-sync[bot]@users.noreply.github.com"
+          git status -sb
+          git rev-parse --abbrev-ref HEAD
+
+      - name: Require model (same contract as DuckPR Review)
+        id: model
+        env:
+          INPUT_MODEL: ${{ inputs.model }}
+          VAR_DOCS_MODEL: ${{ vars.DUCKPR_DOCS_MODEL }}
+          VAR_MODEL: ${{ vars.DUCKPR_MODEL }}
+        run: |
+          set -euo pipefail
+          # DuckPR Review always receives model from the bot (observed: anthropic/glm-5.2).
+          # Do not default to Claude — this repo uses LLM_BASE_URL=https://api.kimi.com/coding/.
+          model="${INPUT_MODEL:-}"
+          if [ -z "${model}" ]; then model="${VAR_DOCS_MODEL:-}"; fi
+          if [ -z "${model}" ]; then model="${VAR_MODEL:-}"; fi
+          if [ -z "${model}" ]; then
+            echo "::error::Pass -f model=anthropic/glm-5.2 (or set vars.DUCKPR_DOCS_MODEL). Matching DuckPR Review is required."
+            exit 1
+          fi
+          echo "model=${model}" >> "$GITHUB_OUTPUT"
+          echo "Using model=${model}"
+
+      - name: Run private Pullfrog docs-sync
+        uses: ./.duckpr/pullfrog-private
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          model: ${{ steps.model.outputs.model }}
+          token: ${{ steps.duckpr-token.outputs.token }}
+          push: restricted
+        env:
+          # Exact env surface from successful DuckPR Review run 29026091063
+          LLM_BASE_URL: ${{ inputs.llm_base_url || vars.LLM_BASE_URL || vars.ANTHROPIC_BASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.ANTHROPIC_AUTH_TOKEN || secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ inputs.llm_base_url || vars.LLM_BASE_URL || vars.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.LLM_API_KEY || secrets.ANTHROPIC_AUTH_TOKEN || secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PULLFROG_MODEL: ${{ steps.model.outputs.model }}
+          PULLFROG_AGENT: opencode
+          LOG_LEVEL: debug
+          PULLFROG_SELF_HOSTED: "1"
+          PULLFROG_FORCE_LOCAL_CLI: "1"
