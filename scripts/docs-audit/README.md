@@ -47,6 +47,13 @@ SurfaceID -> internal
 SurfaceID -> gated:<reason>
 ```
 
+## Writing design docs (agent + humans)
+
+Doc sync must follow `AGENTS.md` §「设计文档同步」. The Pullfrog skill
+`.agents/skills/docs-sync/SKILL.md` operationalizes that contract: when to
+write, no padding, truth-first, pick an existing `docs/design/` exemplar, and
+keep compatibility + test/acceptance notes aligned with the code.
+
 ## Exit codes
 
 | Exit | Meaning |
