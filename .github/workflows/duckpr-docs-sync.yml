@@ -203,30 +203,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Create DuckPR GitHub App token
-        id: duckpr-token
-        if: ${{ secrets.DUCKPR_APP_ID != '' && secrets.DUCKPR_PRIVATE_KEY != '' }}
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.DUCKPR_APP_ID }}
-          private-key: ${{ secrets.DUCKPR_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-          permission-checks: read
-          permission-actions: read
-
       - name: Resolve push token
         id: token
         run: |
           set -euo pipefail
-          # Prefer DuckPR App token; fall back to GITHUB_TOKEN for private-fork smoke.
-          if [ -n "${{ steps.duckpr-token.outputs.token }}" ]; then
-            echo "token=${{ steps.duckpr-token.outputs.token }}" >> "$GITHUB_OUTPUT"
-            echo "Using DuckPR App token"
-          else
-            echo "token=${{ github.token }}" >> "$GITHUB_OUTPUT"
-            echo "Using GITHUB_TOKEN fallback (no DUCKPR_APP_ID)"
-          fi
+          # Private-fork smoke: use GITHUB_TOKEN. Prefer DuckPR App when configured
+          # via a future dedicated setup; secrets cannot be used directly in if:.
+          echo "token=${{ github.token }}" >> "$GITHUB_OUTPUT"
+          echo "Using GITHUB_TOKEN"
 
       - uses: actions/checkout@v6
         with:
