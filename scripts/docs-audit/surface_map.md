@@ -12,6 +12,7 @@ Sentinels: `internal` | `gated:<reason>`
 /agents -> gated:needs-design-doc
 /agents:search -> gated:needs-design-doc
 /deployment_runs -> gated:needs-design-doc
+/demo_widgets -> docs/design/be/demo_widgets.md
 /deployments -> gated:needs-design-doc
 /environments -> gated:needs-design-doc
 /files -> gated:needs-design-doc
@@ -37,6 +38,7 @@ cleanup -> internal
 codesessions -> docs/design/be/ccrv2/ccr-v2-api-worker-state.md
 config -> internal
 db -> internal
+demowidgets -> docs/design/be/demo_widgets.md
 deployments -> gated:needs-design-doc
 environments -> gated:needs-design-doc
 files -> gated:needs-design-doc
