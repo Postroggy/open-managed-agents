@@ -54,3 +54,6 @@ SurfaceID -> gated:<reason>
 | 0 | Clean |
 | 1 | Coverage / map hygiene findings (CI soft-fails initially) |
 | 2 | Extraction floor or completeness accounting failed |
+## E2E smoke
+
+Private-fork smoke PR for DuckPR Docs Sync dispatch.
