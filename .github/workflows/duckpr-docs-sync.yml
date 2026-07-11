@@ -83,6 +83,7 @@ jobs:
         env:
           INPUT_PR_NUMBER: ${{ inputs.pr_number || '' }}
           SKIP_AGENT: ${{ inputs.skip_agent || false }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
         with:
           github-token: ${{ github.token }}
           script: |
@@ -103,7 +104,17 @@ jobs:
             if (!pr.head.ref) {
               throw new Error(`PR #${prNumber} has no head.ref`);
             }
-            const skipAgent = String(process.env.SKIP_AGENT || "false") === "true";
+            // skip_agent comes from the workflow_dispatch input (set by DuckPR
+            // when it parses --audit-only). On the issue_comment path there is
+            // no input, so parse the flag from the comment body directly to
+            // keep --audit-only semantics consistent across both trigger paths.
+            let skipAgent = String(process.env.SKIP_AGENT || "false") === "true";
+            if (context.eventName === "issue_comment") {
+              const body = String(process.env.COMMENT_BODY || "");
+              const docsCmd = /(^|\s)@(?:duckp(?:r|ur)|pullfrog)\s+docs\b/i.test(body);
+              const auditOnly = /(^|\s)@(?:duckp(?:r|ur)|pullfrog)\s+docs\b[\s\S]*?(?:^|\s)--audit-only\b/i.test(body);
+              if (docsCmd && auditOnly) skipAgent = true;
+            }
             core.setOutput("pr_number", String(prNumber));
             core.setOutput("head_ref", pr.head.ref);
             core.setOutput("head_sha", pr.head.sha);

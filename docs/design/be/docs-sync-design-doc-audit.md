@@ -72,7 +72,10 @@
 ### 触发
 
 - `@duckpr docs` / `@pullfrog docs` PR 评论 → DuckPR bot 路由（见 `superduck-ai/duckpr` 的 `dispatchDocsSync`）。
-- `workflow_dispatch` 直接触发（`pr_number` + `model` + `skip_agent`）。
+- `@duckpr docs --audit-only` / `@pullfrog docs --audit-only` — 仅运行确定性 audit（`skip_agent=true`），不调用 LLM。flag 由 DuckPR 从 prompt 中剥离，不传入 agent。适用于快速覆盖检查或 token 敏感场景。
+- `workflow_dispatch` 直接触发（`pr_number` + `model` + `llm_base_url` + `prompt` + `skip_agent`）。
+
+**Model 解析三层优先级**：DuckPR dispatch 时仅在 repo 配置了 `docs_model` 时传 `model` input；未配置则省略，由 workflow 的 `Require model` 步骤按 `inputs.model` > `vars.DUCKPR_DOCS_MODEL` > `vars.DUCKPR_MODEL` 解析。这允许 docs-sync 使用比 review 更便宜的 model（如 `DUCKPR_DOCS_MODEL=kimi-k2.5` 对 `DUCKPR_MODEL=glm-5.2`）。DuckPR **不**回退到 review model——那会遮蔽 vars，静默强制使用更贵的 model。三者都未配置时 workflow 硬失败并给出配置指引。
 
 不做"每个 PR 自动触发"——文档同步是显式动作，避免噪声 PR 与 token 消耗。但 `design-doc-audit.yml` CI 会在检测到信号时**自动提示**：当 audit exit=1（coverage/map/staleness findings）或 `classify_changes.py` verdict 为 `must_document` / `needs_review` 时，CI 在 PR 上贴一条评论（带 `<!-- design-doc-audit-nudge -->` marker，upsert 不重复），提示作者触发 `@duckpr docs`。这是 audit → agent 的衔接桥：确定性检测发现漂移，人决定是否派发 agent。
 
