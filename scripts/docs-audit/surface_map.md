@@ -20,7 +20,7 @@ Sentinels: `internal` | `gated:<reason>`
 /messages/batches -> gated:needs-design-doc
 /models -> internal
 /organizations -> internal
-/sessions -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+/sessions -> gated:needs-design-doc
 /skills -> gated:needs-design-doc
 /v1/code/sessions -> docs/design/be/ccrv2/ccr-v2-api-worker-state.md
 /vaults -> gated:needs-design-doc
