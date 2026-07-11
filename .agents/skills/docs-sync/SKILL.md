@@ -22,6 +22,9 @@ source of truth and avoid extra `gh` round-trips unless a block is missing:
 
 - `<pr_context>` — PR number, title, URL, head branch, body.
 - `<changed_files>` — the PR's changed-file list (paths + additions/deletions).
+- `<classify>` — JSON from `scripts/docs-audit/classify_changes.py`: the binding
+  per-file doc-need verdict (`exclude` / `must_document` / `needs_review`).
+  If absent, run the classifier yourself (step 2a).
 - `<trigger_comment>` — the `@duckpr docs` mention body, if any (may carry extra
   instructions).
 - `<extra_instructions>` — workflow `prompt` input, if any.
@@ -146,11 +149,41 @@ Keep it proportional to the change. For non-trivial design docs, include:
   you cannot proceed and do not invent docs. (When injected, the exit code is in
   `<audit_findings>`.)
 
-### 2. Triage (use the Decision tree)
+### 2. Triage (classify first, then use the Decision tree)
 
-From the audit findings and the PR diff, select findings this PR actually owns
-(changed packages, mounts, migrations, FE routes). Record the baseline finding
-count so step 4 can prove the fix landed.
+**2a. Run the deterministic classifier on the changed files:**
+
+```bash
+# --files takes the changed-file list; --keywords is optional (from diff scan)
+python3 scripts/docs-audit/classify_changes.py \
+  --files <changed-file-1> <changed-file-2> ... \
+  --output /tmp/classify.json
+```
+
+The classifier produces a `verdict.action` and a per-file breakdown. **Treat it
+as binding input, not a suggestion:**
+
+- `verdict.action == exclude` → the PR is CI/test/config/docs-only. **Do not
+  write a doc.** Post a「设计文档无需更新」comment citing the classifier reason.
+  You may still fix `dead_entry` / `dead_doc_target` map hygiene if present.
+- `verdict.action == must_document` → at least one file is a named AGENTS.md
+  category (events / migrations / auth / router wiring) or a behavior-bearing
+  package. You **must** produce a doc update or an explicit「无需更新 with reason」
+  for each `must_document` / `should_document` file. Skipping it is not allowed.
+- `verdict.action == needs_review` → the rules could not decide with confidence.
+  Inspect each `needs_review` file's diff, then classify it yourself as
+  must_document / should_document / exclude **and say which files you inspected
+  and why** in the final comment. Never silently treat a needs_review file as
+  exclude.
+
+This is the anti-drop guardrail: the classifier never silently buckets an
+ambiguous change as exclude — and neither must you.
+
+**2b. Cross-reference with audit findings.** For each file the classifier flags
+must_document / should_document, find the matching `<audit_findings>` entry
+(the surface_hint maps: `event_contracts`, `migrations`, `auth_middleware`,
+`api_mounts`, `api_subroutes`, `packages`, `fe_routes`). Record the baseline
+high-finding count so step 4 can prove the fix landed.
 
 ### 3. Apply fixes
 
@@ -181,22 +214,31 @@ Compare `/tmp/docs-audit-after.json` to the baseline from step 1:
 - Record `before=<N> after=<M>` for the final comment. If `after >= before` and
   you did not defer, you did not finish — go back to step 3.
 
-### 5. Commit + push
+### 5. Commit + push (separate content from bookkeeping)
 
-- Commit on the current PR branch: `docs: sync design docs for <area>`
-- Push the current branch (restricted push is enough for feature branches).
-- If the change is large/unrelated to the PR, open companion branch
-  `docs/sync-<slug>` from current HEAD and open a PR; still comment on the
-  original PR with the companion PR link.
+Keep content edits and audit-bookkeeping edits in **separate commits** so a
+reviewer can skim the doc change without the surface_map noise:
+
+1. `docs: sync design docs for <area>` — the `docs/design/...` content edits only.
+2. `chore(docs-audit): remap surfaces + refresh snapshot for <area>` — the
+   `surface_map.md` + `surface_snapshot.json` changes.
+
+Push the current branch (restricted push is enough for feature branches).
+If the change is large/unrelated to the PR, open companion branch
+`docs/sync-<slug>` from current HEAD and open a PR; still comment on the
+original PR with the companion PR link.
 
 ### 6. Final PR comment (exactly one)
 
 Use this template. Fill every section; omit a section only if it truly does not
-apply, and say so.
+apply, and say so. The classifier verdict and per-file needs_review decisions
+are mandatory reporting — reviewers must be able to see *why* each file was
+acted on or skipped.
 
 ```markdown
 ## Design docs sync
 
+**Classify:** verdict `<exclude|must_document|needs_review>` — must=`<N>` should=`<N>` review=`<M>` excluded=`<K>`
 **Audit:** exit `<code>` — findings `<before>` → `<after>` (`<N>` addressed, `<M>` deferred)
 
 ### Updated
@@ -206,11 +248,17 @@ apply, and say so.
 ### 设计文档无需更新
 - <surface or area> — <why existing doc already matches>
 
+### Inspected (needs_review resolved by agent)
+- `<file>` — <what the diff showed, and the action taken + why>
+
 ### Deferred
 - `<surface>` — `gated:<reason>`
 
 ### Notes / blockers
 - <anything unclear, with links>
+
+### Reviewer
+- cc @<pr author from <pr_context>> — please review the doc changes above match your code change.
 ```
 
 After posting, do not add more comments. If reviewers ask for changes, make new

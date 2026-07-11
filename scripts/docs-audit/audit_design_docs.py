@@ -33,16 +33,22 @@ SNAPSHOT_SCHEMA_VERSION = 1
 
 EXTRACTION_FLOORS = {
     "api_mounts": 10,
+    "api_subroutes": 10,
     "packages": 15,
     "migrations": 5,
     "fe_routes": 20,
+    "event_contracts": 10,
+    "auth_middleware": 3,
 }
 
 SECTION_KEYS = {
     "api_mounts": ("## API mounts", "api_mounts"),
+    "api_subroutes": ("## API subroutes", "api_subroutes"),
     "packages": ("## Packages", "packages"),
     "migrations": ("## Migrations", "migrations"),
     "fe_routes": ("## FE routes", "fe_routes"),
+    "event_contracts": ("## Event contracts", "event_contracts"),
+    "auth_middleware": ("## Auth middleware", "auth_middleware"),
     "unlisted": ("## Unlisted design docs", "unlisted"),
 }
 
@@ -71,9 +77,12 @@ class AuditResult:
 def parse_surface_map(path: Path) -> tuple[dict[str, dict[str, str]], set[str], list[tuple[str, str]]]:
     mappings: dict[str, dict[str, str]] = {
         "api_mounts": {},
+        "api_subroutes": {},
         "packages": {},
         "migrations": {},
         "fe_routes": {},
+        "event_contracts": {},
+        "auth_middleware": {},
     }
     unlisted: set[str] = set()
     duplicates: list[tuple[str, str]] = []
@@ -175,15 +184,142 @@ def extract_fe_routes(router_tsx: Path) -> list[str]:
     return sorted(set(_FE_PATH_RE.findall(router_tsx.read_text(encoding="utf-8"))))
 
 
+# --- api_subroutes ---------------------------------------------------------
+# Each resource package exposes its routes through Register*Routes entry points
+# (e.g. platformapi.RegisterPlatformBillingRoutes). These are the stable unit of
+# "this package contributes an HTTP resource" — more stable than scanning every
+# nested r.Get/r.Post, which churns on path refactors.
+#
+# We prefer the *call-site* prefix (the package qualifier at the mount point,
+# e.g. `platformapi.RegisterPlatformBillingRoutes`) over the definition file's
+# own package, because the call-site prefix is how the resource is named in
+# server.go wiring and is what a reader maps to a design doc area. When a
+# registration is only ever called unqualified (same package), we fall back to
+# the definition file's package name.
+_REGISTER_CALL_RE = re.compile(
+    r"""(?P<prefix>[A-Za-z_]\w*)\.(?P<name>Register(?:[A-Za-z]\w*)?Routes)\s*\("""
+)
+_REGISTER_DEF_RE = re.compile(
+    r"""^func\s+(?:\([^)]*\)\s+)?(?P<name>Register(?:[A-Za-z]\w*)?Routes)\s*\(""",
+    re.MULTILINE,
+)
+
+
+def extract_api_subroutes(internal_dir: Path) -> list[str]:
+    """Collect Register*Routes entry points across resource packages.
+
+    A surface is "<package>.<RegisterName>", e.g. "platformapi.RegisterPlatformBillingRoutes".
+    The defining package (from `func Register*Routes` / `func (s *T) Register*Routes`)
+    is the source of truth for the prefix — it is always the real owning package.
+    Call-site prefixes (`pkg.Register*`, `s.files.Register*`, `codeSessionService.Register*`)
+    are only used to *discover* which registrations exist, not to name them, because
+    call-site qualifiers can be variable names rather than package names.
+    """
+    if not internal_dir.is_dir():
+        return []
+    call_sites: set[str] = set()  # names seen at a call site
+    defined: dict[str, str] = {}  # name -> defining package (source of truth)
+    for go_file in sorted(internal_dir.rglob("*.go")):
+        if go_file.name.endswith("_test.go"):
+            continue
+        text = go_file.read_text(encoding="utf-8")
+        pkg_match = re.search(r"^package\s+(\w+)", text, re.MULTILINE)
+        pkg = pkg_match.group(1) if pkg_match else go_file.parent.name
+        for m in _REGISTER_CALL_RE.finditer(text):
+            call_sites.add(m.group("name"))
+        for m in _REGISTER_DEF_RE.finditer(text):
+            defined[m.group("name")] = pkg
+    names = set(defined) | call_sites
+    surfaces: set[str] = set()
+    for name in names:
+        # Prefer the defining package; fall back to a bare name for registrations
+        # we only ever saw called (no in-repo definition, e.g. interface-satisfied).
+        prefix = defined.get(name)
+        if prefix:
+            surfaces.add(f"{prefix}.{name}")
+        else:
+            surfaces.add(name)
+    return sorted(surfaces)
+
+
+# --- event_contracts -------------------------------------------------------
+# Event types are string literals switched on in CategoryFor/IsClientInput/etc.
+# in internal/managedagentsevents/events.go. These literal strings ARE the event
+# contract; adding/removing/renaming one is an AGENTS.md "event contract change".
+_EVENT_TYPE_LITERAL_RE = re.compile(r'"([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)"')
+
+
+def extract_event_contracts(events_go: Path | None) -> list[str]:
+    """Extract event-type string literals from the managed agent events package.
+
+    Falls back to scanning the whole package dir if the exact file moves. Returns
+    the sorted unique event-type strings (e.g. "user.message", "session.status_running").
+    """
+    search_files: list[Path] = []
+    events_pkg = events_go.parent if events_go and events_go.exists() else None
+    if events_pkg is None:
+        return []
+    for go_file in sorted(events_pkg.glob("*.go")):
+        if go_file.name.endswith("_test.go"):
+            continue
+        search_files.append(go_file)
+    surfaces: set[str] = set()
+    for f in search_files:
+        text = f.read_text(encoding="utf-8")
+        for m in _EVENT_TYPE_LITERAL_RE.finditer(text):
+            surfaces.add(m.group(1))
+    return sorted(surfaces)
+
+
+# --- auth_middleware -------------------------------------------------------
+# Auth/middleware surfaces are the (s *Server) xxxMiddleware definitions plus the
+# router.Use(xxxMiddleware) call sites in server.go. A new middleware or a changed
+# .Use(...) chain is an AGENTS.md "permission boundary change".
+_MIDDLEWARE_DEF_RE = re.compile(
+    r"""func\s+\([^)]*\)\s+([A-Za-z]\w*[Mm]iddleware)\s*\("""
+)
+_MIDDLEWARE_USE_RE = re.compile(r"""\.Use\(\s*([A-Za-z_][\w.]*)\s*\)""")
+
+
+def extract_auth_middleware(server_go: Path) -> list[str]:
+    """Collect auth/middleware surfaces from server.go.
+
+    A surface is a middleware identifier that appears in either a definition
+    (`func (s *Server) xxxMiddleware`) or a `.Use(...)` call. Non-auth middleware
+    (requestIDMiddleware, recoverMiddleware, requestLoggingMiddleware) is included
+    too because the middleware chain is a documented platform boundary; the map
+    decides whether each one needs a design doc.
+    """
+    if not server_go.exists():
+        return []
+    text = server_go.read_text(encoding="utf-8")
+    surfaces: set[str] = set()
+    for m in _MIDDLEWARE_DEF_RE.finditer(text):
+        surfaces.add(m.group(1))
+    for m in _MIDDLEWARE_USE_RE.finditer(text):
+        # Only keep identifiers that look like middleware (end with Middleware or
+        # are s.xxxMiddleware call expressions) to avoid matching generic .Use(cb).
+        ident = m.group(1)
+        if ident.endswith("Middleware"):
+            # s.platformAuthMiddleware -> platformAuthMiddleware
+            surfaces.add(ident.split(".")[-1])
+    return sorted(surfaces)
+
+
 def extract_all(repo: Path) -> dict[str, list[str]]:
     return {
         "api_mounts": extract_api_mounts(
             repo / "internal" / "api" / "server.go",
             repo / "internal" / "codesessions" / "ingress.go",
         ),
+        "api_subroutes": extract_api_subroutes(repo / "internal"),
         "packages": extract_packages(repo / "internal"),
         "migrations": extract_migrations(repo / "internal" / "db" / "migrations"),
         "fe_routes": extract_fe_routes(repo / "web" / "src" / "app" / "router.tsx"),
+        "event_contracts": extract_event_contracts(
+            repo / "internal" / "managedagentsevents" / "events.go"
+        ),
+        "auth_middleware": extract_auth_middleware(repo / "internal" / "api" / "server.go"),
     }
 
 
@@ -288,6 +424,51 @@ def run_map_hygiene(
                     doc,
                     "dead_unlisted",
                     f"unlisted design doc `{doc}` does not exist — prune it",
+                    severity="medium",
+                )
+            )
+
+    # Staleness (reverse drift): design docs that still reference a package
+    # that no longer exists in code. Catches renames/removals that the forward
+    # coverage audit cannot see (it only knows about surfaces that *currently*
+    # exist). We scan docs/design/** prose for `internal/<pkg>` references and
+    # flag any whose <pkg> is not a live package directory.
+    run_staleness_check(extracted, repo, findings)
+
+
+# `internal/<pkg>` reference in design-doc prose. Word boundary on the right so
+# we don't match `internal/db/migrations` as pkg `db/migrations` — we capture
+# only the first path segment and verify it separately.
+_INTERNAL_PKG_REF_RE = re.compile(r"""internal/([a-z][a-z0-9_]*)""")
+
+
+def run_staleness_check(
+    extracted: dict[str, list[str]],
+    repo: Path,
+    findings: list[Finding],
+) -> None:
+    live_packages = set(extracted.get("packages", []))
+    docs_dir = repo / "docs" / "design"
+    if not docs_dir.is_dir() or not live_packages:
+        return
+    # doc path -> set of stale package refs it mentions (dedupe per doc).
+    stale_by_doc: dict[str, set[str]] = {}
+    for doc in sorted(docs_dir.rglob("*.md")):
+        text = doc.read_text(encoding="utf-8")
+        refs = set(_INTERNAL_PKG_REF_RE.findall(text))
+        for pkg in refs:
+            if pkg not in live_packages:
+                rel = str(doc.relative_to(repo))
+                stale_by_doc.setdefault(rel, set()).add(pkg)
+    for doc_rel in sorted(stale_by_doc):
+        for pkg in sorted(stale_by_doc[doc_rel]):
+            findings.append(
+                Finding(
+                    "staleness",
+                    doc_rel,
+                    "stale_pkg_ref",
+                    f"`{doc_rel}` references `internal/{pkg}` but that package no longer exists — "
+                    f"update the doc or confirm the rename",
                     severity="medium",
                 )
             )
