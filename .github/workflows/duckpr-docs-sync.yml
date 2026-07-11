@@ -447,7 +447,7 @@ jobs:
           {
             echo "## Post-sync audit"
             echo
-            echo "- pre-sync: exit \`${HIGH_BEFORE}\` high findings, post-sync: exit \`${after_code}\` high findings \`${high_after}\`"
+            echo "- pre-sync: \`${HIGH_BEFORE}\` high findings → post-sync: \`${high_after}\` high findings (audit exit \`${after_code}\`)"
             echo
             echo "<details><summary>Audit report (after)</summary>"
             echo
