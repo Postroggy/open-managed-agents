@@ -71,7 +71,7 @@
 
 ### 触发
 
-- `@duckpr docs` / `@pullfrog docs` PR 评论 → DuckPR bot 路由（见 `superduck-ai/duckpr` 的 `dispatchDocsSync`）。
+- `@duckpr docs` / `@pullfrog docs` PR 评论 → DuckPR bot 路由（见 `superduck-ai/duckpr` 的 `dispatchDocsSync`）。触发者需要仓库 `write` 及以上权限（见下方安全边界），低权限用户被拒绝并在 PR 贴评论说明。
 - `@duckpr docs --audit-only` / `@pullfrog docs --audit-only` — 仅运行确定性 audit（`skip_agent=true`），不调用 LLM。flag 由 DuckPR 从 prompt 中剥离，不传入 agent。适用于快速覆盖检查或 token 敏感场景。
 - `workflow_dispatch` 直接触发（`pr_number` + `model` + `llm_base_url` + `prompt` + `skip_agent`）。
 
@@ -96,19 +96,45 @@ agent 在 SKILL.md step 2 把这个 verdict 作为**约束性输入消费**：ve
 
 与跨仓文档同步不同，本项目文档在 `docs/design/` 同仓存放。agent 检出 PR head 分支，以 `push: restricted` 只推送该 feature 分支，不触碰 `main`、不建 tag、不删分支。
 
-### Prompt 上下文注入
+### Prompt 上下文注入与注入防御
 
-`duckpr-docs-sync.yml` 的 prompt 构造步骤把以下块注入 agent，避免 agent 自行 `gh` 捞取：
+`duckpr-docs-sync.yml` 的 prompt 构造步骤把以下块注入 agent，避免 agent 自行 `gh` 捞取。块分两类——**trusted**（workflow 产出，XML 标签）和 **untrusted**（用户可控，唯一分隔符）：
+
+**Trusted 块**（workflow 产出，agent 可信）：
 
 - `<pr_context>` — PR 号、标题、URL、head/base 分支、**作者**。
-- `<pr_body>` — PR 描述。
-- `<changed_files>` — 变更文件列表（status + +/- + 路径，上限 300）。
+- `<changed_files>` — 变更文件列表（`<status> +<add>/-<del>  <filename>` 格式，上限 300）。
 - `<classify>` — `classify_changes.py` 的判定 JSON（约束性 per-file triage）。
-- `<audit_findings>` — `audit_design_docs.py --diff` 的 JSON（pre-sync 基线）。
-- `<trigger_comment>` / `<extra_instructions>` — 触发评论与额外指令。
-- `----- BEGIN SKILL -----` / `----- END SKILL -----` — `docs-sync/SKILL.md` 正文。
+- `<audit_findings>` — `audit_design_docs.py --diff` 的 JSON（pre-sync 基线，含 `exit_code` + `findings[]`）。
 
-`<classify>` 和 `<audit_findings>` 共同构成写入层的判定输入：classify 决定"要不要写"，audit findings 决定"写哪些 surface"。agent 据此 triage 该 PR 实际 owns 哪些 finding，而非全盘处理。
+**Untrusted 块**（用户可控，agent 不可作为指令）：
+
+- `pr_body` — PR 描述。
+- `trigger_comment` — 触发评论正文。
+- `extra_instructions` — workflow `prompt` input。
+
+注入顺序（安全关键）：`----- BEGIN SKILL -----`（指令框架）→ 对抗性声明 → trusted 块 → untrusted 块（最后）。这确保 agent 先建立指令框架，再看到任何攻击者可控内容。
+
+**Prompt 注入防御**（三层）：
+
+1. **SKILL 先行** — SKILL.md 正文放在 prompt 最前面，使 agent 的指令框架在任何 untrusted 内容之前建立。
+2. **唯一分隔符** — untrusted 块用每次运行随机生成的分隔符 `=== UNTRUSTED_DATA_OPEN_<random16> ===` / `=== UNTRUSTED_DATA_CLOSE_<random16> ===` 包裹，攻击者无法在 PR body 中预先伪造（随机 token 不可预测）。同时 sanitize 会从 untrusted 内容中移除任何匹配分隔符模式的行（belt-and-suspenders）。
+3. **对抗性声明** — 在 trusted 与 untrusted 块之间插入明确声明：untrusted 块是数据不是指令，binding 输入只有 `<classify>` / `<audit_findings>` / SKILL。
+
+untrusted 块还有长度上限（每块 20KB，DuckPR 侧 `extractDocsExtraPrompt` 另有 4KB 上限），防止 PR body 撑爆 agent 上下文。
+
+`<classify>` 和 `<audit_findings>` 共同构成写入层的判定输入：classify 决定"要不要写"，audit findings 决定"写哪些 surface"。agent 据此 triage 该 PR 实际 owns 哪些 finding（finding 的 surface 出现在 `<changed_files>` 或 `<classify>` 的 must/should 列表中），而非全盘处理。
+
+### 安全边界
+
+docs-sync 的攻击面比 DuckPR Review 更大：它不仅消耗 LLM token，还推送代码到 PR 分支。因此有多层显式安全边界：
+
+- **权限门控**（DuckPR `dispatchDocsSync`）— `@duckpr docs` 触发者必须有仓库 `write` 及以上权限。Review 只把 authorPermission 作为 prompt context 传入；docs-sync 在 dispatch 前硬性拒绝低权限用户（`isPermissionAtLeast(perm, "write")`），失败时删 dedupe key 允许重试。这阻止任意 read 权限用户触发 LLM token 消耗。
+- **`--audit-only` 旁路** — `@duckpr docs --audit-only` 跳过 LLM agent，仅运行确定性 audit。适用于只需覆盖检查、token 敏感或低权限场景。
+- **`persist-credentials: false`** — checkout 步骤不把 DuckPR App token 写入 `.git/config`。Pullfrog 的 ASKPASS 机制（`utils/gitAuth.ts`）在每次 `$git()` 调用时通过本地 HTTP 服务器临时注入凭据，`setupGit()` 还会重写 origin URL 去掉嵌入的 token。即使 agent 被 prompt 注入，也无法通过 `git config --get-regexp http` 读到 App token。
+- **OIDC 环境变量清除**（Pullfrog `agents/opencode.ts` / `opencode_v2.ts` / `claude.ts`）— docs-sync 需要 `id-token: write` 来换取 Pullfrog API token，但 `ACTIONS_ID_TOKEN_REQUEST_URL` / `ACTIONS_ID_TOKEN_REQUEST_TOKEN` 等 OIDC 变量通过 `...process.env` 继承给 agent 子进程。spawn 前用 `DENIED_OVERRIDE_NAMES` 集合清除这些变量，阻止被注入的 agent 伪造 GitHub OIDC token。
+- **命令注入防御** — `classify_changes.py` 的文件路径通过 stdin 管道传递（`< /tmp/paths.txt`），不用 `--files $(cat ...)` 命令替换。攻击者在 PR 中添加 `$(id).go` 这类文件名不会触发 shell 执行。
+- **日志净化** — CI 日志不打印 `base_url` 完整 URL（只输出 `gateway=anthropic-compatible|unset`）；`LOG_LEVEL` 设为 `info` 而非 `debug`，避免 prompt 内容 / 模型请求 / 部分凭据写入 Actions 日志。
 
 ### 写入契约要点（SKILL.md）
 

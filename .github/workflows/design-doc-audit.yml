@@ -59,9 +59,10 @@ jobs:
           gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json files \
             --jq '.files[].path' > /tmp/paths.txt 2>/dev/null || true
           if [ -s /tmp/paths.txt ]; then
+            # Pipe newline-separated paths via stdin to avoid shell word-splitting
+            # and command substitution on attacker-controlled file names.
             python3 scripts/docs-audit/classify_changes.py \
-              --files $(tr '\n' ' ' < /tmp/paths.txt) \
-              --output /tmp/classify.json > /tmp/classify.txt 2>&1
+              --output /tmp/classify.json < /tmp/paths.txt > /tmp/classify.txt 2>&1
             cl_code=$?
             verdict=$(python3 -c "import json;print(json.load(open('/tmp/classify.json'))['verdict']['action'])" 2>/dev/null || echo "unknown")
           else
