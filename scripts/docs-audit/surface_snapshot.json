@@ -172,11 +172,15 @@
       "00006_ensure_code_session_worker_epoch_default.sql",
       "00007_add_code_session_inbound_delivery_ack.sql",
       "00008_add_code_session_outbound_event_ephemeral.sql",
-      "00009_add_code_session_internal_events.sql"
+      "00009_add_code_session_internal_events.sql",
+      "00010_builtin_skills.sql",
+      "00011_unique_skill_display_title.sql",
+      "00012_require_skill_display_title.sql"
     ],
     "packages": [
       "admin",
       "agents",
+      "agentsnapshot",
       "api",
       "auth",
       "batches",
@@ -198,6 +202,7 @@
       "platformauth",
       "platformsession",
       "sessions",
+      "skillprewarm",
       "skills",
       "storage",
       "vaults",

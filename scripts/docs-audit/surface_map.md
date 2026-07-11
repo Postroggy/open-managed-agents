@@ -30,6 +30,7 @@ Sentinels: `internal` | `gated:<reason>`
 
 admin -> internal
 agents -> gated:needs-design-doc
+agentsnapshot -> internal
 api -> internal
 auth -> internal
 batches -> gated:needs-design-doc
@@ -52,6 +53,7 @@ platformauth -> docs/design/be/db-platform-auth-boundaries.md
 platformsession -> internal
 sessions -> docs/design/be/permission-policies.md
 skills -> gated:needs-design-doc
+skillprewarm -> gated:needs-design-doc
 storage -> internal
 vaults -> gated:needs-design-doc
 webhooks -> gated:needs-design-doc
@@ -68,6 +70,9 @@ workbench -> docs/design/be/http-platform-workbench-boundaries.md
 00007_add_code_session_inbound_delivery_ack.sql -> docs/design/be/ccrv2/ccr-v2-api-worker-events-delivery.md
 00008_add_code_session_outbound_event_ephemeral.sql -> docs/design/be/ccrv2/ccr-v2-worker-events-delivery-backend-design.md
 00009_add_code_session_internal_events.sql -> docs/design/be/ccrv2/ccr-v2-api-worker-internal-events.md
+00010_builtin_skills.sql -> gated:needs-design-doc
+00011_unique_skill_display_title.sql -> internal
+00012_require_skill_display_title.sql -> internal
 
 ## FE routes -> design docs
 
