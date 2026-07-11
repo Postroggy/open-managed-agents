@@ -15,6 +15,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/codesessions"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
+	"github.com/superduck-ai/open-managed-agents/internal/demowidgets"
 	deploymentsapi "github.com/superduck-ai/open-managed-agents/internal/deployments"
 	"github.com/superduck-ai/open-managed-agents/internal/environments"
 	"github.com/superduck-ai/open-managed-agents/internal/files"
@@ -239,6 +240,7 @@ func (s *Server) mountSharedV1Resources(r chi.Router) {
 	r.Mount("/skills", s.skills)
 	r.Mount("/vaults", s.vaults)
 	r.Mount("/webhooks", s.webhooks)
+	r.Mount("/demo_widgets", demowidgets.New())
 }
 
 func (s *Server) requestIDMiddleware(next http.Handler) http.Handler {

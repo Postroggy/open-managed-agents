@@ -4,6 +4,7 @@
     "api_mounts": [
       "/agents",
       "/agents:search",
+      "/demo_widgets",
       "/deployment_runs",
       "/deployments",
       "/environments",
@@ -184,6 +185,7 @@
       "codesessions",
       "config",
       "db",
+      "demowidgets",
       "deployments",
       "environments",
       "files",
