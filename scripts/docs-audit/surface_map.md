@@ -140,6 +140,93 @@ workspaces/$workspaceId/skills/new -> gated:needs-design-doc
 workspaces/$workspaceId/vaults -> gated:needs-design-doc
 workspaces/$workspaceId/vaults/$vaultId -> gated:needs-design-doc
 
+## API subroutes -> design docs
+
+# Each Register*Routes entry point = one HTTP resource contributed by a package.
+# Most map to the platform/workbench boundary doc; domain-specific ones map to
+# their area design doc; unmapped resources that need their own doc use gated:.
+codesessions.RegisterRoutes -> docs/design/be/ccrv2/ccr-v2-api-worker-state.md
+files.RegisterPlatformRoutes -> gated:needs-design-doc
+platformapi.RegisterConsoleOrganizationAPIKeyRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterConsoleOrganizationAdminRequestRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterConsoleOrganizationInviteRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterConsoleOrganizationMemberRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterConsoleOrganizationWorkspaceRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterDirectoryRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationAnalyticsRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationBillingRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationExperienceRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationOAuthEnvironmentRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationOnboardingRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationProfileRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationProxyRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationRootRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterOrganizationSSORoutes -> docs/design/be/db-platform-auth-boundaries.md
+platformapi.RegisterPlatformAccountRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterPlatformBillingRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+platformapi.RegisterPlatformEmailLoginRoutes -> docs/design/be/db-platform-auth-boundaries.md
+platformapi.RegisterPlatformPrivacyConsentRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+workbench.RegisterOrgWorkbenchRoutes -> docs/design/be/http-platform-workbench-boundaries.md
+
+## Event contracts -> design docs
+
+# Event-type strings from internal/managedagentsevents/events.go. These are the
+# managed-agent event contract consumed by the FE session timeline. Session
+# status / thread lifecycle events map to the lane-timeline design; agent/tool/
+# span/user/system events map to the same FE contract doc until a dedicated
+# events design doc exists.
+agent.custom_tool_use -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.mcp_tool_result -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.mcp_tool_use -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.message -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.thinking -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.thread_context_compacted -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.thread_message_received -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.thread_message_sent -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+agent.tool_result -> docs/design/fe/sessions/session-tool-call-display.md
+agent.tool_use -> docs/design/fe/sessions/session-tool-call-display.md
+session.deleted -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.error -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.idled -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.requires_action -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.running -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.status_idle -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.status_idled -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.status_rescheduled -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.status_run_started -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.status_running -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.status_terminated -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.thread_created -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.thread_idled -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.thread_status_idle -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.thread_status_rescheduled -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.thread_status_running -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.thread_status_terminated -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.thread_terminated -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+session.updated -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+span.model_request_end -> gated:needs-design-doc
+span.model_request_start -> gated:needs-design-doc
+span.outcome_evaluation_end -> gated:needs-design-doc
+span.outcome_evaluation_ongoing -> gated:needs-design-doc
+span.outcome_evaluation_start -> gated:needs-design-doc
+system.message -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+user.custom_tool_result -> docs/design/fe/sessions/session-tool-call-display.md
+user.define_outcome -> gated:needs-design-doc
+user.interrupt -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+user.message -> docs/design/fe/sessions/session-detail-lane-timeline-design.md
+user.tool_confirmation -> docs/design/fe/sessions/session-tool-permission-confirmation.md
+user.tool_result -> docs/design/fe/sessions/session-tool-call-display.md
+
+## Auth middleware -> design docs
+
+# Middleware surfaces from internal/api/server.go. Infra middleware (requestID,
+# recover) is internal; auth middleware maps to permission/auth boundary docs.
+optionalPlatformAuthMiddleware -> docs/design/be/db-platform-auth-boundaries.md
+platformAuthMiddleware -> docs/design/be/db-platform-auth-boundaries.md
+recoverMiddleware -> internal
+requestIDMiddleware -> internal
+serviceAuthMiddleware -> docs/design/be/permission-policies.md
+
 ## Unlisted design docs
 
 docs/design/be/ccrv2/claude_code-permission-modes.md

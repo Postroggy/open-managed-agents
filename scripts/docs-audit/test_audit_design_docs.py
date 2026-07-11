@@ -14,6 +14,9 @@ from audit_design_docs import (
     build_snapshot,
     diff_snapshots,
     extract_api_mounts,
+    extract_api_subroutes,
+    extract_auth_middleware,
+    extract_event_contracts,
     extract_fe_routes,
     extract_migrations,
     extract_packages,
@@ -110,6 +113,81 @@ func (s *Service) RegisterRoutes(router chi.Router) {
             router.write_text("path: 'login',\npath: 'sessions',\n", encoding="utf-8")
             self.assertEqual(extract_fe_routes(router), ["login", "sessions"])
 
+    def test_extract_api_subroutes_uses_defining_package(self) -> None:
+        """Call-site variable prefixes (s.files..., codeSessionService...)
+        must NOT become the surface name; the defining package wins."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "platformapi").mkdir()
+            (root / "platformapi" / "billing.go").write_text(
+                "package platformapi\n"
+                "func RegisterPlatformBillingRoutes(r chi.Router) {}\n",
+                encoding="utf-8",
+            )
+            (root / "workbench").mkdir()
+            (root / "workbench" / "support.go").write_text(
+                "package workbench\n"
+                "func (s *Service) RegisterOrgWorkbenchRoutes(r chi.Router) {}\n",
+                encoding="utf-8",
+            )
+            # server.go wiring: package-qualified call + variable-qualified call
+            (root / "server.go").write_text(
+                "package api\n"
+                "platformapi.RegisterPlatformBillingRoutes(r)\n"
+                "codeSessionService.RegisterRoutes(r)\n"
+                "s.files.RegisterPlatformRoutes(r)\n",
+                encoding="utf-8",
+            )
+            surfaces = extract_api_subroutes(root)
+        # Defining package is the source of truth.
+        self.assertIn("platformapi.RegisterPlatformBillingRoutes", surfaces)
+        self.assertIn("workbench.RegisterOrgWorkbenchRoutes", surfaces)
+        # Call-site variable names must NOT leak into surface names.
+        self.assertNotIn("codeSessionService.RegisterRoutes", surfaces)
+        self.assertNotIn("s.RegisterPlatformRoutes", surfaces)
+
+    def test_extract_event_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            events_go = root / "events.go"
+            events_go.write_text(
+                'package managedagentsevents\n'
+                'func CategoryFor(et string) string {\n'
+                '	switch et {\n'
+                '	case "user.message", "user.interrupt":\n'
+                '		return "input"\n'
+                '	case "session.status_running":\n'
+                '		return "session_status"\n'
+                '	}\n'
+                '}\n',
+                encoding="utf-8",
+            )
+            events = extract_event_contracts(events_go)
+        self.assertIn("user.message", events)
+        self.assertIn("user.interrupt", events)
+        self.assertIn("session.status_running", events)
+        # Only dotted event-type literals are captured, not arbitrary strings.
+        self.assertNotIn("input", events)
+
+    def test_extract_auth_middleware(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            server_go = Path(tmp) / "server.go"
+            server_go.write_text(
+                "package api\n"
+                "func (s *Server) serviceAuthMiddleware(next http.Handler) http.Handler {}\n"
+                "func (s *Server) platformAuthMiddleware(next http.Handler) http.Handler {}\n"
+                "func (s *Server) recoverMiddleware(next http.Handler) http.Handler {}\n"
+                "func main() {\n"
+                "	r.Use(s.serviceAuthMiddleware)\n"
+                "	r.Use(s.platformAuthMiddleware)\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            mws = extract_auth_middleware(server_go)
+        self.assertIn("serviceAuthMiddleware", mws)
+        self.assertIn("platformAuthMiddleware", mws)
+        self.assertIn("recoverMiddleware", mws)
+
 
 class AuditIntegrationTests(unittest.TestCase):
     def _mini_repo(self, root: Path) -> None:
@@ -163,7 +241,12 @@ func (s *Server) mountSharedV1Resources(r chi.Router) {
 
             old = dict(mod.EXTRACTION_FLOORS)
             try:
-                mod.EXTRACTION_FLOORS.update({"api_mounts": 1, "packages": 1, "migrations": 1, "fe_routes": 1})
+                # mini-repo only has the classic 4 surface types populated; lower
+                # those to 1 and zero out the new types (no source files for them).
+                mod.EXTRACTION_FLOORS.update({
+                    "api_mounts": 1, "packages": 1, "migrations": 1, "fe_routes": 1,
+                    "api_subroutes": 0, "event_contracts": 0, "auth_middleware": 0,
+                })
                 result = audit_coverage(root, map_path)
             finally:
                 mod.EXTRACTION_FLOORS.clear()
@@ -196,7 +279,12 @@ func (s *Server) mountSharedV1Resources(r chi.Router) {
 
             old = dict(mod.EXTRACTION_FLOORS)
             try:
-                mod.EXTRACTION_FLOORS.update({"api_mounts": 1, "packages": 1, "migrations": 1, "fe_routes": 1})
+                # mini-repo only has the classic 4 surface types populated; lower
+                # those to 1 and zero out the new types (no source files for them).
+                mod.EXTRACTION_FLOORS.update({
+                    "api_mounts": 1, "packages": 1, "migrations": 1, "fe_routes": 1,
+                    "api_subroutes": 0, "event_contracts": 0, "auth_middleware": 0,
+                })
                 result = audit_coverage(root, map_path)
             finally:
                 mod.EXTRACTION_FLOORS.clear()
@@ -218,6 +306,47 @@ func (s *Server) mountSharedV1Resources(r chi.Router) {
             result = audit_coverage(root, map_path)
             self.assertEqual(result.exit_code, 2)
             self.assertTrue(any(s.startswith("extraction:") for s in result.audits_skipped))
+
+    def test_staleness_flags_dead_pkg_reference(self) -> None:
+        """A design doc that references a package which no longer exists in
+        code must produce a staleness finding."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Real package on disk.
+            (root / "internal" / "agents").mkdir(parents=True)
+            (root / "internal" / "agents" / "x.go").write_text("package agents\n", encoding="utf-8")
+            (root / "internal" / "db" / "migrations").mkdir(parents=True)
+            (root / "internal" / "db" / "migrations" / "00001.sql").write_text("--\n", encoding="utf-8")
+            (root / "web" / "src" / "app").mkdir(parents=True)
+            (root / "web" / "src" / "app" / "router.tsx").write_text("path: 'r1',\n", encoding="utf-8")
+            (root / "docs" / "design" / "be").mkdir(parents=True)
+            # Doc references a live package (agents) AND a renamed/dead one (oldauth).
+            (root / "docs" / "design" / "be" / "auth.md").write_text(
+                "# Auth\n\nSee internal/agents and internal/oldauth.\n",
+                encoding="utf-8",
+            )
+            map_path = root / "map.md"
+            map_path.write_text(
+                "## Packages -> design docs\n"
+                "agents -> docs/design/be/auth.md\n"
+                "## Migrations -> design docs\n"
+                "## FE routes -> design docs\n"
+                "## API mounts -> design docs\n",
+                encoding="utf-8",
+            )
+            import audit_design_docs as mod
+            old = dict(mod.EXTRACTION_FLOORS)
+            try:
+                mod.EXTRACTION_FLOORS.update({k: 0 for k in old})
+                result = audit_coverage(root, map_path)
+            finally:
+                mod.EXTRACTION_FLOORS.clear()
+                mod.EXTRACTION_FLOORS.update(old)
+        kinds = {f.kind for f in result.findings}
+        self.assertIn("stale_pkg_ref", kinds)
+        stale = [f for f in result.findings if f.kind == "stale_pkg_ref"]
+        self.assertTrue(any("oldauth" in f.message for f in stale))
+        self.assertFalse(any("agents" in f.message for f in stale))
 
 
 class SnapshotDiffTests(unittest.TestCase):

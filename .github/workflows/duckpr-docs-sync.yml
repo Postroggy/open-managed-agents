@@ -250,6 +250,36 @@ jobs:
           # Do not fail here even on exit 2 — let the agent see the JSON and
           # decide (SKILL.md step 1 says STOP on exit 2 and comment instead).
 
+      - name: Classify changed files (deterministic triage)
+        id: classify
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.audit-comment.outputs.pr_number }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              per_page: 300,
+            });
+            const paths = files.map((f) => f.filename);
+            require("fs").writeFileSync("/tmp/changed-paths.txt", paths.join("\n") + "\n");
+
+      - name: Run classify_changes
+        id: classify-run
+        run: |
+          set -euo pipefail
+          python3 scripts/docs-audit/classify_changes.py \
+            --files $(cat /tmp/changed-paths.txt | tr '\n' ' ') \
+            --output /tmp/classify.json > /tmp/classify.txt 2>&1 || true
+          verdict=$(python3 -c "import json;d=json.load(open('/tmp/classify.json'));print(d['verdict']['action'])" 2>/dev/null || echo "unknown")
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          echo "Classify verdict: $verdict"
+          cat /tmp/classify.txt
+
       - name: Build docs-sync prompt
         id: prompt
         uses: actions/github-script@v7
@@ -258,6 +288,7 @@ jobs:
           EXTRA_PROMPT: ${{ inputs.prompt || '' }}
           COMMENT_BODY: ${{ github.event.comment.body || '' }}
           AUDIT_BEFORE_PATH: /tmp/docs-audit-before.json
+          CLASSIFY_PATH: /tmp/classify.json
         with:
           github-token: ${{ github.token }}
           script: |
@@ -291,6 +322,12 @@ jobs:
             if (auditPath && fs.existsSync(auditPath)) {
               auditJson = fs.readFileSync(auditPath, "utf8");
             }
+            // Classify JSON produced by the classify step (binding per-file triage).
+            const classifyPath = String(process.env.CLASSIFY_PATH || "");
+            let classifyJson = "(classify JSON unavailable)";
+            if (classifyPath && fs.existsSync(classifyPath)) {
+              classifyJson = fs.readFileSync(classifyPath, "utf8");
+            }
             const parts = [
               "Follow the docs-sync skill below exactly.",
               "",
@@ -300,6 +337,7 @@ jobs:
               `PR title: ${pr.title || ""}`,
               `PR head branch: ${pr.head.ref}`,
               `PR base branch: ${pr.base.ref}`,
+              `PR author: @${pr.user.login}`,
               "</pr_context>",
               "",
               "<pr_body>",
@@ -309,6 +347,10 @@ jobs:
               "<changed_files>",
               changedFiles || "(none)",
               "</changed_files>",
+              "",
+              "<classify>",
+              classifyJson,
+              "</classify>",
               "",
               "<audit_findings>",
               auditJson,
