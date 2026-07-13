@@ -17,20 +17,80 @@ import {
   MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerProvider,
-  MessageScrollerViewport
+  MessageScrollerViewport,
 } from '../../../shared/ui/message-scroller';
 import { RadioGroup, RadioGroupItem } from '../../../shared/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/ui/tabs';
 import clsx from 'clsx';
-import { AlertCircle, ArrowUp, ArrowUpRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Cloud, Copy, FileText, Loader2, LockKeyhole, Pencil, Play, Plus, Search, Sparkles, Terminal, TriangleAlert, UserRound } from 'lucide-react';
-import { type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowUp,
+  ArrowUpRight,
+  CalendarClock,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Cloud,
+  Copy,
+  FileText,
+  Loader2,
+  LockKeyhole,
+  Pencil,
+  Play,
+  Plus,
+  Search,
+  Sparkles,
+  Terminal,
+  TriangleAlert,
+  UserRound,
+} from 'lucide-react';
+import {
+  type Dispatch,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefObject,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { codeForTemplate, createDialogAgentConfig, displayAgentConfig, yamlStringify } from '../agentConfig';
-import { quickstartComposerFrameClassName, quickstartComposerSendButtonClassName, quickstartComposerTextareaClassName } from '../components/composerStyles';
+import {
+  quickstartComposerFrameClassName,
+  quickstartComposerSendButtonClassName,
+  quickstartComposerTextareaClassName,
+} from '../components/composerStyles';
 import { listSessionEvents, quickstartEnvironmentRequestBody, streamQuickstartSessionEvents } from '../api';
-import { CopyButton, FormatSelect, MiniCodeBlock, NumberedCodeBlock, ScrollableCodeBlock, TemplateCard } from '../components/CodeBlocks';
+import {
+  CopyButton,
+  FormatSelect,
+  MiniCodeBlock,
+  NumberedCodeBlock,
+  ScrollableCodeBlock,
+  TemplateCard,
+} from '../components/CodeBlocks';
 import { templateTitle } from '../labels';
 import { mergeSessionEvents, QuickstartSessionComposer, SessionTracePanel } from '../sessions/SessionDetailPage';
-import { type AgentApiResponse, type AgentPanelTab, type AgentTemplate, type CodeFormat, type CreateAgentInput, type EnvironmentApiResponse, type HighlightLanguage, type I18nMsg, type IconComponent, type IntegrationSnippetLanguage, type QuickstartChatItem, type QuickstartQuestion, type QuickstartSessionEvent, type QuickstartToolCall, type QuickstartToolExecutionResult, type SessionApiResponse } from '../types';
+import {
+  type AgentApiResponse,
+  type AgentPanelTab,
+  type AgentTemplate,
+  type CodeFormat,
+  type CreateAgentInput,
+  type EnvironmentApiResponse,
+  type HighlightLanguage,
+  type I18nMsg,
+  type IconComponent,
+  type IntegrationSnippetLanguage,
+  type QuickstartChatItem,
+  type QuickstartQuestion,
+  type QuickstartSessionEvent,
+  type QuickstartToolCall,
+  type QuickstartToolExecutionResult,
+  type SessionApiResponse,
+} from '../types';
 import { copyText, errorMessage, managedEntityDetailHref, titleCase, toRecord } from '../utils';
 
 export const quickstartEnvironmentSearchQuery =
@@ -42,7 +102,7 @@ export function InitialPromptPane({
   prompt,
   isCreating,
   onPromptChange,
-  onSubmit
+  onSubmit,
 }: {
   prompt: string;
   isCreating: boolean;
@@ -98,7 +158,7 @@ export function QuickstartChatPane({
   onIntegrationExit,
   onStartEnvironmentStep,
   offerNextStepLabel,
-  showCreateAgentNext
+  showCreateAgentNext,
 }: {
   agent: AgentApiResponse | null;
   agentConfig: CreateAgentInput | null;
@@ -115,7 +175,11 @@ export function QuickstartChatPane({
   onConfirmVaultSelection: (call: QuickstartToolCall) => Promise<void>;
   onOfferNextStep: (call: QuickstartToolCall) => Promise<void>;
   onCreateAgentFromConfig: (call: QuickstartToolCall) => Promise<void>;
-  onAuthorizeCredential: (call: QuickstartToolCall, auth?: Record<string, unknown>, displayName?: string) => Promise<void>;
+  onAuthorizeCredential: (
+    call: QuickstartToolCall,
+    auth?: Record<string, unknown>,
+    displayName?: string,
+  ) => Promise<void>;
   onSkipCredential: (call: QuickstartToolCall) => Promise<void>;
   onCreateSession: (call: QuickstartToolCall) => Promise<void>;
   onSendTestRunMessage: (call: QuickstartToolCall, message: string) => Promise<void>;
@@ -126,7 +190,9 @@ export function QuickstartChatPane({
 }) {
   const { msg } = useI18n();
   const pinnedInteractionItem = [...chatItems].reverse().find(isPinnedQuickstartInteraction);
-  const streamItems = pinnedInteractionItem ? chatItems.filter((item) => item.id !== pinnedInteractionItem.id) : chatItems;
+  const streamItems = pinnedInteractionItem
+    ? chatItems.filter((item) => item.id !== pinnedInteractionItem.id)
+    : chatItems;
 
   const renderToolCard = (item: Extract<QuickstartChatItem, { type: 'tool' }>, pinned = false) => (
     <QuickstartToolCard
@@ -176,7 +242,9 @@ export function QuickstartChatPane({
                       messageId={item.id}
                       scrollAnchor={!isStreaming && !error && index === streamItems.length - 1}
                     >
-                      <StatusLine className="mt-5" tone={item.tone}>{item.content}</StatusLine>
+                      <StatusLine className="mt-5" tone={item.tone}>
+                        {item.content}
+                      </StatusLine>
                     </MessageScrollerItem>
                   );
                 }
@@ -305,7 +373,7 @@ export function QuickstartMessageBubble({ item }: { item: Extract<QuickstartChat
 function QuickstartAssistantTurn({
   children,
   className,
-  contentClassName
+  contentClassName,
 }: {
   children: ReactNode;
   className?: string;
@@ -322,7 +390,12 @@ function QuickstartAssistantTurn({
           {msg('managedAgents.quickstart.chat.quickstartLabel', 'Quickstart')}
         </MessageHeader>
         <Bubble variant="ghost" className="w-full max-w-full">
-          <BubbleContent className={clsx('w-full overflow-visible rounded-none border-none bg-transparent px-0 py-0', contentClassName)}>
+          <BubbleContent
+            className={clsx(
+              'w-full overflow-visible rounded-none border-none bg-transparent px-0 py-0',
+              contentClassName,
+            )}
+          >
             {children}
           </BubbleContent>
         </Bubble>
@@ -331,7 +404,9 @@ function QuickstartAssistantTurn({
   );
 }
 
-export function isPinnedQuickstartInteraction(item: QuickstartChatItem): item is Extract<QuickstartChatItem, { type: 'tool' }> {
+export function isPinnedQuickstartInteraction(
+  item: QuickstartChatItem,
+): item is Extract<QuickstartChatItem, { type: 'tool' }> {
   return item.type === 'tool' && item.call.name === 'ask_user_questions' && item.call.status === 'awaiting_user';
 }
 
@@ -402,7 +477,7 @@ export function stripQuickstartInternalSentences(content: string) {
   return trimmed
     .replace(
       /(?:^|[.!?]\s+|\n+)(?:Thinking\b|The user\b|User (?:wants|chose|selected|asked|said|is|has)\b|I see\b|I (?:need|should|will|can)\b|I'll\b|Let me\b|Creating\b|Now\b)[\s\S]*$/i,
-      ''
+      '',
     )
     .trim();
 }
@@ -410,7 +485,7 @@ export function stripQuickstartInternalSentences(content: string) {
 export function StatusLine({
   children,
   className,
-  tone = 'muted'
+  tone = 'muted',
 }: {
   children: ReactNode;
   className?: string;
@@ -420,12 +495,20 @@ export function StatusLine({
     <Marker
       className={clsx(
         'gap-2 text-sm',
-        tone === 'error' ? 'text-destructive' : tone === 'success' ? 'text-muted-foreground' : 'text-muted-foreground/70',
-        className
+        tone === 'error'
+          ? 'text-destructive'
+          : tone === 'success'
+            ? 'text-muted-foreground'
+            : 'text-muted-foreground/70',
+        className,
       )}
     >
       <MarkerIcon>
-        {tone === 'error' ? <AlertCircle className="size-3.5" aria-hidden /> : <Check className="size-3.5" aria-hidden />}
+        {tone === 'error' ? (
+          <AlertCircle className="size-3.5" aria-hidden />
+        ) : (
+          <Check className="size-3.5" aria-hidden />
+        )}
       </MarkerIcon>
       <MarkerContent>{children}</MarkerContent>
     </Marker>
@@ -449,7 +532,7 @@ export function QuickstartToolCard({
   onSendTestRunMessage,
   onIntegrationExit,
   offerNextStepLabel,
-  pinned = false
+  pinned = false,
 }: {
   call: QuickstartToolCall;
   agent: AgentApiResponse | null;
@@ -462,7 +545,11 @@ export function QuickstartToolCard({
   onConfirmVaultSelection: (call: QuickstartToolCall) => Promise<void>;
   onOfferNextStep: (call: QuickstartToolCall) => Promise<void>;
   onCreateAgentFromConfig: (call: QuickstartToolCall) => Promise<void>;
-  onAuthorizeCredential: (call: QuickstartToolCall, auth?: Record<string, unknown>, displayName?: string) => Promise<void>;
+  onAuthorizeCredential: (
+    call: QuickstartToolCall,
+    auth?: Record<string, unknown>,
+    displayName?: string,
+  ) => Promise<void>;
   onSkipCredential: (call: QuickstartToolCall) => Promise<void>;
   onCreateSession: (call: QuickstartToolCall) => Promise<void>;
   onSendTestRunMessage: (call: QuickstartToolCall, message: string) => Promise<void>;
@@ -516,19 +603,21 @@ export function QuickstartToolCard({
     return <CreateVaultResultCard call={call} />;
   }
   if (call.name === 'create_vault_credential') {
-    return <VaultCredentialCard call={call} agentConfig={agentConfig} onAuthorize={onAuthorizeCredential} onSkip={onSkipCredential} />;
+    return (
+      <VaultCredentialCard
+        call={call}
+        agentConfig={agentConfig}
+        onAuthorize={onAuthorizeCredential}
+        onSkip={onSkipCredential}
+      />
+    );
   }
   if (call.name === 'create_deployment') {
     return <CreateDeploymentResultCard call={call} />;
   }
   if (call.name === 'show_integration_exits') {
     return (
-      <IntegrationExitsCard
-        call={call}
-        agent={agent}
-        environment={environment}
-        onSelectExit={onIntegrationExit}
-      />
+      <IntegrationExitsCard call={call} agent={agent} environment={environment} onSelectExit={onIntegrationExit} />
     );
   }
   return <GenericQuickstartToolCard call={call} />;
@@ -540,9 +629,10 @@ export function isHiddenQuickstartTool(name: string) {
 
 export function QuickstartStatusToolLine({ call }: { call: QuickstartToolCall }) {
   const { msg } = useI18n();
-  const fallback = call.name === 'list_vaults'
-    ? msg('managedAgents.quickstart.vaultsLoaded', 'Vaults loaded')
-    : msg('managedAgents.quickstart.environmentsLoaded', 'Environments loaded');
+  const fallback =
+    call.name === 'list_vaults'
+      ? msg('managedAgents.quickstart.vaultsLoaded', 'Vaults loaded')
+      : msg('managedAgents.quickstart.environmentsLoaded', 'Environments loaded');
   const text = (call.error || call.result || fallback).replace(/\.$/, '');
   const tone = call.status === 'failed' ? 'error' : 'muted';
 
@@ -580,14 +670,18 @@ export function VaultSharingNoticeCard({ call: _call }: { call: QuickstartToolCa
   return (
     <QuickstartWarningAlert className="my-2">
       <p>
-        {msg('managedAgents.quickstart.vaultSharingNotice', 'Vaults are shared across this workspace. Credentials added to a vault will be usable by anyone with API key access. Learn more')}{' '}
+        {msg(
+          'managedAgents.quickstart.vaultSharingNotice',
+          'Vaults are shared across this workspace. Credentials added to a vault will be usable by anyone with API key access. Learn more',
+        )}{' '}
         <a
           className="underline underline-offset-2 hover:text-amber-600 dark:text-amber-400"
           href="/docs/en/managed-agents/vaults"
           target="_blank"
           rel="noreferrer"
         >
-          {msg('managedAgents.quickstart.here', 'here')}<span className="sr-only">{msg('managedAgents.common.opensInNewTabParen', '(opens in new tab)')}</span>
+          {msg('managedAgents.quickstart.here', 'here')}
+          <span className="sr-only">{msg('managedAgents.common.opensInNewTabParen', '(opens in new tab)')}</span>
         </a>
         .
       </p>
@@ -595,12 +689,23 @@ export function VaultSharingNoticeCard({ call: _call }: { call: QuickstartToolCa
   );
 }
 
-export function SelectVaultAckCard({ call, onConfirm }: { call: QuickstartToolCall; onConfirm: (call: QuickstartToolCall) => Promise<void> }) {
+export function SelectVaultAckCard({
+  call,
+  onConfirm,
+}: {
+  call: QuickstartToolCall;
+  onConfirm: (call: QuickstartToolCall) => Promise<void>;
+}) {
   const { msg } = useI18n();
   const [acknowledged, setAcknowledged] = useState(false);
   const vaultNames = quickstartVaultLabelsFromInput(call.input);
-  const label = vaultNames.length ? vaultNames.join(', ') : msg('managedAgents.quickstart.noVaultSelected', 'No vault selected');
-  const ackLabel = msg('managedAgents.quickstart.vaultAck', 'I own or am authorized to use this vault. I understand this means this agent can assume the identity granted by this vault.');
+  const label = vaultNames.length
+    ? vaultNames.join(', ')
+    : msg('managedAgents.quickstart.noVaultSelected', 'No vault selected');
+  const ackLabel = msg(
+    'managedAgents.quickstart.vaultAck',
+    'I own or am authorized to use this vault. I understand this means this agent can assume the identity granted by this vault.',
+  );
 
   if (call.status !== 'awaiting_user') {
     return (
@@ -613,7 +718,8 @@ export function SelectVaultAckCard({ call, onConfirm }: { call: QuickstartToolCa
   return (
     <div className="mt-5 flex w-full flex-col gap-3 rounded-xl bg-secondary/80 p-4 shadow-sm">
       <p className="text-sm text-foreground">
-        {msg('managedAgents.quickstart.selected', 'Selected')}: <span className="font-semibold text-foreground">{label}</span>
+        {msg('managedAgents.quickstart.selected', 'Selected')}:{' '}
+        <span className="font-semibold text-foreground">{label}</span>
       </p>
       <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3">
         <Label className="cursor-pointer items-start gap-3 text-sm leading-5 font-normal text-amber-600 dark:text-amber-400">
@@ -645,7 +751,7 @@ export function VaultCredentialCard({
   call,
   agentConfig,
   onAuthorize,
-  onSkip
+  onSkip,
 }: {
   call: QuickstartToolCall;
   agentConfig: CreateAgentInput | null;
@@ -655,7 +761,10 @@ export function VaultCredentialCard({
   const { msg } = useI18n();
   const serverSlug = typeof call.input.mcp_server_name === 'string' ? call.input.mcp_server_name : 'MCP server';
   const serverName = titleCase(serverSlug);
-  const reason = typeof call.input.reason === 'string' ? call.input.reason : msg('managedAgents.quickstart.authorizeServerReason', 'Authorize this server so the test session can use it.');
+  const reason =
+    typeof call.input.reason === 'string'
+      ? call.input.reason
+      : msg('managedAgents.quickstart.authorizeServerReason', 'Authorize this server so the test session can use it.');
   const serverUrl = quickstartMcpServerUrl(agentConfig, serverSlug);
   const [accessToken, setAccessToken] = useState('');
   const [clientId, setClientId] = useState('');
@@ -665,7 +774,10 @@ export function VaultCredentialCard({
   const [acknowledged, setAcknowledged] = useState(false);
   const displayName = `${serverName} credential`;
   const busy = call.status === 'running';
-  const credentialAckLabel = msg('managedAgents.quickstart.credentialAck', 'I acknowledge this credential is shared and that I am responsible for its storage and use.');
+  const credentialAckLabel = msg(
+    'managedAgents.quickstart.credentialAck',
+    'I acknowledge this credential is shared and that I am responsible for its storage and use.',
+  );
 
   if (call.status === 'completed' && call.result) {
     const compactResult = call.result.split(' — ')[0];
@@ -693,7 +805,7 @@ export function VaultCredentialCard({
         type: 'mcp_oauth',
         mcp_server_url: serverUrl,
         client_id: oauthClientId,
-        client_secret: oauthClientSecret
+        client_secret: oauthClientSecret,
       };
     }
     return null;
@@ -720,7 +832,8 @@ export function VaultCredentialCard({
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm leading-5 text-foreground">
-              {msg('managedAgents.quickstart.addCredentialFor', 'Add credential for')} <span className="font-semibold text-foreground">{serverName}</span>
+              {msg('managedAgents.quickstart.addCredentialFor', 'Add credential for')}{' '}
+              <span className="font-semibold text-foreground">{serverName}</span>
             </p>
             <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{reason}</p>
           </div>
@@ -761,9 +874,18 @@ export function VaultCredentialCard({
       </CredentialDisclosure>
       <QuickstartWarningAlert>
         <p>
-          {msg('managedAgents.quickstart.credentialSharingNotice', 'This credential will be shared across this workspace. Anyone with API key access can use this credential in an agent session to access the service associated with the credential - including reading data and taking actions on behalf of the credential owner. Learn more')}{' '}
-          <a className="underline underline-offset-2 hover:text-amber-600 dark:text-amber-400" href="/docs/en/managed-agents/vaults" target="_blank" rel="noreferrer">
-            {msg('managedAgents.quickstart.here', 'here')}<span className="sr-only">{msg('managedAgents.common.opensInNewTabParen', '(opens in new tab)')}</span>
+          {msg(
+            'managedAgents.quickstart.credentialSharingNotice',
+            'This credential will be shared across this workspace. Anyone with API key access can use this credential in an agent session to access the service associated with the credential - including reading data and taking actions on behalf of the credential owner. Learn more',
+          )}{' '}
+          <a
+            className="underline underline-offset-2 hover:text-amber-600 dark:text-amber-400"
+            href="/docs/en/managed-agents/vaults"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {msg('managedAgents.quickstart.here', 'here')}
+            <span className="sr-only">{msg('managedAgents.common.opensInNewTabParen', '(opens in new tab)')}</span>
           </a>
         </p>
       </QuickstartWarningAlert>
@@ -780,13 +902,17 @@ export function VaultCredentialCard({
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
-          aria-label={msg('managedAgents.quickstart.authorizeCredential', 'Authorize {name} credential', { name: serverName })}
+          aria-label={msg('managedAgents.quickstart.authorizeCredential', 'Authorize {name} credential', {
+            name: serverName,
+          })}
           size="sm"
           className="disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground/70"
           disabled={!canConnect}
           onClick={submitCredential}
         >
-          {busy ? msg('managedAgents.quickstart.connecting', 'Connecting') : msg('managedAgents.quickstart.connect', 'Connect')}
+          {busy
+            ? msg('managedAgents.quickstart.connecting', 'Connecting')
+            : msg('managedAgents.quickstart.connect', 'Connect')}
         </Button>
         <Button
           type="button"
@@ -807,7 +933,7 @@ export function CredentialDisclosure({
   title,
   open,
   onOpenChange,
-  children
+  children,
 }: {
   title: string;
   open: boolean;
@@ -825,21 +951,31 @@ export function CredentialDisclosure({
         type="button"
         className="flex h-[46px] w-full items-center justify-start gap-2 rounded-lg px-3 text-left text-sm leading-5 text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:transition-none"
       >
-        <ChevronDown className={clsx('size-4 shrink-0 transition-transform duration-200 ease-snappy-out motion-reduce:transition-none', open ? '' : '-rotate-90')} aria-hidden />
+        <ChevronDown
+          className={clsx(
+            'size-4 shrink-0 transition-transform duration-200 ease-snappy-out motion-reduce:transition-none',
+            open ? '' : '-rotate-90',
+          )}
+          aria-hidden
+        />
         <span className="font-medium text-foreground">{title}</span>
         <Badge variant="secondary" className="h-5 text-[11px] font-medium text-muted-foreground">
           {msg('managedAgents.common.optional', 'Optional')}
         </Badge>
         <AlertCircle className="ml-auto size-3.5 text-muted-foreground/70" aria-hidden />
       </CollapsibleTrigger>
-      <CollapsibleContent className="border-t border-border px-3 pb-3 pt-1">
-        {children}
-      </CollapsibleContent>
+      <CollapsibleContent className="border-t border-border px-3 pb-3 pt-1">{children}</CollapsibleContent>
     </Collapsible>
   );
 }
 
-export function EnvironmentStepCard({ call, onNext }: { call: QuickstartToolCall; onNext: (call: QuickstartToolCall) => Promise<void> }) {
+export function EnvironmentStepCard({
+  call,
+  onNext,
+}: {
+  call: QuickstartToolCall;
+  onNext: (call: QuickstartToolCall) => Promise<void>;
+}) {
   const { msg } = useI18n();
   const isReuse = typeof call.input.reuse_environment_id === 'string' && call.input.reuse_environment_id.trim();
   if (call.status === 'running') {
@@ -847,7 +983,9 @@ export function EnvironmentStepCard({ call, onNext }: { call: QuickstartToolCall
       <QuickstartAssistantTurn>
         <div className="flex items-center gap-2 text-sm text-muted-foreground/70">
           <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          {isReuse ? msg('managedAgents.quickstart.selectingEnvironment', 'Selecting environment') : msg('managedAgents.quickstart.creatingEnvironment', 'Creating environment')}
+          {isReuse
+            ? msg('managedAgents.quickstart.selectingEnvironment', 'Selecting environment')
+            : msg('managedAgents.quickstart.creatingEnvironment', 'Creating environment')}
         </div>
       </QuickstartAssistantTurn>
     );
@@ -855,11 +993,15 @@ export function EnvironmentStepCard({ call, onNext }: { call: QuickstartToolCall
   if (call.status === 'failed') {
     return (
       <QuickstartAssistantTurn>
-        <StatusLine tone="error">{call.error ?? msg('managedAgents.quickstart.environmentSetupFailed', 'Environment setup failed.')}</StatusLine>
+        <StatusLine tone="error">
+          {call.error ?? msg('managedAgents.quickstart.environmentSetupFailed', 'Environment setup failed.')}
+        </StatusLine>
       </QuickstartAssistantTurn>
     );
   }
-  const status = isReuse ? msg('managedAgents.quickstart.environmentSelected', 'Environment selected') : msg('managedAgents.quickstart.environmentCreated', 'Environment created');
+  const status = isReuse
+    ? msg('managedAgents.quickstart.environmentSelected', 'Environment selected')
+    : msg('managedAgents.quickstart.environmentCreated', 'Environment created');
   return (
     <QuickstartAssistantTurn>
       {isReuse ? (
@@ -876,11 +1018,7 @@ export function EnvironmentStepCard({ call, onNext }: { call: QuickstartToolCall
         </>
       )}
       {call.status === 'awaiting_user' ? (
-        <Button
-          type="button"
-          className="mt-5"
-          onClick={() => onNext(call)}
-        >
+        <Button type="button" className="mt-5" onClick={() => onNext(call)}>
           Next: Start session
           <ChevronRight className="size-4" aria-hidden />
         </Button>
@@ -892,7 +1030,7 @@ export function EnvironmentStepCard({ call, onNext }: { call: QuickstartToolCall
 export function AskUserQuestionsCard({
   call,
   pinned = false,
-  onCompleteTool
+  onCompleteTool,
 }: {
   call: QuickstartToolCall;
   pinned?: boolean;
@@ -910,14 +1048,17 @@ export function AskUserQuestionsCard({
   const submittedAnswers = submitted ? parseSubmittedQuestionAnswers(call.result) : [];
   const activeSubmittedAnswer = submittedAnswers[questionIndex] ?? submittedAnswers[0];
 
-  const completeWithAnswers = async (answersByQuestion: Record<number, string[]>, otherAnswers: Record<number, string> = otherValues) => {
+  const completeWithAnswers = async (
+    answersByQuestion: Record<number, string[]>,
+    otherAnswers: Record<number, string> = otherValues,
+  ) => {
     const answers = questions.map((question, index) => {
       const labels = answersByQuestion[index] ?? [];
       const other = otherAnswers[index]?.trim();
       return {
         header: question.header,
         question: question.question,
-        answers: other ? [...labels, other] : labels
+        answers: other ? [...labels, other] : labels,
       };
     });
     await onCompleteTool(call, { content: JSON.stringify({ answers }) });
@@ -938,7 +1079,7 @@ export function AskUserQuestionsCard({
       }
       return {
         ...current,
-        [questionIndex]: values.includes(label) ? values.filter((value) => value !== label) : [...values, label]
+        [questionIndex]: values.includes(label) ? values.filter((value) => value !== label) : [...values, label],
       };
     });
   };
@@ -975,7 +1116,7 @@ export function AskUserQuestionsCard({
       data-testid="quickstart-question-card"
       className={clsx(
         'flex flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-sm outline-none',
-        pinned ? 'mx-auto w-full' : 'mt-5'
+        pinned ? 'mx-auto w-full' : 'mt-5',
       )}
     >
       <div className="flex items-center justify-between gap-3 px-2">
@@ -989,7 +1130,9 @@ export function AskUserQuestionsCard({
 
       {submitted ? (
         <p className="px-2 text-sm text-muted-foreground">
-          {activeSubmittedAnswer ? activeSubmittedAnswer.answers.join(', ') || msg('managedAgents.quickstart.skipped', 'Skipped') : call.result}
+          {activeSubmittedAnswer
+            ? activeSubmittedAnswer.answers.join(', ') || msg('managedAgents.quickstart.skipped', 'Skipped')
+            : call.result}
         </p>
       ) : (
         <>
@@ -1004,7 +1147,7 @@ export function AskUserQuestionsCard({
                     <div
                       className={clsx(
                         'flex items-start gap-3 rounded-lg px-2 py-3 text-left hover:bg-accent',
-                        checked && 'bg-accent'
+                        checked && 'bg-accent',
                       )}
                     >
                       <Checkbox
@@ -1040,7 +1183,7 @@ export function AskUserQuestionsCard({
                       htmlFor={optionId}
                       className={clsx(
                         'w-full cursor-pointer items-start gap-3 rounded-lg px-2 py-3 text-left leading-6 font-normal hover:bg-accent',
-                        checked && 'bg-accent'
+                        checked && 'bg-accent',
                       )}
                     >
                       <RadioGroupItem
@@ -1143,7 +1286,7 @@ export function BuildAgentConfigCard({
   call,
   agent,
   onCompleteTool,
-  onCreateAgent
+  onCreateAgent,
 }: {
   call: QuickstartToolCall;
   agent: AgentApiResponse | null;
@@ -1168,7 +1311,9 @@ export function BuildAgentConfigCard({
   if (call.status === 'failed') {
     return (
       <QuickstartAssistantTurn>
-        <StatusLine tone="error">{call.error ?? msg('managedAgents.quickstart.agentCreationFailed', 'Agent creation failed.')}</StatusLine>
+        <StatusLine tone="error">
+          {call.error ?? msg('managedAgents.quickstart.agentCreationFailed', 'Agent creation failed.')}
+        </StatusLine>
       </QuickstartAssistantTurn>
     );
   }
@@ -1216,7 +1361,7 @@ export function CreateAgentResultCard({
   agentConfig,
   isStreaming,
   showNext,
-  onNext
+  onNext,
 }: {
   agentConfig: CreateAgentInput;
   isStreaming: boolean;
@@ -1248,7 +1393,17 @@ export function CreateAgentResultCard({
   );
 }
 
-export function QuickstartApiCallCard({ method, path, code, maxLines }: { method: string; path: string; code: string; maxLines: number }) {
+export function QuickstartApiCallCard({
+  method,
+  path,
+  code,
+  maxLines,
+}: {
+  method: string;
+  path: string;
+  code: string;
+  maxLines: number;
+}) {
   const { msg } = useI18n();
   return (
     <div className="mt-3 overflow-hidden rounded-lg border border-border bg-popover shadow-sm">
@@ -1291,7 +1446,9 @@ export function CreateVaultResultCard({ call }: { call: QuickstartToolCall }) {
   if (call.status === 'failed') {
     return (
       <QuickstartAssistantTurn>
-        <StatusLine tone="error">{call.error ?? msg('managedAgents.quickstart.vaultCreationFailed', 'Vault creation failed.')}</StatusLine>
+        <StatusLine tone="error">
+          {call.error ?? msg('managedAgents.quickstart.vaultCreationFailed', 'Vault creation failed.')}
+        </StatusLine>
       </QuickstartAssistantTurn>
     );
   }
@@ -1304,7 +1461,12 @@ export function CreateVaultResultCard({ call }: { call: QuickstartToolCall }) {
   return (
     <QuickstartAssistantTurn>
       <StatusLine tone="success">{msg('managedAgents.quickstart.vaultCreated', 'Vault created')}</StatusLine>
-      <QuickstartApiCallCard method="POST" path="/v1/vaults" code={shellYamlCommand('vaults', { display_name: displayName })} maxLines={6} />
+      <QuickstartApiCallCard
+        method="POST"
+        path="/v1/vaults"
+        code={shellYamlCommand('vaults', { display_name: displayName })}
+        maxLines={6}
+      />
     </QuickstartAssistantTurn>
   );
 }
@@ -1315,7 +1477,7 @@ export function AgentReadyCard({
   environment,
   session,
   onCreateSession,
-  onCompleteTool
+  onCompleteTool,
 }: {
   call: QuickstartToolCall;
   agent: AgentApiResponse | null;
@@ -1330,8 +1492,8 @@ export function AgentReadyCard({
       environment_id: environment?.id ?? session.environment_id,
       agent: {
         type: 'agent',
-        id: agent?.id ?? 'agent_id'
-      }
+        id: agent?.id ?? 'agent_id',
+      },
     });
     return (
       <QuickstartAssistantTurn>
@@ -1344,18 +1506,11 @@ export function AgentReadyCard({
     <QuickstartAssistantTurn>
       {call.status === 'awaiting_user' ? (
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            onClick={() => onCreateSession(call)}
-          >
+          <Button type="button" onClick={() => onCreateSession(call)}>
             <Play className="size-3.5 fill-current" aria-hidden />
             {msg('managedAgents.quickstart.testRun', 'Test run')}
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => onCompleteTool(call, { content: 'Keep refining.' })}
-          >
+          <Button type="button" variant="secondary" onClick={() => onCompleteTool(call, { content: 'Keep refining.' })}>
             {msg('managedAgents.quickstart.keepRefining', 'Keep refining')}
           </Button>
         </div>
@@ -1381,7 +1536,9 @@ export function CreateDeploymentResultCard({ call }: { call: QuickstartToolCall 
   if (call.status === 'failed') {
     return (
       <QuickstartAssistantTurn>
-        <StatusLine tone="error">{call.error ?? msg('managedAgents.quickstart.deploymentCreationFailed', 'Deployment creation failed.')}</StatusLine>
+        <StatusLine tone="error">
+          {call.error ?? msg('managedAgents.quickstart.deploymentCreationFailed', 'Deployment creation failed.')}
+        </StatusLine>
       </QuickstartAssistantTurn>
     );
   }
@@ -1390,7 +1547,9 @@ export function CreateDeploymentResultCard({ call }: { call: QuickstartToolCall 
     schedule: {
       type: 'cron',
       expression: typeof call.input.cron_expression === 'string' ? call.input.cron_expression : '0 9 * * 1',
-      ...(typeof call.input.timezone === 'string' && call.input.timezone.trim() ? { timezone: call.input.timezone.trim() } : {})
+      ...(typeof call.input.timezone === 'string' && call.input.timezone.trim()
+        ? { timezone: call.input.timezone.trim() }
+        : {}),
     },
     initial_events: [
       {
@@ -1398,23 +1557,31 @@ export function CreateDeploymentResultCard({ call }: { call: QuickstartToolCall 
         content: [
           {
             type: 'text',
-            text: typeof call.input.initial_message === 'string' ? call.input.initial_message : 'Run the scheduled quickstart task.'
-          }
-        ]
-      }
-    ]
+            text:
+              typeof call.input.initial_message === 'string'
+                ? call.input.initial_message
+                : 'Run the scheduled quickstart task.',
+          },
+        ],
+      },
+    ],
   };
   return (
     <QuickstartAssistantTurn>
       <StatusLine tone="success">{msg('managedAgents.quickstart.deploymentCreated', 'Deployment created')}</StatusLine>
-      <QuickstartApiCallCard method="POST" path="/v1/deployments" code={shellYamlCommand('deployments', deploymentYaml)} maxLines={10} />
+      <QuickstartApiCallCard
+        method="POST"
+        path="/v1/deployments"
+        code={shellYamlCommand('deployments', deploymentYaml)}
+        maxLines={10}
+      />
       {call.result ? <p className="mt-3 text-sm text-muted-foreground">{call.result}</p> : null}
     </QuickstartAssistantTurn>
   );
 }
 
 export function AwaitTestRunCard({
-  call
+  call,
 }: {
   call: QuickstartToolCall;
   onSendTestRunMessage: (call: QuickstartToolCall, message: string) => Promise<void>;
@@ -1426,9 +1593,11 @@ export function AwaitTestRunCard({
       <div className="flex items-center gap-2 text-sm text-muted-foreground/70">
         {call.status === 'awaiting_user' ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
         {call.status === 'awaiting_user' ? (
-          until === 'session_closed'
-            ? msg('managedAgents.quickstart.waitingForSessionClose', 'Waiting for session to close...')
-            : msg('managedAgents.quickstart.waitingForFirstMessage', 'Waiting for first message...')
+          until === 'session_closed' ? (
+            msg('managedAgents.quickstart.waitingForSessionClose', 'Waiting for session to close...')
+          ) : (
+            msg('managedAgents.quickstart.waitingForFirstMessage', 'Waiting for first message...')
+          )
         ) : (
           <ToolStatus call={call} />
         )}
@@ -1440,7 +1609,7 @@ export function AwaitTestRunCard({
 export function OfferNextStepCard({
   call,
   labelOverride,
-  onNext
+  onNext,
 }: {
   call: QuickstartToolCall;
   labelOverride?: string;
@@ -1451,10 +1620,7 @@ export function OfferNextStepCard({
   return (
     <QuickstartAssistantTurn>
       {call.status === 'awaiting_user' ? (
-        <Button
-          type="button"
-          onClick={() => onNext(call)}
-        >
+        <Button type="button" onClick={() => onNext(call)}>
           {label}
           <ChevronRight className="size-4" aria-hidden />
         </Button>
@@ -1490,14 +1656,14 @@ export const integrationLanguageLabels: Record<IntegrationSnippetLanguage, strin
   cli: 'CLI',
   python: 'Python',
   typescript: 'TypeScript',
-  curl: 'Curl'
+  curl: 'Curl',
 };
 
 export const integrationHighlightLanguage: Record<IntegrationSnippetLanguage, HighlightLanguage> = {
   cli: 'bash',
   python: 'python',
   typescript: 'typescript',
-  curl: 'bash'
+  curl: 'bash',
 };
 
 export function shellSingleQuoteEscape(value: string) {
@@ -1507,7 +1673,7 @@ export function shellSingleQuoteEscape(value: string) {
 export function integrationSnippets({
   agentId,
   environmentId,
-  prompt
+  prompt,
 }: {
   agentId: string;
   environmentId: string;
@@ -1612,7 +1778,7 @@ curl "https://api.anthropic.com/v1/sessions/SESSION_ID/events?beta=true" \\
 # Stream events (SSE)
 curl -N "https://api.anthropic.com/v1/sessions/SESSION_ID/events/stream?beta=true" \\
   ${headers}
-`
+`,
   };
 }
 
@@ -1624,7 +1790,7 @@ export function IntegrationExitsCard({
   call,
   agent,
   environment,
-  onSelectExit
+  onSelectExit,
 }: {
   call: QuickstartToolCall;
   agent: AgentApiResponse | null;
@@ -1633,9 +1799,14 @@ export function IntegrationExitsCard({
 }) {
   const { msg } = useI18n();
   const agentId = agent?.id || (typeof call.input.agent_id === 'string' ? call.input.agent_id : 'agent_id');
-  const environmentId = environment?.id || (typeof call.input.environment_id === 'string' ? call.input.environment_id : 'env_...');
-  const prompt = typeof call.input.user_prompt === 'string' ? call.input.user_prompt : 'Hello! What can you help me with?';
-  const snippets = useMemo(() => integrationSnippets({ agentId, environmentId, prompt }), [agentId, environmentId, prompt]);
+  const environmentId =
+    environment?.id || (typeof call.input.environment_id === 'string' ? call.input.environment_id : 'env_...');
+  const prompt =
+    typeof call.input.user_prompt === 'string' ? call.input.user_prompt : 'Hello! What can you help me with?';
+  const snippets = useMemo(
+    () => integrationSnippets({ agentId, environmentId, prompt }),
+    [agentId, environmentId, prompt],
+  );
   const [language, setLanguage] = useState<IntegrationSnippetLanguage>('cli');
   const sampleCode = snippets[language];
   const scaffoldPrompt = useMemo(() => integrationScaffoldPrompt(agentId, environmentId), [agentId, environmentId]);
@@ -1669,11 +1840,7 @@ export function IntegrationExitsCard({
                   className="subtle-scrollbar-auto h-7 max-w-[238px] gap-0.5 overflow-x-auto bg-secondary p-0.5"
                 >
                   {integrationSnippetLanguages.map((item) => (
-                    <TabsTrigger
-                      key={item}
-                      value={item}
-                      className="h-6 shrink-0 px-2 text-xs font-medium"
-                    >
+                    <TabsTrigger key={item} value={item} className="h-6 shrink-0 px-2 text-xs font-medium">
                       {integrationLanguageLabels[item]}
                     </TabsTrigger>
                   ))}
@@ -1703,11 +1870,7 @@ export function IntegrationExitsCard({
                 {msg('managedAgents.quickstart.exitQuickstart', 'Exit quickstart')}
                 <ArrowUpRight className="size-4" aria-hidden />
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => void chooseScaffold()}
-              >
+              <Button type="button" variant="secondary" onClick={() => void chooseScaffold()}>
                 {copiedScaffold ? null : <Copy className="size-3.5" aria-hidden />}
                 {copiedScaffold
                   ? msg('managedAgents.quickstart.promptCopied', 'Prompt copied')
@@ -1743,7 +1906,9 @@ export function GenericQuickstartToolCard({ call }: { call: QuickstartToolCall }
             {JSON.stringify(call.input, null, 2)}
           </pre>
         ) : null}
-        {call.result || call.error ? <p className="mt-3 text-sm text-muted-foreground">{call.result ?? call.error}</p> : null}
+        {call.result || call.error ? (
+          <p className="mt-3 text-sm text-muted-foreground">{call.result ?? call.error}</p>
+        ) : null}
       </div>
     </QuickstartAssistantTurn>
   );
@@ -1760,7 +1925,11 @@ export function ToolStatus({ call }: { call: QuickstartToolCall }) {
     );
   }
   if (call.status === 'awaiting_user') {
-    return <span className="text-xs text-foreground">{msg('managedAgents.quickstart.toolStatus.awaitingInput', 'Awaiting input')}</span>;
+    return (
+      <span className="text-xs text-foreground">
+        {msg('managedAgents.quickstart.toolStatus.awaitingInput', 'Awaiting input')}
+      </span>
+    );
   }
   if (call.status === 'failed') {
     return (
@@ -1795,7 +1964,7 @@ export function parseQuestionInput(input: Record<string, unknown>): QuickstartQu
               }
               return {
                 label: typedOption.label,
-                description: typeof typedOption.description === 'string' ? typedOption.description : ''
+                description: typeof typedOption.description === 'string' ? typedOption.description : '',
               };
             })
             .filter((option): option is { label: string; description: string } => Boolean(option))
@@ -1804,7 +1973,7 @@ export function parseQuestionInput(input: Record<string, unknown>): QuickstartQu
         header: typeof question.header === 'string' ? question.header : 'Question',
         question: typeof question.question === 'string' ? question.question : 'Choose an option.',
         multiSelect: question.multiSelect === true,
-        options
+        options,
       };
     })
     .filter((question): question is QuickstartQuestion => Boolean(question));
@@ -1831,7 +2000,7 @@ export function parseSubmittedQuestionAnswers(result?: string) {
           : [];
         return {
           question: typeof answer.question === 'string' ? answer.question : '',
-          answers: labels
+          answers: labels,
         };
       })
       .filter((answer): answer is { question: string; answers: string[] } => Boolean(answer));
@@ -1847,33 +2016,36 @@ export function quickstartItemId(prefix: string) {
 export function appendQuickstartStatus(
   setChatItems: Dispatch<SetStateAction<QuickstartChatItem[]>>,
   content: string,
-  tone: 'muted' | 'success' | 'error' = 'muted'
+  tone: 'muted' | 'success' | 'error' = 'muted',
 ) {
   setChatItems((current) => [...current, { id: quickstartItemId('status'), type: 'status', content, tone }]);
 }
 
-export function updateQuickstartMessage(items: QuickstartChatItem[], itemId: string, content: string): QuickstartChatItem[] {
+export function updateQuickstartMessage(
+  items: QuickstartChatItem[],
+  itemId: string,
+  content: string,
+): QuickstartChatItem[] {
   return items.map((item) => (item.id === itemId && item.type === 'message' ? { ...item, content } : item));
 }
 
 export function updateQuickstartTool(
   setChatItems: Dispatch<SetStateAction<QuickstartChatItem[]>>,
   toolUseId: string,
-  patch: Partial<QuickstartToolCall>
+  patch: Partial<QuickstartToolCall>,
 ) {
   setChatItems((current) =>
     current.map((item) =>
-      item.type === 'tool' && item.call.id === toolUseId
-        ? { ...item, call: { ...item.call, ...patch } }
-        : item
-    )
+      item.type === 'tool' && item.call.id === toolUseId ? { ...item, call: { ...item.call, ...patch } } : item,
+    ),
   );
 }
 
 export function awaitingQuickstartToolCalls(items: QuickstartChatItem[]) {
   return items
-    .filter((item): item is Extract<QuickstartChatItem, { type: 'tool' }> =>
-      item.type === 'tool' && item.call.status === 'awaiting_user'
+    .filter(
+      (item): item is Extract<QuickstartChatItem, { type: 'tool' }> =>
+        item.type === 'tool' && item.call.status === 'awaiting_user',
     )
     .map((item) => item.call);
 }
@@ -1890,13 +2062,15 @@ export function toolResultBlock(toolUseId: string, result: QuickstartToolExecuti
     type: 'tool_result',
     tool_use_id: toolUseId,
     content: result.content,
-    ...(result.isError ? { is_error: true } : {})
+    ...(result.isError ? { is_error: true } : {}),
   };
 }
 
 export function quickstartVaultIdsFromInput(input: Record<string, unknown>) {
   if (Array.isArray(input.vault_ids)) {
-    return input.vault_ids.filter((id): id is string => typeof id === 'string' && Boolean(id.trim())).map((id) => id.trim());
+    return input.vault_ids
+      .filter((id): id is string => typeof id === 'string' && Boolean(id.trim()))
+      .map((id) => id.trim());
   }
   if (typeof input.vault_id === 'string' && input.vault_id.trim()) {
     return [input.vault_id.trim()];
@@ -1909,7 +2083,9 @@ export function quickstartVaultIdsFromInput(input: Record<string, unknown>) {
 
 export function quickstartVaultLabelsFromInput(input: Record<string, unknown>) {
   if (Array.isArray(input.vault_names)) {
-    const names = input.vault_names.filter((name): name is string => typeof name === 'string' && Boolean(name.trim())).map((name) => name.trim());
+    const names = input.vault_names
+      .filter((name): name is string => typeof name === 'string' && Boolean(name.trim()))
+      .map((name) => name.trim());
     if (names.length) {
       return names;
     }
@@ -1983,7 +2159,7 @@ export function PromptComposer({
   submitShortcut,
   formClassName = 'absolute inset-x-0 bottom-0 p-3 pt-0',
   onChange,
-  onSubmit
+  onSubmit,
 }: {
   value: string;
   label: string;
@@ -2048,16 +2224,17 @@ export function PromptComposer({
       <label htmlFor={promptId} className="sr-only">
         {label}
       </label>
-      <InputGroup
-        className={clsx(quickstartComposerFrameClassName, 'items-stretch gap-0 p-0 pl-0')}
-      >
+      <InputGroup className={clsx(quickstartComposerFrameClassName, 'items-stretch gap-0 p-0 pl-0')}>
         <InputGroupTextarea
           ref={textareaRef}
           id={promptId}
           value={value}
           rows={1}
           placeholder={placeholder}
-          className={clsx(quickstartComposerTextareaClassName, 'subtle-scrollbar-auto block max-h-52 overflow-y-auto px-4 pb-2 pt-4 text-[15px] leading-6')}
+          className={clsx(
+            quickstartComposerTextareaClassName,
+            'subtle-scrollbar-auto block max-h-52 overflow-y-auto px-4 pb-2 pt-4 text-[15px] leading-6',
+          )}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleTextareaKeyDown}
         />
@@ -2070,7 +2247,11 @@ export function PromptComposer({
             disabled={!canSubmit}
             className={quickstartComposerSendButtonClassName}
           >
-            {isBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
+            {isBusy ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <ArrowUp className="size-4" aria-hidden />
+            )}
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
@@ -2083,7 +2264,7 @@ export function BrowseTemplatesPanel({
   searchRef,
   visibleTemplates,
   onQueryChange,
-  onTemplateClick
+  onTemplateClick,
 }: {
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
@@ -2137,7 +2318,10 @@ export function BrowseTemplatesPanel({
         </div>
 
         <label className="relative block" htmlFor="agent-template-search">
-          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
           <Input
             ref={searchRef}
             id="agent-template-search"
@@ -2201,7 +2385,7 @@ export function TemplateDetailPanel({
   onBack,
   onFormatChange,
   onUseTemplate,
-  isUsing
+  isUsing,
 }: {
   template: AgentTemplate;
   format: CodeFormat;
@@ -2229,7 +2413,9 @@ export function TemplateDetailPanel({
           </Button>
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-medium text-foreground">
             {title}
-            <span className="ml-1 text-muted-foreground/70">· {msg('managedAgents.quickstart.templateSuffix', 'Template')}</span>
+            <span className="ml-1 text-muted-foreground/70">
+              · {msg('managedAgents.quickstart.templateSuffix', 'Template')}
+            </span>
           </h2>
           <FormatSelect value={format} onChange={onFormatChange} />
           <CopyButton value={code} label={msg('managedAgents.quickstart.copyCode', 'Copy code')} />
@@ -2241,7 +2427,9 @@ export function TemplateDetailPanel({
             onClick={onUseTemplate}
           >
             {isUsing ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-            {isUsing ? msg('common.creating', 'Creating...') : msg('managedAgents.quickstart.useTemplate', 'Use template')}
+            {isUsing
+              ? msg('common.creating', 'Creating...')
+              : msg('managedAgents.quickstart.useTemplate', 'Use template')}
           </Button>
         </div>
         <div className="subtle-scrollbar-auto min-h-0 flex-1 overflow-auto px-5 py-4">
@@ -2269,7 +2457,7 @@ export function CreatedAgentConfigPanel({
   onRerunTestRun,
   onConfigureEnvironment,
   onFormatChange,
-  onTabChange
+  onTabChange,
 }: {
   template: AgentTemplate;
   agent: AgentApiResponse | null;
@@ -2291,9 +2479,7 @@ export function CreatedAgentConfigPanel({
 }) {
   const { msg } = useI18n();
   const displayedConfig = displayAgentConfig(agentConfig ?? createDialogAgentConfig(template));
-  const code = format === 'YAML'
-    ? yamlStringify(displayedConfig)
-    : JSON.stringify(displayedConfig, null, 2);
+  const code = format === 'YAML' ? yamlStringify(displayedConfig) : JSON.stringify(displayedConfig, null, 2);
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-sm">
       <Tabs
@@ -2362,7 +2548,7 @@ export function PreviewEnvironmentPanel({
   onTestRunMessageChange,
   onSendTestRunMessage,
   onRerunTestRun,
-  onConfigureEnvironment
+  onConfigureEnvironment,
 }: {
   agent: AgentApiResponse | null;
   environment: EnvironmentApiResponse | null;
@@ -2385,9 +2571,7 @@ export function PreviewEnvironmentPanel({
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [rerunning, setRerunning] = useState(false);
-  const environmentHref = environment
-    ? managedEntityDetailHref(workspaceId, 'environments', environment.id)
-    : null;
+  const environmentHref = environment ? managedEntityDetailHref(workspaceId, 'environments', environment.id) : null;
   const refreshLatestEvents = async () => {
     if (!session?.id) {
       return;
@@ -2397,13 +2581,13 @@ export function PreviewEnvironmentPanel({
       setEventState((current) => ({
         loading: false,
         error: null,
-        events: mergeSessionEvents(current.events, page.data)
+        events: mergeSessionEvents(current.events, page.data),
       }));
     } catch (error) {
       setEventState((current) => ({
         ...current,
         loading: false,
-        error: errorMessage(error)
+        error: errorMessage(error),
       }));
     }
   };
@@ -2429,7 +2613,7 @@ export function PreviewEnvironmentPanel({
         setEventState((current) => ({
           loading: false,
           error: null,
-          events: mergeSessionEvents(current.events, page.data)
+          events: mergeSessionEvents(current.events, page.data),
         }));
       } catch (error) {
         if (!active) {
@@ -2438,7 +2622,7 @@ export function PreviewEnvironmentPanel({
         setEventState((current) => ({
           ...current,
           loading: false,
-          error: errorMessage(error)
+          error: errorMessage(error),
         }));
       }
     };
@@ -2457,16 +2641,16 @@ export function PreviewEnvironmentPanel({
           ...current,
           loading: false,
           error: null,
-          events: mergeSessionEvents(current.events, [event])
+          events: mergeSessionEvents(current.events, [event]),
         }));
-      }
+      },
     }).catch((error) => {
       if (!active || (error as DOMException).name === 'AbortError') {
         return;
       }
       setEventState((current) => ({
         ...current,
-        loading: false
+        loading: false,
       }));
     });
 
@@ -2519,16 +2703,19 @@ export function PreviewEnvironmentPanel({
                 className="bg-accent text-foreground hover:bg-accent disabled:cursor-wait disabled:opacity-70"
                 onClick={() => {
                   setRerunning(true);
-                  void onRerunTestRun()
-                    .finally(() => {
-                      setRerunning(false);
-                      void refreshLatestEvents();
-                      window.setTimeout(() => void refreshLatestEvents(), 0);
-                      setEventRefreshKey((value) => value + 1);
-                    });
+                  void onRerunTestRun().finally(() => {
+                    setRerunning(false);
+                    void refreshLatestEvents();
+                    window.setTimeout(() => void refreshLatestEvents(), 0);
+                    setEventRefreshKey((value) => value + 1);
+                  });
                 }}
               >
-                {rerunning ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+                {rerunning ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Play className="size-3.5" aria-hidden />
+                )}
               </Button>
             </div>
           ) : (
@@ -2543,13 +2730,12 @@ export function PreviewEnvironmentPanel({
                   return;
                 }
                 setSendingMessage(true);
-                void onSendTestRunMessage()
-                  .finally(() => {
-                    setSendingMessage(false);
-                    void refreshLatestEvents();
-                    window.setTimeout(() => void refreshLatestEvents(), 0);
-                    setEventRefreshKey((value) => value + 1);
-                  });
+                void onSendTestRunMessage().finally(() => {
+                  setSendingMessage(false);
+                  void refreshLatestEvents();
+                  window.setTimeout(() => void refreshLatestEvents(), 0);
+                  setEventRefreshKey((value) => value + 1);
+                });
               }}
             />
           )}
@@ -2591,7 +2777,9 @@ export function PreviewEnvironmentPanel({
           <div className="rounded-lg border border-border bg-secondary p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">{agent?.name ?? msg('managedAgents.common.agent', 'Agent')}</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {agent?.name ?? msg('managedAgents.common.agent', 'Agent')}
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">{environment.name}</p>
               </div>
               <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
@@ -2600,12 +2788,16 @@ export function PreviewEnvironmentPanel({
             </div>
             <dl className="mt-4 grid gap-3 text-sm">
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-muted-foreground">{msg('managedAgents.quickstart.environmentId', 'Environment ID')}</dt>
+                <dt className="text-muted-foreground">
+                  {msg('managedAgents.quickstart.environmentId', 'Environment ID')}
+                </dt>
                 <dd className="font-mono text-xs text-foreground">{environment.id}</dd>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">{msg('managedAgents.common.session', 'Session')}</dt>
-                <dd className="font-mono text-xs text-foreground">{session?.id ?? msg('managedAgents.quickstart.notStarted', 'Not started')}</dd>
+                <dd className="font-mono text-xs text-foreground">
+                  {session?.id ?? msg('managedAgents.quickstart.notStarted', 'Not started')}
+                </dd>
               </div>
             </dl>
           </div>
@@ -2614,24 +2806,24 @@ export function PreviewEnvironmentPanel({
         <div className="grid flex-1 place-items-center px-4">
           <Card size="sm" className="w-full max-w-[368px] py-0 shadow-sm">
             <CardContent className="flex flex-col items-center px-6 py-8 text-center">
-            <Cloud className="mx-auto mb-5 size-16 stroke-[1.2] text-foreground" aria-hidden />
-            <CardTitle className="text-lg">
-              {msg('managedAgents.quickstart.noEnvironmentsYet', 'No environments yet')}
-            </CardTitle>
-            <CardDescription className="mt-3">
-              {msg('managedAgents.quickstart.needEnvironment', "You'll need an environment to run a test session.")}
-            </CardDescription>
-            <Button
-              type="button"
-              size="lg"
-              className="mt-5"
-              onClick={() => {
-                void onConfigureEnvironment();
-              }}
-            >
-              <Plus className="size-4" aria-hidden />
-              {msg('managedAgents.quickstart.configureEnvironment', 'Configure environment')}
-            </Button>
+              <Cloud className="mx-auto mb-5 size-16 stroke-[1.2] text-foreground" aria-hidden />
+              <CardTitle className="text-lg">
+                {msg('managedAgents.quickstart.noEnvironmentsYet', 'No environments yet')}
+              </CardTitle>
+              <CardDescription className="mt-3">
+                {msg('managedAgents.quickstart.needEnvironment', "You'll need an environment to run a test session.")}
+              </CardDescription>
+              <Button
+                type="button"
+                size="lg"
+                className="mt-5"
+                onClick={() => {
+                  void onConfigureEnvironment();
+                }}
+              >
+                <Plus className="size-4" aria-hidden />
+                {msg('managedAgents.quickstart.configureEnvironment', 'Configure environment')}
+              </Button>
             </CardContent>
           </Card>
         </div>

@@ -1,12 +1,35 @@
 import { useWorkspace } from '../../../shared/workspaces/context';
 import clsx from 'clsx';
-import { AlertCircle, Archive, ChevronDown, ChevronRight, Code2, Copy, Database, Download, Eye, FileText, Folder, FolderOpen, Loader2, MoreVertical, Pencil, Plus, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  Code2,
+  Copy,
+  Database,
+  Download,
+  Eye,
+  FileText,
+  Folder,
+  FolderOpen,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Plus,
+  X,
+} from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../shared/i18n';
 import { Alert, AlertDescription } from '../../../shared/ui/alert';
 import { Button } from '../../../shared/ui/button';
 import { Card, CardContent } from '../../../shared/ui/card';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../../shared/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../../shared/ui/dropdown-menu';
 import { Field, FieldLabel } from '../../../shared/ui/field';
 import { Input } from '../../../shared/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/ui/select';
@@ -14,16 +37,109 @@ import { toast } from '../../../shared/ui/sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/ui/tabs';
 import { Textarea } from '../../../shared/ui/textarea';
 import { relativeTime } from '../agents/AgentsResourcePage';
-import { archiveManagedEntity, archiveVaultCredential, createMemory, createVaultCredential, deleteManagedEntity, deleteMemory, deleteVaultCredential, listDeploymentRuns, listEnvironmentWork, listMemories, listSessionEvents, listSessionResources, listSessionThreads, listVaultCredentials, retrieveManagedEntity, retrieveMemory, updateEnvironmentDetail, updateManagedEntity, updateMemory, updateVaultCredential } from '../api';
+import {
+  archiveManagedEntity,
+  archiveVaultCredential,
+  createMemory,
+  createVaultCredential,
+  deleteManagedEntity,
+  deleteMemory,
+  deleteVaultCredential,
+  listDeploymentRuns,
+  listEnvironmentWork,
+  listMemories,
+  listSessionEvents,
+  listSessionResources,
+  listSessionThreads,
+  listVaultCredentials,
+  retrieveManagedEntity,
+  retrieveMemory,
+  updateEnvironmentDetail,
+  updateManagedEntity,
+  updateMemory,
+  updateVaultCredential,
+} from '../api';
 import { ManagedDetailBreadcrumb } from '../components/breadcrumbs';
-import { ConfirmEntityDialog, DetailCard, DetailKV, DetailTableCard, ManagedTextArea, ManagedTextField, NestedRows, StatusPill } from '../components/common';
+import {
+  ConfirmEntityDialog,
+  DetailCard,
+  DetailKV,
+  DetailTableCard,
+  ManagedTextArea,
+  ManagedTextField,
+  NestedRows,
+  StatusPill,
+} from '../components/common';
 import { entityKindLabel } from '../labels';
-import { type CredentialFormValues, type DeploymentApiResponse, type DeploymentRunApiResponse, type EnvironmentApiResponse, type EnvironmentWorkApiResponse, type ManagedEntityApiResponse, type ManagedEntityFormValues, type ManagedEntitySection, type MemoryApiResponse, type MemoryBranchState, type MemoryFormValues, type MemoryStoreApiResponse, type MemoryTreeNode, type MemoryViewMode, type ResourceConfig, type SessionApiResponse, type SessionResourceApiResponse, type SessionThreadApiResponse, type VaultApiResponse, type VaultCredentialApiResponse } from '../types';
-import { compactEntityId, copyText, downloadTextFile, errorMessage, formatBytes, formatKilobytes, managedEntityDetailHref, managedEntityListHref, objectRecord, titleCase } from '../utils';
+import {
+  type CredentialFormValues,
+  type DeploymentApiResponse,
+  type DeploymentRunApiResponse,
+  type EnvironmentApiResponse,
+  type EnvironmentWorkApiResponse,
+  type ManagedEntityApiResponse,
+  type ManagedEntityFormValues,
+  type ManagedEntitySection,
+  type MemoryApiResponse,
+  type MemoryBranchState,
+  type MemoryFormValues,
+  type MemoryStoreApiResponse,
+  type MemoryTreeNode,
+  type MemoryViewMode,
+  type ResourceConfig,
+  type SessionApiResponse,
+  type SessionResourceApiResponse,
+  type SessionThreadApiResponse,
+  type VaultApiResponse,
+  type VaultCredentialApiResponse,
+} from '../types';
+import {
+  compactEntityId,
+  copyText,
+  downloadTextFile,
+  errorMessage,
+  formatBytes,
+  formatKilobytes,
+  managedEntityDetailHref,
+  managedEntityListHref,
+  objectRecord,
+  titleCase,
+} from '../utils';
 import { CredentialDialog, MemoryDialog } from './dialogs';
-import { buildMemoryTreeNodes, credentialAuthLabel, deploymentRunStatus, detailRowsForEntity, entityDescription, entityDisplayName, entityStatusLabel, environmentEditValues, environmentPackageRows, initialFormValues, initialSelectedMemoryId, loadedMemoryRowsFromBranches, memoryBranchFromPage, memoryFileName, memoryFolderPathsFromBranches, memoryFolderPathsFromRows, memoryPreviewContent, normalizeMemoryFolderPath, removeMemoryFromBranches, sortMemoryRows, triggerLabel, updateMemoryQueryParam, upsertMemoryInBranch, upsertMemoryInBranches } from './model';
+import {
+  buildMemoryTreeNodes,
+  credentialAuthLabel,
+  deploymentRunStatus,
+  detailRowsForEntity,
+  entityDescription,
+  entityDisplayName,
+  entityStatusLabel,
+  environmentEditValues,
+  environmentPackageRows,
+  initialFormValues,
+  initialSelectedMemoryId,
+  loadedMemoryRowsFromBranches,
+  memoryBranchFromPage,
+  memoryFileName,
+  memoryFolderPathsFromBranches,
+  memoryFolderPathsFromRows,
+  memoryPreviewContent,
+  normalizeMemoryFolderPath,
+  removeMemoryFromBranches,
+  sortMemoryRows,
+  triggerLabel,
+  updateMemoryQueryParam,
+  upsertMemoryInBranch,
+  upsertMemoryInBranches,
+} from './model';
 
-export function ManagedEntityDetailPage({ config, entityId }: { config: ResourceConfig & { section: ManagedEntitySection }; entityId: string }) {
+export function ManagedEntityDetailPage({
+  config,
+  entityId,
+}: {
+  config: ResourceConfig & { section: ManagedEntitySection };
+  entityId: string;
+}) {
   const { activeWorkspaceId } = useWorkspace();
   const [entity, setEntity] = useState<ManagedEntityApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -181,7 +297,11 @@ export function ManagedEntityDetailPage({ config, entityId }: { config: Resource
         <div className="min-w-0">
           <h1 className="truncate text-[28px] font-semibold leading-tight text-foreground">{label}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            {config.section === 'environments' ? <span className="text-foreground">Cloud</span> : <StatusPill>{entityStatusLabel(entity)}</StatusPill>}
+            {config.section === 'environments' ? (
+              <span className="text-foreground">Cloud</span>
+            ) : (
+              <StatusPill>{entityStatusLabel(entity)}</StatusPill>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -192,16 +312,14 @@ export function ManagedEntityDetailPage({ config, entityId }: { config: Resource
               <Copy className="size-3.5" aria-hidden />
               <span className="truncate">{compactEntityId(entity.id)}</span>
             </Button>
-            <span>{config.section === 'environments' ? 'Last updated' : 'Created'} {relativeTime(config.section === 'environments' ? entity.updated_at : entity.created_at)}</span>
+            <span>
+              {config.section === 'environments' ? 'Last updated' : 'Created'}{' '}
+              {relativeTime(config.section === 'environments' ? entity.updated_at : entity.created_at)}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="lg"
-            disabled={archived}
-            onClick={() => setEditing(true)}
-          >
+          <Button type="button" size="lg" disabled={archived} onClick={() => setEditing(true)}>
             Edit
           </Button>
           <DropdownMenu>
@@ -220,12 +338,19 @@ export function ManagedEntityDetailPage({ config, entityId }: { config: Resource
               <MoreVertical className="size-4" aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[154px]">
-              <DropdownMenuItem disabled={archived || busyAction === 'archive'} onClick={() => setConfirmAction('archive')}>
+              <DropdownMenuItem
+                disabled={archived || busyAction === 'archive'}
+                onClick={() => setConfirmAction('archive')}
+              >
                 <Archive className="size-4" aria-hidden />
                 Archive
               </DropdownMenuItem>
               {config.section !== 'deployments' ? (
-                <DropdownMenuItem variant="destructive" disabled={busyAction === 'delete'} onClick={() => setConfirmAction('delete')}>
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={busyAction === 'delete'}
+                  onClick={() => setConfirmAction('delete')}
+                >
                   <X className="size-4" aria-hidden />
                   Delete
                 </DropdownMenuItem>
@@ -259,14 +384,26 @@ export function ManagedEntityDetailPage({ config, entityId }: { config: Resource
       ) : (
         <>
           <ManagedEntityOverview section={config.section} entity={entity} />
-          <ManagedEntityNestedPanel section={config.section} entity={entity} workspaceId={activeWorkspaceId} refreshKey={refreshKey} onRefresh={() => setRefreshKey((value) => value + 1)} />
+          <ManagedEntityNestedPanel
+            section={config.section}
+            entity={entity}
+            workspaceId={activeWorkspaceId}
+            refreshKey={refreshKey}
+            onRefresh={() => setRefreshKey((value) => value + 1)}
+          />
         </>
       )}
     </section>
   );
 }
 
-export function ManagedEntityOverview({ section, entity }: { section: ManagedEntitySection; entity: ManagedEntityApiResponse }) {
+export function ManagedEntityOverview({
+  section,
+  entity,
+}: {
+  section: ManagedEntitySection;
+  entity: ManagedEntityApiResponse;
+}) {
   const rows = detailRowsForEntity(section, entity);
   return (
     <DetailCard title="Overview" description={entityDescription(entity) || undefined}>
@@ -301,12 +438,22 @@ export function EnvironmentReadOnlySections({ entity }: { entity: EnvironmentApi
       </div>
       <div className="border-t border-border pt-7">
         <h2 className="text-[20px] font-semibold text-foreground">Packages</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Specify packages and their versions available in this environment. Separate multiple values with spaces.</p>
-        {packages.length ? <div className="mt-3 text-sm text-foreground">{packages.map((row) => `${row.manager}: ${row.value}`).join('  ')}</div> : <div className="mt-3 text-sm text-muted-foreground/70">No packages configured</div>}
+        <p className="mt-1 text-sm text-muted-foreground">
+          Specify packages and their versions available in this environment. Separate multiple values with spaces.
+        </p>
+        {packages.length ? (
+          <div className="mt-3 text-sm text-foreground">
+            {packages.map((row) => `${row.manager}: ${row.value}`).join('  ')}
+          </div>
+        ) : (
+          <div className="mt-3 text-sm text-muted-foreground/70">No packages configured</div>
+        )}
       </div>
       <div className="border-t border-border pt-7">
         <h2 className="text-[20px] font-semibold text-foreground">Metadata</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Add custom key-value pairs to tag and organize this environment. Keys must be lowercase.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Add custom key-value pairs to tag and organize this environment. Keys must be lowercase.
+        </p>
         {Object.keys(metadata).length ? (
           <div className="mt-3 grid gap-2 text-sm text-foreground">
             {Object.entries(metadata).map(([key, value]) => (
@@ -329,7 +476,7 @@ export function ManagedEntityInlineEditor({
   workspaceId,
   onCancel,
   onSaved,
-  onSubmit
+  onSubmit,
 }: {
   section: ManagedEntitySection;
   entity: ManagedEntityApiResponse;
@@ -339,7 +486,14 @@ export function ManagedEntityInlineEditor({
   onSubmit: (values: ManagedEntityFormValues) => Promise<void>;
 }) {
   if (section === 'environments') {
-    return <EnvironmentInlineEditor entity={entity as EnvironmentApiResponse} workspaceId={workspaceId} onCancel={onCancel} onSaved={onSaved} />;
+    return (
+      <EnvironmentInlineEditor
+        entity={entity as EnvironmentApiResponse}
+        workspaceId={workspaceId}
+        onCancel={onCancel}
+        onSaved={onSaved}
+      />
+    );
   }
 
   return <GenericManagedEntityInlineEditor section={section} entity={entity} onCancel={onCancel} onSubmit={onSubmit} />;
@@ -349,7 +503,7 @@ export function GenericManagedEntityInlineEditor({
   section,
   entity,
   onCancel,
-  onSubmit
+  onSubmit,
 }: {
   section: ManagedEntitySection;
   entity: ManagedEntityApiResponse;
@@ -385,11 +539,25 @@ export function GenericManagedEntityInlineEditor({
           onChange={(name) => setValues((current) => ({ ...current, name }))}
           autoFocus
         />
-        {hasDescription ? <ManagedTextArea label="Description" value={values.description} onChange={(description) => setValues((current) => ({ ...current, description }))} /> : null}
+        {hasDescription ? (
+          <ManagedTextArea
+            label="Description"
+            value={values.description}
+            onChange={(description) => setValues((current) => ({ ...current, description }))}
+          />
+        ) : null}
         {section === 'sessions' || section === 'deployments' ? (
           <div className="grid gap-4 md:grid-cols-2">
-            <ManagedTextField label="Agent" value={values.agentId} onChange={(agentId) => setValues((current) => ({ ...current, agentId }))} />
-            <ManagedTextField label="Environment" value={values.environmentId} onChange={(environmentId) => setValues((current) => ({ ...current, environmentId }))} />
+            <ManagedTextField
+              label="Agent"
+              value={values.agentId}
+              onChange={(agentId) => setValues((current) => ({ ...current, agentId }))}
+            />
+            <ManagedTextField
+              label="Environment"
+              value={values.environmentId}
+              onChange={(environmentId) => setValues((current) => ({ ...current, environmentId }))}
+            />
           </div>
         ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -410,7 +578,7 @@ export function EnvironmentInlineEditor({
   entity,
   workspaceId,
   onCancel,
-  onSaved
+  onSaved,
 }: {
   entity: EnvironmentApiResponse;
   workspaceId: string;
@@ -437,13 +605,24 @@ export function EnvironmentInlineEditor({
     }
   };
 
-  const addPackage = () => setValues((current) => ({ ...current, packages: [...current.packages, { manager: 'pip', value: '' }] }));
-  const addMetadata = () => setValues((current) => ({ ...current, metadataRows: [...current.metadataRows, { key: '', value: '' }] }));
+  const addPackage = () =>
+    setValues((current) => ({ ...current, packages: [...current.packages, { manager: 'pip', value: '' }] }));
+  const addMetadata = () =>
+    setValues((current) => ({ ...current, metadataRows: [...current.metadataRows, { key: '', value: '' }] }));
 
   return (
     <form className="max-w-[820px] space-y-7" onSubmit={submit}>
-      <ManagedTextField label="Environment name" value={values.name} onChange={(name) => setValues((current) => ({ ...current, name }))} autoFocus />
-      <ManagedTextArea label="Description" value={values.description} onChange={(description) => setValues((current) => ({ ...current, description }))} />
+      <ManagedTextField
+        label="Environment name"
+        value={values.name}
+        onChange={(name) => setValues((current) => ({ ...current, name }))}
+        autoFocus
+      />
+      <ManagedTextArea
+        label="Description"
+        value={values.description}
+        onChange={(description) => setValues((current) => ({ ...current, description }))}
+      />
       <DetailCard title="Networking" description="Configure network access policies for this environment.">
         <Card size="sm" className="py-0">
           <CardContent className="p-3">
@@ -453,13 +632,16 @@ export function EnvironmentInlineEditor({
                 value={values.networkType}
                 items={[
                   { value: 'unrestricted', label: 'Unrestricted' },
-                  { value: 'limited', label: 'Limited' }
+                  { value: 'limited', label: 'Limited' },
                 ]}
                 onValueChange={(networkType) => {
                   if (networkType === null) {
                     return;
                   }
-                  setValues((current) => ({ ...current, networkType: networkType === 'limited' ? 'limited' : 'unrestricted' }));
+                  setValues((current) => ({
+                    ...current,
+                    networkType: networkType === 'limited' ? 'limited' : 'unrestricted',
+                  }));
                 }}
               >
                 <SelectTrigger aria-label="Type" className="h-10 w-full px-3 text-sm text-foreground">
@@ -478,7 +660,10 @@ export function EnvironmentInlineEditor({
           </CardContent>
         </Card>
       </DetailCard>
-      <DetailCard title="Packages" description="Specify packages and their versions available in this environment. Separate multiple values with spaces.">
+      <DetailCard
+        title="Packages"
+        description="Specify packages and their versions available in this environment. Separate multiple values with spaces."
+      >
         <Card size="sm" className="py-0">
           <CardContent className="space-y-3 p-3">
             <div className="space-y-2">
@@ -486,14 +671,19 @@ export function EnvironmentInlineEditor({
                 <div key={`${row.manager}-${index}`} className="grid gap-2 md:grid-cols-[160px_1fr_40px]">
                   <Select<string>
                     value={row.manager}
-                    items={['apt', 'cargo', 'gem', 'go', 'npm', 'pip'].map((manager) => ({ value: manager, label: manager }))}
+                    items={['apt', 'cargo', 'gem', 'go', 'npm', 'pip'].map((manager) => ({
+                      value: manager,
+                      label: manager,
+                    }))}
                     onValueChange={(manager) => {
                       if (manager === null) {
                         return;
                       }
                       setValues((current) => ({
                         ...current,
-                        packages: current.packages.map((item, itemIndex) => (itemIndex === index ? { ...item, manager } : item))
+                        packages: current.packages.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, manager } : item,
+                        ),
                       }));
                     }}
                   >
@@ -516,7 +706,9 @@ export function EnvironmentInlineEditor({
                     onChange={(event) =>
                       setValues((current) => ({
                         ...current,
-                        packages: current.packages.map((item, itemIndex) => (itemIndex === index ? { ...item, value: event.target.value } : item))
+                        packages: current.packages.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, value: event.target.value } : item,
+                        ),
                       }))
                     }
                   />
@@ -527,7 +719,12 @@ export function EnvironmentInlineEditor({
                     variant="secondary"
                     size="icon-lg"
                     className="size-10"
-                    onClick={() => setValues((current) => ({ ...current, packages: current.packages.filter((_, itemIndex) => itemIndex !== index) }))}
+                    onClick={() =>
+                      setValues((current) => ({
+                        ...current,
+                        packages: current.packages.filter((_, itemIndex) => itemIndex !== index),
+                      }))
+                    }
                   >
                     <X className="size-4" aria-hidden />
                   </Button>
@@ -541,7 +738,10 @@ export function EnvironmentInlineEditor({
           </CardContent>
         </Card>
       </DetailCard>
-      <DetailCard title="Metadata" description="Add custom key-value pairs to tag and organize this environment. Keys must be lowercase.">
+      <DetailCard
+        title="Metadata"
+        description="Add custom key-value pairs to tag and organize this environment. Keys must be lowercase."
+      >
         <Card size="sm" className="py-0">
           <CardContent className="space-y-3 p-3">
             <div className="space-y-2">
@@ -555,7 +755,9 @@ export function EnvironmentInlineEditor({
                     onChange={(event) =>
                       setValues((current) => ({
                         ...current,
-                        metadataRows: current.metadataRows.map((item, itemIndex) => (itemIndex === index ? { ...item, key: event.target.value } : item))
+                        metadataRows: current.metadataRows.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, key: event.target.value } : item,
+                        ),
                       }))
                     }
                   />
@@ -567,7 +769,9 @@ export function EnvironmentInlineEditor({
                     onChange={(event) =>
                       setValues((current) => ({
                         ...current,
-                        metadataRows: current.metadataRows.map((item, itemIndex) => (itemIndex === index ? { ...item, value: event.target.value } : item))
+                        metadataRows: current.metadataRows.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, value: event.target.value } : item,
+                        ),
                       }))
                     }
                   />
@@ -578,7 +782,12 @@ export function EnvironmentInlineEditor({
                     variant="secondary"
                     size="icon-lg"
                     className="size-10"
-                    onClick={() => setValues((current) => ({ ...current, metadataRows: current.metadataRows.filter((_, itemIndex) => itemIndex !== index) }))}
+                    onClick={() =>
+                      setValues((current) => ({
+                        ...current,
+                        metadataRows: current.metadataRows.filter((_, itemIndex) => itemIndex !== index),
+                      }))
+                    }
                   >
                     <X className="size-4" aria-hidden />
                   </Button>
@@ -610,7 +819,7 @@ export function ManagedEntityNestedPanel({
   entity,
   workspaceId,
   refreshKey,
-  onRefresh
+  onRefresh,
 }: {
   section: ManagedEntitySection;
   entity: ManagedEntityApiResponse;
@@ -619,22 +828,62 @@ export function ManagedEntityNestedPanel({
   onRefresh: () => void;
 }) {
   if (section === 'credential-vaults') {
-    return <VaultCredentialsPanel vault={entity as VaultApiResponse} workspaceId={workspaceId} refreshKey={refreshKey} onRefresh={onRefresh} />;
+    return (
+      <VaultCredentialsPanel
+        vault={entity as VaultApiResponse}
+        workspaceId={workspaceId}
+        refreshKey={refreshKey}
+        onRefresh={onRefresh}
+      />
+    );
   }
   if (section === 'memory-stores') {
-    return <MemoryStorePanel store={entity as MemoryStoreApiResponse} workspaceId={workspaceId} refreshKey={refreshKey} onRefresh={onRefresh} />;
+    return (
+      <MemoryStorePanel
+        store={entity as MemoryStoreApiResponse}
+        workspaceId={workspaceId}
+        refreshKey={refreshKey}
+        onRefresh={onRefresh}
+      />
+    );
   }
   if (section === 'deployments') {
-    return <DeploymentRunsPanel deployment={entity as DeploymentApiResponse} workspaceId={workspaceId} refreshKey={refreshKey} />;
+    return (
+      <DeploymentRunsPanel
+        deployment={entity as DeploymentApiResponse}
+        workspaceId={workspaceId}
+        refreshKey={refreshKey}
+      />
+    );
   }
   if (section === 'environments') {
-    return <EnvironmentWorkPanel environment={entity as EnvironmentApiResponse} workspaceId={workspaceId} refreshKey={refreshKey} />;
+    return (
+      <EnvironmentWorkPanel
+        environment={entity as EnvironmentApiResponse}
+        workspaceId={workspaceId}
+        refreshKey={refreshKey}
+      />
+    );
   }
-  return <SessionNestedPanel session={entity as SessionApiResponse} workspaceId={workspaceId} refreshKey={refreshKey} />;
+  return (
+    <SessionNestedPanel session={entity as SessionApiResponse} workspaceId={workspaceId} refreshKey={refreshKey} />
+  );
 }
 
-export function DeploymentRunsPanel({ deployment, workspaceId, refreshKey }: { deployment: DeploymentApiResponse; workspaceId: string; refreshKey: number }) {
-  const [state, setState] = useState<{ loading: boolean; error: string | null; data: DeploymentRunApiResponse[] }>({ loading: true, error: null, data: [] });
+export function DeploymentRunsPanel({
+  deployment,
+  workspaceId,
+  refreshKey,
+}: {
+  deployment: DeploymentApiResponse;
+  workspaceId: string;
+  refreshKey: number;
+}) {
+  const [state, setState] = useState<{ loading: boolean; error: string | null; data: DeploymentRunApiResponse[] }>({
+    loading: true,
+    error: null,
+    data: [],
+  });
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -683,14 +932,26 @@ export function DeploymentRunsPanel({ deployment, workspaceId, refreshKey }: { d
         ) : (
           '—'
         ),
-        relativeTime(run.created_at)
+        relativeTime(run.created_at),
       ])}
     />
   );
 }
 
-export function EnvironmentWorkPanel({ environment, workspaceId, refreshKey }: { environment: EnvironmentApiResponse; workspaceId: string; refreshKey: number }) {
-  const [state, setState] = useState<{ loading: boolean; error: string | null; data: EnvironmentWorkApiResponse[] }>({ loading: true, error: null, data: [] });
+export function EnvironmentWorkPanel({
+  environment,
+  workspaceId,
+  refreshKey,
+}: {
+  environment: EnvironmentApiResponse;
+  workspaceId: string;
+  refreshKey: number;
+}) {
+  const [state, setState] = useState<{ loading: boolean; error: string | null; data: EnvironmentWorkApiResponse[] }>({
+    loading: true,
+    error: null,
+    data: [],
+  });
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -723,15 +984,40 @@ export function EnvironmentWorkPanel({ environment, workspaceId, refreshKey }: {
       error={state.error}
       emptyTitle="No work queued"
       columns={['ID', 'Status', 'Created', 'Updated']}
-      rows={state.data.map((work) => [compactEntityId(work.id), titleCase(work.status || 'queued'), relativeTime(work.created_at), work.updated_at ? relativeTime(work.updated_at) : '—'])}
+      rows={state.data.map((work) => [
+        compactEntityId(work.id),
+        titleCase(work.status || 'queued'),
+        relativeTime(work.created_at),
+        work.updated_at ? relativeTime(work.updated_at) : '—',
+      ])}
     />
   );
 }
 
-export function SessionNestedPanel({ session, workspaceId, refreshKey }: { session: SessionApiResponse; workspaceId: string; refreshKey: number }) {
-  const [resources, setResources] = useState<{ loading: boolean; error: string | null; data: SessionResourceApiResponse[] }>({ loading: true, error: null, data: [] });
-  const [threads, setThreads] = useState<{ loading: boolean; error: string | null; data: SessionThreadApiResponse[] }>({ loading: true, error: null, data: [] });
-  const [events, setEvents] = useState<{ loading: boolean; error: string | null; data: Record<string, unknown>[] }>({ loading: true, error: null, data: [] });
+export function SessionNestedPanel({
+  session,
+  workspaceId,
+  refreshKey,
+}: {
+  session: SessionApiResponse;
+  workspaceId: string;
+  refreshKey: number;
+}) {
+  const [resources, setResources] = useState<{
+    loading: boolean;
+    error: string | null;
+    data: SessionResourceApiResponse[];
+  }>({ loading: true, error: null, data: [] });
+  const [threads, setThreads] = useState<{ loading: boolean; error: string | null; data: SessionThreadApiResponse[] }>({
+    loading: true,
+    error: null,
+    data: [],
+  });
+  const [events, setEvents] = useState<{ loading: boolean; error: string | null; data: Record<string, unknown>[] }>({
+    loading: true,
+    error: null,
+    data: [],
+  });
 
   useEffect(() => {
     let active = true;
@@ -767,7 +1053,11 @@ export function SessionNestedPanel({ session, workspaceId, refreshKey }: { sessi
         error={resources.error}
         emptyTitle="No resources mounted"
         columns={['ID', 'Type', 'Created']}
-        rows={resources.data.map((resource) => [String(resource.id || '—'), String(resource.type || resource.resource_type || 'resource'), typeof resource.created_at === 'string' ? relativeTime(resource.created_at) : '—'])}
+        rows={resources.data.map((resource) => [
+          String(resource.id || '—'),
+          String(resource.type || resource.resource_type || 'resource'),
+          typeof resource.created_at === 'string' ? relativeTime(resource.created_at) : '—',
+        ])}
       />
       <DetailTableCard
         title="Threads"
@@ -776,7 +1066,11 @@ export function SessionNestedPanel({ session, workspaceId, refreshKey }: { sessi
         error={threads.error}
         emptyTitle="No threads yet"
         columns={['ID', 'Status', 'Created']}
-        rows={threads.data.map((thread) => [compactEntityId(thread.id), thread.archived_at ? 'Archived' : 'Active', relativeTime(thread.created_at)])}
+        rows={threads.data.map((thread) => [
+          compactEntityId(thread.id),
+          thread.archived_at ? 'Archived' : 'Active',
+          relativeTime(thread.created_at),
+        ])}
       />
       <DetailTableCard
         title="Events"
@@ -785,7 +1079,11 @@ export function SessionNestedPanel({ session, workspaceId, refreshKey }: { sessi
         error={events.error}
         emptyTitle="No events yet"
         columns={['Type', 'Created', 'Payload']}
-        rows={events.data.map((event) => [String(event.type || 'event'), typeof event.created_at === 'string' ? relativeTime(event.created_at) : '—', JSON.stringify(event).slice(0, 90)])}
+        rows={events.data.map((event) => [
+          String(event.type || 'event'),
+          typeof event.created_at === 'string' ? relativeTime(event.created_at) : '—',
+          JSON.stringify(event).slice(0, 90),
+        ])}
       />
     </div>
   );
@@ -795,7 +1093,7 @@ export function VaultCredentialsPanel({
   vault,
   workspaceId,
   refreshKey,
-  onRefresh
+  onRefresh,
 }: {
   vault: VaultApiResponse;
   workspaceId: string;
@@ -803,9 +1101,18 @@ export function VaultCredentialsPanel({
   onRefresh: () => void;
 }) {
   const { msg } = useI18n();
-  const [state, setState] = useState<{ loading: boolean; error: string | null; data: VaultCredentialApiResponse[] }>({ loading: true, error: null, data: [] });
-  const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; credential?: VaultCredentialApiResponse } | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ action: 'archive' | 'delete'; credential: VaultCredentialApiResponse } | null>(null);
+  const [state, setState] = useState<{ loading: boolean; error: string | null; data: VaultCredentialApiResponse[] }>({
+    loading: true,
+    error: null,
+    data: [],
+  });
+  const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; credential?: VaultCredentialApiResponse } | null>(
+    null,
+  );
+  const [confirmAction, setConfirmAction] = useState<{
+    action: 'archive' | 'delete';
+    credential: VaultCredentialApiResponse;
+  } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -820,7 +1127,9 @@ export function VaultCredentialsPanel({
   }, [refreshKey, vault.id, workspaceId]);
 
   const submit = async (values: CredentialFormValues, credential?: VaultCredentialApiResponse) => {
-    const updated = credential ? await updateVaultCredential(vault.id, credential.id, values, workspaceId) : await createVaultCredential(vault.id, values, workspaceId);
+    const updated = credential
+      ? await updateVaultCredential(vault.id, credential.id, values, workspaceId)
+      : await createVaultCredential(vault.id, values, workspaceId);
     setState((current) => ({ ...current, data: [updated, ...current.data.filter((item) => item.id !== updated.id)] }));
     setDialog(null);
     onRefresh();
@@ -905,21 +1214,36 @@ export function VaultCredentialsPanel({
                     <Pencil className="size-4" aria-hidden />
                     Edit
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="h-9" disabled={busyId === credential.id} onClick={() => setConfirmAction({ action: 'archive', credential })}>
+                  <DropdownMenuItem
+                    className="h-9"
+                    disabled={busyId === credential.id}
+                    onClick={() => setConfirmAction({ action: 'archive', credential })}
+                  >
                     <Archive className="size-4" aria-hidden />
                     Archive
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="h-9" variant="destructive" disabled={busyId === credential.id} onClick={() => setConfirmAction({ action: 'delete', credential })}>
+                  <DropdownMenuItem
+                    className="h-9"
+                    variant="destructive"
+                    disabled={busyId === credential.id}
+                    onClick={() => setConfirmAction({ action: 'delete', credential })}
+                  >
                     <X className="size-4" aria-hidden />
                     Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
+            </div>,
           ])}
         />
       </DetailCard>
-      {dialog ? <CredentialDialog credential={dialog.credential} onClose={() => setDialog(null)} onSubmit={(values) => submit(values, dialog.credential)} /> : null}
+      {dialog ? (
+        <CredentialDialog
+          credential={dialog.credential}
+          onClose={() => setDialog(null)}
+          onSubmit={(values) => submit(values, dialog.credential)}
+        />
+      ) : null}
     </>
   );
 }
@@ -930,7 +1254,7 @@ export function MemoryStorePanel({
   refreshKey,
   onRefresh,
   variant = 'nested',
-  listHref
+  listHref,
 }: {
   store: MemoryStoreApiResponse;
   workspaceId: string;
@@ -948,7 +1272,11 @@ export function MemoryStorePanel({
   const [viewMode, setViewMode] = useState<MemoryViewMode>('preview');
   const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; memory?: MemoryApiResponse } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ action: 'delete'; memory: MemoryApiResponse } | null>(null);
-  const [fullMemory, setFullMemory] = useState<{ loading: boolean; error: string | null; data: MemoryApiResponse | null }>({ loading: false, error: null, data: null });
+  const [fullMemory, setFullMemory] = useState<{
+    loading: boolean;
+    error: string | null;
+    data: MemoryApiResponse | null;
+  }>({ loading: false, error: null, data: null });
   const [editingContent, setEditingContent] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -967,12 +1295,24 @@ export function MemoryStorePanel({
 
   const memoryRows = useMemo(() => sortMemoryRows(memories.data), [memories.data]);
   const rootSelectableMemories = useMemo(() => memoryRows.filter((memory) => memory.type === 'memory'), [memoryRows]);
-  const loadedMemoryRows = useMemo(() => loadedMemoryRowsFromBranches(memoryRows, folderBranches), [folderBranches, memoryRows]);
-  const folderPaths = useMemo(() => memoryFolderPathsFromBranches(memoryRows, folderBranches), [folderBranches, memoryRows]);
+  const loadedMemoryRows = useMemo(
+    () => loadedMemoryRowsFromBranches(memoryRows, folderBranches),
+    [folderBranches, memoryRows],
+  );
+  const folderPaths = useMemo(
+    () => memoryFolderPathsFromBranches(memoryRows, folderBranches),
+    [folderBranches, memoryRows],
+  );
   const allFoldersExpanded = folderPaths.length > 0 && folderPaths.every((path) => expandedFolders.has(path));
-  const treeNodes = useMemo(() => buildMemoryTreeNodes(memoryRows, expandedFolders, folderBranches), [expandedFolders, folderBranches, memoryRows]);
-  const selectedMemoryFromTree = selectedMemoryId ? loadedMemoryRows.find((memory) => memory.id === selectedMemoryId) ?? null : rootSelectableMemories[0] ?? null;
-  const selectedMemorySummary = selectedMemoryFromTree ?? (selectedMemoryId && fullMemory.data?.id === selectedMemoryId ? fullMemory.data : null);
+  const treeNodes = useMemo(
+    () => buildMemoryTreeNodes(memoryRows, expandedFolders, folderBranches),
+    [expandedFolders, folderBranches, memoryRows],
+  );
+  const selectedMemoryFromTree = selectedMemoryId
+    ? (loadedMemoryRows.find((memory) => memory.id === selectedMemoryId) ?? null)
+    : (rootSelectableMemories[0] ?? null);
+  const selectedMemorySummary =
+    selectedMemoryFromTree ?? (selectedMemoryId && fullMemory.data?.id === selectedMemoryId ? fullMemory.data : null);
   const selectedMemory =
     selectedMemorySummary && fullMemory.data?.id === selectedMemorySummary.id
       ? { ...selectedMemorySummary, ...fullMemory.data }
@@ -1013,7 +1353,7 @@ export function MemoryStorePanel({
     const normalizedPath = normalizeMemoryFolderPath(folderPath);
     setFolderBranches((current) => ({
       ...current,
-      [normalizedPath]: { ...(current[normalizedPath] ?? { data: [], prefixes: [] }), loading: true, error: null }
+      [normalizedPath]: { ...(current[normalizedPath] ?? { data: [], prefixes: [] }), loading: true, error: null },
     }));
     try {
       const page = await listMemories(store.id, workspaceId, normalizedPath);
@@ -1084,7 +1424,9 @@ export function MemoryStorePanel({
 
   const submit = async (values: MemoryFormValues, memory?: MemoryApiResponse) => {
     const isUpdate = Boolean(memory);
-    const updated = memory ? await updateMemory(store.id, memory.id, values, workspaceId, memory.content_sha256) : await createMemory(store.id, values, workspaceId);
+    const updated = memory
+      ? await updateMemory(store.id, memory.id, values, workspaceId, memory.content_sha256)
+      : await createMemory(store.id, values, workspaceId);
     setMemories((current) => upsertMemoryInBranch(current, updated, '/'));
     setFolderBranches((current) => upsertMemoryInBranches(current, updated));
     setFullMemory({ loading: false, error: null, data: updated });
@@ -1117,7 +1459,10 @@ export function MemoryStorePanel({
     }
     setBusyId(selectedMemory.id);
     try {
-      const memory = typeof selectedMemory.content === 'string' ? selectedMemory : await retrieveMemory(store.id, selectedMemory.id, workspaceId);
+      const memory =
+        typeof selectedMemory.content === 'string'
+          ? selectedMemory
+          : await retrieveMemory(store.id, selectedMemory.id, workspaceId);
       setFullMemory({ loading: false, error: null, data: memory });
       downloadTextFile(memoryFileName(memory.path), memory.content ?? '');
     } catch (error) {
@@ -1196,7 +1541,9 @@ export function MemoryStorePanel({
 
           <header className="mb-4 flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <h1 className="truncate text-[28px] font-semibold leading-tight text-foreground">{store.name || store.id}</h1>
+              <h1 className="truncate text-[28px] font-semibold leading-tight text-foreground">
+                {store.name || store.id}
+              </h1>
               <div className="mt-3">
                 <StatusPill>{entityStatusLabel(store)}</StatusPill>
               </div>
@@ -1204,7 +1551,9 @@ export function MemoryStorePanel({
             {addMemoryButton}
           </header>
 
-          {store.description ? <p className="mb-3 max-w-[760px] text-sm leading-5 text-muted-foreground">{store.description}</p> : null}
+          {store.description ? (
+            <p className="mb-3 max-w-[760px] text-sm leading-5 text-muted-foreground">{store.description}</p>
+          ) : null}
           <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             {storeCopyButton}
             <span>Created {relativeTime(store.created_at)}</span>
@@ -1214,7 +1563,9 @@ export function MemoryStorePanel({
         <section className="mb-7">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              {store.description ? <p className="max-w-[760px] text-sm leading-5 text-muted-foreground">{store.description}</p> : null}
+              {store.description ? (
+                <p className="max-w-[760px] text-sm leading-5 text-muted-foreground">{store.description}</p>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 {storeCopyButton}
                 <span>Created {relativeTime(store.created_at)}</span>
@@ -1235,45 +1586,53 @@ export function MemoryStorePanel({
       <Card className="overflow-hidden py-0">
         <CardContent className="grid min-h-[520px] p-0 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="border-b border-border bg-card-raised lg:border-b-0 lg:border-r">
-          <div className="flex h-12 items-center justify-between gap-3 border-b border-border px-4 text-sm font-semibold text-foreground">
-            <span>Memories</span>
-            {folderPaths.length ? (
-              <Button
-                type="button"
-                aria-label={allFoldersExpanded ? 'Collapse all' : 'Expand all'}
-                disabled={treeBusy}
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:text-muted-foreground/70"
-                onClick={() => void toggleAllFolders()}
-              >
-                {allFoldersExpanded ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
-              </Button>
-            ) : null}
-          </div>
-          {memories.loading ? (
-            <div className="px-4 py-8 text-sm text-muted-foreground">Loading memories...</div>
-          ) : treeNodes.length ? (
-            <div className="max-h-[560px] overflow-auto p-2">
-              {treeNodes.map((node) =>
-                node.type === 'folder' ? (
-                  <MemoryTreeFolderButton key={`folder:${node.path}`} node={node} onToggle={() => toggleFolder(node.path)} />
-                ) : (
-                  <MemoryTreeMemoryButton
-                    key={`memory:${node.memory.id}`}
-                    node={node}
-                    selected={selectedMemory?.id === node.memory.id}
-                    onSelect={() => {
-                      setSelectedMemoryId(node.memory.id);
-                      updateMemoryQueryParam(node.memory.id);
-                    }}
-                  />
-                )
-              )}
+            <div className="flex h-12 items-center justify-between gap-3 border-b border-border px-4 text-sm font-semibold text-foreground">
+              <span>Memories</span>
+              {folderPaths.length ? (
+                <Button
+                  type="button"
+                  aria-label={allFoldersExpanded ? 'Collapse all' : 'Expand all'}
+                  disabled={treeBusy}
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:text-muted-foreground/70"
+                  onClick={() => void toggleAllFolders()}
+                >
+                  {allFoldersExpanded ? (
+                    <ChevronDown className="size-4" aria-hidden />
+                  ) : (
+                    <ChevronRight className="size-4" aria-hidden />
+                  )}
+                </Button>
+              ) : null}
             </div>
-          ) : (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">No memories yet</div>
-          )}
+            {memories.loading ? (
+              <div className="px-4 py-8 text-sm text-muted-foreground">Loading memories...</div>
+            ) : treeNodes.length ? (
+              <div className="max-h-[560px] overflow-auto p-2">
+                {treeNodes.map((node) =>
+                  node.type === 'folder' ? (
+                    <MemoryTreeFolderButton
+                      key={`folder:${node.path}`}
+                      node={node}
+                      onToggle={() => toggleFolder(node.path)}
+                    />
+                  ) : (
+                    <MemoryTreeMemoryButton
+                      key={`memory:${node.memory.id}`}
+                      node={node}
+                      selected={selectedMemory?.id === node.memory.id}
+                      onSelect={() => {
+                        setSelectedMemoryId(node.memory.id);
+                        updateMemoryQueryParam(node.memory.id);
+                      }}
+                    />
+                  ),
+                )}
+              </div>
+            ) : (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">No memories yet</div>
+            )}
           </aside>
 
           <div className="min-w-0 bg-card">
@@ -1281,39 +1640,48 @@ export function MemoryStorePanel({
               editingContent !== null ? (
                 <>
                   <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-5 py-4">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-[22px] font-semibold leading-7 text-foreground">{selectedMemory.path}</h2>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-[22px] font-semibold leading-7 text-foreground">
+                        {selectedMemory.path}
+                      </h2>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          className="max-w-[240px] font-mono text-[13px] text-foreground"
+                          aria-label={`Copy ${selectedMemory.id}`}
+                          onClick={() => void copyText(selectedMemory.id)}
+                        >
+                          <Copy className="size-3.5" aria-hidden />
+                          <span className="truncate">{compactEntityId(selectedMemory.id)}</span>
+                        </Button>
+                        <span>
+                          Updated{' '}
+                          {selectedMemory.updated_at
+                            ? relativeTime(selectedMemory.updated_at)
+                            : relativeTime(selectedMemory.created_at)}
+                        </span>
+                        <span>
+                          {formatBytes(selectedMemory.content_size_bytes ?? selectedMemory.content?.length ?? 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="secondary" size="lg" onClick={() => setEditingContent(null)}>
+                        <X className="size-4" aria-hidden />
+                        Cancel
+                      </Button>
                       <Button
                         type="button"
-                        variant="outline"
-                        size="xs"
-                        className="max-w-[240px] font-mono text-[13px] text-foreground"
-                        aria-label={`Copy ${selectedMemory.id}`}
-                        onClick={() => void copyText(selectedMemory.id)}
+                        disabled={busyId === selectedMemory.id}
+                        size="lg"
+                        onClick={() => void saveInlineEdit()}
                       >
-                        <Copy className="size-3.5" aria-hidden />
-                        <span className="truncate">{compactEntityId(selectedMemory.id)}</span>
+                        {busyId === selectedMemory.id ? 'Saving...' : 'Save'}
                       </Button>
-                      <span>Updated {selectedMemory.updated_at ? relativeTime(selectedMemory.updated_at) : relativeTime(selectedMemory.created_at)}</span>
-                      <span>{formatBytes(selectedMemory.content_size_bytes ?? selectedMemory.content?.length ?? 0)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="secondary" size="lg" onClick={() => setEditingContent(null)}>
-                      <X className="size-4" aria-hidden />
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      disabled={busyId === selectedMemory.id}
-                      size="lg"
-                      onClick={() => void saveInlineEdit()}
-                    >
-                      {busyId === selectedMemory.id ? 'Saving...' : 'Save'}
-                    </Button>
-                  </div>
-                </div>
 
                   <div className="px-5 py-5">
                     {fullMemory.error ? (
@@ -1322,82 +1690,107 @@ export function MemoryStorePanel({
                         <AlertDescription>{fullMemory.error}</AlertDescription>
                       </Alert>
                     ) : null}
-                    <p className="mb-2 text-xs text-muted-foreground">Tab inserts indentation. Press Escape then Tab to move focus out of the editor.</p>
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      Tab inserts indentation. Press Escape then Tab to move focus out of the editor.
+                    </p>
                     <Textarea
                       aria-label="Memory content"
                       className="min-h-[320px] resize-y px-4 py-3 font-mono leading-6"
                       value={editingContent}
                       onChange={(event) => setEditingContent(event.target.value)}
                     />
-                    <p className="mt-2 text-right text-xs text-muted-foreground">{formatKilobytes(editingContent.length)} / 100kB</p>
+                    <p className="mt-2 text-right text-xs text-muted-foreground">
+                      {formatKilobytes(editingContent.length)} / 100kB
+                    </p>
                   </div>
                 </>
               ) : (
-                <Tabs value={viewMode} onValueChange={(nextValue) => setViewMode(nextValue as MemoryViewMode)} className="gap-0">
+                <Tabs
+                  value={viewMode}
+                  onValueChange={(nextValue) => setViewMode(nextValue as MemoryViewMode)}
+                  className="gap-0"
+                >
                   <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-5 py-4">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-[22px] font-semibold leading-7 text-foreground">{selectedMemory.path}</h2>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-[22px] font-semibold leading-7 text-foreground">
+                        {selectedMemory.path}
+                      </h2>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          className="max-w-[240px] font-mono text-[13px] text-foreground"
+                          aria-label={`Copy ${selectedMemory.id}`}
+                          onClick={() => void copyText(selectedMemory.id)}
+                        >
+                          <Copy className="size-3.5" aria-hidden />
+                          <span className="truncate">{compactEntityId(selectedMemory.id)}</span>
+                        </Button>
+                        <span>
+                          Updated{' '}
+                          {selectedMemory.updated_at
+                            ? relativeTime(selectedMemory.updated_at)
+                            : relativeTime(selectedMemory.created_at)}
+                        </span>
+                        <span>
+                          {formatBytes(selectedMemory.content_size_bytes ?? selectedMemory.content?.length ?? 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <TabsList aria-label="View mode" className="h-9">
+                        <TabsTrigger value="preview" className="gap-1.5 px-3">
+                          <Eye className="size-4" aria-hidden />
+                          Preview
+                        </TabsTrigger>
+                        <TabsTrigger value="source" className="gap-1.5 px-3">
+                          <Code2 className="size-4" aria-hidden />
+                          Source
+                        </TabsTrigger>
+                      </TabsList>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-lg"
+                              aria-label="More actions"
+                              className="text-foreground"
+                            />
+                          }
+                        >
+                          <MoreVertical className="size-4" aria-hidden />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[164px]">
+                          <DropdownMenuItem
+                            disabled={busyId === selectedMemory.id}
+                            onClick={() => void downloadSelectedMemory()}
+                          >
+                            <Download className="size-4" aria-hidden />
+                            Download
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={busyId === selectedMemory.id}
+                            onClick={() => setConfirmAction({ action: 'delete', memory: selectedMemory })}
+                          >
+                            <X className="size-4" aria-hidden />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <Button
                         type="button"
-                        variant="outline"
-                        size="xs"
-                        className="max-w-[240px] font-mono text-[13px] text-foreground"
-                        aria-label={`Copy ${selectedMemory.id}`}
-                        onClick={() => void copyText(selectedMemory.id)}
+                        variant="secondary"
+                        size="lg"
+                        onClick={() => setEditingContent(selectedMemory.content ?? '')}
                       >
-                        <Copy className="size-3.5" aria-hidden />
-                        <span className="truncate">{compactEntityId(selectedMemory.id)}</span>
+                        <Pencil className="size-4" aria-hidden />
+                        Edit
                       </Button>
-                      <span>Updated {selectedMemory.updated_at ? relativeTime(selectedMemory.updated_at) : relativeTime(selectedMemory.created_at)}</span>
-                      <span>{formatBytes(selectedMemory.content_size_bytes ?? selectedMemory.content?.length ?? 0)}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <TabsList aria-label="View mode" className="h-9">
-                      <TabsTrigger value="preview" className="gap-1.5 px-3">
-                        <Eye className="size-4" aria-hidden />
-                        Preview
-                      </TabsTrigger>
-                      <TabsTrigger value="source" className="gap-1.5 px-3">
-                        <Code2 className="size-4" aria-hidden />
-                        Source
-                      </TabsTrigger>
-                    </TabsList>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-lg"
-                            aria-label="More actions"
-                            className="text-foreground"
-                          />
-                        }
-                      >
-                        <MoreVertical className="size-4" aria-hidden />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[164px]">
-                        <DropdownMenuItem disabled={busyId === selectedMemory.id} onClick={() => void downloadSelectedMemory()}>
-                          <Download className="size-4" aria-hidden />
-                          Download
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          disabled={busyId === selectedMemory.id}
-                          onClick={() => setConfirmAction({ action: 'delete', memory: selectedMemory })}
-                        >
-                          <X className="size-4" aria-hidden />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button type="button" variant="secondary" size="lg" onClick={() => setEditingContent(selectedMemory.content ?? '')}>
-                      <Pencil className="size-4" aria-hidden />
-                      Edit
-                    </Button>
-                  </div>
                   </div>
 
                   <div className="px-5 py-5">
@@ -1409,18 +1802,22 @@ export function MemoryStorePanel({
                     ) : null}
                     {fullMemory.loading ? (
                       <Card size="sm">
-                        <CardContent className="px-4 py-12 text-center text-sm text-muted-foreground">Loading memory...</CardContent>
+                        <CardContent className="px-4 py-12 text-center text-sm text-muted-foreground">
+                          Loading memory...
+                        </CardContent>
                       </Card>
+                    ) : viewMode === 'preview' ? (
+                      <TabsContent value="preview" className="mt-0">
+                        <div className="max-h-[460px] overflow-auto whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
+                          {memoryPreviewContent(selectedMemory)}
+                        </div>
+                      </TabsContent>
                     ) : (
-                      viewMode === 'preview' ? (
-                        <TabsContent value="preview" className="mt-0">
-                          <div className="max-h-[460px] overflow-auto whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{memoryPreviewContent(selectedMemory)}</div>
-                        </TabsContent>
-                      ) : (
-                        <TabsContent value="source" className="mt-0">
-                          <pre className="max-h-[460px] overflow-auto whitespace-pre-wrap break-words font-mono text-sm leading-6 text-foreground">{selectedMemory.content || ''}</pre>
-                        </TabsContent>
-                      )
+                      <TabsContent value="source" className="mt-0">
+                        <pre className="max-h-[460px] overflow-auto whitespace-pre-wrap break-words font-mono text-sm leading-6 text-foreground">
+                          {selectedMemory.content || ''}
+                        </pre>
+                      </TabsContent>
                     )}
                   </div>
                 </Tabs>
@@ -1438,12 +1835,24 @@ export function MemoryStorePanel({
         </CardContent>
       </Card>
 
-      {dialog ? <MemoryDialog memory={dialog.memory} onClose={() => setDialog(null)} onSubmit={(values) => submit(values, dialog.memory)} /> : null}
+      {dialog ? (
+        <MemoryDialog
+          memory={dialog.memory}
+          onClose={() => setDialog(null)}
+          onSubmit={(values) => submit(values, dialog.memory)}
+        />
+      ) : null}
     </>
   );
 }
 
-export function MemoryTreeFolderButton({ node, onToggle }: { node: Extract<MemoryTreeNode, { type: 'folder' }>; onToggle: () => void }) {
+export function MemoryTreeFolderButton({
+  node,
+  onToggle,
+}: {
+  node: Extract<MemoryTreeNode, { type: 'folder' }>;
+  onToggle: () => void;
+}) {
   return (
     <Button
       type="button"
@@ -1452,26 +1861,47 @@ export function MemoryTreeFolderButton({ node, onToggle }: { node: Extract<Memor
       aria-label={`${node.expanded ? 'Collapse' : 'Expand'} folder ${node.label}`}
       className={clsx(
         'mb-1 h-auto w-full min-w-0 justify-start gap-2 rounded-md py-1.5 pr-2 text-left text-sm text-foreground hover:bg-accent',
-        node.error && 'text-destructive'
+        node.error && 'text-destructive',
       )}
       style={{ paddingLeft: `${8 + node.depth * 18}px` }}
       onClick={onToggle}
     >
-      {node.expanded ? <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-      {node.expanded ? <FolderOpen className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <Folder className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+      {node.expanded ? (
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      ) : (
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      {node.expanded ? (
+        <FolderOpen className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      ) : (
+        <Folder className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      )}
       <span className="truncate">{node.label}</span>
-      {node.loading ? <Loader2 className="ml-auto size-3.5 shrink-0 animate-spin text-muted-foreground/70" aria-hidden /> : null}
+      {node.loading ? (
+        <Loader2 className="ml-auto size-3.5 shrink-0 animate-spin text-muted-foreground/70" aria-hidden />
+      ) : null}
     </Button>
   );
 }
 
-export function MemoryTreeMemoryButton({ node, selected, onSelect }: { node: Extract<MemoryTreeNode, { type: 'memory' }>; selected: boolean; onSelect: () => void }) {
+export function MemoryTreeMemoryButton({
+  node,
+  selected,
+  onSelect,
+}: {
+  node: Extract<MemoryTreeNode, { type: 'memory' }>;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const size = formatBytes(node.memory.content_size_bytes ?? node.memory.content?.length ?? 0);
   return (
     <Button
       type="button"
       variant="ghost"
-      className={clsx('mb-1 h-auto w-full min-w-0 justify-between gap-3 rounded-md py-2 pr-2 text-left text-sm', selected ? 'bg-accent text-foreground hover:bg-accent' : 'text-foreground hover:bg-accent')}
+      className={clsx(
+        'mb-1 h-auto w-full min-w-0 justify-between gap-3 rounded-md py-2 pr-2 text-left text-sm',
+        selected ? 'bg-accent text-foreground hover:bg-accent' : 'text-foreground hover:bg-accent',
+      )}
       style={{ paddingLeft: `${28 + node.depth * 18}px` }}
       onClick={onSelect}
     >

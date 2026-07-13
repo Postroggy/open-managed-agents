@@ -10,7 +10,7 @@ export async function postJsonSseStream<TData = Record<string, unknown>>({
   signal,
   credentials = 'include',
   onEvent,
-  errorFromResponse
+  errorFromResponse,
 }: {
   url: string;
   headers?: HeadersInit;
@@ -31,7 +31,7 @@ export async function postJsonSseStream<TData = Record<string, unknown>>({
     credentials,
     headers: requestHeaders,
     body: JSON.stringify(body),
-    signal
+    signal,
   });
 
   if (!response.ok) {

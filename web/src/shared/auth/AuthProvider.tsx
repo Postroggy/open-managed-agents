@@ -8,15 +8,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const bootstrapQuery = useQuery({
     queryKey: ['auth', 'bootstrap'],
     queryFn: fetchBootstrap,
-    retry: false
+    retry: false,
   });
 
   const account = bootstrapQuery.data?.account ?? null;
-  const status: AuthStatus = bootstrapQuery.isLoading
-    ? 'loading'
-    : account
-      ? 'authenticated'
-      : 'anonymous';
+  const status: AuthStatus = bootstrapQuery.isLoading ? 'loading' : account ? 'authenticated' : 'anonymous';
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -30,11 +26,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout: async () => {
         await logout();
         queryClient.setQueryData<BootstrapResponse>(['auth', 'bootstrap'], {
-          account: null
+          account: null,
         });
-      }
+      },
     }),
-    [account, bootstrapQuery, queryClient, status]
+    [account, bootstrapQuery, queryClient, status],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

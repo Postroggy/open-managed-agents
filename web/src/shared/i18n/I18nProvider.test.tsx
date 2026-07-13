@@ -45,7 +45,7 @@ describe('i18n locale handling', () => {
     render(
       <I18nProvider initialLocale="en">
         <LocaleProbe />
-      </I18nProvider>
+      </I18nProvider>,
     );
 
     expect(document.documentElement.lang).toBe('en');
@@ -77,7 +77,7 @@ describe('i18n catalogs', () => {
   test('keeps ICU parameter names consistent across translations', () => {
     for (const [key, defaultMessage] of Object.entries(enMessages as Record<string, string>)) {
       expect(extractIcuParams((zhCnMessages as Record<string, string>)[key] ?? '')).toEqual(
-        extractIcuParams(defaultMessage)
+        extractIcuParams(defaultMessage),
       );
     }
   });

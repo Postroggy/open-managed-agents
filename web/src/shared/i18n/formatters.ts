@@ -11,7 +11,7 @@ export function useFormatters() {
       },
       time(value: string | number | Date, options?: Intl.DateTimeFormatOptions) {
         return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', ...options }).format(
-          new Date(value)
+          new Date(value),
         );
       },
       number(value: number, options?: Intl.NumberFormatOptions) {
@@ -21,7 +21,7 @@ export function useFormatters() {
         return new Intl.NumberFormat(locale, {
           style: 'currency',
           currency,
-          ...options
+          ...options,
         }).format(value);
       },
       relativeTime(value: number, unit: Intl.RelativeTimeFormatUnit, options?: Intl.RelativeTimeFormatOptions) {
@@ -42,10 +42,10 @@ export function useFormatters() {
           unitIndex += 1;
         }
         return `${new Intl.NumberFormat(locale, {
-          maximumFractionDigits: value >= 10 ? 0 : 1
+          maximumFractionDigits: value >= 10 ? 0 : 1,
         }).format(value)} ${units[unitIndex]}`;
-      }
+      },
     }),
-    [locale]
+    [locale],
   );
 }

@@ -5,28 +5,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { Badge } from '@/shared/ui/badge';
 import { Button, ButtonLink } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle
-} from '@/shared/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Field, FieldLabel } from '@/shared/ui/field';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem
-} from '@/shared/ui/pagination';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/shared/ui/table';
+import { Pagination, PaginationContent, PaginationItem } from '@/shared/ui/pagination';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import type { IconComponent } from './model';
 
@@ -37,7 +19,7 @@ export function ConsolePageFrame({
   eyebrow,
   meta,
   actions,
-  children
+  children,
 }: {
   title: string;
   icon: IconComponent;
@@ -59,7 +41,9 @@ export function ConsolePageFrame({
               <h1 className="text-[28px] font-semibold leading-tight text-foreground">{title}</h1>
               {eyebrow ? <Badge>{eyebrow}</Badge> : null}
             </div>
-            {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
+            {description ? (
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+            ) : null}
             {meta ? <div className="mt-3">{meta}</div> : null}
           </div>
         </div>
@@ -97,12 +81,7 @@ export function SecondaryAction({ href, icon: Icon, label }: { href: string; ico
 
 export function BackLink({ href, label }: { href: string; label: string }) {
   return (
-    <ButtonLink
-      href={href}
-      variant="ghost"
-      size="sm"
-      className="-ml-2 text-muted-foreground hover:text-foreground"
-    >
+    <ButtonLink href={href} variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground">
       <ChevronLeft className="size-4" aria-hidden />
       {label}
     </ButtonLink>
@@ -113,7 +92,7 @@ export function EmptyState({
   icon: Icon,
   title,
   body,
-  action
+  action,
 }: {
   icon: IconComponent;
   title: string;
@@ -123,7 +102,10 @@ export function EmptyState({
   return (
     <Empty className="min-h-[260px] rounded-lg border border-dashed border-border bg-card px-6 py-12">
       <EmptyHeader>
-        <EmptyMedia variant="icon" className="size-12 rounded-full border border-border bg-secondary text-muted-foreground">
+        <EmptyMedia
+          variant="icon"
+          className="size-12 rounded-full border border-border bg-secondary text-muted-foreground"
+        >
           <Icon className="size-5" aria-hidden />
         </EmptyMedia>
         <EmptyTitle>
@@ -151,7 +133,7 @@ export function CursorPagination({
   canNext,
   isUpdating,
   onPrevious,
-  onNext
+  onNext,
 }: {
   previousLabel: string;
   nextLabel: string;
@@ -217,7 +199,7 @@ export function TableErrorRow({
   title,
   message,
   retryLabel,
-  onRetry
+  onRetry,
 }: {
   colSpan: number;
   title: string;
@@ -291,15 +273,7 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: string[]
   );
 }
 
-export function NoticeCard({
-  icon: Icon,
-  title,
-  action
-}: {
-  icon: IconComponent;
-  title: string;
-  action?: ReactNode;
-}) {
+export function NoticeCard({ icon: Icon, title, action }: { icon: IconComponent; title: string; action?: ReactNode }) {
   return (
     <Card className="flex-row flex-wrap items-center justify-between gap-4 rounded-lg p-4">
       <div className="flex items-center gap-3 text-sm text-foreground">
@@ -318,7 +292,7 @@ export function PanelCard({
   className,
   headerClassName,
   titleClassName,
-  contentClassName
+  contentClassName,
 }: {
   title: ReactNode;
   action?: ReactNode;
@@ -356,7 +330,7 @@ export function SettingRow({
   title,
   body,
   detail,
-  action
+  action,
 }: {
   title: ReactNode;
   body: string;

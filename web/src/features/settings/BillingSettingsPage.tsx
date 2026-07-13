@@ -3,29 +3,17 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useI18n } from '../../shared/i18n';
 import { Alert, AlertDescription, AlertTitle } from '../../shared/ui/alert';
 import { Button, ButtonLink } from '../../shared/ui/button';
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader
-} from '../../shared/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader } from '../../shared/ui/card';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from '../../shared/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '../../shared/ui/field';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
 
 type BillingAudience = 'billing-members' | 'admins-and-billing' | 'all-members';
 type BillingCadence = 'weekly' | 'monthly' | 'quarterly';
@@ -33,29 +21,31 @@ type BillingCadence = 'weekly' | 'monthly' | 'quarterly';
 export function BillingSettingsPage() {
   const { msg } = useI18n();
   const audienceOptions = useMemo(
-    () => [
-      {
-        value: 'billing-members',
-        label: msg('billing.option.billingMembers', 'Billing members only')
-      },
-      {
-        value: 'admins-and-billing',
-        label: msg('billing.option.adminsAndBilling', 'Admins and billing members')
-      },
-      {
-        value: 'all-members',
-        label: msg('billing.option.allMembers', 'All members')
-      }
-    ] satisfies Array<{ value: BillingAudience; label: string }>,
-    [msg]
+    () =>
+      [
+        {
+          value: 'billing-members',
+          label: msg('billing.option.billingMembers', 'Billing members only'),
+        },
+        {
+          value: 'admins-and-billing',
+          label: msg('billing.option.adminsAndBilling', 'Admins and billing members'),
+        },
+        {
+          value: 'all-members',
+          label: msg('billing.option.allMembers', 'All members'),
+        },
+      ] satisfies Array<{ value: BillingAudience; label: string }>,
+    [msg],
   );
   const cadenceOptions = useMemo(
-    () => [
-      { value: 'weekly', label: msg('billing.cadence.optionWeekly', 'Weekly') },
-      { value: 'monthly', label: msg('billing.cadence.optionMonthly', 'Monthly') },
-      { value: 'quarterly', label: msg('billing.cadence.optionQuarterly', 'Quarterly') }
-    ] satisfies Array<{ value: BillingCadence; label: string }>,
-    [msg]
+    () =>
+      [
+        { value: 'weekly', label: msg('billing.cadence.optionWeekly', 'Weekly') },
+        { value: 'monthly', label: msg('billing.cadence.optionMonthly', 'Monthly') },
+        { value: 'quarterly', label: msg('billing.cadence.optionQuarterly', 'Quarterly') },
+      ] satisfies Array<{ value: BillingCadence; label: string }>,
+    [msg],
   );
 
   const [invoiceAudience, setInvoiceAudience] = useState<BillingAudience>('admins-and-billing');
@@ -101,18 +91,10 @@ export function BillingSettingsPage() {
       <Card>
         <CardHeader>
           <CardAction className="flex flex-wrap gap-2">
-            <ButtonLink
-              variant="outline"
-              size="sm"
-              href="/cost"
-            >
+            <ButtonLink variant="outline" size="sm" href="/cost">
               {msg('billing.actions.viewCost', 'View cost dashboard')}
             </ButtonLink>
-            <ButtonLink
-              variant="outline"
-              size="sm"
-              href="/usage/limits"
-            >
+            <ButtonLink variant="outline" size="sm" href="/usage/limits">
               {msg('billing.actions.reviewLimits', 'Review rate limits')}
             </ButtonLink>
           </CardAction>
@@ -120,7 +102,7 @@ export function BillingSettingsPage() {
           <CardDescription>
             {msg(
               'billing.description',
-              'Review billing contacts, invoice delivery, and spend visibility defaults for your organization.'
+              'Review billing contacts, invoice delivery, and spend visibility defaults for your organization.',
             )}
           </CardDescription>
         </CardHeader>
@@ -131,7 +113,7 @@ export function BillingSettingsPage() {
             <AlertDescription>
               {msg(
                 'billing.notice.body',
-                'Use these defaults to decide who receives invoices, who gets billing digests, and who can review spend from the console.'
+                'Use these defaults to decide who receives invoices, who gets billing digests, and who can review spend from the console.',
               )}
             </AlertDescription>
           </Alert>
@@ -144,18 +126,11 @@ export function BillingSettingsPage() {
                   title={msg('billing.contacts.title', 'Billing contacts')}
                   body={msg(
                     'billing.contacts.body',
-                    'Review which members receive invoices, payment reminders, and billing follow-up.'
+                    'Review which members receive invoices, payment reminders, and billing follow-up.',
                   )}
-                  detail={msg(
-                    'billing.contacts.detail',
-                    'Current workflow: Managed from the members directory'
-                  )}
+                  detail={msg('billing.contacts.detail', 'Current workflow: Managed from the members directory')}
                   action={
-                    <ButtonLink
-                      variant="outline"
-                      size="sm"
-                      href="/settings/members"
-                    >
+                    <ButtonLink variant="outline" size="sm" href="/settings/members">
                       {msg('common.manage', 'Manage')}
                     </ButtonLink>
                   }
@@ -165,7 +140,7 @@ export function BillingSettingsPage() {
                   title={msg('billing.invoice.title', 'Invoice delivery')}
                   body={msg(
                     'billing.invoice.body',
-                    'Choose which members automatically receive invoice emails and payment notices.'
+                    'Choose which members automatically receive invoice emails and payment notices.',
                   )}
                   detail={msg('billing.currentDefault', 'Current default: {value}', { value: invoiceAudienceLabel })}
                   action={
@@ -179,7 +154,7 @@ export function BillingSettingsPage() {
                   title={msg('billing.visibility.title', 'Cost visibility')}
                   body={msg(
                     'billing.visibility.body',
-                    'Decide who can open spend dashboards and review billing summaries across the console.'
+                    'Decide who can open spend dashboards and review billing summaries across the console.',
                   )}
                   detail={msg('billing.currentDefault', 'Current default: {value}', { value: costVisibilityLabel })}
                   action={
@@ -193,18 +168,13 @@ export function BillingSettingsPage() {
                   title={msg('billing.cadence.title', 'Billing digest cadence')}
                   body={msg(
                     'billing.cadence.body',
-                    'Set how often digest emails summarize invoice changes and spend updates.'
+                    'Set how often digest emails summarize invoice changes and spend updates.',
                   )}
                   detail={msg('billing.currentDefault', 'Current default: {value}', {
-                    value: statementCadenceLabel
+                    value: statementCadenceLabel,
                   })}
                   action={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openStatementCadenceDialog(true)}
-                    >
+                    <Button type="button" variant="outline" size="sm" onClick={() => openStatementCadenceDialog(true)}>
                       {msg('common.configure', 'Configure')}
                     </Button>
                   }
@@ -221,7 +191,7 @@ export function BillingSettingsPage() {
             <DialogDescription>
               {msg(
                 'billing.invoice.dialogDescription',
-                'Choose which members should receive invoice emails and payment notices by default.'
+                'Choose which members should receive invoice emails and payment notices by default.',
               )}
             </DialogDescription>
           </DialogHeader>
@@ -256,7 +226,7 @@ export function BillingSettingsPage() {
             <FieldDescription>
               {msg(
                 'billing.invoice.dialogHelp',
-                'Members selected here receive future invoice and payment-notice emails for this organization.'
+                'Members selected here receive future invoice and payment-notice emails for this organization.',
               )}
             </FieldDescription>
           </Field>
@@ -283,7 +253,7 @@ export function BillingSettingsPage() {
             <DialogDescription>
               {msg(
                 'billing.visibility.dialogDescription',
-                'Choose which members can review spend summaries and billing dashboards across the console.'
+                'Choose which members can review spend summaries and billing dashboards across the console.',
               )}
             </DialogDescription>
           </DialogHeader>
@@ -318,7 +288,7 @@ export function BillingSettingsPage() {
             <FieldDescription>
               {msg(
                 'billing.visibility.dialogHelp',
-                'Use a narrower audience when cost dashboards and invoice summaries should stay limited to reviewers.'
+                'Use a narrower audience when cost dashboards and invoice summaries should stay limited to reviewers.',
               )}
             </FieldDescription>
           </Field>
@@ -345,7 +315,7 @@ export function BillingSettingsPage() {
             <DialogDescription>
               {msg(
                 'billing.cadence.dialogDescription',
-                'Choose how often billing digests summarize recent statement and spend changes.'
+                'Choose how often billing digests summarize recent statement and spend changes.',
               )}
             </DialogDescription>
           </DialogHeader>
@@ -380,7 +350,7 @@ export function BillingSettingsPage() {
             <FieldDescription>
               {msg(
                 'billing.cadence.dialogHelp',
-                'Digest cadence changes the summary emails sent to billing contacts; invoices are still delivered immediately.'
+                'Digest cadence changes the summary emails sent to billing contacts; invoices are still delivered immediately.',
               )}
             </FieldDescription>
           </Field>
@@ -409,7 +379,7 @@ function BillingSettingRow({
   title,
   body,
   detail,
-  action
+  action,
 }: {
   icon: LucideIcon;
   title: string;

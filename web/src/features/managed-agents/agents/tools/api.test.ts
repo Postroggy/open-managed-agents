@@ -4,7 +4,7 @@ import {
   loadAgentMcpToolCatalogs,
   loadMcpDirectoryServers,
   refreshAgentMcpToolCatalogs,
-  resetMcpDirectoryCacheForTests
+  resetMcpDirectoryCacheForTests,
 } from './api';
 
 const originalFetch = globalThis.fetch;
@@ -21,20 +21,19 @@ describe('MCP directory API', () => {
     globalThis.fetch = mock(async () => {
       requestCount += 1;
       return jsonResponse({
-        servers: [{
-          type: 'remote',
-          slug: 'notion',
-          display_name: 'Notion',
-          tool_names: ['search'],
-          remote: { url: 'https://mcp.notion.com/mcp' }
-        }]
+        servers: [
+          {
+            type: 'remote',
+            slug: 'notion',
+            display_name: 'Notion',
+            tool_names: ['search'],
+            remote: { url: 'https://mcp.notion.com/mcp' },
+          },
+        ],
       });
     });
 
-    const [first, second] = await Promise.all([
-      loadMcpDirectoryServers(),
-      loadMcpDirectoryServers()
-    ]);
+    const [first, second] = await Promise.all([loadMcpDirectoryServers(), loadMcpDirectoryServers()]);
     const cached = await loadMcpDirectoryServers();
 
     expect(requestCount).toBe(1);
@@ -51,13 +50,15 @@ describe('MCP directory API', () => {
         return jsonResponse({ error: { message: 'directory unavailable' } }, 503);
       }
       return jsonResponse({
-        servers: [{
-          type: 'remote',
-          slug: 'slack',
-          display_name: 'Slack',
-          tool_names: ['slack_send_message'],
-          remote: { url: 'https://mcp.slack.com/mcp' }
-        }]
+        servers: [
+          {
+            type: 'remote',
+            slug: 'slack',
+            display_name: 'Slack',
+            tool_names: ['slack_send_message'],
+            remote: { url: 'https://mcp.slack.com/mcp' },
+          },
+        ],
       });
     });
 
@@ -87,15 +88,19 @@ describe('MCP directory API', () => {
     resetMcpDirectoryCacheForTests();
     const secondRequest = loadMcpDirectoryServers();
 
-    resolveFirst(jsonResponse({
-      servers: [{ type: 'remote', slug: 'old', display_name: 'Old', tool_names: ['old_tool'] }]
-    }));
+    resolveFirst(
+      jsonResponse({
+        servers: [{ type: 'remote', slug: 'old', display_name: 'Old', tool_names: ['old_tool'] }],
+      }),
+    );
     await firstRequest;
     expect(loadMcpDirectoryServers()).toBe(secondRequest);
 
-    resolveSecond(jsonResponse({
-      servers: [{ type: 'remote', slug: 'new', display_name: 'New', tool_names: ['new_tool'] }]
-    }));
+    resolveSecond(
+      jsonResponse({
+        servers: [{ type: 'remote', slug: 'new', display_name: 'New', tool_names: ['new_tool'] }],
+      }),
+    );
     const servers = await secondRequest;
     const cached = await loadMcpDirectoryServers();
 
@@ -120,7 +125,9 @@ describe('Agent MCP catalog API', () => {
 
     expect(response.version).toBe(7);
     const url = new URL(requestUrl, 'https://oma.duck.ai');
-    expect(url.pathname).toBe('/api/console/organizations/org%20uuid/workspaces/workspace%2Fdefault/agents/agent%2Ftest/mcp_tool_catalogs');
+    expect(url.pathname).toBe(
+      '/api/console/organizations/org%20uuid/workspaces/workspace%2Fdefault/agents/agent%2Ftest/mcp_tool_catalogs',
+    );
     expect(url.searchParams.get('version')).toBe('7');
     expect(requestHeaders.get('X-Organization-UUID')).toBe('org_uuid');
     expect(requestHeaders.get('X-Workspace-ID')).toBe('workspace_uuid');
@@ -134,7 +141,7 @@ describe('Agent MCP catalog API', () => {
       requestInit = init;
       return jsonResponse({
         data: { server_name: 'weather', status: 'ready', tools: [{ name: 'get_forecast' }] },
-        version: 3
+        version: 3,
       });
     });
 
@@ -151,6 +158,6 @@ describe('Agent MCP catalog API', () => {
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
   });
 }

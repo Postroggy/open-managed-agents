@@ -30,13 +30,13 @@ describe('Organization settings', () => {
           country: 'US',
           state: 'CA',
           city: 'San Francisco',
-          postal_code: '94105'
+          postal_code: '94105',
         },
         website: null,
         industry: null,
         tax_id: null,
-        bill_to: null
-      }
+        bill_to: null,
+      },
     });
 
     render(
@@ -48,13 +48,13 @@ describe('Organization settings', () => {
         >
           <OrganizationSettingsContent />
         </SettingsShell>
-      </OrganizationSettingsHarness>
+      </OrganizationSettingsHarness>,
     );
 
     expect(
       screen
         .getAllByRole('button', { name: /Default/i })
-        .some((button) => button.getAttribute('aria-label') === 'Default')
+        .some((button) => button.getAttribute('aria-label') === 'Default'),
     ).toBe(true);
     expect(screen.getByText('Back to app')).toBeTruthy();
     expect(screen.getByText('Organization settings')).toBeTruthy();
@@ -63,13 +63,13 @@ describe('Organization settings', () => {
     const organizationName = (await screen.findByLabelText('Organization name')) as HTMLInputElement;
     await waitFor(() => expect(organizationName.value).toBe('default'));
     await waitFor(() =>
-      expect((screen.getByLabelText('Primary business address line 1') as HTMLInputElement).value).toBe('1 Main St')
+      expect((screen.getByLabelText('Primary business address line 1') as HTMLInputElement).value).toBe('1 Main St'),
     );
     expect(screen.getByTestId('organization-settings-page').querySelector('.surface-card')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Organization' })).toBeTruthy();
     expect(screen.getByText(/Organization ID: org_test/)).toBeTruthy();
     expect(screen.getByRole('switch', { name: /Allow creating new API keys/i }).getAttribute('aria-checked')).toBe(
-      'true'
+      'true',
     );
     expect(screen.queryByRole('button', { name: /Save changes/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Cancel/i })).toBeNull();
@@ -83,7 +83,7 @@ describe('Organization settings', () => {
     render(
       <OrganizationSettingsHarness>
         <OrganizationSettingsContent />
-      </OrganizationSettingsHarness>
+      </OrganizationSettingsHarness>,
     );
 
     await screen.findByLabelText('Organization name');
@@ -103,25 +103,25 @@ describe('Organization settings', () => {
           country: 'US',
           state: '',
           city: '',
-          postal_code: ''
+          postal_code: '',
         },
         website: null,
         industry: null,
         tax_id: null,
-        bill_to: null
-      }
+        bill_to: null,
+      },
     });
 
     render(
       <OrganizationSettingsHarness>
         <OrganizationSettingsContent />
-      </OrganizationSettingsHarness>
+      </OrganizationSettingsHarness>,
     );
 
     const organizationName = (await screen.findByLabelText('Organization name')) as HTMLInputElement;
     fireEvent.change(organizationName, { target: { value: ' Open Managed Agents Labs ' } });
     fireEvent.change(screen.getByLabelText('Primary business address line 1'), {
-      target: { value: '1 Main St' }
+      target: { value: '1 Main St' },
     });
 
     expect(screen.getByRole('button', { name: /Save changes/i }).hasAttribute('disabled')).toBe(true);
@@ -144,8 +144,8 @@ describe('Organization settings', () => {
         country: 'US',
         state: 'CA',
         city: 'San Francisco',
-        postal_code: '94105'
-      }
+        postal_code: '94105',
+      },
     });
   });
 
@@ -156,7 +156,7 @@ describe('Organization settings', () => {
     render(
       <OrganizationSettingsHarness>
         <OrganizationSettingsContent />
-      </OrganizationSettingsHarness>
+      </OrganizationSettingsHarness>,
     );
 
     const toggle = await screen.findByRole('switch', { name: /Allow creating new API keys/i });
@@ -165,8 +165,8 @@ describe('Organization settings', () => {
     await waitFor(() => expect(api.organizationPuts.length).toBe(1));
     expect(api.organizationPuts[0]).toEqual({
       default_workspace_settings: {
-        enable_api_keys: false
-      }
+        enable_api_keys: false,
+      },
     });
     expect(toggle.getAttribute('aria-checked')).toBe('false');
   });
@@ -180,14 +180,14 @@ function OrganizationSettingsHarness({ children }: { children: ReactNode }) {
         uuid: 'acct_test',
         email_address: 'test@example.com',
         display_name: 'test',
-        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }]
+        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }],
       },
       status: 'authenticated',
       csrfToken: 'csrf_test',
       refresh: async () => ({ account: { uuid: 'acct_test', email_address: 'test@example.com' } }),
-      logout: async () => undefined
+      logout: async () => undefined,
     }),
-    []
+    [],
   );
   const workspaceValue = useMemo<WorkspaceContextValue>(
     () => ({
@@ -199,9 +199,9 @@ function OrganizationSettingsHarness({ children }: { children: ReactNode }) {
       error: null,
       selectWorkspace: () => undefined,
       createWorkspace: async () => defaultWorkspace,
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     }),
-    []
+    [],
   );
 
   return (
@@ -219,16 +219,16 @@ function mockOrganizationSettingsApi(overrides: { profile?: OrganizationProfile 
     name: 'default',
     settings: {
       default_workspace_settings: {
-        enable_api_keys: true
-      }
-    }
+        enable_api_keys: true,
+      },
+    },
   };
   let profile: OrganizationProfile = overrides.profile ?? {
     physical_address: null,
     website: null,
     industry: null,
     tax_id: null,
-    bill_to: null
+    bill_to: null,
   };
   const organizationPuts: Record<string, unknown>[] = [];
   const profilePuts: Record<string, unknown>[] = [];
@@ -247,9 +247,7 @@ function mockOrganizationSettingsApi(overrides: { profile?: OrganizationProfile 
       if (typeof body.name === 'string') {
         organization = { ...organization, name: body.name.trim() };
       }
-      const defaultWorkspaceSettings = body.default_workspace_settings as
-        | { enable_api_keys?: boolean }
-        | undefined;
+      const defaultWorkspaceSettings = body.default_workspace_settings as { enable_api_keys?: boolean } | undefined;
       if (defaultWorkspaceSettings) {
         organization = {
           ...organization,
@@ -257,9 +255,9 @@ function mockOrganizationSettingsApi(overrides: { profile?: OrganizationProfile 
             ...organization.settings,
             default_workspace_settings: {
               ...organization.settings?.default_workspace_settings,
-              ...defaultWorkspaceSettings
-            }
-          }
+              ...defaultWorkspaceSettings,
+            },
+          },
         };
       }
       return jsonResponse(organization);
@@ -274,7 +272,7 @@ function mockOrganizationSettingsApi(overrides: { profile?: OrganizationProfile 
       if ('physical_address' in body) {
         profile = {
           ...profile,
-          physical_address: body.physical_address as OrganizationProfile['physical_address']
+          physical_address: body.physical_address as OrganizationProfile['physical_address'],
         };
       }
       return jsonResponse(profile);
@@ -298,7 +296,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      'Content-Type': 'application/json'
-    }
+      'Content-Type': 'application/json',
+    },
   });
 }

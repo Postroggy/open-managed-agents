@@ -56,8 +56,8 @@ export const BUILT_IN_AGENT_TOOLSETS: Record<string, BuiltInAgentTool[]> = {
     { name: 'glob', description: 'File pattern matching' },
     { name: 'grep', description: 'Text search with regex' },
     { name: 'web_fetch', description: 'Fetch URL content' },
-    { name: 'web_search', description: 'Search the web' }
-  ]
+    { name: 'web_search', description: 'Search the web' },
+  ],
 };
 
 const CURRENT_BUILT_IN_TOOLSET = 'agent_toolset_20260401';
@@ -151,8 +151,8 @@ const FALLBACK_MCP_SERVERS: McpDirectoryServer[] = [
       'unstar_repository',
       'update_gist',
       'update_pull_request',
-      'update_pull_request_branch'
-    ]
+      'update_pull_request_branch',
+    ],
   },
   {
     slug: 'slack',
@@ -170,9 +170,9 @@ const FALLBACK_MCP_SERVERS: McpDirectoryServer[] = [
       'slack_search_public_and_private',
       'slack_search_users',
       'slack_send_message',
-      'slack_update_canvas'
-    ]
-  }
+      'slack_update_canvas',
+    ],
+  },
 ];
 
 export function hasConfiguredAgentTools(agent: AgentApiResponse) {
@@ -186,7 +186,7 @@ export function hasConfiguredAgentTools(agent: AgentApiResponse) {
 
 export function effectiveToolPermission(
   config: Record<string, unknown> | undefined,
-  fallback: Exclude<ToolPermissionState, 'custom'> = 'always_allow'
+  fallback: Exclude<ToolPermissionState, 'custom'> = 'always_allow',
 ): Exclude<ToolPermissionState, 'custom'> {
   if (!config) {
     return fallback;
@@ -200,7 +200,7 @@ export function effectiveToolPermission(
 
 export function aggregateToolPermissions(
   permissions: Array<Exclude<ToolPermissionState, 'custom'>>,
-  fallback: Exclude<ToolPermissionState, 'custom'> = 'always_allow'
+  fallback: Exclude<ToolPermissionState, 'custom'> = 'always_allow',
 ): ToolPermissionState {
   if (!permissions.length) {
     return fallback;
@@ -211,7 +211,7 @@ export function aggregateToolPermissions(
 export function buildAgentToolDisplayCards(
   agent: AgentApiResponse,
   directoryServers: McpDirectoryServer[] = [],
-  catalogs: McpToolCatalog[] = []
+  catalogs: McpToolCatalog[] = [],
 ): AgentToolDisplayCard[] {
   const cards: AgentToolDisplayCard[] = [];
   const tools = arrayRecords(agent.tools);
@@ -222,7 +222,7 @@ export function buildAgentToolDisplayCards(
     const definitions = BUILT_IN_AGENT_TOOLSETS[type];
     const rows = definitions.map((definition) => ({
       ...definition,
-      permission: toolPermissionForName(builtInToolset, definition.name, true, 'always_allow')
+      permission: toolPermissionForName(builtInToolset, definition.name, true, 'always_allow'),
     }));
     cards.push({
       key: `built-in:${type}`,
@@ -230,7 +230,7 @@ export function buildAgentToolDisplayCards(
       title: 'Built-in tools',
       subtitle: type,
       aggregatePermission: aggregateToolPermissions(rows.map((row) => row.permission)),
-      tools: rows
+      tools: rows,
     });
   }
 
@@ -243,8 +243,8 @@ export function buildAgentToolDisplayCards(
       subtitle: 'Client-handled tool definitions',
       tools: customTools.map((tool, index) => ({
         name: stringValue(tool.name) || `custom_tool_${index + 1}`,
-        description: optionalStringValue(tool.description)
-      }))
+        description: optionalStringValue(tool.description),
+      })),
     });
   }
 
@@ -256,25 +256,26 @@ export function buildAgentToolDisplayCards(
       stringValue(configuredServer.mcp_server_url);
     const server = resolveMcpServer(serverName, configuredUrl, directoryServers);
     const toolset = tools.find(
-      (tool) => tool.type === 'mcp_toolset' && stringValue(tool.mcp_server_name) === serverName
+      (tool) => tool.type === 'mcp_toolset' && stringValue(tool.mcp_server_name) === serverName,
     );
     const catalog = catalogs.find((item) => item.server_name === serverName);
     const discoveredTools = catalog?.tools;
     // 动态 catalog 的非 null tools 是权威快照（包括真实空数组）；仅在 null/缺失时回退
     // Directory，不能与静态工具名做 union，否则已下线的工具会继续显示。
-    const rows = discoveredTools !== null && discoveredTools !== undefined
-      ? discoveredTools.map((tool) => ({
-          name: tool.name,
-          description: tool.description || tool.title,
-          permission: toolPermissionForName(toolset, tool.name, false, 'always_ask')
-        }))
-      : server.toolNames.map((name) => ({
-          name,
-          permission: toolPermissionForName(toolset, name, false, 'always_ask')
-        }));
+    const rows =
+      discoveredTools !== null && discoveredTools !== undefined
+        ? discoveredTools.map((tool) => ({
+            name: tool.name,
+            description: tool.description || tool.title,
+            permission: toolPermissionForName(toolset, tool.name, false, 'always_ask'),
+          }))
+        : server.toolNames.map((name) => ({
+            name,
+            permission: toolPermissionForName(toolset, name, false, 'always_ask'),
+          }));
     const defaultPermission = effectiveToolPermission(
       toolset ? optionalRecordValue(toolset.default_config) : undefined,
-      'always_ask'
+      'always_ask',
     );
     cards.push({
       key: `mcp:${serverName}:${index}`,
@@ -282,11 +283,14 @@ export function buildAgentToolDisplayCards(
       title: server.displayName,
       subtitle: server.url,
       iconUrl: server.iconUrl,
-      aggregatePermission: aggregateToolPermissions(rows.map((row) => row.permission), defaultPermission),
+      aggregatePermission: aggregateToolPermissions(
+        rows.map((row) => row.permission),
+        defaultPermission,
+      ),
       tools: rows,
       toolCountKnown: discoveredTools !== null && discoveredTools !== undefined ? true : rows.length > 0,
       catalogStatus: catalog?.status,
-      serverName
+      serverName,
     });
   });
 
@@ -330,8 +334,8 @@ export function normalizeMcpDirectoryServers(payload: unknown): McpDirectoryServ
         displayName,
         ...(url ? { url } : {}),
         iconUrl: optionalStringValue(server.icon_url) ?? optionalStringValue(server.iconUrl),
-        toolNames: rawToolNames.filter((name): name is string => typeof name === 'string' && Boolean(name))
-      }
+        toolNames: rawToolNames.filter((name): name is string => typeof name === 'string' && Boolean(name)),
+      },
     ];
   });
 }
@@ -340,7 +344,7 @@ function toolPermissionForName(
   toolset: Record<string, unknown> | undefined,
   toolName: string,
   allowLegacyToolName: boolean,
-  fallback: Exclude<ToolPermissionState, 'custom'>
+  fallback: Exclude<ToolPermissionState, 'custom'>,
 ): Exclude<ToolPermissionState, 'custom'> {
   if (!toolset) {
     return fallback;
@@ -348,8 +352,7 @@ function toolPermissionForName(
   // 与运行时保持 first-wins：按配置顺序取首个同名项。内置工具兼容 legacy tool_name，
   // MCP 只匹配 name；未命中时再使用 default_config。
   const override = arrayRecords(toolset.configs).find(
-    (config) =>
-      (stringValue(config.name) || (allowLegacyToolName ? stringValue(config.tool_name) : '')) === toolName
+    (config) => (stringValue(config.name) || (allowLegacyToolName ? stringValue(config.tool_name) : '')) === toolName,
   );
   return effectiveToolPermission(override ?? optionalRecordValue(toolset.default_config), fallback);
 }
@@ -360,7 +363,7 @@ function resolveMcpServer(name: string, url: string, directoryServers: McpDirect
       slug: name,
       displayName: urlHost(url) || name.slice('tunnel:'.length),
       url,
-      toolNames: []
+      toolNames: [],
     };
   }
 
@@ -376,7 +379,7 @@ function resolveMcpServer(name: string, url: string, directoryServers: McpDirect
     slug: name,
     displayName: humanizeMcpName(name),
     url,
-    toolNames: []
+    toolNames: [],
   };
 }
 

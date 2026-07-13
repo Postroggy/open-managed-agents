@@ -17,7 +17,7 @@ describe('Admin keys settings page', () => {
     const { container } = render(
       <I18nProvider initialLocale="en">
         <AdminKeysSettingsPage />
-      </I18nProvider>
+      </I18nProvider>,
     );
 
     expect(screen.getByRole('heading', { name: 'Admin keys' })).toBeTruthy();
@@ -28,7 +28,7 @@ describe('Admin keys settings page', () => {
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Build pipeline' } });
     fireEvent.change(screen.getByLabelText('Description'), {
-      target: { value: 'Coordinates organization-level release automation.' }
+      target: { value: 'Coordinates organization-level release automation.' },
     });
     press(screen.getByRole('button', { name: 'Create' }));
 

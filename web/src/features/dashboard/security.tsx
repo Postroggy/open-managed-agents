@@ -3,22 +3,9 @@ import { useMemo, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { Button, ButtonLink } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/shared/ui/field';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Switch } from '@/shared/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useI18n } from '../../shared/i18n';
@@ -33,8 +20,7 @@ export function SecurityPage() {
   const [reauthenticationWindow, setReauthenticationWindow] = useState<ReauthenticationWindow>('24-hours');
   const [reauthenticationDraft, setReauthenticationDraft] = useState<ReauthenticationWindow>('24-hours');
   const [reauthenticationOpen, setReauthenticationOpen] = useState(false);
-  const [securityActivityVisibility, setSecurityActivityVisibility] =
-    useState<SecurityActivityVisibility>('admins');
+  const [securityActivityVisibility, setSecurityActivityVisibility] = useState<SecurityActivityVisibility>('admins');
   const [securityActivityVisibilityDraft, setSecurityActivityVisibilityDraft] =
     useState<SecurityActivityVisibility>('admins');
   const [securityActivityVisibilityOpen, setSecurityActivityVisibilityOpen] = useState(false);
@@ -44,9 +30,9 @@ export function SecurityPage() {
       [
         { value: '12-hours', label: msg('security.reauth.option12h', 'Every 12 hours') },
         { value: '24-hours', label: msg('security.reauth.option24h', 'Every 24 hours') },
-        { value: '7-days', label: msg('security.reauth.option7d', 'Every 7 days') }
+        { value: '7-days', label: msg('security.reauth.option7d', 'Every 7 days') },
       ] satisfies Array<{ value: ReauthenticationWindow; label: string }>,
-    [msg]
+    [msg],
   );
 
   const securityActivityVisibilityOptions = useMemo(
@@ -55,11 +41,11 @@ export function SecurityPage() {
         { value: 'admins', label: msg('security.visibility.optionAdmins', 'Admins only') },
         {
           value: 'admins-and-billing',
-          label: msg('security.visibility.optionBilling', 'Admins and billing')
+          label: msg('security.visibility.optionBilling', 'Admins and billing'),
         },
-        { value: 'all-members', label: msg('security.visibility.optionAllMembers', 'All members') }
+        { value: 'all-members', label: msg('security.visibility.optionAllMembers', 'All members') },
       ] satisfies Array<{ value: SecurityActivityVisibility; label: string }>,
-    [msg]
+    [msg],
   );
 
   const reauthenticationLabel =
@@ -89,7 +75,7 @@ export function SecurityPage() {
         icon={Shield}
         description={msg(
           'featurePage.security.description',
-          'Configure security defaults, access reviews, and security activity visibility for your organization.'
+          'Configure security defaults, access reviews, and security activity visibility for your organization.',
         )}
         actions={<SecondaryAction href="/logs" icon={Activity} label={msg('security.actions.viewLogs', 'View logs')} />}
       >
@@ -99,7 +85,7 @@ export function SecurityPage() {
           <AlertDescription>
             {msg(
               'security.notice.body',
-              'Use these defaults to decide who needs stronger authentication and who can inspect security-sensitive console activity.'
+              'Use these defaults to decide who needs stronger authentication and who can inspect security-sensitive console activity.',
             )}
           </AlertDescription>
         </Alert>
@@ -109,26 +95,17 @@ export function SecurityPage() {
             title={
               <SecuritySettingTitle
                 title={msg('security.mfa.title', 'Admin multi-factor authentication')}
-                tooltip={msg(
-                  'security.mfa.tooltip',
-                  'Applies the next time an admin or billing member signs in.'
-                )}
+                tooltip={msg('security.mfa.tooltip', 'Applies the next time an admin or billing member signs in.')}
               />
             }
             body={msg(
               'security.mfa.body',
-              'Require members with elevated permissions to verify with an additional factor before they can manage organization settings.'
+              'Require members with elevated permissions to verify with an additional factor before they can manage organization settings.',
             )}
             detail={
               adminMfaRequired
-                ? msg(
-                    'security.mfa.enabledDetail',
-                    'Current default: Required for admins and billing members'
-                  )
-                : msg(
-                    'security.mfa.disabledDetail',
-                    'Current default: Optional for admins and billing members'
-                  )
+                ? msg('security.mfa.enabledDetail', 'Current default: Required for admins and billing members')
+                : msg('security.mfa.disabledDetail', 'Current default: Optional for admins and billing members')
             }
             action={
               <Switch
@@ -142,7 +119,7 @@ export function SecurityPage() {
             title={msg('security.members.title', 'Member invitations')}
             body={msg(
               'security.members.body',
-              'Review organization access, resend invitations, and remove members when access requirements change.'
+              'Review organization access, resend invitations, and remove members when access requirements change.',
             )}
             detail={msg('security.members.detail', 'Current workflow: Managed from the members directory')}
             action={
@@ -155,7 +132,7 @@ export function SecurityPage() {
             title={msg('security.reauth.title', 'Session reauthentication')}
             body={msg(
               'security.reauth.body',
-              'Ask members to reverify before reopening the console after an idle period.'
+              'Ask members to reverify before reopening the console after an idle period.',
             )}
             detail={msg('security.currentDefault', 'Current default: {value}', { value: reauthenticationLabel })}
             action={
@@ -168,10 +145,10 @@ export function SecurityPage() {
             title={msg('security.visibility.title', 'Security activity visibility')}
             body={msg(
               'security.visibility.body',
-              'Choose who can view audit-oriented logs, rate-limit diagnostics, and incident history in the console.'
+              'Choose who can view audit-oriented logs, rate-limit diagnostics, and incident history in the console.',
             )}
             detail={msg('security.currentDefault', 'Current default: {value}', {
-              value: securityActivityVisibilityLabel
+              value: securityActivityVisibilityLabel,
             })}
             action={
               <Button
@@ -193,7 +170,7 @@ export function SecurityPage() {
               <DialogDescription>
                 {msg(
                   'security.reauth.dialogDescription',
-                  'Choose how often members should verify again before reopening the organization console.'
+                  'Choose how often members should verify again before reopening the organization console.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -228,7 +205,7 @@ export function SecurityPage() {
               <FieldDescription>
                 {msg(
                   'security.reauth.dialogHelp',
-                  'Shorter windows reduce how long an unattended console session can stay available.'
+                  'Shorter windows reduce how long an unattended console session can stay available.',
                 )}
               </FieldDescription>
             </Field>
@@ -258,7 +235,7 @@ export function SecurityPage() {
               <DialogDescription>
                 {msg(
                   'security.visibility.dialogDescription',
-                  'Choose which members can inspect security-focused activity across the console.'
+                  'Choose which members can inspect security-focused activity across the console.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -293,7 +270,7 @@ export function SecurityPage() {
               <FieldDescription>
                 {msg(
                   'security.visibility.dialogHelp',
-                  'Use a narrower audience when security logs and diagnostics should stay limited to reviewers.'
+                  'Use a narrower audience when security logs and diagnostics should stay limited to reviewers.',
                 )}
               </FieldDescription>
             </Field>

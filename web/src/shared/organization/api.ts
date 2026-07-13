@@ -62,7 +62,7 @@ export function updateOrganization(orgUuid: string, input: UpdateOrganizationInp
   return consoleApi<Organization>(`/api/organizations/${encodeURIComponent(orgUuid)}`, {
     method: 'PUT',
     csrfToken,
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
   });
 }
 
@@ -70,14 +70,10 @@ export function getOrganizationProfile(orgUuid: string) {
   return consoleApi<OrganizationProfile>(`/api/organizations/${encodeURIComponent(orgUuid)}/profile`);
 }
 
-export function updateOrganizationProfile(
-  orgUuid: string,
-  input: UpdateOrganizationProfileInput,
-  csrfToken?: string
-) {
+export function updateOrganizationProfile(orgUuid: string, input: UpdateOrganizationProfileInput, csrfToken?: string) {
   return consoleApi<OrganizationProfile>(`/api/organizations/${encodeURIComponent(orgUuid)}/profile`, {
     method: 'PUT',
     csrfToken,
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
   });
 }

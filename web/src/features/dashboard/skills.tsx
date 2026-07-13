@@ -1,14 +1,4 @@
-import {
-  AlertCircle,
-  Check,
-  FileArchive,
-  FolderPlus,
-  Plus,
-  RefreshCw,
-  Trash2,
-  Upload,
-  X
-} from 'lucide-react';
+import { AlertCircle, Check, FileArchive, FolderPlus, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { cn } from '@/shared/lib/utils';
@@ -20,39 +10,15 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/shared/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/shared/ui/dropdown-menu';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle
-} from '@/shared/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/shared/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 import {
   CopyIdCell,
   DataTableCell,
@@ -60,15 +26,10 @@ import {
   MoreActionsButton,
   dataTableClassName,
   dataTableHeaderCellClassName,
-  dataTableHeaderRowClassName
+  dataTableHeaderRowClassName,
 } from '@/shared/ui/data-table-interactions';
 import { useI18n } from '../../shared/i18n';
-import {
-  CursorPagination,
-  TableEmptyRow,
-  TableErrorRow,
-  TableLoadingRow
-} from './frame';
+import { CursorPagination, TableEmptyRow, TableErrorRow, TableLoadingRow } from './frame';
 import {
   createSkillPackage,
   deleteSkill,
@@ -83,7 +44,7 @@ import {
   skillsIndexHref,
   useDashboardWorkspaceScope,
   type ConsoleSkill,
-  type ConsoleSkillVersion
+  type ConsoleSkillVersion,
 } from './model';
 
 const maxUploadBytes = 8 * 1024 * 1024;
@@ -137,7 +98,7 @@ export function SkillsPage({ initialCreateOpen = false, initialSkillId }: Skills
   const skillsQuery = useQuery({
     queryKey: ['skills', workspaceId, pageToken ?? ''],
     queryFn: () => listSkills(pageToken, workspaceId),
-    retry: false
+    retry: false,
   });
   const skills = skillsQuery.data?.data ?? [];
   const nextPage = skillsQuery.data?.next_page ?? undefined;
@@ -167,10 +128,10 @@ export function SkillsPage({ initialCreateOpen = false, initialSkillId }: Skills
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['skills', workspaceId] }),
         queryClient.invalidateQueries({ queryKey: ['skill', workspaceId, skillId] }),
-        queryClient.invalidateQueries({ queryKey: ['skillVersions', workspaceId, skillId] })
+        queryClient.invalidateQueries({ queryKey: ['skillVersions', workspaceId, skillId] }),
       ]);
     },
-    [queryClient, workspaceId]
+    [queryClient, workspaceId],
   );
 
   const handleCreateUploaded = (resource: ConsoleSkill | ConsoleSkillVersion) => {
@@ -229,13 +190,15 @@ export function SkillsPage({ initialCreateOpen = false, initialSkillId }: Skills
     <section className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {msg('skills.title', 'Skills')}
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{msg('skills.title', 'Skills')}</h1>
           <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
-            {msg('skills.description', 'Skills are repeatable and customizable instructions that Claude API can follow.', {
-              workspaceName
-            })}
+            {msg(
+              'skills.description',
+              'Skills are repeatable and customizable instructions that Claude API can follow.',
+              {
+                workspaceName,
+              },
+            )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -347,7 +310,7 @@ function SkillsTable({
   onRetry,
   onOpenSkill,
   onUpdateSkill,
-  onDeleteSkill
+  onDeleteSkill,
 }: {
   skills: ConsoleSkill[];
   workspaceName: string;
@@ -365,79 +328,90 @@ function SkillsTable({
   return (
     <section aria-label={msg('skills.listAria', 'Skills list')} className="min-w-0">
       <Table className={dataTableClassName}>
-          <colgroup>
-            <col className="w-[16%]" />
-            <col className="w-[43%]" />
-            <col className="w-[12%]" />
-            <col className="w-[14%]" />
-            <col className="w-[11%]" />
-            <col className="w-[4%]" />
-          </colgroup>
-          <TableHeader>
-            <TableRow className={dataTableHeaderRowClassName}>
-              <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>{msg('skills.table.id', 'ID')}</TableHead>
-              <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>{msg('common.name', 'Name')}</TableHead>
-              <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>{msg('skills.table.source', 'Source')}</TableHead>
-              <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>{msg('skills.table.latest', 'Latest version')}</TableHead>
-              <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>{msg('common.updated', 'Updated')}</TableHead>
-              <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')} aria-label={msg('common.actions', 'Actions')} />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableLoadingRow colSpan={6} label={msg('skills.loading', 'Loading skills...')} />
-            ) : error ? (
-              <TableErrorRow
-                colSpan={6}
-                title={msg('skills.error', 'Skills could not be loaded.')}
-                message={errorMessage(error)}
-                retryLabel={msg('common.retry', 'Retry')}
-                onRetry={onRetry}
-              />
-            ) : skills.length === 0 ? (
-              <TableEmptyRow colSpan={6}>
-                {msg('skills.empty', 'No skills have been created in the {workspaceName} workspace.', { workspaceName })}
-              </TableEmptyRow>
-            ) : (
-              skills.map((skill) => (
-                <DataTableRow
-                  key={skill.id}
-                  clickable
-                  selected={selectedSkillId === skill.id}
-                  onClick={() => onOpenSkill(skill.id)}
-                >
-                  <DataTableCell edge="start" className="min-w-0">
-                    <CopyIdCell
-                      value={skill.id}
-                      displayValue={formatSkillId(skill.id)}
-                      ariaLabel={msg('skills.copyAria', 'Copy {skillId}', { skillId: skill.id })}
-                      stopPropagation
-                    />
-                  </DataTableCell>
-                  <DataTableCell className="truncate font-medium" title={skill.display_title || skill.id}>
-                    {skill.display_title || skill.id}
-                  </DataTableCell>
-                  <DataTableCell className="truncate">
-                    <SkillSourceBadge source={skill.source} />
-                  </DataTableCell>
-                  <DataTableCell className="truncate text-muted-foreground">{formatSkillVersionDate(skill.latest_version, locale)}</DataTableCell>
-                  <DataTableCell className="truncate text-muted-foreground">{formatSkillUpdatedAt(skill.updated_at || skill.created_at, locale, msg)}</DataTableCell>
-                  <DataTableCell edge="end" className="px-2 text-right">
-                    {skill.source === 'custom' ? (
-                      <SkillActionsMenu
-                        skill={skill}
-                        onUpdateSkill={onUpdateSkill}
-                        onDeleteSkill={onDeleteSkill}
-                      />
-                    ) : null}
-                  </DataTableCell>
-                </DataTableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-        {isFetching && !isLoading ? <span className="sr-only">{msg('common.updating', 'Updating...')}</span> : null}
-      </section>
+        <colgroup>
+          <col className="w-[16%]" />
+          <col className="w-[43%]" />
+          <col className="w-[12%]" />
+          <col className="w-[14%]" />
+          <col className="w-[11%]" />
+          <col className="w-[4%]" />
+        </colgroup>
+        <TableHeader>
+          <TableRow className={dataTableHeaderRowClassName}>
+            <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>
+              {msg('skills.table.id', 'ID')}
+            </TableHead>
+            <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>{msg('common.name', 'Name')}</TableHead>
+            <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>
+              {msg('skills.table.source', 'Source')}
+            </TableHead>
+            <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>
+              {msg('skills.table.latest', 'Latest version')}
+            </TableHead>
+            <TableHead className={cn(dataTableHeaderCellClassName, 'truncate')}>
+              {msg('common.updated', 'Updated')}
+            </TableHead>
+            <TableHead
+              className={cn(dataTableHeaderCellClassName, 'truncate')}
+              aria-label={msg('common.actions', 'Actions')}
+            />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableLoadingRow colSpan={6} label={msg('skills.loading', 'Loading skills...')} />
+          ) : error ? (
+            <TableErrorRow
+              colSpan={6}
+              title={msg('skills.error', 'Skills could not be loaded.')}
+              message={errorMessage(error)}
+              retryLabel={msg('common.retry', 'Retry')}
+              onRetry={onRetry}
+            />
+          ) : skills.length === 0 ? (
+            <TableEmptyRow colSpan={6}>
+              {msg('skills.empty', 'No skills have been created in the {workspaceName} workspace.', { workspaceName })}
+            </TableEmptyRow>
+          ) : (
+            skills.map((skill) => (
+              <DataTableRow
+                key={skill.id}
+                clickable
+                selected={selectedSkillId === skill.id}
+                onClick={() => onOpenSkill(skill.id)}
+              >
+                <DataTableCell edge="start" className="min-w-0">
+                  <CopyIdCell
+                    value={skill.id}
+                    displayValue={formatSkillId(skill.id)}
+                    ariaLabel={msg('skills.copyAria', 'Copy {skillId}', { skillId: skill.id })}
+                    stopPropagation
+                  />
+                </DataTableCell>
+                <DataTableCell className="truncate font-medium" title={skill.display_title || skill.id}>
+                  {skill.display_title || skill.id}
+                </DataTableCell>
+                <DataTableCell className="truncate">
+                  <SkillSourceBadge source={skill.source} />
+                </DataTableCell>
+                <DataTableCell className="truncate text-muted-foreground">
+                  {formatSkillVersionDate(skill.latest_version, locale)}
+                </DataTableCell>
+                <DataTableCell className="truncate text-muted-foreground">
+                  {formatSkillUpdatedAt(skill.updated_at || skill.created_at, locale, msg)}
+                </DataTableCell>
+                <DataTableCell edge="end" className="px-2 text-right">
+                  {skill.source === 'custom' ? (
+                    <SkillActionsMenu skill={skill} onUpdateSkill={onUpdateSkill} onDeleteSkill={onDeleteSkill} />
+                  ) : null}
+                </DataTableCell>
+              </DataTableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+      {isFetching && !isLoading ? <span className="sr-only">{msg('common.updating', 'Updating...')}</span> : null}
+    </section>
   );
 }
 
@@ -447,7 +421,7 @@ function SkillDrawer({
   onClose,
   onUpdateSkill,
   onDeleteSkill,
-  onVersionChanged
+  onVersionChanged,
 }: {
   skillId: string | null;
   workspaceId: string;
@@ -464,13 +438,13 @@ function SkillDrawer({
     queryKey: ['skill', workspaceId, skillId],
     queryFn: () => retrieveSkill(skillId || '', workspaceId),
     enabled: Boolean(skillId),
-    retry: false
+    retry: false,
   });
   const versionsQuery = useQuery({
     queryKey: ['skillVersions', workspaceId, skillId],
     queryFn: () => listSkillVersions(skillId || '', workspaceId),
     enabled: Boolean(skillId),
-    retry: false
+    retry: false,
   });
   const skill = skillQuery.data;
   const versions = versionsQuery.data?.data ?? [];
@@ -514,7 +488,13 @@ function SkillDrawer({
                 <AlertTitle>{msg('skills.detail.error', 'Skill could not be loaded.')}</AlertTitle>
                 <AlertDescription>
                   <p>{errorMessage(skillQuery.error)}</p>
-                  <Button type="button" size="sm" variant="outline" className="mt-3" onClick={() => void skillQuery.refetch()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="mt-3"
+                    onClick={() => void skillQuery.refetch()}
+                  >
                     <RefreshCw className="size-3.5" aria-hidden />
                     {msg('common.retry', 'Retry')}
                   </Button>
@@ -527,24 +507,30 @@ function SkillDrawer({
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <SheetTitle className="truncate">{skill.display_title || latestVersion?.name || skill.id}</SheetTitle>
+                      <SheetTitle className="truncate">
+                        {skill.display_title || latestVersion?.name || skill.id}
+                      </SheetTitle>
                       <SkillSourceBadge source={skill.source} />
                     </div>
                     <SheetDescription className="mt-1 font-mono">
                       {formatSkillUpdatedAt(skill.updated_at || skill.created_at, locale, msg)}
-                      <span className="mx-2 font-sans" aria-hidden>·</span>
+                      <span className="mx-2 font-sans" aria-hidden>
+                        ·
+                      </span>
                       {formatSkillId(skill.id)}
                     </SheetDescription>
                   </div>
                   <div className="absolute right-4 top-4 flex items-center gap-1">
                     {skill.source === 'custom' ? (
-                      <SkillActionsMenu
-                        skill={skill}
-                        onUpdateSkill={onUpdateSkill}
-                        onDeleteSkill={onDeleteSkill}
-                      />
+                      <SkillActionsMenu skill={skill} onUpdateSkill={onUpdateSkill} onDeleteSkill={onDeleteSkill} />
                     ) : null}
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label={msg('common.close', 'Close')} onClick={onClose}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={msg('common.close', 'Close')}
+                      onClick={onClose}
+                    >
                       <X className="size-4" aria-hidden />
                     </Button>
                   </div>
@@ -579,9 +565,13 @@ function SkillDrawer({
                           <Badge variant="secondary" className="max-w-[180px] rounded-md font-mono">
                             <span className="truncate">{version.version}</span>
                           </Badge>
-                          <span className="text-sm text-muted-foreground">{formatSkillUpdatedAt(version.created_at, locale, msg)}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {formatSkillUpdatedAt(version.created_at, locale, msg)}
+                          </span>
                           {version.version === skill.latest_version ? (
-                            <Badge className="rounded-md bg-primary/20 text-primary">{msg('skills.versions.latest', 'Latest')}</Badge>
+                            <Badge className="rounded-md bg-primary/20 text-primary">
+                              {msg('skills.versions.latest', 'Latest')}
+                            </Badge>
                           ) : null}
                           {skill.source === 'custom' ? (
                             <Button
@@ -589,7 +579,9 @@ function SkillDrawer({
                               variant="ghost"
                               size="icon-sm"
                               className="ml-auto text-muted-foreground"
-                              aria-label={msg('skills.versions.deleteAria', 'Delete version {version}', { version: version.version })}
+                              aria-label={msg('skills.versions.deleteAria', 'Delete version {version}', {
+                                version: version.version,
+                              })}
                               onClick={() => {
                                 setDeleteVersionError(null);
                                 setVersionToDelete(version);
@@ -621,10 +613,15 @@ function SkillDrawer({
         <AlertDialogContent size="default">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {msg('skills.deleteVersion.title', 'Confirm deleting version {version}', { version: versionToDelete?.version ?? '' })}
+              {msg('skills.deleteVersion.title', 'Confirm deleting version {version}', {
+                version: versionToDelete?.version ?? '',
+              })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {msg('skills.deleteVersion.description', 'This version will no longer be available. This action is permanent and cannot be undone.')}
+              {msg(
+                'skills.deleteVersion.description',
+                'This version will no longer be available. This action is permanent and cannot be undone.',
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteVersionError ? (
@@ -661,7 +658,7 @@ function SkillUploadDialog({
   workspaceId,
   skill,
   onOpenChange,
-  onUploaded
+  onUploaded,
 }: {
   mode: UploadMode;
   open: boolean;
@@ -735,7 +732,10 @@ function SkillUploadDialog({
           <DialogTitle>{title}</DialogTitle>
           {mode === 'update' ? (
             <DialogDescription>
-              {msg('skills.update.description', 'Upload new files to create a new version of this skill. The version number will be automatically generated.')}
+              {msg(
+                'skills.update.description',
+                'Upload new files to create a new version of this skill. The version number will be automatically generated.',
+              )}
             </DialogDescription>
           ) : null}
         </DialogHeader>
@@ -767,8 +767,12 @@ function SkillUploadDialog({
                   <Check className="size-4 shrink-0 text-primary" aria-hidden />
                 </div>
                 <p className="mt-1 text-xs leading-tight text-muted-foreground">
-                  {msg('skills.upload.summary', '{count, plural, one {# file} other {# files}}', { count: selection.fileCount })}
-                  <span className="mx-2" aria-hidden>•</span>
+                  {msg('skills.upload.summary', '{count, plural, one {# file} other {# files}}', {
+                    count: selection.fileCount,
+                  })}
+                  <span className="mx-2" aria-hidden>
+                    •
+                  </span>
                   {formatBytes(selection.size)}
                 </p>
               </div>
@@ -798,7 +802,7 @@ function SkillUploadDialog({
             tabIndex={0}
             className={cn(
               'grid min-h-32 cursor-pointer place-items-center rounded-lg border border-dashed border-border bg-background/30 p-4 text-center outline-none transition hover:bg-secondary/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40',
-              isDragging && 'border-primary bg-primary/5'
+              isDragging && 'border-primary bg-primary/5',
             )}
             onClick={() => inputRef.current?.click()}
             onKeyDown={(event) => {
@@ -861,8 +865,7 @@ function SkillUploadDialog({
 
         <DialogFooter className="items-start sm:items-center sm:justify-between">
           <p className="max-w-[260px] text-xs leading-5 text-muted-foreground">
-            {msg('skills.upload.limit', 'Total file size limit: 8MB.')}
-            {' '}
+            {msg('skills.upload.limit', 'Total file size limit: 8MB.')}{' '}
             <a href="https://docs.anthropic.com/" className="underline underline-offset-4">
               {msg('skills.upload.fileFormat', 'File format')}
             </a>
@@ -887,7 +890,7 @@ function SkillUploadDialog({
 function SkillActionsMenu({
   skill,
   onUpdateSkill,
-  onDeleteSkill
+  onDeleteSkill,
 }: {
   skill: ConsoleSkill;
   onUpdateSkill: (skill: ConsoleSkill) => void;
@@ -898,10 +901,7 @@ function SkillActionsMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <MoreActionsButton
-            label={msg('common.actions', 'Actions')}
-            onClick={(event) => event.stopPropagation()}
-          />
+          <MoreActionsButton label={msg('common.actions', 'Actions')} onClick={(event) => event.stopPropagation()} />
         }
       />
       <DropdownMenuContent align="end" sideOffset={8} className="min-w-40">
@@ -934,7 +934,7 @@ function DeleteSkillDialog({
   isDeleting,
   error,
   onOpenChange,
-  onConfirm
+  onConfirm,
 }: {
   skill: ConsoleSkill | null;
   isDeleting: boolean;
@@ -948,14 +948,12 @@ function DeleteSkillDialog({
     <AlertDialog open={Boolean(skill)} onOpenChange={onOpenChange}>
       <AlertDialogContent size="default">
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            {msg('skills.delete.title', 'Confirm deleting {name}', { name })}
-          </AlertDialogTitle>
+          <AlertDialogTitle>{msg('skills.delete.title', 'Confirm deleting {name}', { name })}</AlertDialogTitle>
           <AlertDialogDescription>
             {msg(
               'skills.delete.description',
               'Are you sure you want to delete {name} skill? Existing code references will break immediately. This action is permanent and cannot be undone.',
-              { name }
+              { name },
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -993,17 +991,16 @@ function SkillSourceBadge({ source }: { source: string }) {
   return (
     <Badge
       variant="secondary"
-      className={cn(
-        'rounded-md',
-        anthropic ? 'bg-blue-500/20 text-blue-300' : 'bg-secondary text-muted-foreground'
-      )}
+      className={cn('rounded-md', anthropic ? 'bg-blue-500/20 text-blue-300' : 'bg-secondary text-muted-foreground')}
     >
       {label}
     </Badge>
   );
 }
 
-function useSkillSearchParam(initialSkillId?: string): [string | null, (skillId: string | null, replace?: boolean) => void] {
+function useSkillSearchParam(
+  initialSkillId?: string,
+): [string | null, (skillId: string | null, replace?: boolean) => void] {
   const readCurrent = useCallback(() => {
     if (typeof window === 'undefined') {
       return initialSkillId || null;
@@ -1058,16 +1055,19 @@ function validateUploadFiles(files: File[], msg: I18nMsg): { selection: UploadSe
         label,
         displayTitle: label.replace(/\.(zip|skill)$/i, ''),
         fileCount: 1,
-        size
+        size,
       },
-      error: null
+      error: null,
     };
   }
 
   const paths = files.map(skillFilePath);
   const topLevel = new Set(paths.map((path) => path.split('/')[0]).filter(Boolean));
   if (topLevel.size !== 1) {
-    return { selection: null, error: msg('skills.upload.errors.singleTopLevel', 'All skill files must be under a single top-level directory.') };
+    return {
+      selection: null,
+      error: msg('skills.upload.errors.singleTopLevel', 'All skill files must be under a single top-level directory.'),
+    };
   }
   const directory = Array.from(topLevel)[0];
   if (!paths.includes(`${directory}/SKILL.md`)) {
@@ -1075,8 +1075,8 @@ function validateUploadFiles(files: File[], msg: I18nMsg): { selection: UploadSe
       selection: null,
       error: msg(
         'skills.upload.errors.missingSkillMd',
-        'SKILL.md not found. File name must be in all caps (SKILL.md) and located in the top-level folder.'
-      )
+        'SKILL.md not found. File name must be in all caps (SKILL.md) and located in the top-level folder.',
+      ),
     };
   }
   return {
@@ -1085,9 +1085,9 @@ function validateUploadFiles(files: File[], msg: I18nMsg): { selection: UploadSe
       label: directory,
       displayTitle: directory,
       fileCount: files.length,
-      size
+      size,
     },
-    error: null
+    error: null,
   };
 }
 
@@ -1167,7 +1167,7 @@ function formatDate(date: Date, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
   }).format(date);
 }
 

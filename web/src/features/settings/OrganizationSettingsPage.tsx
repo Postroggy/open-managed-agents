@@ -12,13 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Field, FieldLabel } from '../../shared/ui/field';
 import { Input } from '../../shared/ui/input';
 import { Label } from '../../shared/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
 import { Skeleton } from '../../shared/ui/skeleton';
 import { Switch } from '../../shared/ui/switch';
 import {
@@ -30,7 +24,7 @@ import {
   type OrganizationPhysicalAddress,
   type OrganizationProfile,
   type UpdateOrganizationInput,
-  type UpdateOrganizationProfileInput
+  type UpdateOrganizationProfileInput,
 } from '../../shared/organization/api';
 import { useWorkspace } from '../../shared/workspaces/context';
 import { BillingSettingsPage } from './BillingSettingsPage';
@@ -42,7 +36,7 @@ import {
   ProfileSettingsPage,
   SettingsApiKeysPage,
   settingsSectionFromPath,
-  type SettingsPageSection
+  type SettingsPageSection,
 } from './feature-pages';
 import { OrganizationMembersPage } from './OrganizationMembersPage';
 import { WorkspacesSettingsPage } from './WorkspacesSettingsPage';
@@ -50,7 +44,7 @@ import { WorkspacesSettingsPage } from './WorkspacesSettingsPage';
 const countryOptions = [
   { value: 'US', label: 'United States' },
   { value: 'CA', label: 'Canada' },
-  { value: 'GB', label: 'United Kingdom' }
+  { value: 'GB', label: 'United Kingdom' },
 ];
 
 type FormState = {
@@ -70,7 +64,7 @@ const emptyForm: FormState = {
   country: '',
   state: '',
   city: '',
-  postalCode: ''
+  postalCode: '',
 };
 
 type OrganizationSettingsSection = Extract<
@@ -137,20 +131,20 @@ export function OrganizationSettingsContent() {
   const activeOrgUuid = orgUuid ?? bootstrapOrganization?.uuid;
   const initialForm = useMemo<FormState>(
     () => ({ ...emptyForm, name: bootstrapOrganization?.name ?? '' }),
-    [bootstrapOrganization?.name]
+    [bootstrapOrganization?.name],
   );
 
   const organizationQuery = useQuery({
     queryKey: ['console', 'organization', activeOrgUuid],
     queryFn: () => getOrganization(activeOrgUuid ?? ''),
     enabled: Boolean(activeOrgUuid),
-    retry: false
+    retry: false,
   });
   const profileQuery = useQuery({
     queryKey: ['console', 'organization-profile', activeOrgUuid],
     queryFn: () => getOrganizationProfile(activeOrgUuid ?? ''),
     enabled: Boolean(activeOrgUuid),
-    retry: false
+    retry: false,
   });
 
   const [form, setForm] = useState<FormState>(() => initialForm);
@@ -175,7 +169,7 @@ export function OrganizationSettingsContent() {
     const apiKeysEnabled = organizationAllowsApiKeys(organizationQuery.data);
     const shouldHydrateOrg = hydratedOrgRef.current !== (activeOrgUuid ?? null);
     setForm((current) =>
-      shouldHydrateOrg || sameForm(normalizeForm(current), normalizeForm(savedFormRef.current)) ? next : current
+      shouldHydrateOrg || sameForm(normalizeForm(current), normalizeForm(savedFormRef.current)) ? next : current,
     );
     hydratedOrgRef.current = activeOrgUuid ?? null;
     savedFormRef.current = next;
@@ -192,14 +186,15 @@ export function OrganizationSettingsContent() {
       queryClient.setQueryData(['console', 'organization', activeOrgUuid], organization);
       await queryClient.invalidateQueries({ queryKey: ['auth', 'bootstrap'] });
       await refresh();
-    }
+    },
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: (input: UpdateOrganizationProfileInput) => updateOrganizationProfile(activeOrgUuid ?? '', input, csrfToken),
+    mutationFn: (input: UpdateOrganizationProfileInput) =>
+      updateOrganizationProfile(activeOrgUuid ?? '', input, csrfToken),
     onSuccess: (profile) => {
       queryClient.setQueryData(['console', 'organization-profile', activeOrgUuid], profile);
-    }
+    },
   });
 
   const normalizedForm = useMemo(() => normalizeForm(form), [form]);
@@ -254,8 +249,8 @@ export function OrganizationSettingsContent() {
     try {
       await updateOrganizationMutation.mutateAsync({
         default_workspace_settings: {
-          enable_api_keys: next
-        }
+          enable_api_keys: next,
+        },
       });
       setSavedAllowApiKeys(next);
     } catch (error) {
@@ -380,21 +375,11 @@ export function OrganizationSettingsContent() {
               {isDirty ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      type="button"
-                      size="lg"
-                      disabled={!canSave}
-                      onClick={handleSave}
-                    >
+                    <Button type="button" size="lg" disabled={!canSave} onClick={handleSave}>
                       <Save className="size-4" aria-hidden />
                       {isSaving ? 'Saving' : 'Save changes'}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      onClick={handleCancel}
-                    >
+                    <Button type="button" variant="outline" size="lg" onClick={handleCancel}>
                       <X className="size-4" aria-hidden />
                       Cancel
                     </Button>
@@ -422,8 +407,8 @@ export function OrganizationSettingsContent() {
               Allow creating new API keys in default workspace
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Allow users to create new API keys in the default workspace. Disabling this setting does not affect existing
-              API keys or disable Workbench usage.
+              Allow users to create new API keys in the default workspace. Disabling this setting does not affect
+              existing API keys or disable Workbench usage.
             </p>
             {switchError ? (
               <Alert variant="destructive" className="mt-3">
@@ -448,7 +433,7 @@ function TextField({
   id,
   label,
   value,
-  onChange
+  onChange,
 }: {
   id: string;
   label: string;
@@ -471,23 +456,10 @@ function TextInput({
   value: string;
   onChange: (value: string) => void;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'>) {
-  return (
-    <Input
-      {...props}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-10 px-4"
-    />
-  );
+  return <Input {...props} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 px-4" />;
 }
 
-function CountryCombobox({
-  value,
-  onChange
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function CountryCombobox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <Select<string>
       value={value || null}
@@ -498,10 +470,7 @@ function CountryCombobox({
         }
       }}
     >
-      <SelectTrigger
-        aria-label="Country"
-        className="h-10 w-full px-4"
-      >
+      <SelectTrigger aria-label="Country" className="h-10 w-full px-4">
         <SelectValue placeholder="Select" />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false} className="min-w-[208px]">
@@ -524,7 +493,7 @@ function formFromOrganization(organization: Organization, profile: OrganizationP
     country: address?.country ?? '',
     state: address?.state ?? '',
     city: address?.city ?? '',
-    postalCode: address?.postal_code ?? ''
+    postalCode: address?.postal_code ?? '',
   };
 }
 
@@ -536,7 +505,7 @@ function normalizeForm(form: FormState): FormState {
     country: form.country.trim(),
     state: form.state.trim(),
     city: form.city.trim(),
-    postalCode: form.postalCode.trim()
+    postalCode: form.postalCode.trim(),
   };
 }
 
@@ -554,7 +523,7 @@ function sameForm(left: FormState, right: FormState) {
 
 function isAddressValid(form: FormState) {
   const hasAnyAddressValue = Boolean(
-    form.line1 || form.line2 || form.country || form.state || form.city || form.postalCode
+    form.line1 || form.line2 || form.country || form.state || form.city || form.postalCode,
   );
   if (!hasAnyAddressValue) {
     return true;
@@ -572,7 +541,7 @@ function addressPayload(form: FormState): OrganizationPhysicalAddress | null {
     country: form.country,
     state: form.state,
     city: form.city,
-    postal_code: form.postalCode
+    postal_code: form.postalCode,
   };
 }
 

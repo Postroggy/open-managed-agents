@@ -9,7 +9,7 @@ describe('TextStreamSmoother', () => {
       onUpdate: (text) => updates.push(text),
       now: clock.now,
       sleep: clock.sleep,
-      initialCharsPerSecond: 90
+      initialCharsPerSecond: 90,
     });
     const text = 'abcdefghijklmnopqrstuvwxyz';
 
@@ -22,7 +22,7 @@ describe('TextStreamSmoother', () => {
     await clock.step(17);
     await clock.step(17);
 
-    expect((updates.at(-1)?.length ?? 0)).toBeGreaterThan(firstLength);
+    expect(updates.at(-1)?.length ?? 0).toBeGreaterThan(firstLength);
     expect(updates.at(-1)).not.toBe(text);
     smoother.dispose();
   });
@@ -34,7 +34,7 @@ describe('TextStreamSmoother', () => {
       onUpdate: (text) => updates.push(text),
       now: clock.now,
       sleep: clock.sleep,
-      initialCharsPerSecond: 60
+      initialCharsPerSecond: 60,
     });
     const text = 'final smoothed workbench response';
 
@@ -54,7 +54,7 @@ describe('TextStreamSmoother', () => {
     const updates: string[] = [];
     const smoother = new TextStreamSmoother({
       onUpdate: (text) => updates.push(text),
-      signal: controller.signal
+      signal: controller.signal,
     });
     const text = 'abort should not hide arrived text';
 
@@ -72,7 +72,7 @@ describe('TextStreamSmoother', () => {
       onUpdate: (text) => updates.push(text),
       now: clock.now,
       sleep: clock.sleep,
-      isDocumentHidden: () => true
+      isDocumentHidden: () => true,
     });
     const text = 'hidden tab completion should still reveal progressively';
 
@@ -85,7 +85,7 @@ describe('TextStreamSmoother', () => {
 
     await clock.step(200);
 
-    expect((updates.at(-1)?.length ?? 0)).toBeGreaterThan(firstLength);
+    expect(updates.at(-1)?.length ?? 0).toBeGreaterThan(firstLength);
     expect(updates.at(-1)).not.toBe(text);
     expect(clock.sleepDurations.at(-1)).toBe(200);
     smoother.dispose();
@@ -100,7 +100,7 @@ describe('TextStreamSmoother', () => {
       sleep: clock.sleep,
       initialCharsPerSecond: 5000,
       maxCharsPerSecond: 5000,
-      maxVisibleCharsPerStep: 12
+      maxVisibleCharsPerStep: 12,
     });
 
     smoother.setTarget('x'.repeat(1000));
@@ -122,7 +122,7 @@ describe('TextStreamSmoother', () => {
       isDocumentHidden: () => true,
       initialCharsPerSecond: 5000,
       maxCharsPerSecond: 5000,
-      maxHiddenCharsPerStep: 60
+      maxHiddenCharsPerStep: 60,
     });
 
     smoother.setTarget('x'.repeat(1000));
@@ -141,7 +141,7 @@ describe('TextStreamSmoother', () => {
       onUpdate: () => undefined,
       now: clock.now,
       sleep: clock.sleep,
-      isOutputVisible: () => false
+      isOutputVisible: () => false,
     });
 
     smoother.setTarget('offscreen throttled text');
@@ -157,7 +157,7 @@ describe('TextStreamSmoother', () => {
       onUpdate: (text) => updates.push(text),
       now: clock.now,
       sleep: clock.sleep,
-      initialCharsPerSecond: 80
+      initialCharsPerSecond: 80,
     });
 
     smoother.setTarget('old generation text');
@@ -191,6 +191,6 @@ function manualClock() {
       pending.shift()?.();
       await Promise.resolve();
       await Promise.resolve();
-    }
+    },
   };
 }

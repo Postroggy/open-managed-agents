@@ -11,13 +11,7 @@ import { Badge } from '../../shared/ui/badge';
 import { Card, CardContent, CardHeader } from '../../shared/ui/card';
 import { Field, FieldDescription, FieldLabel } from '../../shared/ui/field';
 import { Input } from '../../shared/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
 
 export const settingsSections = [
   'profile',
@@ -32,7 +26,7 @@ export const settingsSections = [
   'service-accounts',
   'workload-identity',
   'privacy-controls',
-  'identity-and-access'
+  'identity-and-access',
 ] as const;
 
 export type SettingsPageSection = (typeof settingsSections)[number];
@@ -40,13 +34,10 @@ export type SettingsPageSection = (typeof settingsSections)[number];
 const settingsSectionSet = new Set<SettingsPageSection>(settingsSections);
 
 const settingsLabelsBySection = new Map(
-  settingsNavigation.map((item) => [pathSectionFromHref(item.href), item] as const)
+  settingsNavigation.map((item) => [pathSectionFromHref(item.href), item] as const),
 );
 
-type PlaceholderSection = Extract<
-  SettingsPageSection,
-  'identity-and-access'
->;
+type PlaceholderSection = Extract<SettingsPageSection, 'identity-and-access'>;
 
 export function settingsSectionFromPath(pathname: string): SettingsPageSection {
   const match = pathname.match(/^\/settings\/([^/]+)/);
@@ -63,7 +54,8 @@ export function ProfileSettingsPage() {
     account?.full_name ||
     account?.email_address?.split('@')[0] ||
     msg('settings.profile.unknownName', 'Unknown user');
-  const organizationName = membership?.organization?.name || msg('settings.profile.unknownOrganization', 'Unknown organization');
+  const organizationName =
+    membership?.organization?.name || msg('settings.profile.unknownOrganization', 'Unknown organization');
   const role = formatRole(membership?.role, msg);
 
   return (
@@ -81,14 +73,17 @@ export function ProfileSettingsPage() {
             <p className="text-sm text-muted-foreground">
               {msg(
                 'settings.profile.description',
-                'Review the account identity and organization role currently active in this session.'
+                'Review the account identity and organization role currently active in this session.',
               )}
             </p>
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <ReadonlyField label={msg('settings.profile.displayName', 'Display name')} value={displayName} />
-          <ReadonlyField label={msg('settings.profile.emailAddress', 'Email address')} value={account?.email_address || '—'} />
+          <ReadonlyField
+            label={msg('settings.profile.emailAddress', 'Email address')}
+            value={account?.email_address || '—'}
+          />
           <ReadonlyField label={msg('settings.profile.accountId', 'Account ID')} value={account?.uuid || '—'} />
           <ReadonlyField label={msg('settings.profile.organization', 'Organization')} value={organizationName} />
           <ReadonlyField label={msg('settings.profile.organizationRole', 'Organization role')} value={role} />
@@ -104,7 +99,7 @@ export function AppearanceSettingsPage() {
   const { mode, setMode } = useTheme();
   const languageOptions = useMemo(
     () => settingsLocaleOptions.map((option) => ({ ...option, label: localeLabels[option.value] })),
-    []
+    [],
   );
   const themeOptions = useMemo(
     () =>
@@ -115,16 +110,18 @@ export function AppearanceSettingsPage() {
             ? msg('theme.system', 'System')
             : value === 'light'
               ? msg('theme.light', 'Light')
-              : msg('theme.dark', 'Dark')
+              : msg('theme.dark', 'Dark'),
       })),
-    [msg]
+    [msg],
   );
 
   return (
     <section className="mx-auto w-full max-w-[1100px] space-y-4" data-testid="settings-appearance-page">
       <Card>
         <CardHeader className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-normal text-foreground">{msg('nav.appearance', 'Appearance')}</h1>
+          <h1 className="text-xl font-semibold tracking-normal text-foreground">
+            {msg('nav.appearance', 'Appearance')}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {msg('settings.appearance.description', 'Customize language and theme preferences for the console.')}
           </p>
@@ -180,7 +177,10 @@ export function AppearanceSettingsPage() {
               </SelectContent>
             </Select>
             <FieldDescription>
-              {msg('settings.appearance.themeHelp', 'Theme preference applies immediately and is saved for future sessions.')}
+              {msg(
+                'settings.appearance.themeHelp',
+                'Theme preference applies immediately and is saved for future sessions.',
+              )}
             </FieldDescription>
           </Field>
         </CardContent>
@@ -204,16 +204,23 @@ export function SettingsPlaceholderPage({ section }: { section: PlaceholderSecti
         <CardHeader className="space-y-1">
           <h1 className="text-xl font-semibold tracking-normal text-foreground">{title}</h1>
           <p className="text-sm text-muted-foreground">
-            {msg('settings.placeholder.description', 'This setting is available from the organization settings sidebar, but its configuration flow is not wired yet.')}
+            {msg(
+              'settings.placeholder.description',
+              'This setting is available from the organization settings sidebar, but its configuration flow is not wired yet.',
+            )}
           </p>
         </CardHeader>
         <CardContent>
           <Alert>
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             <AlertDescription>
-              {msg('settings.placeholder.body', '{title} does not have an interactive surface in Open Managed Agents yet.', {
-                title
-              })}
+              {msg(
+                'settings.placeholder.body',
+                '{title} does not have an interactive surface in Open Managed Agents yet.',
+                {
+                  title,
+                },
+              )}
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -233,7 +240,7 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
 
 const settingsLocaleOptions = [
   { value: 'en', label: 'English' },
-  { value: 'zh-CN', label: '简体中文' }
+  { value: 'zh-CN', label: '简体中文' },
 ] satisfies Array<{ value: Locale; label: string }>;
 
 function pathSectionFromHref(href: string) {

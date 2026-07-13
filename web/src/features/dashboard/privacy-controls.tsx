@@ -2,22 +2,9 @@ import { Info, Shield } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/shared/ui/field';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Switch } from '@/shared/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useI18n } from '../../shared/i18n';
@@ -43,9 +30,9 @@ export function PrivacyControlsPage() {
         { value: '30-days', label: msg('privacyControls.retention.option30', '30 days') },
         { value: '90-days', label: msg('privacyControls.retention.option90', '90 days') },
         { value: '1-year', label: msg('privacyControls.retention.option365', '1 year') },
-        { value: 'indefinite', label: msg('privacyControls.retention.optionIndefinite', 'Indefinite') }
+        { value: 'indefinite', label: msg('privacyControls.retention.optionIndefinite', 'Indefinite') },
       ] satisfies Array<{ value: RetentionWindow; label: string }>,
-    [msg]
+    [msg],
   );
 
   const exportAccessOptions = useMemo(
@@ -54,16 +41,15 @@ export function PrivacyControlsPage() {
         { value: 'admins', label: msg('privacyControls.exports.optionAdmins', 'Admins only') },
         {
           value: 'billing-and-admins',
-          label: msg('privacyControls.exports.optionBilling', 'Billing and admins')
+          label: msg('privacyControls.exports.optionBilling', 'Billing and admins'),
         },
-        { value: 'disabled', label: msg('privacyControls.exports.optionDisabled', 'Disabled') }
+        { value: 'disabled', label: msg('privacyControls.exports.optionDisabled', 'Disabled') },
       ] satisfies Array<{ value: ExportAccess; label: string }>,
-    [msg]
+    [msg],
   );
 
   const retentionLabel = retentionOptions.find((option) => option.value === retentionWindow)?.label ?? retentionWindow;
-  const exportAccessLabel =
-    exportAccessOptions.find((option) => option.value === exportAccess)?.label ?? exportAccess;
+  const exportAccessLabel = exportAccessOptions.find((option) => option.value === exportAccess)?.label ?? exportAccess;
 
   const openRetentionDialog = (nextOpen: boolean) => {
     setRetentionOpen(nextOpen);
@@ -86,7 +72,7 @@ export function PrivacyControlsPage() {
         icon={Shield}
         description={msg(
           'featurePage.privacyControls.description',
-          'Configure privacy and data handling controls for your organization.'
+          'Configure privacy and data handling controls for your organization.',
         )}
       >
         <Card className="divide-y divide-border rounded-lg p-0">
@@ -96,13 +82,13 @@ export function PrivacyControlsPage() {
                 title={msg('privacyControls.training.title', 'Training data')}
                 tooltip={msg(
                   'privacyControls.training.tooltip',
-                  'Applies to new prompts, attachments, and outputs created after this default changes.'
+                  'Applies to new prompts, attachments, and outputs created after this default changes.',
                 )}
               />
             }
             body={msg(
               'privacyControls.training.body',
-              'Prevent prompts, attachments, and outputs from being retained for model training by default.'
+              'Prevent prompts, attachments, and outputs from being retained for model training by default.',
             )}
             detail={
               trainingExcluded
@@ -123,13 +109,13 @@ export function PrivacyControlsPage() {
                 title={msg('privacyControls.redaction.title', 'Sensitive metadata redaction')}
                 tooltip={msg(
                   'privacyControls.redaction.tooltip',
-                  'Masks email addresses and bearer-like tokens in stored activity metadata.'
+                  'Masks email addresses and bearer-like tokens in stored activity metadata.',
                 )}
               />
             }
             body={msg(
               'privacyControls.redaction.body',
-              'Automatically redact sensitive metadata before activity is stored in logs and traces.'
+              'Automatically redact sensitive metadata before activity is stored in logs and traces.',
             )}
             detail={
               redactionEnabled
@@ -148,7 +134,7 @@ export function PrivacyControlsPage() {
             title={msg('privacyControls.retention.title', 'Activity retention')}
             body={msg(
               'privacyControls.retention.body',
-              'Choose how long request logs, traces, and audit metadata remain available by default.'
+              'Choose how long request logs, traces, and audit metadata remain available by default.',
             )}
             detail={msg('privacyControls.currentDefault', 'Current default: {value}', { value: retentionLabel })}
             action={
@@ -161,7 +147,7 @@ export function PrivacyControlsPage() {
             title={msg('privacyControls.exports.title', 'Export access')}
             body={msg(
               'privacyControls.exports.body',
-              'Control who can export conversation history and usage evidence from the console.'
+              'Control who can export conversation history and usage evidence from the console.',
             )}
             detail={msg('privacyControls.currentDefault', 'Current default: {value}', { value: exportAccessLabel })}
             action={
@@ -179,7 +165,7 @@ export function PrivacyControlsPage() {
               <DialogDescription>
                 {msg(
                   'privacyControls.retention.dialogDescription',
-                  'Choose how long request logs, traces, and audit metadata should remain available by default.'
+                  'Choose how long request logs, traces, and audit metadata should remain available by default.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -214,7 +200,7 @@ export function PrivacyControlsPage() {
               <FieldDescription>
                 {msg(
                   'privacyControls.retention.dialogHelp',
-                  'Shorter retention reduces how long activity history remains visible in the console.'
+                  'Shorter retention reduces how long activity history remains visible in the console.',
                 )}
               </FieldDescription>
             </Field>
@@ -242,7 +228,7 @@ export function PrivacyControlsPage() {
               <DialogDescription>
                 {msg(
                   'privacyControls.exports.dialogDescription',
-                  'Choose which members can export conversation history and usage evidence from the console.'
+                  'Choose which members can export conversation history and usage evidence from the console.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -277,7 +263,7 @@ export function PrivacyControlsPage() {
               <FieldDescription>
                 {msg(
                   'privacyControls.exports.dialogHelp',
-                  'Use this default to limit who can export conversation and usage evidence from the organization console.'
+                  'Use this default to limit who can export conversation and usage evidence from the organization console.',
                 )}
               </FieldDescription>
             </Field>

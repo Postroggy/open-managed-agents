@@ -53,7 +53,9 @@ describe('Analytics pages', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
     selectOption('Default');
 
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Workspace: Default' }).textContent).toContain('Default'));
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Workspace: Default' }).textContent).toContain('Default'),
+    );
 
     fireEvent.click(screen.getByRole('combobox', { name: 'View by: Month' }));
     selectOption('Week');
@@ -210,9 +212,9 @@ function WorkspaceHarness({ children }: { children: ReactNode }) {
       error: null,
       selectWorkspace: () => undefined,
       createWorkspace: async () => defaultWorkspace,
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     }),
-    []
+    [],
   );
 
   return <WorkspaceContext.Provider value={workspaceValue}>{children}</WorkspaceContext.Provider>;

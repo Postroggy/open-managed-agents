@@ -10,17 +10,11 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from '../../shared/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '../../shared/ui/field';
 import { Input } from '../../shared/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
 import { Switch } from '../../shared/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/ui/tooltip';
 import { SettingRow } from '../dashboard/frame';
@@ -31,38 +25,40 @@ type DefaultInviteRole = 'member' | 'billing' | 'admin';
 export function IdentityAndAccessSettingsPage() {
   const { msg } = useI18n();
   const signInModeOptions = useMemo(
-    () => [
-      {
-        value: 'email-link',
-        label: msg('identityAccess.signIn.optionEmailLink', 'Email verification links')
-      },
-      {
-        value: 'sso-and-email',
-        label: msg('identityAccess.signIn.optionSsoAndEmail', 'SSO and email verification')
-      },
-      {
-        value: 'sso-only',
-        label: msg('identityAccess.signIn.optionSsoOnly', 'SSO only')
-      }
-    ] satisfies Array<{ value: SignInMode; label: string }>,
-    [msg]
+    () =>
+      [
+        {
+          value: 'email-link',
+          label: msg('identityAccess.signIn.optionEmailLink', 'Email verification links'),
+        },
+        {
+          value: 'sso-and-email',
+          label: msg('identityAccess.signIn.optionSsoAndEmail', 'SSO and email verification'),
+        },
+        {
+          value: 'sso-only',
+          label: msg('identityAccess.signIn.optionSsoOnly', 'SSO only'),
+        },
+      ] satisfies Array<{ value: SignInMode; label: string }>,
+    [msg],
   );
   const inviteRoleOptions = useMemo(
-    () => [
-      {
-        value: 'member',
-        label: msg('identityAccess.roles.optionMember', 'Member')
-      },
-      {
-        value: 'billing',
-        label: msg('identityAccess.roles.optionBilling', 'Billing')
-      },
-      {
-        value: 'admin',
-        label: msg('identityAccess.roles.optionAdmin', 'Admin')
-      }
-    ] satisfies Array<{ value: DefaultInviteRole; label: string }>,
-    [msg]
+    () =>
+      [
+        {
+          value: 'member',
+          label: msg('identityAccess.roles.optionMember', 'Member'),
+        },
+        {
+          value: 'billing',
+          label: msg('identityAccess.roles.optionBilling', 'Billing'),
+        },
+        {
+          value: 'admin',
+          label: msg('identityAccess.roles.optionAdmin', 'Admin'),
+        },
+      ] satisfies Array<{ value: DefaultInviteRole; label: string }>,
+    [msg],
   );
 
   const [signInMode, setSignInMode] = useState<SignInMode>('sso-and-email');
@@ -77,8 +73,7 @@ export function IdentityAndAccessSettingsPage() {
   const [defaultInviteRoleDraft, setDefaultInviteRoleDraft] = useState<DefaultInviteRole>(defaultInviteRole);
   const [defaultInviteRoleDialogOpen, setDefaultInviteRoleDialogOpen] = useState(false);
 
-  const signInModeLabel =
-    signInModeOptions.find((option) => option.value === signInMode)?.label ?? signInMode;
+  const signInModeLabel = signInModeOptions.find((option) => option.value === signInMode)?.label ?? signInMode;
   const defaultInviteRoleLabel =
     inviteRoleOptions.find((option) => option.value === defaultInviteRole)?.label ?? defaultInviteRole;
 
@@ -114,7 +109,7 @@ export function IdentityAndAccessSettingsPage() {
             <CardDescription>
               {msg(
                 'identityAccess.description',
-                'Configure sign-in, invitation defaults, and domain-based access policies for your organization.'
+                'Configure sign-in, invitation defaults, and domain-based access policies for your organization.',
               )}
             </CardDescription>
           </CardHeader>
@@ -127,7 +122,7 @@ export function IdentityAndAccessSettingsPage() {
               <AlertDescription>
                 {msg(
                   'identityAccess.notice.body',
-                  'Use these settings to decide how members sign in, when domains are enforced, and what access level new invitations should receive by default.'
+                  'Use these settings to decide how members sign in, when domains are enforced, and what access level new invitations should receive by default.',
                 )}
               </AlertDescription>
             </Alert>
@@ -139,18 +134,14 @@ export function IdentityAndAccessSettingsPage() {
                     title={msg('identityAccess.directory.title', 'Member directory')}
                     body={msg(
                       'identityAccess.directory.body',
-                      'Review members, resend invitations, and remove access when identity requirements change.'
+                      'Review members, resend invitations, and remove access when identity requirements change.',
                     )}
                     detail={msg(
                       'identityAccess.directory.detail',
-                      'Current workflow: Managed from the members directory'
+                      'Current workflow: Managed from the members directory',
                     )}
                     action={
-                      <ButtonLink
-                        variant="outline"
-                        size="sm"
-                        href="/settings/members"
-                      >
+                      <ButtonLink variant="outline" size="sm" href="/settings/members">
                         {msg('common.manage', 'Manage')}
                       </ButtonLink>
                     }
@@ -161,15 +152,17 @@ export function IdentityAndAccessSettingsPage() {
                         title={msg('identityAccess.signIn.title', 'Sign-in method')}
                         tooltip={msg(
                           'identityAccess.signIn.tooltip',
-                          'Choose whether members authenticate with email verification, your SSO provider, or both.'
+                          'Choose whether members authenticate with email verification, your SSO provider, or both.',
                         )}
                       />
                     }
                     body={msg(
                       'identityAccess.signIn.body',
-                      'Decide how members authenticate when they open the organization console for the first time.'
+                      'Decide how members authenticate when they open the organization console for the first time.',
                     )}
-                    detail={msg('identityAccess.currentDefault', 'Current default: {value}', { value: signInModeLabel })}
+                    detail={msg('identityAccess.currentDefault', 'Current default: {value}', {
+                      value: signInModeLabel,
+                    })}
                     action={
                       <Button type="button" variant="outline" size="sm" onClick={() => openSignInDialog(true)}>
                         {msg('common.configure', 'Configure')}
@@ -182,13 +175,13 @@ export function IdentityAndAccessSettingsPage() {
                         title={msg('identityAccess.domain.title', 'Verified domain')}
                         tooltip={msg(
                           'identityAccess.domain.tooltip',
-                          'Use a verified domain to route member invitations and SSO sign-in toward the expected identity boundary.'
+                          'Use a verified domain to route member invitations and SSO sign-in toward the expected identity boundary.',
                         )}
                       />
                     }
                     body={msg(
                       'identityAccess.domain.body',
-                      'Choose the primary domain used for member invitations, just-in-time provisioning, and sign-in guidance.'
+                      'Choose the primary domain used for member invitations, just-in-time provisioning, and sign-in guidance.',
                     )}
                     detail={msg('identityAccess.currentDefault', 'Current default: {value}', { value: verifiedDomain })}
                     action={
@@ -203,25 +196,31 @@ export function IdentityAndAccessSettingsPage() {
                         title={msg('identityAccess.domainRestriction.title', 'Restrict invites to verified domains')}
                         tooltip={msg(
                           'identityAccess.domainRestriction.tooltip',
-                          'Applies to future invitations and self-serve sign-in attempts after this default changes.'
+                          'Applies to future invitations and self-serve sign-in attempts after this default changes.',
                         )}
                       />
                     }
                     body={msg(
                       'identityAccess.domainRestriction.body',
-                      'Require invited members to use the verified domain before they can join this organization.'
+                      'Require invited members to use the verified domain before they can join this organization.',
                     )}
                     detail={
                       verifiedDomainsRequired
-                        ? msg('identityAccess.domainRestriction.enabledDetail', 'Current default: Verified domains required')
-                        : msg('identityAccess.domainRestriction.disabledDetail', 'Current default: Any domain can be invited')
+                        ? msg(
+                            'identityAccess.domainRestriction.enabledDetail',
+                            'Current default: Verified domains required',
+                          )
+                        : msg(
+                            'identityAccess.domainRestriction.disabledDetail',
+                            'Current default: Any domain can be invited',
+                          )
                     }
                     action={
                       <Switch
                         checked={verifiedDomainsRequired}
                         aria-label={msg(
                           'identityAccess.domainRestriction.title',
-                          'Restrict invites to verified domains'
+                          'Restrict invites to verified domains',
                         )}
                         onCheckedChange={(nextChecked) => setVerifiedDomainsRequired(Boolean(nextChecked))}
                       />
@@ -233,13 +232,13 @@ export function IdentityAndAccessSettingsPage() {
                         title={msg('identityAccess.jit.title', 'Just-in-time provisioning')}
                         tooltip={msg(
                           'identityAccess.jit.tooltip',
-                          'Automatically creates a member record after a successful sign-in from an approved identity provider.'
+                          'Automatically creates a member record after a successful sign-in from an approved identity provider.',
                         )}
                       />
                     }
                     body={msg(
                       'identityAccess.jit.body',
-                      'Create member access automatically after a successful first sign-in instead of requiring a manual invitation every time.'
+                      'Create member access automatically after a successful first sign-in instead of requiring a manual invitation every time.',
                     )}
                     detail={
                       jitProvisioningEnabled
@@ -258,10 +257,10 @@ export function IdentityAndAccessSettingsPage() {
                     title={msg('identityAccess.roles.title', 'Default invite role')}
                     body={msg(
                       'identityAccess.roles.body',
-                      'Choose the access level new member invitations should receive before an admin reviews them.'
+                      'Choose the access level new member invitations should receive before an admin reviews them.',
                     )}
                     detail={msg('identityAccess.currentDefault', 'Current default: {value}', {
-                      value: defaultInviteRoleLabel
+                      value: defaultInviteRoleLabel,
                     })}
                     action={
                       <Button
@@ -287,7 +286,7 @@ export function IdentityAndAccessSettingsPage() {
               <DialogDescription>
                 {msg(
                   'identityAccess.signIn.dialogDescription',
-                  'Choose how members should authenticate when opening the organization console.'
+                  'Choose how members should authenticate when opening the organization console.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -322,7 +321,7 @@ export function IdentityAndAccessSettingsPage() {
               <FieldDescription>
                 {msg(
                   'identityAccess.signIn.dialogHelp',
-                  'Use SSO-only when every member should authenticate through the same identity provider.'
+                  'Use SSO-only when every member should authenticate through the same identity provider.',
                 )}
               </FieldDescription>
             </Field>
@@ -350,7 +349,7 @@ export function IdentityAndAccessSettingsPage() {
               <DialogDescription>
                 {msg(
                   'identityAccess.domain.dialogDescription',
-                  'Choose the primary domain that member invitations and sign-in guidance should use by default.'
+                  'Choose the primary domain that member invitations and sign-in guidance should use by default.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -367,7 +366,7 @@ export function IdentityAndAccessSettingsPage() {
               <FieldDescription>
                 {msg(
                   'identityAccess.domain.dialogHelp',
-                  'Use the domain members expect to use when signing in so invitations and JIT access stay aligned.'
+                  'Use the domain members expect to use when signing in so invitations and JIT access stay aligned.',
                 )}
               </FieldDescription>
             </Field>
@@ -396,7 +395,7 @@ export function IdentityAndAccessSettingsPage() {
               <DialogDescription>
                 {msg(
                   'identityAccess.roles.dialogDescription',
-                  'Choose which role new invitations should receive before a reviewer adjusts their access.'
+                  'Choose which role new invitations should receive before a reviewer adjusts their access.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -431,7 +430,7 @@ export function IdentityAndAccessSettingsPage() {
               <FieldDescription>
                 {msg(
                   'identityAccess.roles.dialogHelp',
-                  'Use Member by default unless invitations should immediately land with billing or admin-level access.'
+                  'Use Member by default unless invitations should immediately land with billing or admin-level access.',
                 )}
               </FieldDescription>
             </Field>

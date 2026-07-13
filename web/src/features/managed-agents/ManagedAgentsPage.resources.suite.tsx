@@ -21,7 +21,7 @@ import {
   setAgentConfigEditorValue,
   waitFor,
   within,
-  workspaceContextValue
+  workspaceContextValue,
 } from './ManagedAgentsPage.test-utils';
 
 function requestUrl(input: RequestInfo | URL) {
@@ -42,7 +42,7 @@ export function registerManagedAgentsResourceTests() {
       ['deployments', 'Deployment one'],
       ['environments', 'Environment one'],
       ['credential-vaults', 'Vault one'],
-      ['memory-stores', 'Memory one']
+      ['memory-stores', 'Memory one'],
     ] as const;
 
     for (const [section, rowText] of sections) {
@@ -54,11 +54,21 @@ export function registerManagedAgentsResourceTests() {
       expect(screen.getByRole('button', { name: 'Next page' }).className.includes('bg-secondary')).toBe(false);
     }
 
-    expect(api.requests.some((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET')).toBe(true);
-    expect(api.requests.some((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET')).toBe(true);
-    expect(api.requests.some((request) => request.url.startsWith('/v1/environments?') && request.method === 'GET')).toBe(true);
-    expect(api.requests.some((request) => request.url.startsWith('/v1/vaults?') && request.method === 'GET')).toBe(true);
-    expect(api.requests.some((request) => request.url.startsWith('/v1/memory_stores?') && request.method === 'GET')).toBe(true);
+    expect(api.requests.some((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET')).toBe(
+      true,
+    );
+    expect(api.requests.some((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET')).toBe(
+      true,
+    );
+    expect(
+      api.requests.some((request) => request.url.startsWith('/v1/environments?') && request.method === 'GET'),
+    ).toBe(true);
+    expect(api.requests.some((request) => request.url.startsWith('/v1/vaults?') && request.method === 'GET')).toBe(
+      true,
+    );
+    expect(
+      api.requests.some((request) => request.url.startsWith('/v1/memory_stores?') && request.method === 'GET'),
+    ).toBe(true);
   });
 
   test('uses client-side navigation for managed resource detail links', async () => {
@@ -90,7 +100,7 @@ export function registerManagedAgentsResourceTests() {
       if (requestUrl(input).startsWith('/v1/environments?') && requestMethod(input, init) === 'GET') {
         return new Response(JSON.stringify({ error: { message: 'environment list failed' } }), {
           status: 500,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
       }
       return baseFetch(input, init);
@@ -117,7 +127,9 @@ export function registerManagedAgentsResourceTests() {
     expect(within(row).queryByRole('button', { name: 'Delete' })).toBeNull();
 
     fireEvent.click(within(row).getByRole('button', { name: 'More actions' }));
-    const credentialMenu = screen.getByRole('menuitem', { name: 'Edit' }).closest('[data-slot="dropdown-menu-content"]');
+    const credentialMenu = screen
+      .getByRole('menuitem', { name: 'Edit' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(credentialMenu?.className).toContain('bg-popover');
     expect(credentialMenu?.className.includes('bg-secondary')).toBe(false);
     expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeTruthy();
@@ -137,7 +149,13 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/v1/vaults/vlt_one123456/credentials/vcrd_one123456?beta=true' && request.method === 'DELETE')).toBe(true)
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url === '/v1/vaults/vlt_one123456/credentials/vcrd_one123456?beta=true' &&
+            request.method === 'DELETE',
+        ),
+      ).toBe(true),
     );
     await waitFor(() => expect(screen.queryByText('Vault credential one')).toBeNull());
   });
@@ -168,8 +186,8 @@ export function registerManagedAgentsResourceTests() {
       value: {
         writeText: mock(async (value: string) => {
           clipboardWrites.push(value);
-        })
-      }
+        }),
+      },
     });
 
     renderManagedAgentsPage('sessions');
@@ -236,14 +254,14 @@ export function registerManagedAgentsResourceTests() {
       bottom: 80,
       width: 1000,
       height: 80,
-      toJSON: () => ({})
+      toJSON: () => ({}),
     });
     fireEvent.pointerEnter(minimapRows[1]);
     await waitFor(() => expect(minimapRows[1].className).toContain('oma-session-timeline-track-hover'));
     expect(minimapRows[1].className).toContain('h-7');
     const secondLaneTick = minimapRows[1].querySelector<HTMLElement>('[data-timeline-tick-id]');
     expect(secondLaneTick).toBeTruthy();
-    const hoverPct = Number.parseFloat(secondLaneTick!.style.left) + (Number.parseFloat(secondLaneTick!.style.width) / 2);
+    const hoverPct = Number.parseFloat(secondLaneTick!.style.left) + Number.parseFloat(secondLaneTick!.style.width) / 2;
     fireEvent.mouseMove(minimapTrack, { clientX: hoverPct * 10, clientY: 260 });
     expect(minimapRows[1].className).toContain('oma-session-timeline-track-hover');
     await waitFor(() => expect(document.querySelector('[id^="session-timeline-tooltip-"]')).toBeTruthy());
@@ -255,7 +273,9 @@ export function registerManagedAgentsResourceTests() {
     expect(minimapTicks[0].style.left.endsWith('%')).toBe(true);
     expect(Number.parseFloat(minimapTicks[0].style.width)).toBeGreaterThanOrEqual(0.4);
     expect(screen.getByText("I'll start by unzipping the dataset, then prepare the unified CSV files.")).toBeTruthy();
-    const agentPrepareRow = document.querySelector('[data-event-id^="evt_agent_prepare-"][data-entry-kind="message"]') as HTMLElement;
+    const agentPrepareRow = document.querySelector(
+      '[data-event-id^="evt_agent_prepare-"][data-entry-kind="message"]',
+    ) as HTMLElement;
     expect(agentPrepareRow.querySelector('[data-transcript-header]')?.className).toContain('px-4');
     expect(agentPrepareRow?.textContent).toContain('18.2k');
     expect(agentPrepareRow?.textContent).toContain('425');
@@ -270,16 +290,18 @@ export function registerManagedAgentsResourceTests() {
     expect(toolBatchRow?.textContent).not.toContain('2 tool calls');
     expect(screen.getByText('1 queued message')).toBeTruthy();
     expect(screen.getByText('Queued warmup request')).toBeTruthy();
-    const queuedRow = document.querySelector('[data-event-id^="evt_user_queued-"][data-entry-kind="message"]') as HTMLElement;
+    const queuedRow = document.querySelector(
+      '[data-event-id^="evt_user_queued-"][data-entry-kind="message"]',
+    ) as HTMLElement;
     expect(queuedRow).toBeTruthy();
     expect(queuedRow.querySelector('[data-cds="ShimmerText"]')?.textContent).toContain('Queued warmup request');
     expect(within(queuedRow).queryByText('Generating')).toBeNull();
     expect(screen.getAllByTestId('session-meta-strip').length).toBeGreaterThan(0);
     expect(screen.getByText('unzip /mnt/session/uploads/orders.zip -d /workspace/data/')).toBeTruthy();
-    const unzipRow = document.querySelector('[data-event-id^="evt_tool_unzip-"][data-display-kind="command"]') as HTMLElement;
-    expect(unzipRow?.textContent).toContain(
-      'unzip /mnt/session/uploads/orders.zip -d /workspace/data/'
-    );
+    const unzipRow = document.querySelector(
+      '[data-event-id^="evt_tool_unzip-"][data-display-kind="command"]',
+    ) as HTMLElement;
+    expect(unzipRow?.textContent).toContain('unzip /mnt/session/uploads/orders.zip -d /workspace/data/');
     const toolBadge = within(unzipRow).getByText('Tool').parentElement;
     expect(toolBadge?.className).toContain('h-5');
     expect(toolBadge?.className).toContain('rounded-md');
@@ -301,10 +323,14 @@ export function registerManagedAgentsResourceTests() {
     expect(screen.getByText('/workspace/prepare.py')).toBeTruthy();
     expect(screen.getByText('cd /workspace && python3 prepare.py')).toBeTruthy();
     expect(screen.getAllByText('Subagent').length).toBeGreaterThanOrEqual(1);
-    const coordinatorSubagentSentRow = document.querySelector('[data-event-id^="evt_thread_message_sent-"]') as HTMLElement;
+    const coordinatorSubagentSentRow = document.querySelector(
+      '[data-event-id^="evt_thread_message_sent-"]',
+    ) as HTMLElement;
     expect(coordinatorSubagentSentRow?.textContent).toContain('reporter');
     expect(within(coordinatorSubagentSentRow).getByText('Subagent')).toBeTruthy();
-    const coordinatorSubagentRow = document.querySelector('[data-event-id^="evt_thread_message_received-"]') as HTMLElement;
+    const coordinatorSubagentRow = document.querySelector(
+      '[data-event-id^="evt_thread_message_received-"]',
+    ) as HTMLElement;
     expect(coordinatorSubagentRow?.textContent).toContain('reporter');
     expect(coordinatorSubagentRow?.textContent).not.toContain('sthr_reporter123456');
     expect(document.querySelector('[data-event-id^="evt_subagent_reporter-"]')).toBeNull();
@@ -333,17 +359,33 @@ export function registerManagedAgentsResourceTests() {
     expect(markdown.querySelector('code')?.textContent).toBe('Glob("*")');
     fireEvent.click(within(resultDetail).getByRole('button', { name: 'Close detail panel' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/sessions/sesn_one123456?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/sessions/sesn_one123456?beta=true')).toBe(true),
+    );
     expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/resources?'))).toBe(true);
     expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads?'))).toBe(true);
     expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true);
-    expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'))).toBe(true);
-    expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_archived123456/events?'))).toBe(false);
+    expect(
+      api.requests.some((request) =>
+        request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'),
+      ),
+    ).toBe(true);
+    expect(
+      api.requests.some((request) =>
+        request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_archived123456/events?'),
+      ),
+    ).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: '+1 archived' }));
     await waitFor(() => expect(new URL(window.location.href).searchParams.get('archived_lanes')).toBe('true'));
     expect(await screen.findByRole('tab', { name: 'archived' })).toBeTruthy();
-    await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_archived123456/events?'))).toBe(true));
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) =>
+          request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_archived123456/events?'),
+        ),
+      ).toBe(true),
+    );
     fireEvent.click(screen.getByRole('tab', { name: 'archived' }));
     await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_archived123456'));
     await waitFor(() => {
@@ -377,7 +419,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('tab', { name: 'reporter' }));
     expect(screen.getAllByText('Reporter is summarizing order cohorts.').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('tab', { name: 'reporter' }).getAttribute('aria-selected')).toBe('true');
-    const reporterAgentRow = document.querySelector('[data-event-id^="evt_reporter-"][data-entry-kind="message"]') as HTMLElement;
+    const reporterAgentRow = document.querySelector(
+      '[data-event-id^="evt_reporter-"][data-entry-kind="message"]',
+    ) as HTMLElement;
     expect(reporterAgentRow?.textContent).toContain('7.2k');
     expect(reporterAgentRow?.textContent).toContain('168');
     expect(screen.queryByText('7223 input → 168 output')).toBeNull();
@@ -385,11 +429,15 @@ export function registerManagedAgentsResourceTests() {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Debug' }));
     expect(screen.getByText('7223 input → 168 output')).toBeTruthy();
-    const modelRow = document.querySelector('[data-event-id^="evt_reporter_span-"][data-display-kind="metric"]') as HTMLElement;
+    const modelRow = document.querySelector(
+      '[data-event-id^="evt_reporter_span-"][data-display-kind="metric"]',
+    ) as HTMLElement;
     const modelBadge = within(modelRow).getByText('span.model…end').parentElement;
     expect(modelBadge?.className).toContain('ring-1');
     expect(modelBadge?.className).toContain('bg-transparent');
-    const debugUserRow = document.querySelector('[data-event-id^="evt_reporter-"][data-entry-kind="debug"]') as HTMLElement;
+    const debugUserRow = document.querySelector(
+      '[data-event-id^="evt_reporter-"][data-entry-kind="debug"]',
+    ) as HTMLElement;
     const debugBadge = within(debugUserRow).getByText('agent.message').parentElement;
     expect(debugBadge?.className).toContain('rounded-md');
     expect(debugBadge?.className).toContain('text-[10px]');
@@ -399,7 +447,9 @@ export function registerManagedAgentsResourceTests() {
     const deltasTooltipTrigger = deltasButton.parentElement;
     expect(deltasTooltipTrigger?.dataset.slot).toBe('tooltip-trigger');
     fireEvent.mouseEnter(deltasTooltipTrigger as HTMLElement);
-    await waitFor(() => expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain('Open deltas'));
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain('Open deltas'),
+    );
     fireEvent.mouseLeave(deltasTooltipTrigger as HTMLElement);
     await waitFor(() => expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull());
     fireEvent.click(deltasButton);
@@ -411,13 +461,19 @@ export function registerManagedAgentsResourceTests() {
     expect(debugSearchParams.get('segment')).toBe('debug');
     expect(debugSearchParams.get('event')).toBe('evt_reporter');
     fireEvent.click(screen.getByRole('tab', { name: 'Transcript' }));
-    await waitFor(() => expect(screen.getAllByText('Reporter is summarizing order cohorts.').length).toBeGreaterThan(0));
-    const selectedReporterRow = document.querySelector('[data-event-id^="evt_reporter-"][data-entry-kind="message"]') as HTMLElement;
+    await waitFor(() =>
+      expect(screen.getAllByText('Reporter is summarizing order cohorts.').length).toBeGreaterThan(0),
+    );
+    const selectedReporterRow = document.querySelector(
+      '[data-event-id^="evt_reporter-"][data-entry-kind="message"]',
+    ) as HTMLElement;
     expect(selectedReporterRow.querySelector('[data-transcript-header]')?.getAttribute('data-slot')).toBe('toggle');
     expect(selectedReporterRow.querySelector('[data-transcript-header]')?.getAttribute('aria-pressed')).toBe('true');
     expect(new URL(window.location.href).searchParams.get('event')).toBe('evt_reporter');
     fireEvent.click(screen.getByRole('tab', { name: 'Debug' }));
-    const debugUserRowAfterMapping = document.querySelector('[data-event-id^="evt_reporter-"][data-entry-kind="debug"]') as HTMLElement;
+    const debugUserRowAfterMapping = document.querySelector(
+      '[data-event-id^="evt_reporter-"][data-entry-kind="debug"]',
+    ) as HTMLElement;
     const debugBadgeAfterMapping = within(debugUserRowAfterMapping).getByText('agent.message').parentElement;
     expect(debugBadgeAfterMapping?.className).not.toContain('rounded-full');
     expect(within(debugUserRowAfterMapping).getByText('Deltas')).toBeTruthy();
@@ -427,7 +483,11 @@ export function registerManagedAgentsResourceTests() {
     expect(within(detail).getByTestId('session-trace-code-block').textContent).toContain('sthr_reporter123456');
     fireEvent.click(within(detail).getByRole('button', { name: 'Close detail panel' }));
 
-    fireEvent.click((document.querySelector('[data-event-id^="evt_reporter-"][data-entry-kind="debug"]') as HTMLElement).querySelector('[data-transcript-header]') as HTMLElement);
+    fireEvent.click(
+      (
+        document.querySelector('[data-event-id^="evt_reporter-"][data-entry-kind="debug"]') as HTMLElement
+      ).querySelector('[data-transcript-header]') as HTMLElement,
+    );
     expect((await screen.findByTestId('session-trace-detail')).getAttribute('data-placement')).toBe('side');
     fireEvent.pointerDown(screen.getByTestId('session-trace-list-pane'));
     await waitFor(() => expect(screen.queryByTestId('session-trace-detail')).toBeNull());
@@ -437,7 +497,9 @@ export function registerManagedAgentsResourceTests() {
     expect(screen.queryByText(/session\.thread_status_running/)).toBeNull();
     expect(screen.queryByText(/sevt_thread_running/)).toBeNull();
     expect(screen.getByText('Thinking...')).toBeTruthy();
-    expect(document.querySelector('[data-event-id^="evt_analyst_thinking-"][data-display-kind="thinking"]')).toBeTruthy();
+    expect(
+      document.querySelector('[data-event-id^="evt_analyst_thinking-"][data-display-kind="thinking"]'),
+    ).toBeTruthy();
     expect(screen.queryByText('Reviewing basket pair frequencies.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Thinking\.\.\./ }));
     const thinkingDetail = await screen.findByTestId('session-trace-detail');
@@ -446,7 +508,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('tab', { name: 'reporter' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy all' }));
-    await waitFor(() => expect(clipboardWrites.some((value) => value.includes('Reporter is summarizing order cohorts.'))).toBe(true));
+    await waitFor(() =>
+      expect(clipboardWrites.some((value) => value.includes('Reporter is summarizing order cohorts.'))).toBe(true),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
     expect(screen.getByRole('menuitem', { name: 'Refresh' })).toBeTruthy();
@@ -479,33 +543,33 @@ export function registerManagedAgentsResourceTests() {
         parent_thread_id: 'sthr_orchestrator123456',
         archived_at: null,
         created_at: new Date(base + 1_000).toISOString(),
-        updated_at: new Date(base + 88_000).toISOString()
-      }
+        updated_at: new Date(base + 88_000).toISOString(),
+      },
     ];
     api.resources.sessionEvents = [
       {
         id: 'evt_idle_gap_user_before',
         type: 'user.message',
         created_at: new Date(base).toISOString(),
-        content: [{ type: 'text', text: 'Start the idle gap fixture.' }]
+        content: [{ type: 'text', text: 'Start the idle gap fixture.' }],
       },
       {
         id: 'evt_idle_gap_agent_before',
         type: 'agent.message',
         created_at: new Date(base + 2_000).toISOString(),
-        content: [{ type: 'text', text: 'I will pause before continuing.' }]
+        content: [{ type: 'text', text: 'I will pause before continuing.' }],
       },
       {
         id: 'evt_idle_gap_idle',
         type: 'session.status_idle',
-        created_at: new Date(base + 4_000).toISOString()
+        created_at: new Date(base + 4_000).toISOString(),
       },
       {
         id: 'evt_idle_gap_user_after',
         type: 'user.message',
         created_at: new Date(base + 88_000).toISOString(),
-        content: [{ type: 'text', text: 'Continue after the idle gap.' }]
-      }
+        content: [{ type: 'text', text: 'Continue after the idle gap.' }],
+      },
     ];
 
     renderManagedAgentsPage('sessions');
@@ -525,14 +589,18 @@ export function registerManagedAgentsResourceTests() {
   });
 
   test('restores the session detail lane from the URL query', async () => {
-    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456?lane=sthr_reporter123456&event=evt_reporter');
+    resetTestDom(
+      'https://oma.duck.ai/workspaces/default/sessions/sesn_one123456?lane=sthr_reporter123456&event=evt_reporter',
+    );
     window.localStorage.removeItem('oma.sessionDetail.showArchivedLanes');
     mockManagedResourceApi();
 
     renderManagedAgentsPage('sessions');
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'reporter' }).getAttribute('aria-selected')).toBe('true'));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'reporter' }).getAttribute('aria-selected')).toBe('true'),
+    );
     expect(screen.getAllByText('Reporter is summarizing order cohorts.').length).toBeGreaterThan(0);
     expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_reporter123456');
     expect(new URL(window.location.href).searchParams.get('event')).toBe('evt_reporter');
@@ -555,7 +623,7 @@ export function registerManagedAgentsResourceTests() {
       if (requestUrl(input) === '/v1/sessions/sesn_one123456?beta=true' && requestMethod(input, init) === 'DELETE') {
         return new Response(JSON.stringify({ error: { message: 'forced delete failure' } }), {
           status: 500,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
       }
       return baseFetch(input, init);
@@ -566,7 +634,11 @@ export function registerManagedAgentsResourceTests() {
     expect(await screen.findByRole('heading', { name: 'Session one' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    fireEvent.click(within(await screen.findByRole('alertdialog', { name: /Delete session/i })).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog', { name: /Delete session/i })).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
 
     const mutationAlert = await screen.findByRole('alert');
     expect(mutationAlert.dataset.slot).toBe('alert');
@@ -585,7 +657,7 @@ export function registerManagedAgentsResourceTests() {
         id: 'evt_user_tool_permissions',
         type: 'user.message',
         created_at: new Date(base).toISOString(),
-        content: [{ type: 'text', text: 'Check tool permissions' }]
+        content: [{ type: 'text', text: 'Check tool permissions' }],
       },
       {
         id: 'evt_tool_wait',
@@ -593,7 +665,7 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 1_000).toISOString(),
         name: 'Bash',
         evaluated_permission: 'ask',
-        input: { command: 'npm test -- --watch=false' }
+        input: { command: 'npm test -- --watch=false' },
       },
       {
         id: 'evt_tool_policy_object_wait',
@@ -602,7 +674,7 @@ export function registerManagedAgentsResourceTests() {
         name: 'Bash',
         status: 'running',
         permission_policy: { type: 'always_ask' },
-        input: { command: 'echo permission policy' }
+        input: { command: 'echo permission policy' },
       },
       {
         id: 'evt_tool_allow',
@@ -610,14 +682,14 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 2_000).toISOString(),
         name: 'Bash',
         evaluated_permission: 'always_ask',
-        input: { command: 'npm run build' }
+        input: { command: 'npm run build' },
       },
       {
         id: 'evt_tool_allow_confirmation',
         type: 'user.tool_confirmation',
         created_at: new Date(base + 2_500).toISOString(),
         tool_use_id: 'evt_tool_allow',
-        result: 'allow'
+        result: 'allow',
       },
       {
         id: 'evt_tool_denied',
@@ -625,7 +697,7 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 3_000).toISOString(),
         name: 'mcp__github__search_repositories',
         evaluated_permission: 'ask',
-        input: { query: 'private repository scan' }
+        input: { query: 'private repository scan' },
       },
       {
         id: 'evt_tool_requires_action_details_wait',
@@ -633,7 +705,7 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 3_250).toISOString(),
         name: 'mcp__weather_service__get_weather',
         requires_action_details: { type: 'requires_action' },
-        input: { location: 'Beijing' }
+        input: { location: 'Beijing' },
       },
       {
         id: 'evt_tool_deny_confirmation',
@@ -641,7 +713,7 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 3_500).toISOString(),
         tool_use_id: 'evt_tool_denied',
         result: 'deny',
-        deny_message: 'Needs owner approval'
+        deny_message: 'Needs owner approval',
       },
       {
         id: 'evt_tool_batch_read',
@@ -649,14 +721,14 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 4_000).toISOString(),
         name: 'Read',
         bracket_id: 'bracket_mixed_tools',
-        input: { file_path: '/workspace/a.md' }
+        input: { file_path: '/workspace/a.md' },
       },
       {
         id: 'evt_agent_batch_message',
         type: 'agent.message',
         created_at: new Date(base + 4_200).toISOString(),
         bracket_id: 'bracket_mixed_tools',
-        content: [{ type: 'text', text: 'I will inspect both files before editing.' }]
+        content: [{ type: 'text', text: 'I will inspect both files before editing.' }],
       },
       {
         id: 'evt_tool_batch_glob',
@@ -664,13 +736,13 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 4_400).toISOString(),
         name: 'Glob',
         bracket_id: 'bracket_mixed_tools',
-        input: { pattern: '*.md' }
+        input: { pattern: '*.md' },
       },
       {
         id: 'evt_session_idle_permissions',
         type: 'session.status_idle',
-        created_at: new Date(base + 5_000).toISOString()
-      }
+        created_at: new Date(base + 5_000).toISOString(),
+      },
     ];
 
     renderManagedAgentsPage('sessions');
@@ -684,11 +756,21 @@ export function registerManagedAgentsResourceTests() {
     expect(singleLaneTrack?.className).toContain('h-9');
     expect(singleLaneTrack?.className).toContain('rounded');
     expect(singleLaneTrack?.querySelectorAll('[data-timeline-tick-id]').length).toBeGreaterThan(2);
-    const waitingRow = document.querySelector('[data-event-id^="evt_tool_wait-"][data-entry-kind="tool_call"]') as HTMLElement;
-    const policyObjectWaitingRow = document.querySelector('[data-event-id^="evt_tool_policy_object_wait-"][data-entry-kind="tool_call"]') as HTMLElement;
-    const allowedRow = document.querySelector('[data-event-id^="evt_tool_allow-"][data-entry-kind="tool_call"]') as HTMLElement;
-    const deniedRow = document.querySelector('[data-event-id^="evt_tool_denied-"][data-entry-kind="tool_call"]') as HTMLElement;
-    const requiresActionWaitingRow = document.querySelector('[data-event-id^="evt_tool_requires_action_details_wait-"][data-entry-kind="tool_call"]') as HTMLElement;
+    const waitingRow = document.querySelector(
+      '[data-event-id^="evt_tool_wait-"][data-entry-kind="tool_call"]',
+    ) as HTMLElement;
+    const policyObjectWaitingRow = document.querySelector(
+      '[data-event-id^="evt_tool_policy_object_wait-"][data-entry-kind="tool_call"]',
+    ) as HTMLElement;
+    const allowedRow = document.querySelector(
+      '[data-event-id^="evt_tool_allow-"][data-entry-kind="tool_call"]',
+    ) as HTMLElement;
+    const deniedRow = document.querySelector(
+      '[data-event-id^="evt_tool_denied-"][data-entry-kind="tool_call"]',
+    ) as HTMLElement;
+    const requiresActionWaitingRow = document.querySelector(
+      '[data-event-id^="evt_tool_requires_action_details_wait-"][data-entry-kind="tool_call"]',
+    ) as HTMLElement;
     const batchRow = document.querySelector('[data-entry-kind="tool_batch"]') as HTMLElement;
 
     expect(waitingRow.textContent).toContain('awaiting approval');
@@ -712,7 +794,9 @@ export function registerManagedAgentsResourceTests() {
     expect(deniedDetail.textContent).toContain('Needs owner approval');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Debug' }));
-    const confirmationDebugRow = document.querySelector('[data-event-id^="evt_tool_deny_confirmation-"][data-entry-kind="debug"]') as HTMLElement;
+    const confirmationDebugRow = document.querySelector(
+      '[data-event-id^="evt_tool_deny_confirmation-"][data-entry-kind="debug"]',
+    ) as HTMLElement;
     expect(confirmationDebugRow).toBeTruthy();
     expect(confirmationDebugRow.textContent).toContain('Tool confirmation submitted.');
   });
@@ -730,8 +814,8 @@ export function registerManagedAgentsResourceTests() {
         parent_thread_id: 'sthr_orchestrator123456',
         archived_at: null,
         created_at: new Date(Date.now() - 45_000).toISOString(),
-        updated_at: new Date().toISOString()
-      }
+        updated_at: new Date().toISOString(),
+      },
     ];
     api.resources.sessionThreadEvents = {
       sthr_reporter123456: [
@@ -742,16 +826,16 @@ export function registerManagedAgentsResourceTests() {
           created_at: new Date(base + 2_000).toISOString(),
           name: 'mcp__weather_service__get_forecast',
           evaluated_permission: 'ask',
-          input: { location: 'Paris' }
-        }
-      ]
+          input: { location: 'Paris' },
+        },
+      ],
     };
     api.resources.sessionEvents = [
       {
         id: 'evt_subagent_approval_user',
         type: 'user.message',
         created_at: new Date(base).toISOString(),
-        content: [{ type: 'text', text: 'Check lane-scoped approvals' }]
+        content: [{ type: 'text', text: 'Check lane-scoped approvals' }],
       },
       {
         id: 'evt_main_shared_permission',
@@ -760,7 +844,7 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 1_000).toISOString(),
         name: 'mcp__filesystem__write_file',
         evaluated_permission: 'ask',
-        input: { path: '/workspace/main.txt' }
+        input: { path: '/workspace/main.txt' },
       },
       {
         id: 'evt_reporter_shared_permission',
@@ -770,7 +854,7 @@ export function registerManagedAgentsResourceTests() {
         created_at: new Date(base + 2_000).toISOString(),
         name: 'mcp__weather_service__get_forecast',
         evaluated_permission: 'ask',
-        input: { location: 'Paris' }
+        input: { location: 'Paris' },
       },
       {
         id: 'evt_reporter_shared_confirmation',
@@ -779,13 +863,13 @@ export function registerManagedAgentsResourceTests() {
         tool_use_id: 'toolu_shared_permission',
         created_at: new Date(base + 2_500).toISOString(),
         result: 'deny',
-        deny_message: 'Reporter cannot call external weather'
+        deny_message: 'Reporter cannot call external weather',
       },
       {
         id: 'evt_subagent_approval_idle',
         type: 'session.status_idle',
-        created_at: new Date(base + 3_000).toISOString()
-      }
+        created_at: new Date(base + 3_000).toISOString(),
+      },
     ];
 
     renderManagedAgentsPage('sessions');
@@ -793,7 +877,9 @@ export function registerManagedAgentsResourceTests() {
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
     let mainRow: HTMLElement | null = null;
     await waitFor(() => {
-      mainRow = document.querySelector<HTMLElement>('[data-event-id^="evt_main_shared_permission-"][data-entry-kind="tool_call"]');
+      mainRow = document.querySelector<HTMLElement>(
+        '[data-event-id^="evt_main_shared_permission-"][data-entry-kind="tool_call"]',
+      );
       expect(mainRow).toBeTruthy();
     });
     expect(mainRow?.textContent).toContain('/workspace/main.txt');
@@ -805,12 +891,19 @@ export function registerManagedAgentsResourceTests() {
     await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_reporter123456'));
     let reporterRow: HTMLElement | null = null;
     await waitFor(() => {
-      reporterRow = Array.from(document.querySelectorAll<HTMLElement>('[data-entry-kind="tool_call"]')).find((row) => row.textContent?.includes('Paris')) ?? null;
+      reporterRow =
+        Array.from(document.querySelectorAll<HTMLElement>('[data-entry-kind="tool_call"]')).find((row) =>
+          row.textContent?.includes('Paris'),
+        ) ?? null;
       expect(reporterRow).toBeTruthy();
     });
     expect(reporterRow?.textContent).toContain('Paris');
     expect(reporterRow?.textContent).toContain('denied');
-    expect(Array.from(document.querySelectorAll<HTMLElement>('[data-entry-kind="tool_call"]')).filter((row) => row.textContent?.includes('Paris')).length).toBe(1);
+    expect(
+      Array.from(document.querySelectorAll<HTMLElement>('[data-entry-kind="tool_call"]')).filter((row) =>
+        row.textContent?.includes('Paris'),
+      ).length,
+    ).toBe(1);
     expect(screen.queryByText('/workspace/main.txt')).toBeNull();
     expect(screen.queryByText('Reporter cannot call external weather')).toBeNull();
 
@@ -820,7 +913,9 @@ export function registerManagedAgentsResourceTests() {
     expect(reporterDetail.textContent).toContain('Reporter cannot call external weather');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Debug' }));
-    const confirmationDebugRow = document.querySelector('[data-event-id^="evt_reporter_shared_confirmation-"][data-entry-kind="debug"]') as HTMLElement;
+    const confirmationDebugRow = document.querySelector(
+      '[data-event-id^="evt_reporter_shared_confirmation-"][data-entry-kind="debug"]',
+    ) as HTMLElement;
     expect(confirmationDebugRow).toBeTruthy();
     expect(confirmationDebugRow.textContent).toContain('Tool confirmation submitted.');
   });
@@ -837,8 +932,8 @@ export function registerManagedAgentsResourceTests() {
         parent_thread_id: 'sthr_orchestrator123456',
         archived_at: null,
         created_at: new Date(Date.now() - 45_000).toISOString(),
-        updated_at: new Date().toISOString()
-      }
+        updated_at: new Date().toISOString(),
+      },
     ];
     api.resources.sessionThreadEvents = {};
     const base = Date.now() - 60_000;
@@ -847,7 +942,7 @@ export function registerManagedAgentsResourceTests() {
         id: 'evt_lane_batch_user',
         type: 'user.message',
         created_at: new Date(base).toISOString(),
-        content: [{ type: 'text', text: 'Compare lane scoped tool batches' }]
+        content: [{ type: 'text', text: 'Compare lane scoped tool batches' }],
       },
       {
         id: 'evt_lane_batch_main_tool',
@@ -855,7 +950,7 @@ export function registerManagedAgentsResourceTests() {
         bracket_id: 'span_shared_lane_batch',
         created_at: new Date(base + 1_000).toISOString(),
         name: 'Read',
-        input: { file_path: '/workspace/main.json' }
+        input: { file_path: '/workspace/main.json' },
       },
       {
         id: 'evt_lane_batch_reporter_tool',
@@ -864,20 +959,22 @@ export function registerManagedAgentsResourceTests() {
         bracket_id: 'span_shared_lane_batch',
         created_at: new Date(base + 1_100).toISOString(),
         name: 'Bash',
-        input: { command: 'echo reporter lane' }
+        input: { command: 'echo reporter lane' },
       },
       {
         id: 'evt_lane_batch_idle',
         type: 'session.status_idle',
-        created_at: new Date(base + 3_000).toISOString()
-      }
+        created_at: new Date(base + 3_000).toISOString(),
+      },
     ];
 
     renderManagedAgentsPage('sessions');
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
     await waitFor(() => {
-      const mainToolRow = document.querySelector<HTMLElement>('[data-event-id^="evt_lane_batch_main_tool-"][data-entry-kind="tool_call"]');
+      const mainToolRow = document.querySelector<HTMLElement>(
+        '[data-event-id^="evt_lane_batch_main_tool-"][data-entry-kind="tool_call"]',
+      );
       expect(mainToolRow?.textContent).toContain('/workspace/main.json');
     });
     expect(document.querySelector('[data-entry-kind="tool_batch"]')).toBeNull();
@@ -886,7 +983,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('tab', { name: 'reporter' }));
     await waitFor(() => expect(new URL(window.location.href).searchParams.get('lane')).toBe('sthr_reporter123456'));
     await waitFor(() => {
-      const reporterToolRow = document.querySelector<HTMLElement>('[data-event-id^="evt_lane_batch_reporter_tool-"][data-entry-kind="tool_call"]');
+      const reporterToolRow = document.querySelector<HTMLElement>(
+        '[data-event-id^="evt_lane_batch_reporter_tool-"][data-entry-kind="tool_call"]',
+      );
       expect(reporterToolRow?.textContent).toContain('echo reporter lane');
     });
     expect(document.querySelector('[data-entry-kind="tool_batch"]')).toBeNull();
@@ -903,11 +1002,23 @@ export function registerManagedAgentsResourceTests() {
     renderManagedAgentsPage('sessions');
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
-      await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true));
-      await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'))).toBe(true));
-      await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events/stream?'))).toBe(true));
-      expect(api.requests.some((request) => request.url.includes('/threads/sthr_reporter123456/stream?'))).toBe(false);
-    });
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) =>
+          request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'),
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events/stream?'))).toBe(
+        true,
+      ),
+    );
+    expect(api.requests.some((request) => request.url.includes('/threads/sthr_reporter123456/stream?'))).toBe(false);
+  });
 
   test('does not subscribe to session streams when running metadata has completed history', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
@@ -918,8 +1029,16 @@ export function registerManagedAgentsResourceTests() {
     renderManagedAgentsPage('sessions');
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
-    await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true));
-    await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) =>
+          request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'),
+        ),
+      ).toBe(true),
+    );
     expect(api.requests.some((request) => request.url.includes('/stream?'))).toBe(false);
   });
 
@@ -932,8 +1051,16 @@ export function registerManagedAgentsResourceTests() {
     renderManagedAgentsPage('sessions');
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
-    await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true));
-    await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) =>
+          request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'),
+        ),
+      ).toBe(true),
+    );
     expect(api.requests.some((request) => request.url.includes('/stream?'))).toBe(false);
   });
 
@@ -946,8 +1073,16 @@ export function registerManagedAgentsResourceTests() {
     renderManagedAgentsPage('sessions');
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
-    await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true));
-    await waitFor(() => expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) =>
+          request.url.startsWith('/v1/sessions/sesn_one123456/threads/sthr_reporter123456/events?'),
+        ),
+      ).toBe(true),
+    );
     expect(api.requests.some((request) => request.url.includes('/stream?'))).toBe(false);
   });
 
@@ -991,7 +1126,9 @@ export function registerManagedAgentsResourceTests() {
     expect(await screen.findByRole('heading', { name: 'Memory one' })).toBeTruthy();
     const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(breadcrumb.dataset.slot).toBe('breadcrumb');
-    expect(within(breadcrumb).getByRole('link', { name: 'Memory stores' }).getAttribute('href')).toBe('/workspaces/default/memory-stores');
+    expect(within(breadcrumb).getByRole('link', { name: 'Memory stores' }).getAttribute('href')).toBe(
+      '/workspaces/default/memory-stores',
+    );
     expect(breadcrumb.querySelector('[data-slot="breadcrumb-page"]')?.textContent).toBe('Memory one');
     expect(screen.queryByRole('heading', { name: 'Overview' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Add memory' })).toBeTruthy();
@@ -1003,14 +1140,23 @@ export function registerManagedAgentsResourceTests() {
       expect(
         api.requests.some(
           (request) =>
-            request.url === '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2F&depth=1&limit=100&order_by=path' &&
-            request.method === 'GET'
-        )
-      ).toBe(true)
+            request.url ===
+              '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2F&depth=1&limit=100&order_by=path' &&
+            request.method === 'GET',
+        ),
+      ).toBe(true),
     );
 
     expect(screen.getByRole('heading', { name: '/project/brief.md' })).toBeTruthy();
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true&view=full' && request.method === 'GET')).toBe(true));
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true&view=full' &&
+            request.method === 'GET',
+        ),
+      ).toBe(true),
+    );
     expect(await screen.findByText('Remember the release plan.')).toBeTruthy();
     expect(screen.queryByText(/localeCompare/)).toBeNull();
     const viewModeTabs = screen.getByRole('tablist', { name: 'View mode' });
@@ -1028,7 +1174,9 @@ export function registerManagedAgentsResourceTests() {
     expect(sourceBlock.className).not.toContain('bg-secondary');
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    const memoryActionMenu = screen.getByRole('menuitem', { name: 'Download' }).closest('[data-slot="dropdown-menu-content"]');
+    const memoryActionMenu = screen
+      .getByRole('menuitem', { name: 'Download' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(memoryActionMenu?.className).toContain('bg-popover');
     expect(memoryActionMenu?.className.includes('bg-secondary')).toBe(false);
     expect(screen.getByRole('menuitem', { name: 'Download' })).toBeTruthy();
@@ -1043,8 +1191,20 @@ export function registerManagedAgentsResourceTests() {
     expect(editor.className.includes('bg-secondary')).toBe(false);
     fireEvent.change(editor, { target: { value: 'Updated release memory.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true&view=full' && request.method === 'POST')).toBe(true));
-    const updateRequest = api.requests.find((request) => request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true&view=full' && request.method === 'POST');
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true&view=full' &&
+            request.method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    const updateRequest = api.requests.find(
+      (request) =>
+        request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true&view=full' &&
+        request.method === 'POST',
+    );
     expect(updateRequest?.body?.path).toBe('/project/brief.md');
     expect(updateRequest?.body?.content).toBe('Updated release memory.');
     expect(await screen.findByText('Updated release memory.')).toBeTruthy();
@@ -1055,8 +1215,20 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.change(within(dialog).getByLabelText('Content'), { target: { value: 'New memory content' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add memory' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories?beta=true&view=full' && request.method === 'POST')).toBe(true));
-    const createRequest = api.requests.find((request) => request.url === '/v1/memory_stores/memstore_one123456/memories?beta=true&view=full' && request.method === 'POST');
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url === '/v1/memory_stores/memstore_one123456/memories?beta=true&view=full' &&
+            request.method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    const createRequest = api.requests.find(
+      (request) =>
+        request.url === '/v1/memory_stores/memstore_one123456/memories?beta=true&view=full' &&
+        request.method === 'POST',
+    );
     expect(createRequest?.body?.path).toBe('/notes/new.md');
     expect(createRequest?.body?.content).toBe('New memory content');
   });
@@ -1077,7 +1249,13 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true' && request.method === 'DELETE')).toBe(true)
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url === '/v1/memory_stores/memstore_one123456/memories/mem_one123456?beta=true' &&
+            request.method === 'DELETE',
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByText('Select a memory')).toBeTruthy();
   });
@@ -1096,32 +1274,67 @@ export function registerManagedAgentsResourceTests() {
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand folder aaa' }));
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2Faaa%2F&depth=1&limit=100&order_by=path' && request.method === 'GET')).toBe(true)
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url ===
+              '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2Faaa%2F&depth=1&limit=100&order_by=path' &&
+            request.method === 'GET',
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByRole('button', { name: 'bbbb 4 B' })).toBeTruthy();
     expect(screen.getByText('Choose a file from the tree to view its contents.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'bbbb 4 B' }));
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories/mem_nested123456?beta=true&view=full' && request.method === 'GET')).toBe(true));
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url === '/v1/memory_stores/memstore_one123456/memories/mem_nested123456?beta=true&view=full' &&
+            request.method === 'GET',
+        ),
+      ).toBe(true),
+    );
     expect(await screen.findByRole('heading', { name: '/aaa/bbbb' })).toBeTruthy();
     expect(screen.getByText('aaaa')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2Fcccc%2Fdddd%2Fccc%2F&depth=1&limit=100&order_by=path' && request.method === 'GET')).toBe(true)
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url ===
+              '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2Fcccc%2Fdddd%2Fccc%2F&depth=1&limit=100&order_by=path' &&
+            request.method === 'GET',
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByRole('button', { name: 'Collapse all' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'xxxx 4 B' })).toBeTruthy();
 
-    const rootListUrl = '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2F&depth=1&limit=100&order_by=path';
-    const rootListRequestsBeforeSave = api.requests.filter((request) => request.url === rootListUrl && request.method === 'GET').length;
+    const rootListUrl =
+      '/v1/memory_stores/memstore_one123456/memories?beta=true&path_prefix=%2F&depth=1&limit=100&order_by=path';
+    const rootListRequestsBeforeSave = api.requests.filter(
+      (request) => request.url === rootListUrl && request.method === 'GET',
+    ).length;
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     const editor = screen.getByRole('textbox', { name: 'Memory content' });
     fireEvent.change(editor, { target: { value: 'updated nested memory' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456/memories/mem_nested123456?beta=true&view=full' && request.method === 'POST')).toBe(true));
-    expect(api.requests.filter((request) => request.url === rootListUrl && request.method === 'GET')).toHaveLength(rootListRequestsBeforeSave);
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) =>
+            request.url === '/v1/memory_stores/memstore_one123456/memories/mem_nested123456?beta=true&view=full' &&
+            request.method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    expect(api.requests.filter((request) => request.url === rootListUrl && request.method === 'GET')).toHaveLength(
+      rootListRequestsBeforeSave,
+    );
     expect(screen.getByRole('button', { name: 'Collapse folder aaa' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Collapse folder cccc' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'xxxx 4 B' })).toBeTruthy();
@@ -1146,17 +1359,27 @@ export function registerManagedAgentsResourceTests() {
     expect(resourceTrigger.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(resourceTrigger);
     expect(resourceTrigger.getAttribute('aria-expanded')).toBe('true');
-    const resourceCopy = within(dialog).getByText('No resource attachments are configured. Add files, repositories, or memory stores after creation.');
+    const resourceCopy = within(dialog).getByText(
+      'No resource attachments are configured. Add files, repositories, or memory stores after creation.',
+    );
     expect(resourceCopy.closest('[data-slot="collapsible-content"]')).toBeTruthy();
 
-    await waitFor(() => expect(within(dialog).getByRole('combobox', { name: 'Agent' }).textContent).toContain('Option agent'));
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Agent' }).textContent).toContain('Option agent'),
+    );
     await selectManagedComboboxOption(dialog, 'Environment', 'Option environment');
     expect(within(dialog).getByRole('combobox', { name: 'Environment' }).textContent).toContain('Option environment');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create session' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST')).toBe(true));
-    const createRequest = api.requests.find((request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST');
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST'),
+      ).toBe(true),
+    );
+    const createRequest = api.requests.find(
+      (request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST',
+    );
     expect(createRequest?.body?.title).toBe('Console session');
     expect(createRequest?.body?.agent).toBe('agent_option123456');
     expect(createRequest?.body?.environment_id).toBe('env_option123456');
@@ -1178,22 +1401,34 @@ export function registerManagedAgentsResourceTests() {
     expect(within(dialog).getByText('Deploy an agent with a trigger, environment, and credentials.')).toBeTruthy();
     expect(within(dialog).queryByLabelText('Description')).toBeNull();
     expect(within(dialog).queryByRole('button', { name: 'Cancel' })).toBeNull();
-    expect(within(dialog).getByRole('link', { name: 'Manage agents (opens in new tab)' }).getAttribute('href')).toBe('/workspaces/default/agents');
+    expect(within(dialog).getByRole('link', { name: 'Manage agents (opens in new tab)' }).getAttribute('href')).toBe(
+      '/workspaces/default/agents',
+    );
     expect(within(dialog).queryByRole('button', { name: 'Resource' })).toBeNull();
 
-    await waitFor(() => expect(within(dialog).getByRole('combobox', { name: 'Agent' }).textContent).toContain('Select an agent'));
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Agent' }).textContent).toContain('Select an agent'),
+    );
 
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Nightly inbox triage' } });
     await selectManagedComboboxOption(dialog, 'Agent', 'Option agent');
-    fireEvent.change(within(dialog).getByLabelText('Initial message'), { target: { value: 'Summarize support tickets.' } });
+    fireEvent.change(within(dialog).getByLabelText('Initial message'), {
+      target: { value: 'Summarize support tickets.' },
+    });
     await selectManagedComboboxOption(dialog, 'Environment', 'Option environment');
     await selectManagedComboboxOption(dialog, /Credential vaults/, 'Vault one');
     await selectManagedComboboxOption(dialog, /Memory stores/, 'Memory one');
     await selectManagedComboboxOption(dialog, 'Trigger', 'Manual');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST')).toBe(true));
-    const createRequest = api.requests.find((request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST');
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST'),
+      ).toBe(true),
+    );
+    const createRequest = api.requests.find(
+      (request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST',
+    );
     expect(createRequest?.body?.name).toBe('Nightly inbox triage');
     expect(createRequest?.body?.agent).toBe('agent_option123456');
     expect(createRequest?.body?.environment_id).toBe('env_option123456');
@@ -1202,8 +1437,8 @@ export function registerManagedAgentsResourceTests() {
     expect(createRequest?.body?.initial_events).toEqual([
       {
         type: 'user.message',
-        content: [{ type: 'text', text: 'Summarize support tickets.' }]
-      }
+        content: [{ type: 'text', text: 'Summarize support tickets.' }],
+      },
     ]);
     expect(createRequest?.body?.schedule).toBeNull();
   });
@@ -1224,7 +1459,7 @@ export function registerManagedAgentsResourceTests() {
       system: null,
       tools: [],
       updated_at: now,
-      version: 1
+      version: 1,
     });
     api.resources.deployments.push(
       {
@@ -1241,7 +1476,7 @@ export function registerManagedAgentsResourceTests() {
         status: 'paused',
         type: 'deployment',
         updated_at: now,
-        vault_ids: []
+        vault_ids: [],
       },
       {
         id: 'dep_archived123456',
@@ -1257,8 +1492,8 @@ export function registerManagedAgentsResourceTests() {
         status: 'active',
         type: 'deployment',
         updated_at: now,
-        vault_ids: []
-      }
+        vault_ids: [],
+      },
     );
 
     render(<ManagedAgentsPage section="deployments" />);
@@ -1267,14 +1502,19 @@ export function registerManagedAgentsResourceTests() {
     expect(await screen.findByText('Paused deployment')).toBeTruthy();
     expect(await screen.findByText('Archived deployment')).toBeTruthy();
     expect(
-      api.requests.some((request) => request.url === '/v1/deployments?beta=true&limit=5&include_archived=true' && request.method === 'GET')
+      api.requests.some(
+        (request) =>
+          request.url === '/v1/deployments?beta=true&limit=5&include_archived=true' && request.method === 'GET',
+      ),
     ).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Status All' }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Paused' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('status')).toBe('paused');
@@ -1288,7 +1528,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'All' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('status')).toBeNull();
@@ -1299,7 +1541,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Server agent' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/deployments?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('agent_id')).toBe('agent_server123456');
@@ -1324,7 +1568,7 @@ export function registerManagedAgentsResourceTests() {
       scope: 'workspace',
       state: 'archived',
       type: 'environment',
-      updated_at: archivedAt
+      updated_at: archivedAt,
     });
 
     render(<ManagedAgentsPage section="environments" />);
@@ -1332,14 +1576,18 @@ export function registerManagedAgentsResourceTests() {
     expect(await screen.findByText('Environment one')).toBeTruthy();
     expect(await screen.findByText('Archived environment')).toBeTruthy();
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/environments?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/environments?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('include_archived')).toBe('true');
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Status All' }));
-    const statusMenu = screen.getByRole('menuitemradio', { name: 'All' }).closest('[data-slot="dropdown-menu-content"]');
+    const statusMenu = screen
+      .getByRole('menuitemradio', { name: 'All' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(statusMenu?.className).toContain('bg-popover');
     expect(statusMenu?.className.includes('bg-secondary')).toBe(false);
     expect(screen.getByRole('menuitemradio', { name: 'All' })).toBeTruthy();
@@ -1347,7 +1595,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Active' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/environments?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/environments?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('include_archived')).toBe('false');
@@ -1365,7 +1615,9 @@ export function registerManagedAgentsResourceTests() {
     expect(await screen.findByText('Deployment one')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Status All' }));
-    const filterMenu = screen.getByRole('menuitemradio', { name: 'All' }).closest('[data-slot="dropdown-menu-content"]');
+    const filterMenu = screen
+      .getByRole('menuitemradio', { name: 'All' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(filterMenu?.className).toContain('bg-popover');
     expect(filterMenu?.className.includes('bg-secondary')).toBe(false);
 
@@ -1391,7 +1643,7 @@ export function registerManagedAgentsResourceTests() {
       title: 'Server session',
       type: 'session',
       updated_at: archivedAt,
-      vault_ids: []
+      vault_ids: [],
     });
 
     render(<ManagedAgentsPage section="sessions" />);
@@ -1402,7 +1654,9 @@ export function registerManagedAgentsResourceTests() {
     expect(screen.getByRole('button', { name: /deployment All/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Status Active' })).toBeTruthy();
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       expect(sessionStatusValuesFromUrl(latestRequest!.url)).toEqual(['idle', 'rescheduling', 'running']);
       expect(new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams.get('include_archived')).toBe('false');
@@ -1412,7 +1666,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Terminated' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       expect(sessionStatusValuesFromUrl(latestRequest!.url)).toEqual(['terminated']);
       expect(new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams.get('include_archived')).toBe('true');
@@ -1424,7 +1680,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Server agent' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('agent_id')).toBe('agent_server123456');
@@ -1435,7 +1693,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'dep_server123456' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('deployment_id')).toBe('dep_server123456');
@@ -1445,7 +1705,9 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Last 30 days' }));
 
     await waitFor(() => {
-      const latestRequest = api.requests.filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET').at(-1);
+      const latestRequest = api.requests
+        .filter((request) => request.url.startsWith('/v1/sessions?') && request.method === 'GET')
+        .at(-1);
       expect(latestRequest).toBeTruthy();
       const params = new URL(latestRequest!.url, 'https://oma.duck.ai').searchParams;
       expect(params.get('created_at[gte]')).toBeTruthy();
@@ -1464,7 +1726,11 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Archive environment' }));
     fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/environments/env_one123456/archive?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/environments/env_one123456/archive?beta=true')).toBe(
+        true,
+      ),
+    );
     await waitFor(() => expect(screen.queryByText('Environment one')).toBeNull());
 
     cleanup();
@@ -1474,7 +1740,13 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete memory store' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/memory_stores/memstore_one123456?beta=true' && request.method === 'DELETE')).toBe(true));
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) => request.url === '/v1/memory_stores/memstore_one123456?beta=true' && request.method === 'DELETE',
+        ),
+      ).toBe(true),
+    );
     await waitFor(() => expect(screen.queryByText('Memory one')).toBeNull());
   });
 
@@ -1486,7 +1758,9 @@ export function registerManagedAgentsResourceTests() {
     expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
     const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(breadcrumb.dataset.slot).toBe('breadcrumb');
-    expect(within(breadcrumb).getByRole('link', { name: 'Environments' }).getAttribute('href')).toBe('/workspaces/default/environments');
+    expect(within(breadcrumb).getByRole('link', { name: 'Environments' }).getAttribute('href')).toBe(
+      '/workspaces/default/environments',
+    );
     expect(breadcrumb.querySelector('[data-slot="breadcrumb-page"]')?.textContent).toBe('Environment one');
     const overviewSection = screen.getByRole('heading', { name: 'Overview' }).closest('section');
     const overviewCard = overviewSection?.querySelector('[data-slot="card"]') as HTMLElement | null;
@@ -1495,7 +1769,9 @@ export function registerManagedAgentsResourceTests() {
     expect(overviewGrid?.className).toContain('bg-border');
     expect(overviewGrid?.className.includes('bg-secondary')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    const detailActionMenu = screen.getByRole('menuitem', { name: 'Archive' }).closest('[data-slot="dropdown-menu-content"]');
+    const detailActionMenu = screen
+      .getByRole('menuitem', { name: 'Archive' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(detailActionMenu?.className).toContain('bg-popover');
     expect(detailActionMenu?.className.includes('bg-secondary')).toBe(false);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
@@ -1545,12 +1821,18 @@ export function registerManagedAgentsResourceTests() {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Run deployment' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/deployments/dep_one123456/run?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/deployments/dep_one123456/run?beta=true')).toBe(true),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Pause deployment' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/deployments/dep_one123456/pause?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/deployments/dep_one123456/pause?beta=true')).toBe(
+        true,
+      ),
+    );
   });
 
   test('renders the dreaming loading panel', () => {
@@ -1560,5 +1842,4 @@ export function registerManagedAgentsResourceTests() {
     expect(screen.getByRole('heading', { name: 'Dreaming' })).toBeTruthy();
     expect(screen.getByText('Captured Dreaming assets are loading.')).toBeTruthy();
   });
-
 }

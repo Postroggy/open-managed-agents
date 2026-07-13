@@ -1,34 +1,59 @@
 import { type ApiError } from '../../shared/api/client';
 import { buildPlatformQuickstartRequest } from './quickstart/platformQuickstartRequest';
-import { BarChart3, Box, BriefcaseBusiness, FileCheck2, FileJson, FileText, GitBranch, Headphones, MessageCircle, Siren, Sparkles } from 'lucide-react';
+import {
+  BarChart3,
+  Box,
+  BriefcaseBusiness,
+  FileCheck2,
+  FileJson,
+  FileText,
+  GitBranch,
+  Headphones,
+  MessageCircle,
+  Siren,
+  Sparkles,
+} from 'lucide-react';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { agentModelName, BUILT_IN_AGENT_TOOLSETS } from './agents/AgentsResourcePage';
 import { postQuickstartProxyStream } from './api';
-import { type AgentApiResponse, type AgentEditConfig, type AgentModelInput, type AgentTemplate, type AgentUpdateInput, type CodeFormat, type CreateAgentInput, type TemplateTag } from './types';
+import {
+  type AgentApiResponse,
+  type AgentEditConfig,
+  type AgentModelInput,
+  type AgentTemplate,
+  type AgentUpdateInput,
+  type CodeFormat,
+  type CreateAgentInput,
+  type TemplateTag,
+} from './types';
 import { cloneJsonValue, objectRecord, parseToolInput, toRecord } from './utils';
 
 export const agentModelInputSchema = z.union([
   z.string().trim().min(1, 'Model is required.'),
-  z.object({
-    id: z.string().trim().min(1, 'Model id is required.'),
-    speed: z.string().trim().optional()
-  }).strict()
+  z
+    .object({
+      id: z.string().trim().min(1, 'Model id is required.'),
+      speed: z.string().trim().optional(),
+    })
+    .strict(),
 ]);
 
 export const agentEditObjectSchema = z.record(z.string(), z.unknown());
 
-export const agentEditConfigSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required.'),
-  description: z.string().nullable().optional(),
-  model: agentModelInputSchema,
-  system: z.string().nullable().optional(),
-  mcp_servers: z.array(z.unknown()).optional(),
-  tools: z.array(agentEditObjectSchema).optional(),
-  skills: z.array(z.unknown()).optional(),
-  metadata: agentEditObjectSchema.optional(),
-  multiagent: agentEditObjectSchema.nullable().optional()
-}).strict();
+export const agentEditConfigSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required.'),
+    description: z.string().nullable().optional(),
+    model: agentModelInputSchema,
+    system: z.string().nullable().optional(),
+    mcp_servers: z.array(z.unknown()).optional(),
+    tools: z.array(agentEditObjectSchema).optional(),
+    skills: z.array(z.unknown()).optional(),
+    metadata: agentEditObjectSchema.optional(),
+    multiagent: agentEditObjectSchema.nullable().optional(),
+  })
+  .strict();
 
 export const templateTags = {
   docs: { label: 'docs', icon: FileText, tone: 'bg-secondary text-foreground' },
@@ -49,7 +74,7 @@ export const templateTags = {
   intercom: { label: 'intercom', icon: Headphones, tone: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
   atlassian: { label: 'atlassian', icon: BriefcaseBusiness, tone: 'bg-secondary text-secondary-foreground' },
   docx: { label: 'docx', icon: FileText, tone: 'bg-secondary text-secondary-foreground' },
-  amplitude: { label: 'amplitude', icon: BarChart3, tone: 'bg-secondary text-secondary-foreground' }
+  amplitude: { label: 'amplitude', icon: BarChart3, tone: 'bg-secondary text-secondary-foreground' },
 } satisfies Record<string, TemplateTag>;
 
 export const agentTemplates: AgentTemplate[] = [
@@ -58,21 +83,21 @@ export const agentTemplates: AgentTemplate[] = [
     slug: 'blank-agent',
     title: 'Blank agent config',
     body: 'A blank starting point with the core toolset.',
-    prompt: 'Create a blank managed agent config with a core toolset.'
+    prompt: 'Create a blank managed agent config with a core toolset.',
   },
   {
     id: 'deep-researcher',
     slug: 'deep-researcher',
     title: 'Deep researcher',
     body: 'Conducts multi-step web research with source synthesis and citations.',
-    prompt: 'Build a deep researcher that conducts multi-step web research, synthesizes sources, and cites claims.'
+    prompt: 'Build a deep researcher that conducts multi-step web research, synthesizes sources, and cites claims.',
   },
   {
     id: 'structured-extractor',
     slug: 'structured-extractor',
     title: 'Structured extractor',
     body: 'Parses unstructured text into a typed JSON schema.',
-    prompt: 'Create an agent that parses unstructured text into a typed JSON schema.'
+    prompt: 'Create an agent that parses unstructured text into a typed JSON schema.',
   },
   {
     id: 'field-monitor',
@@ -80,7 +105,7 @@ export const agentTemplates: AgentTemplate[] = [
     title: 'Field monitor',
     body: 'Scans software blogs for a topic and writes a weekly what-changed brief.',
     prompt: 'Create a field monitor that scans software blogs for a topic and writes a weekly change brief.',
-    tags: [templateTags.notion]
+    tags: [templateTags.notion],
   },
   {
     id: 'support-agent',
@@ -88,15 +113,16 @@ export const agentTemplates: AgentTemplate[] = [
     title: 'Support agent',
     body: 'Answers customer questions from your docs and knowledge base, and escalates when needed.',
     prompt: 'Build a support agent that answers customer questions from docs and escalates when needed.',
-    tags: [templateTags.notion, templateTags.slack]
+    tags: [templateTags.notion, templateTags.slack],
   },
   {
     id: 'incident-commander',
     slug: 'incident-commander',
     title: 'Incident commander',
     body: 'Triages a Sentry alert, opens a Linear incident ticket, and runs the Slack war room.',
-    prompt: 'Create an incident commander agent that triages alerts, opens an incident ticket, and coordinates a war room.',
-    tags: [templateTags.sentry, templateTags.linear, templateTags.slack, templateTags.github]
+    prompt:
+      'Create an incident commander agent that triages alerts, opens an incident ticket, and coordinates a war room.',
+    tags: [templateTags.sentry, templateTags.linear, templateTags.slack, templateTags.github],
   },
   {
     id: 'contract-tracker',
@@ -104,15 +130,16 @@ export const agentTemplates: AgentTemplate[] = [
     title: 'Contract tracker',
     body: 'Extracts clauses, sets deadline reminders, and tracks obligations in Asana when given a Box file ID or link.',
     prompt: 'Build a contract tracker that extracts clauses, sets deadline reminders, and tracks obligations.',
-    tags: [templateTags.box, templateTags.asana]
+    tags: [templateTags.box, templateTags.asana],
   },
   {
     id: 'retro-facilitator',
     slug: 'sprint-retro-facilitator',
     title: 'Sprint retro facilitator',
     body: 'Pulls a closed sprint from Linear, synthesizes themes, and writes the retro doc before the meeting.',
-    prompt: 'Create a sprint retro facilitator that pulls closed sprint work, synthesizes themes, and drafts the retro doc.',
-    tags: [templateTags.linear, templateTags.slack, templateTags.docx]
+    prompt:
+      'Create a sprint retro facilitator that pulls closed sprint work, synthesizes themes, and drafts the retro doc.',
+    tags: [templateTags.linear, templateTags.slack, templateTags.docx],
   },
   {
     id: 'support-escalator',
@@ -120,7 +147,7 @@ export const agentTemplates: AgentTemplate[] = [
     title: 'Support-to-eng escalator',
     body: 'Reads an Intercom conversation, reproduces the bug, and files a linked Jira issue with repro steps.',
     prompt: 'Create a support-to-engineering escalator that reproduces bugs and files linked issues with repro steps.',
-    tags: [templateTags.intercom, templateTags.atlassian, templateTags.slack]
+    tags: [templateTags.intercom, templateTags.atlassian, templateTags.slack],
   },
   {
     id: 'data-analyst',
@@ -128,8 +155,8 @@ export const agentTemplates: AgentTemplate[] = [
     title: 'Data analyst',
     body: 'Load, explore, and visualize data; build reports and answer questions from datasets.',
     prompt: 'Build a data analyst agent that loads, explores, visualizes data, and writes reports from datasets.',
-    tags: [templateTags.amplitude]
-  }
+    tags: [templateTags.amplitude],
+  },
 ];
 
 export const createAgentTemplates = agentTemplates.slice(0, 6);
@@ -139,7 +166,7 @@ export const blankAgentTemplate = createAgentTemplates[0];
 export const createTemplateAppTags: Record<string, TemplateTag[]> = {
   'field-monitor': [templateTags.notion],
   'support-agent': [templateTags.notion, templateTags.slack],
-  'incident-commander': [templateTags.sentry, templateTags.linear, templateTags.slack, templateTags.github]
+  'incident-commander': [templateTags.sentry, templateTags.linear, templateTags.slack, templateTags.github],
 };
 
 export const structuredExtractorSystem = `You extract structured data from unstructured text. Given raw input (emails, PDFs, logs, transcripts, scraped HTML) and a target JSON schema:
@@ -173,7 +200,7 @@ export function codeForTemplate(template: AgentTemplate, format: CodeFormat) {
 
 export function createAgentToolset() {
   return {
-    type: 'agent_toolset_20260401'
+    type: 'agent_toolset_20260401',
   };
 }
 
@@ -181,7 +208,7 @@ export function createMcpServer(name: string, url: string) {
   return {
     name,
     type: 'url',
-    url
+    url,
   };
 }
 
@@ -191,9 +218,9 @@ export function createMcpToolset(name: string) {
     mcp_server_name: name,
     default_config: {
       permission_policy: {
-        type: 'always_allow'
-      }
-    }
+        type: 'always_allow',
+      },
+    },
   };
 }
 
@@ -202,10 +229,11 @@ export const createDialogTemplateConfigs: Record<string, CreateAgentInput> = {
     name: 'Untitled agent',
     description: 'A blank starting point with the core toolset.',
     model: 'claude-sonnet-4-6',
-    system: "You are a general-purpose agent that can research, write code, run commands, and use connected tools to complete the user's task end to end.",
+    system:
+      "You are a general-purpose agent that can research, write code, run commands, and use connected tools to complete the user's task end to end.",
     mcp_servers: [],
     tools: [{ type: 'agent_toolset_20260401' }],
-    skills: []
+    skills: [],
   },
   'deep-researcher': {
     name: 'Deep researcher',
@@ -222,7 +250,7 @@ Be skeptical. If sources conflict, say so and explain which you find more credib
     mcp_servers: [],
     tools: [createAgentToolset()],
     skills: [],
-    metadata: { template: 'deep-research' }
+    metadata: { template: 'deep-research' },
   },
   'structured-extractor': {
     name: 'Structured extractor',
@@ -232,7 +260,7 @@ Be skeptical. If sources conflict, say so and explain which you find more credib
     mcp_servers: [],
     tools: [createAgentToolset()],
     skills: [],
-    metadata: { template: 'structured-extractor' }
+    metadata: { template: 'structured-extractor' },
   },
   'field-monitor': {
     name: 'Field monitor',
@@ -248,12 +276,9 @@ Be skeptical. If sources conflict, say so and explain which you find more credib
 
 Be ruthless about signal. A paper that restates a known result with a new benchmark is noise. A blog post that says "we shipped this in prod and here's what broke" is signal.`,
     mcp_servers: [createMcpServer('notion', 'https://mcp.notion.com/mcp')],
-    tools: [
-      createAgentToolset(),
-      createMcpToolset('notion')
-    ],
+    tools: [createAgentToolset(), createMcpToolset('notion')],
     skills: [],
-    metadata: { template: 'field-monitor' }
+    metadata: { template: 'field-monitor' },
   },
   'support-agent': {
     name: 'Support agent',
@@ -266,14 +291,13 @@ Be ruthless about signal. A paper that restates a known result with a new benchm
 3. If you can't answer with ≥80% confidence, don't guess — post a handoff message to the internal escalation Slack channel with the full question, what you searched, what you found, and your best hypothesis. Tell the customer a human is taking a look.
 
 Match the customer's tone. Be warm but don't pad. One emoji max.`,
-    mcp_servers: [createMcpServer('notion', 'https://mcp.notion.com/mcp'), createMcpServer('slack', 'https://mcp.slack.com/mcp')],
-    tools: [
-      createAgentToolset(),
-      createMcpToolset('notion'),
-      createMcpToolset('slack')
+    mcp_servers: [
+      createMcpServer('notion', 'https://mcp.notion.com/mcp'),
+      createMcpServer('slack', 'https://mcp.slack.com/mcp'),
     ],
+    tools: [createAgentToolset(), createMcpToolset('notion'), createMcpToolset('slack')],
     skills: [],
-    metadata: { template: 'support-agent' }
+    metadata: { template: 'support-agent' },
   },
   'incident-commander': {
     name: 'Incident commander',
@@ -292,21 +316,22 @@ Be decisive. If you're >70% confident it's a specific deploy, say so and recomme
       createMcpServer('sentry', 'https://mcp.sentry.dev/mcp'),
       createMcpServer('linear', 'https://mcp.linear.app/mcp'),
       createMcpServer('slack', 'https://mcp.slack.com/mcp'),
-      createMcpServer('github', 'https://api.githubcopilot.com/mcp/')
+      createMcpServer('github', 'https://api.githubcopilot.com/mcp/'),
     ],
     tools: [
       createAgentToolset(),
       createMcpToolset('sentry'),
       createMcpToolset('linear'),
       createMcpToolset('slack'),
-      createMcpToolset('github')
+      createMcpToolset('github'),
     ],
     skills: [],
-    metadata: { template: 'incident-commander' }
+    metadata: { template: 'incident-commander' },
   },
   'contract-tracker': {
     name: 'Contract tracker',
-    description: 'Extracts clauses, sets deadline reminders, and tracks obligations in Asana when given a Box file ID or link.',
+    description:
+      'Extracts clauses, sets deadline reminders, and tracks obligations in Asana when given a Box file ID or link.',
     model: 'claude-opus-4-8',
     system: `You are a contract lifecycle assistant. Given a Box file ID or link:
 
@@ -317,13 +342,9 @@ Be decisive. If you're >70% confident it's a specific deploy, say so and recomme
 
 Rules: always quote the original clause text — never paraphrase without it. If a date or clause is ambiguous, flag it rather than assume.`,
     mcp_servers: [createMcpServer('box', 'https://mcp.box.com'), createMcpServer('asana', 'https://mcp.asana.com/sse')],
-    tools: [
-      createAgentToolset(),
-      createMcpToolset('box'),
-      createMcpToolset('asana')
-    ],
+    tools: [createAgentToolset(), createMcpToolset('box'), createMcpToolset('asana')],
     skills: [],
-    metadata: { template: 'contract-clause-extraction' }
+    metadata: { template: 'contract-clause-extraction' },
   },
   'retro-facilitator': {
     name: 'Sprint retro facilitator',
@@ -337,14 +358,13 @@ Rules: always quote the original clause text — never paraphrase without it. If
 4. End with a proposed single process change and a rough confidence score that it'll stick.
 
 Be specific. "Communication was bad" is useless; "three tickets were re-assigned mid-sprint without Slack heads-up (LIN-123, LIN-456, LIN-789)" is actionable.`,
-    mcp_servers: [createMcpServer('linear', 'https://mcp.linear.app/mcp'), createMcpServer('slack', 'https://mcp.slack.com/mcp')],
-    tools: [
-      createAgentToolset(),
-      createMcpToolset('linear'),
-      createMcpToolset('slack')
+    mcp_servers: [
+      createMcpServer('linear', 'https://mcp.linear.app/mcp'),
+      createMcpServer('slack', 'https://mcp.slack.com/mcp'),
     ],
+    tools: [createAgentToolset(), createMcpToolset('linear'), createMcpToolset('slack')],
     skills: [{ type: 'anthropic', skill_id: 'docx' }],
-    metadata: { template: 'sprint-retro-facilitator' }
+    metadata: { template: 'sprint-retro-facilitator' },
   },
   'support-escalator': {
     name: 'Support-to-eng escalator',
@@ -362,16 +382,16 @@ If you can't repro, say so explicitly and list what you tried — don't file a v
     mcp_servers: [
       createMcpServer('intercom', 'https://mcp.intercom.com/mcp'),
       createMcpServer('atlassian', 'https://mcp.atlassian.com/v1/mcp'),
-      createMcpServer('slack', 'https://mcp.slack.com/mcp')
+      createMcpServer('slack', 'https://mcp.slack.com/mcp'),
     ],
     tools: [
       createAgentToolset(),
       createMcpToolset('intercom'),
       createMcpToolset('atlassian'),
-      createMcpToolset('slack')
+      createMcpToolset('slack'),
     ],
     skills: [],
-    metadata: { template: 'support-to-eng-escalator' }
+    metadata: { template: 'support-to-eng-escalator' },
   },
   'data-analyst': {
     name: 'Data analyst',
@@ -387,20 +407,20 @@ If you can't repro, say so explicitly and list what you tried — don't file a v
 
 Default to simple, readable analysis over clever one-liners. A clear bar chart usually beats a dense heatmap.`,
     mcp_servers: [createMcpServer('amplitude', 'https://mcp.amplitude.com/mcp')],
-    tools: [
-      createAgentToolset(),
-      createMcpToolset('amplitude')
-    ],
+    tools: [createAgentToolset(), createMcpToolset('amplitude')],
     skills: [],
-    metadata: { template: 'data-analyst' }
-  }
+    metadata: { template: 'data-analyst' },
+  },
 };
 
 export function cloneCreateAgentInput(config: CreateAgentInput): CreateAgentInput {
   return JSON.parse(JSON.stringify(config)) as CreateAgentInput;
 }
 
-export function createDialogAgentConfig(template: AgentTemplate, descriptionOverride?: string | null): CreateAgentInput {
+export function createDialogAgentConfig(
+  template: AgentTemplate,
+  descriptionOverride?: string | null,
+): CreateAgentInput {
   const fallbackConfig: CreateAgentInput = {
     name: template.id === 'blank' ? 'Untitled agent' : template.title,
     description: template.body,
@@ -409,7 +429,7 @@ export function createDialogAgentConfig(template: AgentTemplate, descriptionOver
     mcp_servers: [],
     tools: [createAgentToolset()],
     skills: [],
-    metadata: { template: template.slug }
+    metadata: { template: template.slug },
   };
   const config = cloneCreateAgentInput(createDialogTemplateConfigs[template.id] ?? fallbackConfig);
   const trimmedDescription = descriptionOverride?.trim();
@@ -422,7 +442,10 @@ export function createDialogAgentConfig(template: AgentTemplate, descriptionOver
   return config;
 }
 
-export function quickstartBuildAgentConfigInput(input: Record<string, unknown>, fallback: CreateAgentInput): CreateAgentInput {
+export function quickstartBuildAgentConfigInput(
+  input: Record<string, unknown>,
+  fallback: CreateAgentInput,
+): CreateAgentInput {
   const rawConfig = toRecord(input.config) ?? input;
   const name = typeof rawConfig.name === 'string' && rawConfig.name.trim() ? rawConfig.name.trim() : fallback.name;
   const description =
@@ -430,23 +453,21 @@ export function quickstartBuildAgentConfigInput(input: Record<string, unknown>, 
       ? rawConfig.description
       : rawConfig.description === null
         ? null
-        : fallback.description ?? null;
+        : (fallback.description ?? null);
   const model = quickstartModelInput(rawConfig.model, fallback.model);
   const system =
     typeof rawConfig.system === 'string'
       ? rawConfig.system
       : rawConfig.system === null
         ? null
-        : fallback.system ?? null;
+        : (fallback.system ?? null);
   const mcpServers = Array.isArray(rawConfig.mcp_servers)
     ? cloneJsonArray(rawConfig.mcp_servers)
     : cloneJsonArray(fallback.mcp_servers);
   const tools = Array.isArray(rawConfig.tools)
     ? rawConfig.tools.filter(isPlainObject).map((tool) => ({ ...tool }))
     : fallback.tools.map((tool) => ({ ...tool }));
-  const skills = Array.isArray(rawConfig.skills)
-    ? cloneJsonArray(rawConfig.skills)
-    : cloneJsonArray(fallback.skills);
+  const skills = Array.isArray(rawConfig.skills) ? cloneJsonArray(rawConfig.skills) : cloneJsonArray(fallback.skills);
   const metadata = quickstartMetadata(rawConfig.metadata, fallback.metadata);
 
   return {
@@ -457,7 +478,7 @@ export function quickstartBuildAgentConfigInput(input: Record<string, unknown>, 
     mcp_servers: mcpServers,
     tools,
     skills,
-    ...(metadata ? { metadata } : {})
+    ...(metadata ? { metadata } : {}),
   };
 }
 
@@ -469,7 +490,7 @@ export function quickstartModelInput(value: unknown, fallback: AgentModelInput):
   if (record && typeof record.id === 'string' && record.id.trim()) {
     return {
       id: record.id.trim(),
-      ...(typeof record.speed === 'string' && record.speed.trim() ? { speed: record.speed.trim() } : {})
+      ...(typeof record.speed === 'string' && record.speed.trim() ? { speed: record.speed.trim() } : {}),
     };
   }
   return fallback;
@@ -479,7 +500,10 @@ export function cloneJsonArray<T>(value: T[]): T[] {
   return JSON.parse(JSON.stringify(value)) as T[];
 }
 
-export function quickstartMetadata(value: unknown, fallback?: Record<string, string>): Record<string, string> | undefined {
+export function quickstartMetadata(
+  value: unknown,
+  fallback?: Record<string, string>,
+): Record<string, string> | undefined {
   const record = toRecord(value);
   if (!record) {
     return fallback ? { ...fallback } : undefined;
@@ -489,7 +513,7 @@ export function quickstartMetadata(value: unknown, fallback?: Record<string, str
     .flatMap(([key, entryValue]) =>
       typeof entryValue === 'string' || typeof entryValue === 'number' || typeof entryValue === 'boolean'
         ? ([[key, String(entryValue)]] as const)
-        : []
+        : [],
     );
   if (!entries.length) {
     return fallback ? { ...fallback } : undefined;
@@ -504,7 +528,7 @@ export function createAgentConfigText(config: CreateAgentInput, format: CodeForm
 export function parseCreateAgentConfigText(
   text: string,
   format: CodeFormat,
-  fallback: CreateAgentInput
+  fallback: CreateAgentInput,
 ): { ok: true; input: CreateAgentInput } | { ok: false; error: string } {
   if (!text.trim()) {
     return { ok: false, error: 'Agent config is required.' };
@@ -531,7 +555,7 @@ export async function generateCreateAgentConfig({
   workspaceId,
   description,
   currentConfig,
-  signal
+  signal,
 }: {
   orgUuid: string;
   workspaceId: string;
@@ -544,9 +568,9 @@ export async function generateCreateAgentConfig({
       step: 'agent',
       deploymentSchedulePlanned: false,
       agentDescription: description,
-      agentConfig: currentConfig
+      agentConfig: currentConfig,
     }),
-    tool_choice: { type: 'tool', name: 'build_agent_config', disable_parallel_tool_use: true }
+    tool_choice: { type: 'tool', name: 'build_agent_config', disable_parallel_tool_use: true },
   };
   let currentTool: { name: string; input: Record<string, unknown>; inputJson: string } | null = null;
   let generatedConfig: CreateAgentInput | null = null;
@@ -564,7 +588,7 @@ export async function generateCreateAgentConfig({
           currentTool = {
             name: String(contentBlock.name ?? 'unknown_tool'),
             input: toRecord(contentBlock.input) ?? {},
-            inputJson: ''
+            inputJson: '',
           };
         }
         return;
@@ -583,7 +607,7 @@ export async function generateCreateAgentConfig({
         }
         currentTool = null;
       }
-    }
+    },
   });
 
   if (!generatedConfig) {
@@ -598,7 +622,7 @@ export function displayAgentConfig(config: CreateAgentInput | AgentApiResponse) 
     name: config.name,
     description: config.description,
     model: typeof model === 'string' ? model : agentModelName(model),
-    system: config.system
+    system: config.system,
   };
   if (Array.isArray(config.tools) && config.tools.length) {
     displayConfig.tools = config.tools;
@@ -736,7 +760,7 @@ export function agentEditConfig(agent: AgentApiResponse): AgentEditConfig {
     tools: canonicalizeAgentEditTools(agent.tools),
     skills: cloneJsonValue(agent.skills),
     metadata: { ...agent.metadata },
-    multiagent: multiagent ? cloneJsonValue(multiagent) : null
+    multiagent: multiagent ? cloneJsonValue(multiagent) : null,
   };
 }
 
@@ -746,7 +770,7 @@ export function agentEditModelInput(model: AgentApiResponse['model']): AgentMode
   }
   return {
     id: agentModelName(model),
-    ...(typeof model.speed === 'string' && model.speed.trim() ? { speed: model.speed } : {})
+    ...(typeof model.speed === 'string' && model.speed.trim() ? { speed: model.speed } : {}),
   };
 }
 
@@ -754,7 +778,10 @@ export function agentEditConfigText(config: AgentEditConfig, format: CodeFormat)
   return format === 'YAML' ? yamlStringify(config) : JSON.stringify(config, null, 2);
 }
 
-export function parseAgentEditConfigText(text: string, format: CodeFormat): { ok: true; config: AgentEditConfig } | { ok: false; error: string } {
+export function parseAgentEditConfigText(
+  text: string,
+  format: CodeFormat,
+): { ok: true; config: AgentEditConfig } | { ok: false; error: string } {
   if (!text.trim()) {
     return { ok: false, error: 'Agent configuration is required.' };
   }
@@ -794,7 +821,7 @@ export function buildAgentUpdateInput(version: number, config: AgentEditConfig):
     mcp_servers: cloneJsonValue(config.mcp_servers ?? []),
     skills: cloneJsonValue(config.skills ?? []),
     metadata: { ...(config.metadata ?? {}) },
-    multiagent: config.multiagent ?? null
+    multiagent: config.multiagent ?? null,
   };
 }
 
@@ -804,7 +831,7 @@ export function normalizeAgentEditModel(model: AgentModelInput): AgentModelInput
   }
   return {
     id: model.id.trim(),
-    ...(model.speed?.trim() ? { speed: model.speed.trim() } : {})
+    ...(model.speed?.trim() ? { speed: model.speed.trim() } : {}),
   };
 }
 

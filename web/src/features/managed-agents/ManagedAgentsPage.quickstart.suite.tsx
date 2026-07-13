@@ -27,7 +27,7 @@ import {
   setAgentConfigEditorValue,
   waitFor,
   within,
-  workspaceContextValue
+  workspaceContextValue,
 } from './ManagedAgentsPage.test-utils';
 
 if (typeof globalThis.DOMRect === 'undefined') {
@@ -65,7 +65,7 @@ if (typeof globalThis.DOMRect === 'undefined') {
         top: this.top,
         right: this.right,
         bottom: this.bottom,
-        left: this.left
+        left: this.left,
       };
     }
   }
@@ -125,7 +125,11 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(within(dialog).getByRole('tab', { name: '模板' }));
     fireEvent.click(within(dialog).getByRole('button', { name: /深度研究员/i }));
 
-    expect(within(dialog).getByRole('button', { name: /^起点$/i }).getAttribute('aria-expanded')).toBe('false');
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /^起点$/i })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
     const collapsedSummary = within(dialog)
       .getAllByText('深度研究员')
       .find((node) => node.closest('[data-slot="badge"]'));
@@ -213,16 +217,17 @@ export function registerManagedAgentsQuickstartTests() {
   test('keeps Enter for newlines in the initial quickstart composer and submits on Cmd/Ctrl+Enter', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/agent-quickstart');
     const api = mockAgentsApi([], {
-      quickstartStream: () => quickstartToolStream('build_agent_config', {
-        name: 'Invoice tracker',
-        description: 'Tracks invoices and keeps the team updated.',
-        model: 'claude-sonnet-4-6',
-        system: 'Track invoice intake and summarize status.',
-        mcp_servers: [],
-        tools: [],
-        skills: [],
-        metadata: { template: 'blank-agent', source: 'description' }
-      })
+      quickstartStream: () =>
+        quickstartToolStream('build_agent_config', {
+          name: 'Invoice tracker',
+          description: 'Tracks invoices and keeps the team updated.',
+          model: 'claude-sonnet-4-6',
+          system: 'Track invoice intake and summarize status.',
+          mcp_servers: [],
+          tools: [],
+          skills: [],
+          metadata: { template: 'blank-agent', source: 'description' },
+        }),
     });
     renderManagedAgentsPage('quickstart');
 
@@ -230,11 +235,17 @@ export function registerManagedAgentsQuickstartTests() {
 
     fireEvent.change(promptInput, { target: { value: 'Build an invoice tracker.' } });
     fireEvent.keyDown(promptInput, { key: 'Enter' });
-    expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBe(0);
+    expect(
+      api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+    ).toBe(0);
 
     fireEvent.keyDown(promptInput, { key: 'Enter', ctrlKey: true });
 
-    await waitFor(() => expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBe(1));
+    await waitFor(() =>
+      expect(
+        api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+      ).toBe(1),
+    );
     expect(await screen.findByRole('button', { name: 'Create this agent' })).toBeTruthy();
   });
 
@@ -248,7 +259,7 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartTextStream('Ready for the next step.');
         }
         return quickstartTextStream("Thanks, I'll continue from there.");
-      }
+      },
     });
     renderManagedAgentsPage('quickstart');
 
@@ -260,17 +271,25 @@ export function registerManagedAgentsQuickstartTests() {
     const reply = screen.getByLabelText('Reply…') as HTMLTextAreaElement;
 
     fireEvent.change(reply, { target: { value: 'Use limited networking.' } });
-    const initialRequestCount = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length;
+    const initialRequestCount = api.requests.filter(
+      (request) => request.url === '/api/organizations/org_test/proxy/v1/messages',
+    ).length;
 
     fireEvent.keyDown(reply, { key: 'Enter', shiftKey: true });
-    expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBe(initialRequestCount);
+    expect(
+      api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+    ).toBe(initialRequestCount);
 
     fireEvent.keyDown(reply, { key: 'Enter' });
 
     await waitFor(() =>
-      expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBe(initialRequestCount + 1)
+      expect(
+        api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+      ).toBe(initialRequestCount + 1),
     );
-    const latestProxyRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
+    const latestProxyRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
     expect(JSON.stringify(latestProxyRequest?.body?.messages)).toContain('Use limited networking.');
   });
 
@@ -317,7 +336,7 @@ export function registerManagedAgentsQuickstartTests() {
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -376,24 +395,24 @@ export function registerManagedAgentsQuickstartTests() {
               {
                 type: 'agent_toolset_20260401',
                 default_config: { enabled: true, permission_policy: { type: 'always_allow' } },
-                configs: [{ name: 'bash', enabled: false }]
-              }
+                configs: [{ name: 'bash', enabled: false }],
+              },
             ],
             skills: [],
-            metadata: { template: 'blank-agent', source: 'description' }
+            metadata: { template: 'blank-agent', source: 'description' },
           });
         }
         return quickstartTextStream('Ready to configure the environment.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.change(screen.getByLabelText('Describe your agent'), {
-      target: { value: 'Build an invoice tracker that summarizes inbound invoice emails.' }
+      target: { value: 'Build an invoice tracker that summarizes inbound invoice emails.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
@@ -427,20 +446,20 @@ export function registerManagedAgentsQuickstartTests() {
             system: 'Track invoices, summarize status, and ask before taking irreversible actions.',
             mcp_servers: [],
             tools: [{ type: 'agent_toolset_20260401' }],
-            skills: []
+            skills: [],
           });
         }
         return quickstartTextStream('Ready to configure the environment.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.change(screen.getByLabelText('Describe your agent'), {
-      target: { value: 'Build an invoice tracker that summarizes inbound invoice emails.' }
+      target: { value: 'Build an invoice tracker that summarizes inbound invoice emails.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
@@ -484,8 +503,8 @@ export function registerManagedAgentsQuickstartTests() {
           'https://mcp.box.com',
           'https://mcp.asana.com/sse',
           'urgent ≤30 days / medium 31–90 days',
-          'template: contract-clause-extraction'
-        ]
+          'template: contract-clause-extraction',
+        ],
       },
       {
         button: /Sprint retro facilitator/i,
@@ -494,8 +513,8 @@ export function registerManagedAgentsQuickstartTests() {
           'https://mcp.slack.com/mcp',
           'nice" / 🎉 reactions',
           'skill_id: docx',
-          'template: sprint-retro-facilitator'
-        ]
+          'template: sprint-retro-facilitator',
+        ],
       },
       {
         button: /Support-to-eng escalator/i,
@@ -503,8 +522,8 @@ export function registerManagedAgentsQuickstartTests() {
           'https://mcp.intercom.com/mcp',
           'https://mcp.atlassian.com/v1/mcp',
           "If you can't repro, say so explicitly",
-          'template: support-to-eng-escalator'
-        ]
+          'template: support-to-eng-escalator',
+        ],
       },
       {
         button: /Data analyst/i,
@@ -512,9 +531,9 @@ export function registerManagedAgentsQuickstartTests() {
           'https://mcp.amplitude.com/mcp',
           'correlation-vs-causation',
           'A clear bar chart usually beats a dense heatmap.',
-          'template: data-analyst'
-        ]
-      }
+          'template: data-analyst',
+        ],
+      },
     ];
 
     for (const expectation of expectations) {
@@ -532,7 +551,7 @@ export function registerManagedAgentsQuickstartTests() {
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -545,7 +564,11 @@ export function registerManagedAgentsQuickstartTests() {
 
     fireEvent.click(screen.getByRole('button', { name: 'Use template' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(
+        true,
+      ),
+    );
     expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(false);
     expect(screen.getByText('Agent created')).toBeTruthy();
     expect(screen.getByText('Your agent is created. Here’s the call that made it:')).toBeTruthy();
@@ -564,7 +587,9 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(screen.getByRole('button', { name: /Next: Configure environment/i }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(true)
+      expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(
+        true,
+      ),
     );
     expect(screen.getByRole('button', { name: 'Test run' }).hasAttribute('disabled')).toBe(true);
     expect(await screen.findByText("Let's configure the environment.")).toBeTruthy();
@@ -577,17 +602,33 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(previewTab);
     expect(within(panelTabs).getByRole('tab', { name: 'Preview', selected: true })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Select an environment/i })).toBeTruthy();
-    const noEnvironmentCard = screen.getByText('No environments yet').closest('[data-slot="card"]') as HTMLElement | null;
+    const noEnvironmentCard = screen
+      .getByText('No environments yet')
+      .closest('[data-slot="card"]') as HTMLElement | null;
     expect(noEnvironmentCard?.getAttribute('data-slot')).toBe('card');
-    expect(within(noEnvironmentCard as HTMLElement).getByRole('button', { name: /^Configure environment$/i }).dataset.slot).toBe('button');
+    expect(
+      within(noEnvironmentCard as HTMLElement).getByRole('button', { name: /^Configure environment$/i }).dataset.slot,
+    ).toBe('button');
 
-    const createRequest = api.requests.find((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST');
+    const createRequest = api.requests.find(
+      (request) => request.url === '/v1/agents?beta=true' && request.method === 'POST',
+    );
     expect(createRequest?.headers['x-workspace-id']).toBe('default');
     expect(createRequest?.body?.name).toBe('Structured extractor');
     expect((createRequest?.body?.metadata as Record<string, string>).template).toBe('structured-extractor');
 
-    const proxyRequest = api.requests.find((request) => request.url === '/api/organizations/org_test/proxy/v1/messages');
-    expect(Object.keys(proxyRequest?.body ?? {})).toEqual(['messages', 'system', 'model', 'max_tokens', 'tools', 'tool_choice', 'stream']);
+    const proxyRequest = api.requests.find(
+      (request) => request.url === '/api/organizations/org_test/proxy/v1/messages',
+    );
+    expect(Object.keys(proxyRequest?.body ?? {})).toEqual([
+      'messages',
+      'system',
+      'model',
+      'max_tokens',
+      'tools',
+      'tool_choice',
+      'stream',
+    ]);
     expect(proxyRequest?.body?.model).toBe('claude-sonnet-4-6');
     expect(proxyRequest?.body?.max_tokens).toBe(4096);
     expect(proxyRequest?.body?.stream).toBe(true);
@@ -599,7 +640,7 @@ export function registerManagedAgentsQuickstartTests() {
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -612,7 +653,9 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(within(previewPanel).getByRole('button', { name: /^Configure environment$/i }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(true)
+      expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(
+        true,
+      ),
     );
     expect(await screen.findByText("Let's configure the environment.")).toBeTruthy();
   });
@@ -634,37 +677,43 @@ export function registerManagedAgentsQuickstartTests() {
               {
                 type: 'agent_toolset_20260401',
                 default_config: { enabled: true, permission_policy: { type: 'always_allow' } },
-                configs: [{ name: 'bash', enabled: false }]
-              }
+                configs: [{ name: 'bash', enabled: false }],
+              },
             ],
             skills: [],
-            metadata: { template: 'blank-agent', source: 'description' }
+            metadata: { template: 'blank-agent', source: 'description' },
           });
         }
         return quickstartTextStream('Ready to configure the environment.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.change(screen.getByLabelText('Describe your agent'), {
-      target: { value: 'Build an invoice tracker that summarizes inbound invoice emails.' }
+      target: { value: 'Build an invoice tracker that summarizes inbound invoice emails.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(true)
+      expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(
+        true,
+      ),
     );
-    const firstProxyRequest = api.requests.find((request) => request.url === '/api/organizations/org_test/proxy/v1/messages');
+    const firstProxyRequest = api.requests.find(
+      (request) => request.url === '/api/organizations/org_test/proxy/v1/messages',
+    );
     const firstProxyContent = firstProxyRequest?.body?.messages?.[0]?.content as string;
     expect(firstProxyContent).toContain("I'm building an agent. Here's my description:");
     expect(firstProxyContent).toContain('"Build an invoice tracker that summarizes inbound invoice emails."');
     expect(firstProxyContent).toContain('"description": "A blank starting point with the core toolset."');
     expect(firstProxyContent).not.toContain('"metadata"');
-    expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(false);
+    expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(
+      false,
+    );
     expect(screen.getByRole('button', { name: 'Create this agent' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keep refining' })).toBeTruthy();
     expect(screen.queryByText('/v1/agents')).toBeNull();
@@ -672,16 +721,24 @@ export function registerManagedAgentsQuickstartTests() {
 
     fireEvent.click(screen.getByRole('button', { name: 'Create this agent' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(true));
-    const createRequest = api.requests.find((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST');
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(
+        true,
+      ),
+    );
+    const createRequest = api.requests.find(
+      (request) => request.url === '/v1/agents?beta=true' && request.method === 'POST',
+    );
     expect(createRequest?.body?.name).toBe('Invoice tracker');
-    expect(createRequest?.body?.system).toBe('Track invoices, summarize status, and ask before taking irreversible actions.');
+    expect(createRequest?.body?.system).toBe(
+      'Track invoices, summarize status, and ask before taking irreversible actions.',
+    );
     expect(createRequest?.body?.tools).toEqual([
       {
         type: 'agent_toolset_20260401',
         default_config: { enabled: true, permission_policy: { type: 'always_allow' } },
-        configs: [{ name: 'bash', enabled: false }]
-      }
+        configs: [{ name: 'bash', enabled: false }],
+      },
     ]);
     expect((createRequest?.body?.metadata as Record<string, string>).source).toBe('description');
     expect(await screen.findByText('Agent created')).toBeTruthy();
@@ -689,10 +746,22 @@ export function registerManagedAgentsQuickstartTests() {
     expect(screen.getByRole('button', { name: /Next: Configure environment/i })).toBeTruthy();
 
     await waitFor(() =>
-      expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBeGreaterThanOrEqual(2)
+      expect(
+        api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+      ).toBeGreaterThanOrEqual(2),
     );
-    const latestProxyRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
-    expect(Object.keys(latestProxyRequest?.body ?? {})).toEqual(['messages', 'system', 'model', 'max_tokens', 'tools', 'tool_choice', 'stream']);
+    const latestProxyRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
+    expect(Object.keys(latestProxyRequest?.body ?? {})).toEqual([
+      'messages',
+      'system',
+      'model',
+      'max_tokens',
+      'tools',
+      'tool_choice',
+      'stream',
+    ]);
     expect(JSON.stringify(latestProxyRequest?.body?.messages)).toContain('Agent created.');
   });
 
@@ -710,20 +779,20 @@ export function registerManagedAgentsQuickstartTests() {
             system: 'Track invoices.',
             mcp_servers: [],
             tools: [{ type: 'agent_toolset_20260401' }],
-            skills: []
+            skills: [],
           });
         }
         return quickstartTextStream('I updated the config.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.change(screen.getByLabelText('Describe your agent'), {
-      target: { value: 'Build an invoice tracker.' }
+      target: { value: 'Build an invoice tracker.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
@@ -733,12 +802,18 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     await waitFor(() =>
-      expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBeGreaterThanOrEqual(2)
+      expect(
+        api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+      ).toBeGreaterThanOrEqual(2),
     );
-    const latestProxyRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
+    const latestProxyRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
     const latestContent = latestProxyRequest?.body?.messages?.at(-1)?.content as Array<Record<string, string>>;
     expect(latestContent[0]?.content).toBe('User sent a message instead: "Call it Invoice Copilot."');
-    expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(false);
+    expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(
+      false,
+    );
   });
 
   test('sends chat replies and renders official quickstart question tool calls', async () => {
@@ -756,19 +831,19 @@ export function registerManagedAgentsQuickstartTests() {
                 multiSelect: false,
                 options: [
                   { label: 'Limited networking', description: 'Run without open internet access.' },
-                  { label: 'Unrestricted networking', description: 'Allow external API calls.' }
-                ]
-              }
-            ]
+                  { label: 'Unrestricted networking', description: 'Allow external API calls.' },
+                ],
+              },
+            ],
           });
         }
         return quickstartTextStream("Thanks, I'll continue from there.");
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -780,11 +855,15 @@ export function registerManagedAgentsQuickstartTests() {
     expect(within(pinnedInteraction).getByText('Does this agent need to access external services?')).toBeTruthy();
     expect(within(pinnedInteraction).getByTestId('quickstart-question-card').className).toContain('border-border');
     const networkingChoices = within(pinnedInteraction).getByRole('radiogroup', {
-      name: 'Does this agent need to access external services?'
+      name: 'Does this agent need to access external services?',
     });
     expect(within(networkingChoices).getByRole('radio', { name: /Limited networking/i })).toBeTruthy();
     expect(within(networkingChoices).getByRole('radio', { name: /Unrestricted networking/i })).toBeTruthy();
-    expect(within(screen.getByTestId('quickstart-chat-stream')).queryByText('Does this agent need to access external services?')).toBeNull();
+    expect(
+      within(screen.getByTestId('quickstart-chat-stream')).queryByText(
+        'Does this agent need to access external services?',
+      ),
+    ).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: /Limited networking/i }));
 
     expect(await screen.findByText("Thanks, I'll continue from there.")).toBeTruthy();
@@ -796,8 +875,14 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.change(reply, { target: { value: 'Use limited networking.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
-    await waitFor(() => expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBeGreaterThanOrEqual(3));
-    const latestProxyRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
+    await waitFor(() =>
+      expect(
+        api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+      ).toBeGreaterThanOrEqual(3),
+    );
+    const latestProxyRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
     expect(JSON.stringify(latestProxyRequest?.body?.messages)).toContain('Use limited networking.');
   });
 
@@ -816,10 +901,10 @@ export function registerManagedAgentsQuickstartTests() {
                 multiSelect: true,
                 options: [
                   { label: 'Slack', description: 'Post updates to channels.' },
-                  { label: 'Notion', description: 'Read project pages.' }
-                ]
-              }
-            ]
+                  { label: 'Notion', description: 'Read project pages.' },
+                ],
+              },
+            ],
           });
         }
         if (proxyCalls === 2) {
@@ -829,18 +914,18 @@ export function registerManagedAgentsQuickstartTests() {
                 question: 'Can we skip this decision?',
                 header: 'Skip',
                 multiSelect: false,
-                options: [{ label: 'Decide later', description: 'Leave this for the next step.' }]
-              }
-            ]
+                options: [{ label: 'Decide later', description: 'Leave this for the next step.' }],
+              },
+            ],
           });
         }
         return quickstartTextStream('Question flow complete.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -882,16 +967,16 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartTextAndToolStream(
             '<think>I should not be visible or persisted.</think>An environment is a reusable compute template.',
             'list_environments',
-            {}
+            {},
           );
         }
         return quickstartTextStream('Environment options are ready.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Field monitor/i }));
@@ -901,10 +986,14 @@ export function registerManagedAgentsQuickstartTests() {
     expect(await screen.findByText('An environment is a reusable compute template.')).toBeTruthy();
     expect(screen.queryByText(/I should not be visible/)).toBeNull();
     await waitFor(() =>
-      expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBeGreaterThanOrEqual(2)
+      expect(
+        api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+      ).toBeGreaterThanOrEqual(2),
     );
 
-    const continuationRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
+    const continuationRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
     const continuationMessages = JSON.stringify(continuationRequest?.body?.messages);
     expect(continuationMessages).toContain('An environment is a reusable compute template.');
     expect(continuationMessages).not.toContain('<think>');
@@ -926,12 +1015,12 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartTextAndToolStream(officialSearchResult, 'list_vaults', {});
         }
         return quickstartTextStream('Vault options are ready.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Field monitor/i }));
@@ -939,9 +1028,15 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(await screen.findByRole('button', { name: /Next: Configure environment/i }));
 
     await waitFor(() =>
-      expect(screen.getAllByRole('alert').some((node) => node.textContent?.includes('Vaults are shared across this workspace'))).toBe(true)
+      expect(
+        screen
+          .getAllByRole('alert')
+          .some((node) => node.textContent?.includes('Vaults are shared across this workspace')),
+      ).toBe(true),
     );
-    const vaultSharingNotice = screen.getAllByRole('alert').find((node) => node.textContent?.includes('Vaults are shared across this workspace'));
+    const vaultSharingNotice = screen
+      .getAllByRole('alert')
+      .find((node) => node.textContent?.includes('Vaults are shared across this workspace'));
     expect(vaultSharingNotice?.getAttribute('role')).toBe('alert');
     expect(screen.queryByText('A vault')).toBeNull();
     expect(screen.getByRole('link', { name: /here/ }).getAttribute('href')).toBe('/docs/en/managed-agents/vaults');
@@ -951,7 +1046,9 @@ export function registerManagedAgentsQuickstartTests() {
     expect(screen.queryByText('Vaults loaded.')).toBeNull();
     expect(screen.queryByText('List vaults')).toBeNull();
     expect(screen.getByLabelText('Reply…')).toBeTruthy();
-    expect(api.requests.some((request) => request.url.startsWith('/v1/vaults?') && request.method === 'GET')).toBe(true);
+    expect(api.requests.some((request) => request.url.startsWith('/v1/vaults?') && request.method === 'GET')).toBe(
+      true,
+    );
   });
 
   test('handles quickstart web_search tool calls without inventing a local API side effect', async () => {
@@ -964,16 +1061,16 @@ export function registerManagedAgentsQuickstartTests() {
         proxyCalls += 1;
         if (proxyCalls === 1) {
           return quickstartTextAndToolStream('Search results for query:', 'web_search', {
-            query: environmentSearchQuery
+            query: environmentSearchQuery,
           });
         }
         return quickstartTextStream('Search complete.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -985,9 +1082,15 @@ export function registerManagedAgentsQuickstartTests() {
     expect(screen.getByText('web_search')).toBeTruthy();
     expect(await screen.findByText('web_search is handled by the upstream model.')).toBeTruthy();
     expect(await screen.findByText('Search complete.')).toBeTruthy();
-    const continuationRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
-    expect(JSON.stringify(continuationRequest?.body?.messages)).toContain(`Search results for query: ${environmentSearchQuery}`);
-    expect(JSON.stringify(continuationRequest?.body?.messages)).toContain('web_search is handled by the upstream model.');
+    const continuationRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
+    expect(JSON.stringify(continuationRequest?.body?.messages)).toContain(
+      `Search results for query: ${environmentSearchQuery}`,
+    );
+    expect(JSON.stringify(continuationRequest?.body?.messages)).toContain(
+      'web_search is handled by the upstream model.',
+    );
     expect(api.requests.some((request) => request.url.includes('/v1/search'))).toBe(false);
   });
 
@@ -1000,20 +1103,15 @@ export function registerManagedAgentsQuickstartTests() {
       quickstartStream: () => {
         proxyCalls += 1;
         if (proxyCalls === 1) {
-          return quickstartTextServerToolAndToolStream(
-            'Search results for query:',
-            '',
-            'list_environments',
-            {}
-          );
+          return quickstartTextServerToolAndToolStream('Search results for query:', '', 'list_environments', {});
         }
         return quickstartTextStream('Environment options are ready.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -1025,7 +1123,9 @@ export function registerManagedAgentsQuickstartTests() {
     expect(await screen.findByText('Environments loaded')).toBeTruthy();
     expect(await screen.findByText('Environment options are ready.')).toBeTruthy();
     expect(screen.queryByText('Search web')).toBeNull();
-    const continuationRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
+    const continuationRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
     expect(JSON.stringify(continuationRequest?.body?.messages)).toContain(environmentSearchQuery);
     expect(JSON.stringify(continuationRequest?.body?.messages)).not.toContain('server_tool_use');
     expect(api.requests.some((request) => request.url.includes('/v1/search'))).toBe(false);
@@ -1042,27 +1142,31 @@ export function registerManagedAgentsQuickstartTests() {
             name: 'structured-extractor-env-5',
             config: {
               type: 'cloud',
-              networking: { type: 'unrestricted' }
-            }
+              networking: { type: 'unrestricted' },
+            },
           });
         }
         return quickstartTextStream('Environment is ready.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Use template' }));
     fireEvent.click(await screen.findByRole('button', { name: /Next: Configure environment/i }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/environments?beta=true' && request.method === 'POST')).toBe(true));
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) => request.url === '/v1/environments?beta=true' && request.method === 'POST'),
+      ).toBe(true),
+    );
     await waitFor(() => expect(codeBlockContaining('ant beta:environments create')).toBeTruthy());
     const createEnvironmentRequest = api.requests.find(
-      (request) => request.url === '/v1/environments?beta=true' && request.method === 'POST'
+      (request) => request.url === '/v1/environments?beta=true' && request.method === 'POST',
     );
     expect(Object.keys(createEnvironmentRequest?.body ?? {})).toEqual(['name', 'metadata', 'scope', 'config']);
     expect(createEnvironmentRequest?.body?.name).toBe('structured-extractor-env-5');
@@ -1082,7 +1186,9 @@ export function registerManagedAgentsQuickstartTests() {
     expect(environmentCliBlock?.textContent).toContain('go: []');
     expect(environmentCliBlock?.textContent).not.toContain('description: Created from the managed agent quickstart.');
 
-    const environmentToast = screen.getByText(/Environment created - env_created123456/i).closest('[data-sonner-toast]');
+    const environmentToast = screen
+      .getByText(/Environment created - env_created123456/i)
+      .closest('[data-sonner-toast]');
     expect(environmentToast).toBeTruthy();
     expect(within(environmentToast as HTMLElement).getByRole('button', { name: 'Close' })).toBeTruthy();
   });
@@ -1097,12 +1203,12 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartToolStream('await_test_run', { until: 'first_message' });
         }
         return quickstartTextStream('Thanks, I captured that reply.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -1119,13 +1225,17 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(await screen.findByText('Thanks, I captured that reply.')).toBeTruthy();
-    const latestProxyRequest = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1);
+    const latestProxyRequest = api.requests
+      .filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')
+      .at(-1);
     const messages = latestProxyRequest?.body?.messages as Array<{ role: string; content: unknown }>;
     const latestMessage = messages.at(-1);
     expect(latestMessage?.role).toBe('user');
     expect(Array.isArray(latestMessage?.content)).toBe(true);
     expect(JSON.stringify(latestMessage?.content)).toContain('"type":"tool_result"');
-    expect(JSON.stringify(latestMessage?.content)).toContain('User replied in chat: Keep the current setup and continue.');
+    expect(JSON.stringify(latestMessage?.content)).toContain(
+      'User replied in chat: Keep the current setup and continue.',
+    );
   });
 
   test('creates a real test session and renders session events in the preview panel', async () => {
@@ -1147,7 +1257,7 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartToolStream('create_vault_credential', {
             vault_id: 'vault_option123456',
             mcp_server_name: 'notion',
-            reason: 'Notion access is needed for this agent.'
+            reason: 'Notion access is needed for this agent.',
           });
         }
         if (proxyCalls === 5) {
@@ -1159,16 +1269,16 @@ export function registerManagedAgentsQuickstartTests() {
         if (proxyCalls === 7) {
           return quickstartToolStream('show_integration_exits', {
             agent_id: 'agent_model_wrong123456',
-            environment_id: 'env_option123456'
+            environment_id: 'env_option123456',
           });
         }
         return quickstartTextStream('Integration selected.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -1188,8 +1298,8 @@ export function registerManagedAgentsQuickstartTests() {
     expect(Array.isArray(sessionStepUserMessage?.content)).toBe(true);
     const sessionStepContent = sessionStepUserMessage?.content as Array<Record<string, unknown>>;
     expect(sessionStepContent[0]?.type).toBe('tool_result');
-    expect((sessionStepContent[1]?.text as string)).toContain('[Current quickstart step: "session". Follow this step');
-    expect((sessionStepContent[1]?.text as string)).toContain("Here's the current config:");
+    expect(sessionStepContent[1]?.text as string).toContain('[Current quickstart step: "session". Follow this step');
+    expect(sessionStepContent[1]?.text as string).toContain("Here's the current config:");
     expect(screen.getByText('vault_option123456')).toBeTruthy();
     const confirmVaultButton = screen.getByRole('button', { name: 'Confirm' });
     expect(confirmVaultButton.hasAttribute('disabled')).toBe(true);
@@ -1210,11 +1320,15 @@ export function registerManagedAgentsQuickstartTests() {
     expect(accessTokenDisclosure.dataset.slot).toBe('collapsible-trigger');
     expect(oauthDisclosure).toBeTruthy();
     expect(oauthDisclosure.dataset.slot).toBe('collapsible-trigger');
-    const credentialSharingNotice = screen.getAllByRole('alert').find((node) => node.textContent?.includes('This credential will be shared across this workspace'));
+    const credentialSharingNotice = screen
+      .getAllByRole('alert')
+      .find((node) => node.textContent?.includes('This credential will be shared across this workspace'));
     expect(credentialSharingNotice).toBeTruthy();
     expect(credentialSharingNotice?.getAttribute('role')).toBe('alert');
     const credentialAckCheckbox = screen.getByRole('checkbox', { name: /I acknowledge this credential is shared/ });
-    const credentialAckLabel = screen.getByText(/I acknowledge this credential is shared/).closest('[data-slot="label"]');
+    const credentialAckLabel = screen
+      .getByText(/I acknowledge this credential is shared/)
+      .closest('[data-slot="label"]');
     expect(credentialAckLabel).toBeTruthy();
     fireEvent.click(credentialAckLabel!);
     expect(credentialAckCheckbox.getAttribute('aria-checked')).toBe('true');
@@ -1256,17 +1370,29 @@ export function registerManagedAgentsQuickstartTests() {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/v1/sessions/sesn_created123456/events?beta=true' && request.method === 'POST')).toBe(true)
-    );
-    await waitFor(() => {
-      const postIndex = api.requests.findIndex((request) => request.url === '/v1/sessions/sesn_created123456/events?beta=true' && request.method === 'POST');
-      expect(postIndex).toBeGreaterThanOrEqual(0);
       expect(
-        api.requests
-          .slice(postIndex + 1)
-          .some((request) => request.url.startsWith('/v1/sessions/sesn_created123456/events?beta=true') && request.method === 'GET')
-      ).toBe(true);
-    }, { timeout: 3000 });
+        api.requests.some(
+          (request) => request.url === '/v1/sessions/sesn_created123456/events?beta=true' && request.method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    await waitFor(
+      () => {
+        const postIndex = api.requests.findIndex(
+          (request) => request.url === '/v1/sessions/sesn_created123456/events?beta=true' && request.method === 'POST',
+        );
+        expect(postIndex).toBeGreaterThanOrEqual(0);
+        expect(
+          api.requests
+            .slice(postIndex + 1)
+            .some(
+              (request) =>
+                request.url.startsWith('/v1/sessions/sesn_created123456/events?beta=true') && request.method === 'GET',
+            ),
+        ).toBe(true);
+      },
+      { timeout: 3000 },
+    );
     expect(screen.getByRole('tab', { name: 'Transcript' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByRole('button', { name: /^Env / })).toBeNull();
     expect(await screen.findByRole('button', { name: /^System System message/ })).toBeTruthy();
@@ -1347,21 +1473,31 @@ export function registerManagedAgentsQuickstartTests() {
     expect(pythonCodeBlock?.querySelector('code.language-python')).toBeTruthy();
     expect(pythonCodeBlock?.querySelector('.hljs-keyword')).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Scaffold in Claude Code' })).toBeTruthy();
-    const proxyCallCountBeforeCopy = api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length;
+    const proxyCallCountBeforeCopy = api.requests.filter(
+      (request) => request.url === '/api/organizations/org_test/proxy/v1/messages',
+    ).length;
     fireEvent.click(screen.getByRole('button', { name: 'Scaffold in Claude Code' }));
     expect(await screen.findByRole('button', { name: 'Prompt copied' })).toBeTruthy();
-    expect(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length).toBe(
-      proxyCallCountBeforeCopy
-    );
+    expect(
+      api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').length,
+    ).toBe(proxyCallCountBeforeCopy);
 
-    expect(api.requests.some((request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST')).toBe(true);
-    expect(api.requests.find((request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST')?.body?.vault_ids).toEqual([
-      'vault_option123456'
-    ]);
-    expect(api.requests.some((request) => request.url === '/v1/sessions/sesn_created123456/events/stream?beta=true')).toBe(true);
-    expect(JSON.stringify(api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1)?.body?.messages)).not.toContain(
-      'User chose scaffold.'
+    expect(api.requests.some((request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST')).toBe(
+      true,
     );
+    expect(
+      api.requests.find((request) => request.url === '/v1/sessions?beta=true' && request.method === 'POST')?.body
+        ?.vault_ids,
+    ).toEqual(['vault_option123456']);
+    expect(
+      api.requests.some((request) => request.url === '/v1/sessions/sesn_created123456/events/stream?beta=true'),
+    ).toBe(true);
+    expect(
+      JSON.stringify(
+        api.requests.filter((request) => request.url === '/api/organizations/org_test/proxy/v1/messages').at(-1)?.body
+          ?.messages,
+      ),
+    ).not.toContain('User chose scaffold.');
   });
 
   test('enables header-created idle test sessions to send messages without an await_test_run tool call', async () => {
@@ -1377,12 +1513,12 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartToolStream('agent_ready', { suggested_first_message: 'Say hello from the test run.' });
         }
         return quickstartTextStream('Session started.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -1393,7 +1529,7 @@ export function registerManagedAgentsQuickstartTests() {
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Test run' }).length).toBeGreaterThan(1));
     fireEvent.click(screen.getAllByRole('button', { name: 'Test run' }).at(-1)!);
 
-    const composer = await screen.findByPlaceholderText('Send a message to the agent') as HTMLTextAreaElement;
+    const composer = (await screen.findByPlaceholderText('Send a message to the agent')) as HTMLTextAreaElement;
     await waitFor(() => expect(composer.hasAttribute('disabled')).toBe(false));
     fireEvent.change(composer, { target: { value: 'Extract structured data from this email.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -1405,11 +1541,13 @@ export function registerManagedAgentsQuickstartTests() {
             request.url === '/v1/sessions/sesn_created123456/events?beta=true' &&
             request.method === 'POST' &&
             request.body?.events?.[0]?.type === 'user.message' &&
-            request.body?.events?.[0]?.content?.[0]?.text === 'Extract structured data from this email.'
-        )
-      ).toBe(true)
+            request.body?.events?.[0]?.content?.[0]?.text === 'Extract structured data from this email.',
+        ),
+      ).toBe(true),
     );
-    expect((await screen.findAllByRole('button', { name: /^User Extract structured data from this email\./ })).length).toBeGreaterThan(1);
+    expect(
+      (await screen.findAllByRole('button', { name: /^User Extract structured data from this email\./ })).length,
+    ).toBeGreaterThan(1);
   });
 
   test('creates vault credentials through the real vault credential endpoint', async () => {
@@ -1422,22 +1560,25 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartToolStream('create_environment', { reuse_environment_id: 'env_option123456' });
         }
         if (proxyCalls === 2) {
-          return quickstartToolStream('select_vault', { vault_ids: ['vault_option123456'], vault_names: ['Option vault'] });
+          return quickstartToolStream('select_vault', {
+            vault_ids: ['vault_option123456'],
+            vault_names: ['Option vault'],
+          });
         }
         if (proxyCalls === 3) {
           return quickstartToolStream('create_vault_credential', {
             vault_id: 'vault_option123456',
             mcp_server_name: 'notion',
-            reason: 'Notion access is needed for this agent.'
+            reason: 'Notion access is needed for this agent.',
           });
         }
         return quickstartTextStream('Credential stored.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Field monitor/i }));
@@ -1455,7 +1596,9 @@ export function registerManagedAgentsQuickstartTests() {
 
     fireEvent.click(screen.getByRole('button', { name: /Access token/ }));
     fireEvent.change(screen.getByPlaceholderText('OAuth access token'), { target: { value: 'token_test123' } });
-    const credentialAckLabel = screen.getByText(/I acknowledge this credential is shared/).closest('[data-slot="label"]');
+    const credentialAckLabel = screen
+      .getByText(/I acknowledge this credential is shared/)
+      .closest('[data-slot="label"]');
     expect(credentialAckLabel).toBeTruthy();
     fireEvent.click(credentialAckLabel!);
     fireEvent.click(screen.getByRole('button', { name: 'Authorize Notion credential' }));
@@ -1466,15 +1609,17 @@ export function registerManagedAgentsQuickstartTests() {
           (request) =>
             request.url === '/v1/vaults/vault_option123456/credentials?beta=true' &&
             request.method === 'POST' &&
-            request.body?.display_name === 'Notion credential'
-        )
-      ).toBe(true)
+            request.body?.display_name === 'Notion credential',
+        ),
+      ).toBe(true),
     );
-    const credentialRequest = api.requests.find((request) => request.url === '/v1/vaults/vault_option123456/credentials?beta=true');
+    const credentialRequest = api.requests.find(
+      (request) => request.url === '/v1/vaults/vault_option123456/credentials?beta=true',
+    );
     expect(credentialRequest?.body?.auth).toEqual({
       type: 'static_bearer',
       mcp_server_url: 'https://mcp.notion.com/mcp',
-      token: 'token_test123'
+      token: 'token_test123',
     });
     expect(await screen.findByText('Credential stored.')).toBeTruthy();
   });
@@ -1496,16 +1641,16 @@ export function registerManagedAgentsQuickstartTests() {
             name: 'Weekly research report',
             cron_expression: '0 9 * * 1',
             timezone: 'America/New_York',
-            initial_message: 'Run the scheduled research report.'
+            initial_message: 'Run the scheduled research report.',
           });
         }
         return quickstartTextStream('Deployment ready.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -1517,16 +1662,20 @@ export function registerManagedAgentsQuickstartTests() {
     expect(await screen.findByText('Deployment created')).toBeTruthy();
     expect(await screen.findByText('Deployment ready.')).toBeTruthy();
 
-    const vaultRequest = api.requests.find((request) => request.url === '/v1/vaults?beta=true' && request.method === 'POST');
+    const vaultRequest = api.requests.find(
+      (request) => request.url === '/v1/vaults?beta=true' && request.method === 'POST',
+    );
     expect(vaultRequest?.body).toEqual({ display_name: 'Research vault', metadata: {} });
-    const deploymentRequest = api.requests.find((request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST');
+    const deploymentRequest = api.requests.find(
+      (request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST',
+    );
     expect(deploymentRequest?.body?.agent).toEqual({ type: 'agent', id: 'agent_created123456', version: 1 });
     expect(deploymentRequest?.body?.environment_id).toBe('env_option123456');
     expect(deploymentRequest?.body?.vault_ids).toEqual(['vault_created123456']);
     expect(deploymentRequest?.body?.schedule).toEqual({
       type: 'cron',
       expression: '0 9 * * 1',
-      timezone: 'America/New_York'
+      timezone: 'America/New_York',
     });
   });
 
@@ -1546,12 +1695,12 @@ export function registerManagedAgentsQuickstartTests() {
           return quickstartToolStream('await_test_run', { until: 'session_closed' });
         }
         return quickstartTextStream('Test run stopped.');
-      }
+      },
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="quickstart" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Structured extractor/i }));
@@ -1572,9 +1721,9 @@ export function registerManagedAgentsQuickstartTests() {
           (request) =>
             request.url === '/v1/sessions/sesn_created123456/events?beta=true' &&
             request.method === 'POST' &&
-            request.body?.events?.[0]?.type === 'user.interrupt'
-        )
-      ).toBe(true)
+            request.body?.events?.[0]?.type === 'user.interrupt',
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByText('Test run stopped.')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Test run' }).length).toBeGreaterThan(0);
@@ -1613,11 +1762,17 @@ export function registerManagedAgentsQuickstartTests() {
             title: 'Tag overflow',
             body: 'Template body.',
             prompt: 'Create an agent.',
-            tags: [templateTags.notion, templateTags.slack, templateTags.sentry, templateTags.linear, templateTags.github]
+            tags: [
+              templateTags.notion,
+              templateTags.slack,
+              templateTags.sentry,
+              templateTags.linear,
+              templateTags.github,
+            ],
           }}
           onClick={() => {}}
         />
-      </I18nProvider>
+      </I18nProvider>,
     );
 
     const templateCard = screen.getByRole('button', { name: /Tag overflow/i });
@@ -1630,5 +1785,4 @@ export function registerManagedAgentsQuickstartTests() {
     expect(within(templateCard).getByText('+1')).toBeTruthy();
     expect(templateCard.getAttribute('aria-label')).toContain('github');
   });
-
 }

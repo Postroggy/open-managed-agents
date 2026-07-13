@@ -9,15 +9,9 @@ import {
   RowIconButton,
   dataTableClassName,
   dataTableHeaderCellClassName,
-  dataTableHeaderRowClassName
+  dataTableHeaderRowClassName,
 } from '@/shared/ui/data-table-interactions';
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/shared/ui/table';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 import { useI18n } from '../../shared/i18n';
 import { ConsolePageFrame, CursorPagination, TableEmptyRow, TableErrorRow, TableLoadingRow } from './frame';
 import {
@@ -29,7 +23,7 @@ import {
   listFiles,
   useDashboardWorkspaceScope,
   type ConsoleFile,
-  type FilesPageCursor
+  type FilesPageCursor,
 } from './model';
 
 export function FilesPage() {
@@ -39,11 +33,11 @@ export function FilesPage() {
   const [pageCursors, setPageCursors] = useState<FilesPageCursor[]>([{}]);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const paginationWorkspaceIdRef = useRef(workspaceId);
-  const cursor = paginationWorkspaceIdRef.current === workspaceId ? pageCursors[pageIndex] ?? {} : {};
+  const cursor = paginationWorkspaceIdRef.current === workspaceId ? (pageCursors[pageIndex] ?? {}) : {};
   const filesQuery = useQuery({
     queryKey: ['files', workspaceId, cursor.afterId ?? '', cursor.beforeId ?? ''],
     queryFn: () => listFiles(cursor, workspaceId),
-    retry: false
+    retry: false,
   });
   const response = filesQuery.data;
   const files = response?.data ?? [];
@@ -94,7 +88,7 @@ export function FilesPage() {
       description={msg(
         'files.description',
         "Only files from the {workspaceName} workspace are shown. To see another workspace's files, select a workspace.",
-        { workspaceName }
+        { workspaceName },
       )}
     >
       <FilesTable
@@ -127,7 +121,7 @@ function FilesTable({
   onRetry,
   onPrevious,
   onNext,
-  onDownload
+  onDownload,
 }: {
   files: ConsoleFile[];
   workspaceName: string;
@@ -177,7 +171,7 @@ function FilesTable({
           ) : files.length === 0 ? (
             <TableEmptyRow colSpan={5}>
               {msg('files.empty', 'No files have been uploaded to the {workspaceName} workspace.', {
-                workspaceName
+                workspaceName,
               })}
             </TableEmptyRow>
           ) : (

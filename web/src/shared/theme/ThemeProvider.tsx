@@ -39,9 +39,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     () => ({
       mode,
       resolvedTheme,
-      setMode: setModeState
+      setMode: setModeState,
     }),
-    [mode, resolvedTheme]
+    [mode, resolvedTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

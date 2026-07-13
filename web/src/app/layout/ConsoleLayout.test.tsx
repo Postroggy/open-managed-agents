@@ -24,7 +24,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     expect(getWorkspaceMenuButton(/Default/i)).toBeTruthy();
@@ -43,7 +43,7 @@ describe('ConsoleShell', () => {
     expect(screen.getByRole('link', { name: 'Caching' }).getAttribute('href')).toBe('/usage/cache');
     expect(screen.getByRole('link', { name: 'Rate limits' }).getAttribute('href')).toBe('/usage/limits');
     expect(screen.getByRole('link', { name: 'Quickstart' }).getAttribute('href')).toBe(
-      '/workspaces/default/agent-quickstart'
+      '/workspaces/default/agent-quickstart',
     );
     expect(screen.queryByRole('link', { name: /Playground/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /Dreams/i })).toBeNull();
@@ -61,11 +61,13 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     expect(getWorkspaceMenuButton(/Default/i).closest('[data-sidebar-scroll-area="true"]')).toBeNull();
-    const scrollArea = screen.getByRole('navigation', { name: /Console navigation/i }).closest('[data-sidebar-scroll-area="true"]');
+    const scrollArea = screen
+      .getByRole('navigation', { name: /Console navigation/i })
+      .closest('[data-sidebar-scroll-area="true"]');
     expect(scrollArea).toBeTruthy();
     expect(scrollArea?.classList.contains('sidebar-scroll-area')).toBe(true);
   });
@@ -79,7 +81,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     const sidebar = document.querySelector('[data-slot="sidebar"]');
@@ -117,7 +119,7 @@ describe('ConsoleShell', () => {
         onNavigate={navigate}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     fireEvent.click(screen.getByRole('link', { name: 'Workbench' }));
@@ -137,7 +139,7 @@ describe('ConsoleShell', () => {
         onNavigate={navigate}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     fireEvent.click(screen.getByRole('link', { name: 'Files' }));
@@ -156,7 +158,7 @@ describe('ConsoleShell', () => {
         onLogout={logout}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /test/i }));
@@ -186,7 +188,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     await act(async () => {
@@ -210,7 +212,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /test/i }));
@@ -231,7 +233,7 @@ describe('ConsoleShell', () => {
       >
         <div>Dashboard content</div>
       </ConsoleShell>,
-      { locale: 'zh-CN' }
+      { locale: 'zh-CN' },
     );
 
     expect(document.documentElement.lang).toBe('zh-CN');
@@ -261,7 +263,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     await act(async () => {
@@ -284,7 +286,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     fireEvent.click(getWorkspaceMenuButton(/Default/i));
@@ -306,7 +308,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Dashboard content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     await act(async () => {
@@ -336,7 +338,7 @@ describe('ConsoleShell', () => {
         onNavigate={navigate}
       >
         <div>Agents content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     fireEvent.click(getWorkspaceMenuButton(/Default/i));
@@ -356,7 +358,7 @@ describe('ConsoleShell', () => {
         onLogout={() => undefined}
       >
         <div>Logs content</div>
-      </ConsoleShell>
+      </ConsoleShell>,
     );
 
     await waitFor(() => expect(getWorkspaceMenuButton(/foo/i)).toBeTruthy());
@@ -370,7 +372,7 @@ describe('ConsoleShell', () => {
       name: input.name,
       display_color: input.display_color,
       color: input.display_color,
-      data_residency: input.data_residency
+      data_residency: input.data_residency,
     }));
 
     renderWithWorkspaces(
@@ -381,7 +383,7 @@ describe('ConsoleShell', () => {
       >
         <div>Dashboard content</div>
       </ConsoleShell>,
-      { createWorkspace }
+      { createWorkspace },
     );
 
     fireEvent.click(getWorkspaceMenuButton(/Default/i));
@@ -398,8 +400,8 @@ describe('ConsoleShell', () => {
       name: 'bar',
       display_color: '#D8D2A6',
       data_residency: {
-        workspace_geo: 'us'
-      }
+        workspace_geo: 'us',
+      },
     });
     expect(getWorkspaceMenuButton(/bar/i)).toBeTruthy();
   });
@@ -423,7 +425,7 @@ function matchesName(value: string | null, expected: RegExp | string) {
 
 function renderWithWorkspaces(
   children: ReactNode,
-  options: { createWorkspace?: (input: CreateWorkspaceInput) => Promise<Workspace>; locale?: Locale } = {}
+  options: { createWorkspace?: (input: CreateWorkspaceInput) => Promise<Workspace>; locale?: Locale } = {},
 ) {
   const tree = <WorkspaceHarness createWorkspace={options.createWorkspace}>{children}</WorkspaceHarness>;
   return render(options.locale ? <I18nProvider initialLocale={options.locale}>{tree}</I18nProvider> : tree);
@@ -431,7 +433,7 @@ function renderWithWorkspaces(
 
 function WorkspaceHarness({
   children,
-  createWorkspace
+  createWorkspace,
 }: {
   children: ReactNode;
   createWorkspace?: (input: CreateWorkspaceInput) => Promise<Workspace>;
@@ -443,8 +445,8 @@ function WorkspaceHarness({
       type: 'workspace',
       name: 'foo',
       display_color: '#9B87F5',
-      color: '#9B87F5'
-    }
+      color: '#9B87F5',
+    },
   ]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(defaultWorkspace.id);
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? defaultWorkspace;
@@ -467,15 +469,15 @@ function WorkspaceHarness({
               name: input.name,
               display_color: input.display_color,
               color: input.display_color,
-              data_residency: input.data_residency
+              data_residency: input.data_residency,
             };
         setWorkspaces((current) => [...current, created]);
         setActiveWorkspaceId(created.id);
         return created;
       },
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     }),
-    [activeWorkspace, activeWorkspaceId, createWorkspace, workspaces]
+    [activeWorkspace, activeWorkspaceId, createWorkspace, workspaces],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

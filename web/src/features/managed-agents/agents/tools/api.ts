@@ -47,12 +47,12 @@ export function loadAgentMcpToolCatalogs(
   workspaceId: string,
   agentId: string,
   version: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ) {
   const versionQuery = version > 0 ? `?version=${encodeURIComponent(String(version))}` : '';
   return consoleApi<{ data: McpToolCatalog[]; version: number }>(
     `/api/console/organizations/${encodeURIComponent(orgUuid)}/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/mcp_tool_catalogs${versionQuery}`,
-    { signal }
+    { signal },
   );
 }
 
@@ -62,7 +62,7 @@ export function refreshAgentMcpToolCatalogs(
   agentId: string,
   version: number,
   serverName: string,
-  csrfToken?: string
+  csrfToken?: string,
 ) {
   const versionQuery = version > 0 ? `?version=${encodeURIComponent(String(version))}` : '';
   return consoleApi<{ data: McpToolCatalog; version: number }>(
@@ -70,7 +70,7 @@ export function refreshAgentMcpToolCatalogs(
     {
       method: 'POST',
       body: JSON.stringify({ server_name: serverName }),
-      csrfToken
-    }
+      csrfToken,
+    },
   );
 }

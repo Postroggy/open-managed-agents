@@ -7,7 +7,7 @@ import {
   defaultWorkspace,
   listConsoleWorkspaces,
   type CreateWorkspaceInput,
-  type Workspace
+  type Workspace,
 } from './api';
 import { getPrimaryOrganizationUuid, WorkspaceContext, type WorkspaceContextValue } from './context';
 
@@ -23,7 +23,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     queryKey: ['console', 'workspaces', orgUuid],
     queryFn: () => listConsoleWorkspaces(orgUuid ?? ''),
     enabled: status === 'authenticated' && Boolean(orgUuid),
-    retry: false
+    retry: false,
   });
 
   const workspaces = useMemo(() => normalizeWorkspaces(workspacesQuery.data), [workspacesQuery.data]);
@@ -32,11 +32,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       workspaces.some((workspace) => workspace.id === preferredWorkspaceId)
         ? preferredWorkspaceId
         : defaultWorkspace.id,
-    [preferredWorkspaceId, workspaces]
+    [preferredWorkspaceId, workspaces],
   );
   const activeWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? defaultWorkspace,
-    [activeWorkspaceId, workspaces]
+    [activeWorkspaceId, workspaces],
   );
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     setConsoleRequestContext({
       organizationUuid: status === 'authenticated' ? orgUuid : undefined,
-      workspaceId: status === 'authenticated' ? activeWorkspaceId : undefined
+      workspaceId: status === 'authenticated' ? activeWorkspaceId : undefined,
     });
     return () => setConsoleRequestContext({});
   }, [activeWorkspaceId, orgUuid, status]);
@@ -73,7 +73,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setPreferredWorkspaceId(created.id);
       return created;
     },
-    [orgUuid, queryClient]
+    [orgUuid, queryClient],
   );
 
   const refreshWorkspaces = useCallback(async () => {
@@ -90,7 +90,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       error: workspacesQuery.error,
       selectWorkspace,
       createWorkspace,
-      refreshWorkspaces
+      refreshWorkspaces,
     }),
     [
       activeWorkspace,
@@ -101,8 +101,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       selectWorkspace,
       workspaces,
       workspacesQuery.error,
-      workspacesQuery.isLoading
-    ]
+      workspacesQuery.isLoading,
+    ],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
@@ -120,7 +120,7 @@ function normalizeWorkspaces(apiWorkspaces: Workspace[] = []) {
     workspaces.push({
       ...workspace,
       display_color: workspace.display_color || workspace.color || defaultWorkspace.display_color,
-      color: workspace.color || workspace.display_color || defaultWorkspace.color
+      color: workspace.color || workspace.display_color || defaultWorkspace.color,
     });
   }
   return workspaces;

@@ -31,21 +31,14 @@ export function listOrganizationMembers(orgUuid: string) {
 
 export function listOrganizationInvites(orgUuid: string, status = 'pending') {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return consoleApi<OrganizationInvite[]>(
-    `/api/console/organizations/${encodeURIComponent(orgUuid)}/invites${query}`
-  );
+  return consoleApi<OrganizationInvite[]>(`/api/console/organizations/${encodeURIComponent(orgUuid)}/invites${query}`);
 }
 
-export function createOrganizationInvite(
-  orgUuid: string,
-  email: string,
-  role: PlatformRole,
-  csrfToken?: string
-) {
+export function createOrganizationInvite(orgUuid: string, email: string, role: PlatformRole, csrfToken?: string) {
   return consoleApi<OrganizationInvite>(`/api/console/organizations/${encodeURIComponent(orgUuid)}/invites`, {
     method: 'POST',
     csrfToken,
-    body: JSON.stringify({ email, role })
+    body: JSON.stringify({ email, role }),
   });
 }
 
@@ -54,8 +47,8 @@ export function resendOrganizationInvite(orgUuid: string, inviteId: string, csrf
     `/api/console/organizations/${encodeURIComponent(orgUuid)}/invites/${encodeURIComponent(inviteId)}`,
     {
       method: 'PUT',
-      csrfToken
-    }
+      csrfToken,
+    },
   );
 }
 
@@ -64,8 +57,8 @@ export function deleteOrganizationInvite(orgUuid: string, inviteId: string, csrf
     `/api/console/organizations/${encodeURIComponent(orgUuid)}/invites/${encodeURIComponent(inviteId)}`,
     {
       method: 'DELETE',
-      csrfToken
-    }
+      csrfToken,
+    },
   );
 }
 
@@ -73,14 +66,14 @@ export function updateOrganizationMemberRole(
   orgUuid: string,
   memberId: string,
   role: PlatformRole,
-  csrfToken?: string
+  csrfToken?: string,
 ) {
   return consoleApi<OrganizationMember>(
     `/api/console/organizations/${encodeURIComponent(orgUuid)}/members/${encodeURIComponent(memberId)}`,
     {
       method: 'POST',
       csrfToken,
-      body: JSON.stringify({ role })
-    }
+      body: JSON.stringify({ role }),
+    },
   );
 }

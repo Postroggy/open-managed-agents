@@ -40,7 +40,7 @@ describe('WorkbenchPage', () => {
     expect(screen.getByRole('button', { name: /Tools/i })).toBeTruthy();
     expect(screen.getByLabelText('User prompt 1')).toBeTruthy();
     expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toContain(
-      'Draft an email responding to a customer complaint email'
+      'Draft an email responding to a customer complaint email',
     );
     expect(screen.getByRole('heading', { name: 'Response' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Create New Prompt' })).toBeNull();
@@ -56,40 +56,44 @@ describe('WorkbenchPage', () => {
           name: 'Other workspace',
           workspace_id: 'wrkspc_other',
           updated_at: '2026-06-22T09:00:00.000000Z',
-          creator: defaultPromptCreator()
+          creator: defaultPromptCreator(),
         },
         {
           id: 'prompt_other_user',
           name: 'Other user',
           workspace_id: 'default',
           updated_at: '2026-06-23T09:00:00.000000Z',
-          creator: { tagged_id: 'user_other' }
+          creator: { tagged_id: 'user_other' },
         },
         {
           id: 'prompt_recent_own',
           name: 'Recent own prompt',
           workspace_id: 'default',
           updated_at: '2026-06-21T09:00:00.000000Z',
-          creator: defaultPromptCreator()
+          creator: defaultPromptCreator(),
         },
         {
           id: 'prompt_old_own',
           name: 'Old own prompt',
           workspace_id: 'default',
           updated_at: '2026-06-10T09:00:00.000000Z',
-          creator: defaultPromptCreator()
-        }
+          creator: defaultPromptCreator(),
+        },
       ],
       promptTexts: {
-        prompt_recent_own: 'Most recent prompt for this user and workspace.'
-      }
+        prompt_recent_own: 'Most recent prompt for this user and workspace.',
+      },
     });
     renderWorkbench();
 
     await waitFor(() => expect(window.location.pathname).toBe('/workbench/prompt_recent_own'));
     expect(await screen.findByRole('button', { name: 'Get Code' })).toBeTruthy();
-    expect(api.requests.some((request) => request.url.endsWith('/workbench/prompts') && request.method === 'GET')).toBe(true);
-    expect(api.requests.some((request) => request.url.endsWith('/workspaces/default/prompts') && request.method === 'GET')).toBe(false);
+    expect(api.requests.some((request) => request.url.endsWith('/workbench/prompts') && request.method === 'GET')).toBe(
+      true,
+    );
+    expect(
+      api.requests.some((request) => request.url.endsWith('/workspaces/default/prompts') && request.method === 'GET'),
+    ).toBe(false);
   });
 
   test('routes bare Workbench to new when no prompt matches the current user and workspace', async () => {
@@ -101,22 +105,26 @@ describe('WorkbenchPage', () => {
           name: 'Other user',
           workspace_id: 'default',
           updated_at: '2026-06-23T09:00:00.000000Z',
-          creator: { tagged_id: 'user_other' }
+          creator: { tagged_id: 'user_other' },
         },
         {
           id: 'prompt_other_workspace',
           name: 'Other workspace',
           workspace_id: 'wrkspc_other',
           updated_at: '2026-06-22T09:00:00.000000Z',
-          creator: defaultPromptCreator()
-        }
-      ]
+          creator: defaultPromptCreator(),
+        },
+      ],
     });
     renderWorkbench();
 
     await waitFor(() => expect(window.location.pathname).toBe('/workbench/prompt_new_1'));
-    const listIndex = api.requests.findIndex((request) => request.url.endsWith('/workbench/prompts') && request.method === 'GET');
-    const createIndex = api.requests.findIndex((request) => request.url.endsWith('/workspaces/default/prompts') && request.method === 'POST');
+    const listIndex = api.requests.findIndex(
+      (request) => request.url.endsWith('/workbench/prompts') && request.method === 'GET',
+    );
+    const createIndex = api.requests.findIndex(
+      (request) => request.url.endsWith('/workspaces/default/prompts') && request.method === 'POST',
+    );
     expect(listIndex).toBeGreaterThanOrEqual(0);
     expect(createIndex).toBeGreaterThan(listIndex);
   });
@@ -136,12 +144,12 @@ describe('WorkbenchPage', () => {
               name: 'Claude Platform',
               settings: {
                 product_name: 'Claude Platform',
-                workbench: { enabled: false }
-              } as any
-            }
-          }
-        ]
-      })
+                workbench: { enabled: false },
+              } as any,
+            },
+          },
+        ],
+      }),
     });
 
     expect(await screen.findByText('Workbench access unavailable')).toBeTruthy();
@@ -165,7 +173,7 @@ describe('WorkbenchPage', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Get Code' })).toBeTruthy());
     expect(
-      api.requests.filter((request) => request.method === 'GET' && request.url.endsWith('/workspaces/default/prompts'))
+      api.requests.filter((request) => request.method === 'GET' && request.url.endsWith('/workspaces/default/prompts')),
     ).toHaveLength(2);
   });
 
@@ -173,7 +181,7 @@ describe('WorkbenchPage', () => {
     resetTestDom('https://oma.duck.ai/workbench/prompt_1');
     mockWorkbenchApi({
       initialPromptName: '',
-      initialPromptText: 'Write a haiku about {{ANIMAL}}.'
+      initialPromptText: 'Write a haiku about {{ANIMAL}}.',
     });
     renderWorkbench();
 
@@ -274,7 +282,7 @@ describe('WorkbenchPage', () => {
     selectOption('Extra high');
     await waitFor(() => expect(effortCombobox.textContent).toContain('Extra high'));
     expect(within(panel).getByRole('link', { name: 'View all API options' }).getAttribute('href')).toBe(
-      'https://docs.claude.com/en/api/messages'
+      'https://docs.claude.com/en/api/messages',
     );
     expect(within(panel).getByRole('button', { name: 'Run ⌘ + ⏎' })).toBeTruthy();
 
@@ -310,7 +318,7 @@ describe('WorkbenchPage', () => {
     expect(document.activeElement).toBe(nameInput);
     expect(within(panel).getByRole('textbox', { name: 'Description' })).toBeTruthy();
     expect((within(panel).getByRole('textbox', { name: 'Input Schema' }) as HTMLTextAreaElement).value).toContain(
-      'The city and state, e.g. San Francisco, CA'
+      'The city and state, e.g. San Francisco, CA',
     );
     expect(panel.querySelector('.workbench-tool-schema code.language-json')).toBeTruthy();
     expect(panel.querySelector('.workbench-tool-schema .hljs-attr')).toBeTruthy();
@@ -322,7 +330,7 @@ describe('WorkbenchPage', () => {
       fireEvent.click(within(panel).getByRole('button', { name: 'Example tools' }));
     });
     await waitFor(() =>
-      expect(within(panel).getByRole('button', { name: 'Example tools' }).getAttribute('aria-expanded')).toBe('true')
+      expect(within(panel).getByRole('button', { name: 'Example tools' }).getAttribute('aria-expanded')).toBe('true'),
     );
     expect(screen.getByRole('menuitemradio', { name: 'get_weather' })).toBeTruthy();
     expect(screen.getByRole('menuitemradio', { name: 'get_time' })).toBeTruthy();
@@ -336,7 +344,9 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Web search' }));
     await waitFor(() => expect(drawerBody.scrollTop).toBe(0));
     expect(within(panel).getByRole('heading', { name: 'Web search' })).toBeTruthy();
-    expect(within(panel).getByText('Allow Claude to search the web and cite those results in its responses.')).toBeTruthy();
+    expect(
+      within(panel).getByText('Allow Claude to search the web and cite those results in its responses.'),
+    ).toBeTruthy();
     const restrictionSelect = within(panel).getByRole('combobox', { name: 'Search restrictions' });
     expect(restrictionSelect.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(restrictionSelect);
@@ -344,14 +354,23 @@ describe('WorkbenchPage', () => {
     expect(screen.getByRole('option', { name: 'None Search any domain' }).getAttribute('aria-selected')).toBe('true');
     selectOption('Allow domains Only search allowed domains');
     await waitFor(() =>
-      expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).textContent).toContain('Allow domains')
+      expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).textContent).toContain(
+        'Allow domains',
+      ),
     );
-    expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).getAttribute('aria-expanded')).toBe('false');
-    expect(within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)')).toBeTruthy();
+    expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    expect(
+      within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)'),
+    ).toBeTruthy();
     expect((within(panel).getByRole('button', { name: 'Add tool' }) as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.change(within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)'), {
-      target: { value: 'docs.anthropic.com' }
-    });
+    fireEvent.change(
+      within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)'),
+      {
+        target: { value: 'docs.anthropic.com' },
+      },
+    );
     expect(within(panel).getByRole('switch', { name: 'Limit the number of times this tool is called' })).toBeTruthy();
     expect(within(panel).getByRole('switch', { name: 'Localize results' })).toBeTruthy();
     expect((within(panel).getByRole('button', { name: 'Add tool' }) as HTMLButtonElement).disabled).toBe(false);
@@ -380,11 +399,16 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(panel).getByRole('combobox', { name: 'Search restrictions' }));
     selectOption('Blocked domains Do not search blocked domains');
     await waitFor(() =>
-      expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).textContent).toContain('Blocked domains')
+      expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).textContent).toContain(
+        'Blocked domains',
+      ),
     );
-    fireEvent.change(within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)'), {
-      target: { value: 'https://example.com/docs' }
-    });
+    fireEvent.change(
+      within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)'),
+      {
+        target: { value: 'https://example.com/docs' },
+      },
+    );
     fireEvent.click(within(panel).getByRole('button', { name: 'Save tool' }));
 
     await waitFor(() => expect(document.querySelector('.workbench-drawer-panel.is-tools')).toBeNull());
@@ -394,9 +418,13 @@ describe('WorkbenchPage', () => {
     expect(within(panel).getByText('Blocked domain: example.com')).toBeTruthy();
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Run ⌘ + ⏎' }));
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     const runRequest = api.requests.find((request) => request.url.endsWith('/workbench/completions'));
-    expect(runRequest?.body?.tools).toEqual([{ type: 'web_search_v0', name: 'web_search', blocked_domains: ['example.com'] }]);
+    expect(runRequest?.body?.tools).toEqual([
+      { type: 'web_search_v0', name: 'web_search', blocked_domains: ['example.com'] },
+    ]);
   });
 
   test('adds Web search restrictions to the Workbench completion payload', async () => {
@@ -412,11 +440,16 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(panel).getByRole('combobox', { name: 'Search restrictions' }));
     selectOption('Allow domains Only search allowed domains');
     await waitFor(() =>
-      expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).textContent).toContain('Allow domains')
+      expect(within(panel).getByRole('combobox', { name: 'Search restrictions' }).textContent).toContain(
+        'Allow domains',
+      ),
     );
-    fireEvent.change(within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)'), {
-      target: { value: 'https://docs.anthropic.com, Example.com/docs' }
-    });
+    fireEvent.change(
+      within(panel).getByPlaceholderText('Enter domains (e.g., example.com, example.com/path, example.com/*)'),
+      {
+        target: { value: 'https://docs.anthropic.com, Example.com/docs' },
+      },
+    );
     fireEvent.click(within(panel).getByRole('switch', { name: 'Limit the number of times this tool is called' }));
     fireEvent.change(within(panel).getByLabelText('Web search max uses'), { target: { value: '3' } });
     fireEvent.click(within(panel).getByRole('switch', { name: 'Localize results' }));
@@ -426,7 +459,9 @@ describe('WorkbenchPage', () => {
     expect(screen.getByRole('button', { name: 'Tools' }).textContent).toContain('1');
     fireEvent.click(screen.getByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     const runRequest = api.requests.find((request) => request.url.endsWith('/workbench/completions'));
     expect(runRequest?.body?.tools).toEqual([
       {
@@ -434,8 +469,8 @@ describe('WorkbenchPage', () => {
         name: 'web_search',
         max_uses: 3,
         user_location: { type: 'approximate' },
-        allowed_domains: ['docs.anthropic.com', 'example.com']
-      }
+        allowed_domains: ['docs.anthropic.com', 'example.com'],
+      },
     ]);
   });
 
@@ -456,28 +491,32 @@ describe('WorkbenchPage', () => {
     fireEvent.click(document.body);
 
     fireEvent.change(screen.getByTestId('workbench-upload-input-0'), {
-      target: { files: [new File(['hello world'], 'brief.pdf', { type: 'application/pdf' })] }
+      target: { files: [new File(['hello world'], 'brief.pdf', { type: 'application/pdf' })] },
     });
 
     expect(await screen.findByText('brief.pdf')).toBeTruthy();
     const attachments = screen.getByLabelText('User prompt attachments');
-    expect((within(attachments).getByRole('button', { name: 'Preview brief.pdf' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(attachments).getByRole('button', { name: 'Preview brief.pdf' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
     fireEvent.click(within(attachments).getByRole('button', { name: 'Replace brief.pdf' }));
     fireEvent.change(screen.getByTestId('workbench-upload-input-0'), {
-      target: { files: [new File(['updated brief'], 'brief-v2.pdf', { type: 'application/pdf' })] }
+      target: { files: [new File(['updated brief'], 'brief-v2.pdf', { type: 'application/pdf' })] },
     });
     expect(await screen.findByText('brief-v2.pdf')).toBeTruthy();
     expect(screen.queryByText('brief.pdf')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Remove brief-v2.pdf' }));
     expect(screen.queryByText('brief-v2.pdf')).toBeNull();
     fireEvent.change(screen.getByTestId('workbench-upload-input-0'), {
-      target: { files: [new File(['hello world'], 'brief.pdf', { type: 'application/pdf' })] }
+      target: { files: [new File(['hello world'], 'brief.pdf', { type: 'application/pdf' })] },
     });
     expect(await screen.findByText('brief.pdf')).toBeTruthy();
     fireEvent.change(userPrompt, { target: { value: 'Summarize this file.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     const uploadRequest = api.requests.find((request) => request.url === '/v1/files?beta=true');
     expect(uploadRequest?.method).toBe('POST');
     expect(uploadRequest?.headers['anthropic-beta']).toBe('files-api-2025-04-14');
@@ -488,8 +527,8 @@ describe('WorkbenchPage', () => {
       {
         type: 'document',
         source: { type: 'file', file_id: 'file_upload_test' },
-        title: 'brief.pdf'
-      }
+        title: 'brief.pdf',
+      },
     ]);
   });
 
@@ -524,13 +563,15 @@ describe('WorkbenchPage', () => {
     expect(await screen.findByText('PDF')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     expect(api.requests.filter((request) => request.url === '/v1/files?beta=true')).toHaveLength(0);
     const runRequest = api.requests.find((request) => request.url.endsWith('/workbench/completions'));
     expect(runRequest?.body?.messages?.[0]?.content).toEqual([
       { type: 'text', text: 'Describe these attachments.' },
       { type: 'image', source: { type: 'url', url: 'https://example.com/image.jpg' } },
-      { type: 'document', source: { type: 'url', url: 'https://example.com/document.pdf' } }
+      { type: 'document', source: { type: 'url', url: 'https://example.com/document.pdf' } },
     ]);
   });
 
@@ -544,14 +585,14 @@ describe('WorkbenchPage', () => {
     const droppedFile = new File(['meeting notes'], 'notes.txt', { type: 'text/plain' });
 
     fireEvent.dragEnter(messageCard, {
-      dataTransfer: { types: ['Files'], files: [droppedFile] }
+      dataTransfer: { types: ['Files'], files: [droppedFile] },
     });
     expect(messageCard.classList.contains('is-drag-over')).toBe(true);
     expect(screen.getByText('Drop here to insert into user message')).toBeTruthy();
     expect(screen.getByText('Max 100 files at 20MB each')).toBeTruthy();
 
     fireEvent.drop(messageCard, {
-      dataTransfer: { types: ['Files'], files: [droppedFile] }
+      dataTransfer: { types: ['Files'], files: [droppedFile] },
     });
 
     expect(await screen.findByText('notes.txt')).toBeTruthy();
@@ -587,24 +628,32 @@ describe('WorkbenchPage', () => {
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Generate example' }));
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url.endsWith('/workbench/evaluations/generate_test_case'))).toBe(true)
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/evaluations/generate_test_case'))).toBe(
+        true,
+      ),
     );
-    const generateRequest = api.requests.find((request) => request.url.endsWith('/workbench/evaluations/generate_test_case'));
+    const generateRequest = api.requests.find((request) =>
+      request.url.endsWith('/workbench/evaluations/generate_test_case'),
+    );
     expect(Object.keys(generateRequest?.body ?? {})).toEqual([
       'system_prompt',
       'messages',
       'custom_chain_of_thought',
-      'existing_examples'
+      'existing_examples',
     ]);
     expect(generateRequest?.body?.messages.at(-1)).toEqual({
       role: 'assistant',
-      content: [{ type: 'text', text: '' }]
+      content: [{ type: 'text', text: '' }],
     });
     expect(generateRequest?.body).not.toHaveProperty('model_name');
     expect(generateRequest?.body).not.toHaveProperty('ideal_output');
     expect(generateRequest?.body).not.toHaveProperty('additional_context');
-    await waitFor(() => expect((within(panel).getByRole('textbox', { name: '{{animal}}' }) as HTMLTextAreaElement).value).toBe('owl'));
-    expect((within(panel).getByRole('textbox', { name: 'Ideal output' }) as HTMLTextAreaElement).value).toBe('A quiet owl answers in moonlight.');
+    await waitFor(() =>
+      expect((within(panel).getByRole('textbox', { name: '{{animal}}' }) as HTMLTextAreaElement).value).toBe('owl'),
+    );
+    expect((within(panel).getByRole('textbox', { name: 'Ideal output' }) as HTMLTextAreaElement).value).toBe(
+      'A quiet owl answers in moonlight.',
+    );
   });
 
   test('loads existing Examples as official-style cards and includes them in run payload', async () => {
@@ -615,14 +664,14 @@ describe('WorkbenchPage', () => {
       promptExamples: [
         {
           variable_values: { ANIMAL: 'Generated ANIMAL example 1' },
-          ideal_output: 'A tiny owl poem.'
+          ideal_output: 'A tiny owl poem.',
         },
         {
           variable_values: { ANIMAL: 'falcon' },
           ideal_output: 'A swift sky poem.',
-          additional_context: 'Keep the tone playful.'
-        }
-      ]
+          additional_context: 'Keep the tone playful.',
+        },
+      ],
     });
     renderWorkbench();
 
@@ -644,7 +693,9 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Edit example 2' }));
     expect(within(panel).getByRole('heading', { name: 'Edit example' })).toBeTruthy();
     expect((within(panel).getByRole('textbox', { name: '{{ANIMAL}}' }) as HTMLTextAreaElement).value).toBe('falcon');
-    expect((within(panel).getByRole('textbox', { name: 'Ideal output' }) as HTMLTextAreaElement).value).toBe('A swift sky poem.');
+    expect((within(panel).getByRole('textbox', { name: 'Ideal output' }) as HTMLTextAreaElement).value).toBe(
+      'A swift sky poem.',
+    );
     fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
 
     fireEvent.click(screen.getByRole('button', { name: /Variables/i }));
@@ -653,7 +704,9 @@ describe('WorkbenchPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Help Claude understand the task better' }));
     fireEvent.click(within(screen.getByLabelText('Examples')).getByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     const runRequest = api.requests.find((request) => request.url.endsWith('/workbench/completions'));
     const firstMessage = runRequest?.body?.messages?.[0]?.content?.[0]?.text;
     expect(firstMessage).toContain('<examples>');
@@ -677,19 +730,23 @@ describe('WorkbenchPage', () => {
     expect(within(dialog).getByRole('button', { name: 'Close' })).toBeTruthy();
     expect(within(dialog).getByText('This takes 1-2 minutes and uses Claude Sonnet 4.5 credits')).toBeTruthy();
     const feedback = within(dialog).getByRole('textbox', {
-      name: 'The more detailed the feedback, the more Claude will be able to help.'
+      name: 'The more detailed the feedback, the more Claude will be able to help.',
     });
     expect(feedback.getAttribute('data-slot')).toBe('textarea');
     expect(feedback.className.includes('bg-secondary')).toBe(false);
     fireEvent.change(feedback, { target: { value: 'Make it warmer and shorter.' } });
     expect(
-      within(dialog).getByRole('checkbox', {
-        name: 'This prompt will be used with models that have thinking enabled'
-      }).getAttribute('aria-checked')
+      within(dialog)
+        .getByRole('checkbox', {
+          name: 'This prompt will be used with models that have thinking enabled',
+        })
+        .getAttribute('aria-checked'),
     ).toBe('true');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Improve prompt' }));
 
-    await waitFor(() => expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('Improved prompt.'));
+    await waitFor(() =>
+      expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('Improved prompt.'),
+    );
     const request = api.requests.find((item) => item.url.endsWith('/workbench/generate_prompt'));
     expect(request?.method).toBe('POST');
     expect(request?.body?.feedback).toBe('Make it warmer and shorter.');
@@ -704,7 +761,7 @@ describe('WorkbenchPage', () => {
       initialPromptText: '',
       generatedPromptDelayMs: 25,
       generatedPromptText:
-        '<planning>Draft the reusable prompt.</planning>\n<Instructions>Write a crisp project brief about {$topic}.\nLet me know if you want me to adjust this.</Instructions>'
+        '<planning>Draft the reusable prompt.</planning>\n<Instructions>Write a crisp project brief about {$topic}.\nLet me know if you want me to adjust this.</Instructions>',
     });
     renderWorkbench();
 
@@ -716,15 +773,17 @@ describe('WorkbenchPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate Prompt' }));
     const dialog = screen.getByRole('dialog', { name: 'Generate a prompt' });
     expect(
-      within(dialog).getByRole('checkbox', {
-        name: 'This prompt will be used with models that have thinking enabled'
-      }).getAttribute('aria-checked')
+      within(dialog)
+        .getByRole('checkbox', {
+          name: 'This prompt will be used with models that have thinking enabled',
+        })
+        .getAttribute('aria-checked'),
     ).toBe('true');
     const taskTextarea = within(dialog).getByRole('textbox', { name: 'Describe your task...' });
     expect(taskTextarea.getAttribute('data-slot')).toBe('textarea');
     expect(taskTextarea.className.includes('bg-secondary')).toBe(false);
     fireEvent.change(taskTextarea, {
-      target: { value: 'Summarize meeting notes into action items.' }
+      target: { value: 'Summarize meeting notes into action items.' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Generate' }));
 
@@ -734,11 +793,13 @@ describe('WorkbenchPage', () => {
     expect((within(dialog).getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true);
 
     const generatedPromptTextarea = (await within(dialog).findByRole('textbox', {
-      name: 'Your prompt'
+      name: 'Your prompt',
     })) as HTMLTextAreaElement;
     await waitFor(() => expect(generatedPromptTextarea.value).toBe(generatedPrompt));
     expect(within(dialog).getByRole('heading', { name: 'Variables' })).toBeTruthy();
-    expect(within(dialog).getByText(/Variables are placeholder values that make your prompt flexible and reusable/)).toBeTruthy();
+    expect(
+      within(dialog).getByText(/Variables are placeholder values that make your prompt flexible and reusable/),
+    ).toBeTruthy();
     expect(within(within(dialog).getByLabelText('Generated prompt variables')).getByText('{{topic}}')).toBeTruthy();
     expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('');
     const continueButton = within(dialog).getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
@@ -754,11 +815,11 @@ describe('WorkbenchPage', () => {
     expect(request?.body?.isPromptConversion).toBe(false);
     expect(request?.body?.feedback).toBeUndefined();
     const revisionIndex = api.requests.findIndex(
-      (item) => item.method === 'POST' && /\/workbench\/prompts\/prompt_1\/revisions$/.test(item.url)
+      (item) => item.method === 'POST' && /\/workbench\/prompts\/prompt_1\/revisions$/.test(item.url),
     );
     const titleIndex = api.requests.findIndex((item) => item.url.endsWith('/workbench/generate_title'));
     const updatePromptIndex = api.requests.findIndex(
-      (item) => item.method === 'PUT' && /\/workbench\/prompts\/prompt_1$/.test(item.url)
+      (item) => item.method === 'PUT' && /\/workbench\/prompts\/prompt_1$/.test(item.url),
     );
     expect(revisionIndex).toBeGreaterThan(-1);
     expect(titleIndex).toBeGreaterThan(revisionIndex);
@@ -766,7 +827,7 @@ describe('WorkbenchPage', () => {
     expect(api.requests[revisionIndex]?.body?.variables).toEqual(['topic']);
     expect(api.requests[titleIndex]?.body).toEqual({
       message_content: generatedPrompt,
-      model: 'claude-opus-4-8'
+      model: 'claude-opus-4-8',
     });
     expect(api.requests[updatePromptIndex]?.body).toEqual({ name: 'Cat haiku' });
   });
@@ -777,14 +838,14 @@ describe('WorkbenchPage', () => {
       initialPromptName: '',
       initialPromptText: '',
       generatedPromptDelayMs: 1000,
-      generatedPromptText: '<Instructions>Write a crisp project brief about {$topic}.</Instructions>'
+      generatedPromptText: '<Instructions>Write a crisp project brief about {$topic}.</Instructions>',
     });
     renderWorkbench();
 
     await screen.findByRole('button', { name: 'Generate Prompt' });
     fireEvent.click(screen.getByRole('button', { name: 'Generate Prompt' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Describe your task...' }), {
-      target: { value: 'Create a project brief prompt.' }
+      target: { value: 'Create a project brief prompt.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
@@ -798,8 +859,14 @@ describe('WorkbenchPage', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Close prompt generator?' })).toBeNull());
     expect(screen.getByRole('dialog', { name: 'Generate a prompt' })).toBeTruthy();
 
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('button', { name: 'Close' }));
-    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Close prompt generator?' })).getByRole('button', { name: 'Close' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('button', { name: 'Close' }),
+    );
+    fireEvent.click(
+      within(screen.getByRole('alertdialog', { name: 'Close prompt generator?' })).getByRole('button', {
+        name: 'Close',
+      }),
+    );
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Generate a prompt' })).toBeNull());
   });
@@ -811,14 +878,14 @@ describe('WorkbenchPage', () => {
       initialPromptName: '',
       initialPromptText: '',
       generatedPromptDelayMs: 25,
-      generatedPromptText: `<planning>Draft the reusable prompt.</planning>\n<Instructions>${generatedPrompt.replace('{{topic}}', '{$topic}')}</Instructions>`
+      generatedPromptText: `<planning>Draft the reusable prompt.</planning>\n<Instructions>${generatedPrompt.replace('{{topic}}', '{$topic}')}</Instructions>`,
     });
     renderWorkbench();
 
     await screen.findByRole('button', { name: 'Generate Prompt' });
     fireEvent.click(screen.getByRole('button', { name: 'Generate Prompt' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Describe your task...' }), {
-      target: { value: 'Create a project brief prompt.' }
+      target: { value: 'Create a project brief prompt.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
@@ -829,28 +896,40 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
     const confirmDialog = screen.getByRole('alertdialog', { name: 'Clear generated prompt?' });
     expect(
-      within(confirmDialog).getByText('Editing this page will clear the existing generated/converted prompt.')
+      within(confirmDialog).getByText('Editing this page will clear the existing generated/converted prompt.'),
     ).toBeTruthy();
     fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Clear generated prompt?' })).toBeNull());
     expect(
-      (within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('textbox', {
-        name: 'Your prompt'
-      }) as HTMLTextAreaElement).value
+      (
+        within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('textbox', {
+          name: 'Your prompt',
+        }) as HTMLTextAreaElement
+      ).value,
     ).toBe(generatedPrompt);
 
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('button', { name: 'Back' }));
-    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Clear generated prompt?' })).getByRole('button', { name: 'Clear prompt' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('button', { name: 'Back' }),
+    );
+    fireEvent.click(
+      within(screen.getByRole('alertdialog', { name: 'Clear generated prompt?' })).getByRole('button', {
+        name: 'Clear prompt',
+      }),
+    );
 
     await waitFor(() =>
       expect(
-        within(screen.getByRole('dialog', { name: 'Generate a prompt' })).queryByRole('textbox', { name: 'Your prompt' })
-      ).toBeNull()
+        within(screen.getByRole('dialog', { name: 'Generate a prompt' })).queryByRole('textbox', {
+          name: 'Your prompt',
+        }),
+      ).toBeNull(),
     );
     expect(
-      (within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('textbox', {
-        name: 'Describe your task...'
-      }) as HTMLTextAreaElement).value
+      (
+        within(screen.getByRole('dialog', { name: 'Generate a prompt' })).getByRole('textbox', {
+          name: 'Describe your task...',
+        }) as HTMLTextAreaElement
+      ).value,
     ).toBe('Create a project brief prompt.');
   });
 
@@ -859,15 +938,15 @@ describe('WorkbenchPage', () => {
     const generatedPrompt = [
       'Write a launch readiness brief about {{topic}}.',
       'Include scope, milestones, customer impact, support risks, and launch owner.',
-      'Keep the final answer concise but specific enough for a product review.'
+      'Keep the final answer concise but specific enough for a product review.',
     ].join('\n');
     mockWorkbenchApi({
       initialPromptName: '',
       initialPromptText: '',
       generatedPromptText: `<planning>Draft the reusable prompt.</planning>\n<Instructions>${generatedPrompt.replace(
         '{{topic}}',
-        '{$topic}'
-      )}\nLet me know if you want me to adjust this.</Instructions>`
+        '{$topic}',
+      )}\nLet me know if you want me to adjust this.</Instructions>`,
     });
     renderWorkbench();
 
@@ -875,12 +954,12 @@ describe('WorkbenchPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate Prompt' }));
     const dialog = screen.getByRole('dialog', { name: 'Generate a prompt' });
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Describe your task...' }), {
-      target: { value: 'Create a launch readiness prompt.' }
+      target: { value: 'Create a launch readiness prompt.' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Generate' }));
 
     const generatedPromptTextarea = (await within(dialog).findByRole('textbox', {
-      name: 'Your prompt'
+      name: 'Your prompt',
     })) as HTMLTextAreaElement;
     await waitFor(() => {
       expect(generatedPromptTextarea.value.length).toBeGreaterThan(0);
@@ -907,7 +986,7 @@ describe('WorkbenchPage', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: /Write me an email/i }));
     await waitFor(() =>
-      expect(taskInput.value).toBe('Draft an email responding to a customer complaint email and offer a resolution')
+      expect(taskInput.value).toBe('Draft an email responding to a customer complaint email and offer a resolution'),
     );
 
     fireEvent.click(within(dialog).getByRole('button', { name: /Translate code/i }));
@@ -918,11 +997,13 @@ describe('WorkbenchPage', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: /Content moderation/i }));
     await waitFor(() =>
-      expect(taskInput.value).toBe('Classify chat transcripts into categories using our content moderation policy')
+      expect(taskInput.value).toBe('Classify chat transcripts into categories using our content moderation policy'),
     );
 
     fireEvent.click(within(dialog).getByRole('button', { name: /Recommend a product/i }));
-    await waitFor(() => expect(taskInput.value).toBe('Recommend a product based on a customer’s previous transactions'));
+    await waitFor(() =>
+      expect(taskInput.value).toBe('Recommend a product based on a customer’s previous transactions'),
+    );
   });
 
   test('hides Generate Prompt as soon as the first user message receives input', async () => {
@@ -954,12 +1035,12 @@ describe('WorkbenchPage', () => {
               api_disabled_reason: 'out_of_credits',
               settings: {
                 product_name: 'Claude Platform',
-                workbench: { enabled: true }
-              } as any
-            }
-          }
-        ]
-      })
+                workbench: { enabled: true },
+              } as any,
+            },
+          },
+        ],
+      }),
     });
 
     const button = (await screen.findByRole('button', { name: 'Generate Prompt' })) as HTMLButtonElement;
@@ -973,13 +1054,13 @@ describe('WorkbenchPage', () => {
     resetTestDom('https://oma.duck.ai/workbench');
     const api = mockWorkbenchApi({
       initialPromptText: 'Describe this image.',
-      uploadedFile: { filename: 'diagram.png', mime_type: 'image/png' }
+      uploadedFile: { filename: 'diagram.png', mime_type: 'image/png' },
     });
     renderWorkbench();
 
     await screen.findByRole('button', { name: 'Get Code' });
     fireEvent.change(screen.getByTestId('workbench-upload-input-0'), {
-      target: { files: [new File(['image bytes'], 'diagram.png', { type: 'image/png' })] }
+      target: { files: [new File(['image bytes'], 'diagram.png', { type: 'image/png' })] },
     });
     await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/files?beta=true')).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Add message pair' }));
@@ -987,10 +1068,10 @@ describe('WorkbenchPage', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'What would you like to improve?' });
     expect(
-      within(dialog).getByText('Images will not be processed. Please manually add them back in to improved prompt.')
+      within(dialog).getByText('Images will not be processed. Please manually add them back in to improved prompt.'),
     ).toBeTruthy();
     expect(
-      within(dialog).getByText('Multi-turn prompt detected. Only the first user message will be improved.')
+      within(dialog).getByText('Multi-turn prompt detected. Only the first user message will be improved.'),
     ).toBeTruthy();
   });
 
@@ -1031,7 +1112,7 @@ describe('WorkbenchPage', () => {
     resetTestDom('https://oma.duck.ai/workbench/prompt_1?tab=evaluate');
     mockWorkbenchApi({
       initialPromptText: 'Write a haiku about {{animal}}.',
-      initialTools: [{ type: 'web_search_v0', name: 'web_search' }]
+      initialTools: [{ type: 'web_search_v0', name: 'web_search' }],
     });
     renderWorkbench();
 
@@ -1039,7 +1120,9 @@ describe('WorkbenchPage', () => {
     await waitFor(() => expect(window.location.search).toBe(''));
     const evaluateButton = screen.getByRole('tab', { name: 'Evaluate' });
     expect(evaluateButton.getAttribute('aria-disabled')).toBe('true');
-    expect(evaluateButton.getAttribute('title')).toBe('Run a prompt with at least one variable and no tools to use ‘Evaluate’.');
+    expect(evaluateButton.getAttribute('title')).toBe(
+      'Run a prompt with at least one variable and no tools to use ‘Evaluate’.',
+    );
     expect(screen.queryByRole('button', { name: /Run All/ })).toBeNull();
   });
 
@@ -1055,7 +1138,9 @@ describe('WorkbenchPage', () => {
     expect((screen.getByRole('button', { name: 'Run ⌘ + ⏎' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
     expect(
-      api.requests.filter((request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'))
+      api.requests.filter(
+        (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
+      ),
     ).toHaveLength(1);
     expect(api.requests.some((request) => request.url.endsWith('/workbench/prompts/prompt_1'))).toBe(false);
   });
@@ -1085,18 +1170,24 @@ describe('WorkbenchPage', () => {
     expect(document.body.textContent).toContain('Run prompt to see assistant response from the');
     expect(screen.getByText('Untitled')).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Evaluate' }).getAttribute('aria-disabled')).toBe('true');
-    expect((screen.getByRole('button', { name: 'Requires at least one variable' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Add some text to the prompt to use this feature' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Requires at least one variable' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(
+      (screen.getByRole('button', { name: 'Add some text to the prompt to use this feature' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
     expect((screen.getByRole('button', { name: 'Pre-fill response' }) as HTMLButtonElement).disabled).toBe(true);
     const createRequest = api.requests.find(
-      (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts')
+      (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
     );
     expect(createRequest?.body).toEqual({});
     const createRequestIndex = api.requests.findIndex(
-      (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts')
+      (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
     );
     const refreshListIndex = api.requests.findIndex(
-      (request, index) => index > createRequestIndex && request.method === 'GET' && request.url.endsWith('/workbench/prompts')
+      (request, index) =>
+        index > createRequestIndex && request.method === 'GET' && request.url.endsWith('/workbench/prompts'),
     );
     expect(refreshListIndex).toBeGreaterThan(createRequestIndex);
   });
@@ -1117,7 +1208,9 @@ describe('WorkbenchPage', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/workbench/prompt_new_1'));
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
     expect(
-      api.requests.filter((request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'))
+      api.requests.filter(
+        (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
+      ),
     ).toHaveLength(1);
   });
 
@@ -1159,7 +1252,9 @@ describe('WorkbenchPage', () => {
     expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('');
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
     expect(
-      api.requests.filter((request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'))
+      api.requests.filter(
+        (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
+      ),
     ).toHaveLength(1);
   });
 
@@ -1194,9 +1289,13 @@ describe('WorkbenchPage', () => {
     expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('');
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
     expect(
-      api.requests.filter((request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'))
+      api.requests.filter(
+        (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
+      ),
     ).toHaveLength(1);
-    expect(api.requests.some((request) => request.method === 'GET' && request.url.endsWith('/workbench/prompts'))).toBe(true);
+    expect(api.requests.some((request) => request.method === 'GET' && request.url.endsWith('/workbench/prompts'))).toBe(
+      true,
+    );
   });
 
   test('adds an assistant prefill response when the prompt has user content', async () => {
@@ -1231,7 +1330,7 @@ describe('WorkbenchPage', () => {
     expect(screen.queryByLabelText('Assistant prompt 3')).toBeNull();
 
     const deletePairButtons = screen.getAllByRole('button', {
-      name: 'Delete both to maintain user & assistant alternation'
+      name: 'Delete both to maintain user & assistant alternation',
     });
     expect(deletePairButtons).toHaveLength(2);
     fireEvent.click(deletePairButtons[1]);
@@ -1251,14 +1350,11 @@ describe('WorkbenchPage', () => {
     expect(screen.getByText(/Last saved Jun 12/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Prompt settings' }));
     const menu = screen.getByRole('menu');
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Rename prompt',
-      'Save',
-      'Version history',
-      'Make a copy',
-      'Share',
-      'Delete'
-    ]);
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Rename prompt', 'Save', 'Version history', 'Make a copy', 'Share', 'Delete']);
     expect(within(menu).getByRole('menuitem', { name: 'Save' }).getAttribute('aria-disabled')).toBe('true');
     expect(menu.querySelector('[data-slot="dropdown-menu-separator"]')).toBeTruthy();
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -1270,8 +1366,10 @@ describe('WorkbenchPage', () => {
     fireEvent.click(saveChanges);
     await waitFor(() =>
       expect(
-        api.requests.some((request) => request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_1/revisions'))
-      ).toBe(true)
+        api.requests.some(
+          (request) => request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_1/revisions'),
+        ),
+      ).toBe(true),
     );
   });
 
@@ -1285,14 +1383,11 @@ describe('WorkbenchPage', () => {
     fireEvent.click(promptSettings);
 
     const menu = screen.getByRole('menu');
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Rename prompt',
-      'Save',
-      'Version history',
-      'Make a copy',
-      'Share',
-      'Delete'
-    ]);
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Rename prompt', 'Save', 'Version history', 'Make a copy', 'Share', 'Delete']);
     expect(promptSettings.getAttribute('aria-expanded')).toBe('true');
   });
 
@@ -1316,21 +1411,24 @@ describe('WorkbenchPage', () => {
 
     await waitFor(() =>
       expect(
-        api.requests.some((request) =>
-          request.method === 'PUT' &&
-          request.url.endsWith('/workbench/prompts/prompt_1') &&
-          request.body?.name === 'Renamed prompt'
-        )
-      ).toBe(true)
+        api.requests.some(
+          (request) =>
+            request.method === 'PUT' &&
+            request.url.endsWith('/workbench/prompts/prompt_1') &&
+            request.body?.name === 'Renamed prompt',
+        ),
+      ).toBe(true),
     );
-    const renamePutIndex = api.requests.findIndex((request) =>
-      request.method === 'PUT' && request.url.endsWith('/workbench/prompts/prompt_1')
+    const renamePutIndex = api.requests.findIndex(
+      (request) => request.method === 'PUT' && request.url.endsWith('/workbench/prompts/prompt_1'),
     );
-    const refreshPromptIndex = api.requests.findIndex((request, index) =>
-      index > renamePutIndex && request.method === 'GET' && request.url.endsWith('/workbench/prompts/prompt_1')
+    const refreshPromptIndex = api.requests.findIndex(
+      (request, index) =>
+        index > renamePutIndex && request.method === 'GET' && request.url.endsWith('/workbench/prompts/prompt_1'),
     );
-    const refreshListIndex = api.requests.findIndex((request, index) =>
-      index > refreshPromptIndex && request.method === 'GET' && request.url.endsWith('/workbench/prompts')
+    const refreshListIndex = api.requests.findIndex(
+      (request, index) =>
+        index > refreshPromptIndex && request.method === 'GET' && request.url.endsWith('/workbench/prompts'),
     );
     expect(refreshPromptIndex).toBeGreaterThan(renamePutIndex);
     expect(refreshListIndex).toBeGreaterThan(refreshPromptIndex);
@@ -1346,8 +1444,8 @@ describe('WorkbenchPage', () => {
       revisionsByPrompt: {
         prompt_1: [
           promptRevision('Latest prompt body.', 'workbench-revision-latest'),
-          promptRevision('Earlier prompt about {{animal}}.', 'workbench-revision-earlier')
-        ]
+          promptRevision('Earlier prompt about {{animal}}.', 'workbench-revision-earlier'),
+        ],
       },
       evaluationsByRevision: {
         'workbench-revision-earlier': [
@@ -1358,10 +1456,10 @@ describe('WorkbenchPage', () => {
             variable_values: { animal: 'otter' },
             golden_answer: '',
             completion_text: 'Historical output.',
-            rating: ''
-          }
-        ]
-      }
+            rating: '',
+          },
+        ],
+      },
     });
     renderWorkbench();
 
@@ -1380,19 +1478,27 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Revision v1' }));
 
     await waitFor(() =>
-      expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('Earlier prompt about {{animal}}.')
+      expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe(
+        'Earlier prompt about {{animal}}.',
+      ),
     );
     expect(screen.getByText('Unsaved')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Evaluate' }));
-    expect((await screen.findByLabelText('animal row 1') as HTMLTextAreaElement).value).toBe('otter');
-    expect(api.requests.some((request) =>
-      request.method === 'GET' &&
-      request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier')
-    )).toBe(true);
-    expect(api.requests.some((request) =>
-      request.method === 'GET' &&
-      request.url.endsWith('/workbench/revisions/workbench-revision-earlier/evaluations/list')
-    )).toBe(true);
+    expect(((await screen.findByLabelText('animal row 1')) as HTMLTextAreaElement).value).toBe('otter');
+    expect(
+      api.requests.some(
+        (request) =>
+          request.method === 'GET' &&
+          request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier'),
+      ),
+    ).toBe(true);
+    expect(
+      api.requests.some(
+        (request) =>
+          request.method === 'GET' &&
+          request.url.endsWith('/workbench/revisions/workbench-revision-earlier/evaluations/list'),
+      ),
+    ).toBe(true);
   });
 
   test('requires saving or discarding a draft before viewing previous versions', async () => {
@@ -1403,9 +1509,9 @@ describe('WorkbenchPage', () => {
       revisionsByPrompt: {
         prompt_1: [
           promptRevision('Latest prompt body.', 'workbench-revision-latest'),
-          promptRevision('Earlier prompt about {{animal}}.', 'workbench-revision-earlier')
-        ]
-      }
+          promptRevision('Earlier prompt about {{animal}}.', 'workbench-revision-earlier'),
+        ],
+      },
     });
     renderWorkbench();
 
@@ -1425,37 +1531,47 @@ describe('WorkbenchPage', () => {
     expect(await within(panel).findByText('Previously')).toBeTruthy();
     expect(within(panel).getByText(/You are currently editing a draft version/)).toBeTruthy();
 
-    const revisionDetailRequestsBeforeClick = api.requests.filter((request) =>
-      request.method === 'GET' &&
-      request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier')
+    const revisionDetailRequestsBeforeClick = api.requests.filter(
+      (request) =>
+        request.method === 'GET' &&
+        request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier'),
     ).length;
     fireEvent.click(within(panel).getByRole('button', { name: 'Revision v1' }));
     expect(
-      api.requests.filter((request) =>
-        request.method === 'GET' &&
-        request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier')
-      )
+      api.requests.filter(
+        (request) =>
+          request.method === 'GET' &&
+          request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier'),
+      ),
     ).toHaveLength(revisionDetailRequestsBeforeClick);
 
     fireEvent.click(within(panel).getByRole('button', { name: 'discard' }));
     await waitFor(() =>
-      expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('Latest prompt body.')
+      expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('Latest prompt body.'),
     );
-    expect(api.requests.some((request) =>
-      request.method === 'POST' &&
-      request.url.endsWith('/workbench/prompts/prompt_1/kv_store/set/draft_revision') &&
-      String(request.body?.value).includes('Latest prompt body.')
-    )).toBe(true);
+    expect(
+      api.requests.some(
+        (request) =>
+          request.method === 'POST' &&
+          request.url.endsWith('/workbench/prompts/prompt_1/kv_store/set/draft_revision') &&
+          String(request.body?.value).includes('Latest prompt body.'),
+      ),
+    ).toBe(true);
     expect(within(panel).queryByRole('button', { name: 'Revision Draft version' })).toBeNull();
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Revision v1' }));
     await waitFor(() =>
-      expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe('Earlier prompt about {{animal}}.')
+      expect((screen.getByLabelText('User prompt 1') as HTMLTextAreaElement).value).toBe(
+        'Earlier prompt about {{animal}}.',
+      ),
     );
-    expect(api.requests.some((request) =>
-      request.method === 'GET' &&
-      request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier')
-    )).toBe(true);
+    expect(
+      api.requests.some(
+        (request) =>
+          request.method === 'GET' &&
+          request.url.endsWith('/workbench/prompts/prompt_1/revisions/workbench-revision-earlier'),
+      ),
+    ).toBe(true);
   });
 
   test('confirms before deleting a Workbench prompt', async () => {
@@ -1476,11 +1592,15 @@ describe('WorkbenchPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Prompt settings' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Delete prompt' })).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(screen.getByRole('alertdialog', { name: 'Delete prompt' })).getByRole('button', { name: 'Delete' }),
+    );
     await waitFor(() =>
-      expect(api.requests.some((request) =>
-        request.method === 'DELETE' && request.url.endsWith('/workbench/prompts/prompt_1')
-      )).toBe(true)
+      expect(
+        api.requests.some(
+          (request) => request.method === 'DELETE' && request.url.endsWith('/workbench/prompts/prompt_1'),
+        ),
+      ).toBe(true),
     );
   });
 
@@ -1497,15 +1617,19 @@ describe('WorkbenchPage', () => {
     expect(within(dialog).getByText('Complaint response')).toBeTruthy();
     expect(within(dialog).getByText('Jun 12, 2026 by user_default')).toBeTruthy();
     expect(within(dialog).getByRole('heading', { name: 'Access' })).toBeTruthy();
-    expect(within(dialog).getByText('Only you can access this prompt until it is shared with the workspace.')).toBeTruthy();
+    expect(
+      within(dialog).getByText('Only you can access this prompt until it is shared with the workspace.'),
+    ).toBeTruthy();
     expect(api.requests.some((request) => request.url.endsWith('/workbench/prompts/prompt_1/sharing'))).toBe(false);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Share with workspace' }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) =>
-        request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_1/sharing')
-      )).toBe(true)
+      expect(
+        api.requests.some(
+          (request) => request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_1/sharing'),
+        ),
+      ).toBe(true),
     );
     expect(within(dialog).getByText('Shared with workspace')).toBeTruthy();
     expect(within(dialog).getByText('Anyone in this workspace can find and use this prompt.')).toBeTruthy();
@@ -1519,9 +1643,9 @@ describe('WorkbenchPage', () => {
           tagged_id: 'user_other',
           uuid: 'user_other',
           full_name: 'user_other',
-          email_address: 'user_other'
-        }
-      }
+          email_address: 'user_other',
+        },
+      },
     });
     renderWorkbench();
 
@@ -1530,7 +1654,9 @@ describe('WorkbenchPage', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Share' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Share Prompt' });
-    expect(within(dialog).getByText('Please ask the creator of this prompt, user_other, to modify its sharing settings.')).toBeTruthy();
+    expect(
+      within(dialog).getByText('Please ask the creator of this prompt, user_other, to modify its sharing settings.'),
+    ).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: 'Share with workspace' })).toBeNull();
     expect(dialog.querySelector('.workbench-share-content.is-readonly')).toBeTruthy();
     expect(api.requests.some((request) => request.url.endsWith('/workbench/prompts/prompt_1/sharing'))).toBe(false);
@@ -1547,20 +1673,26 @@ describe('WorkbenchPage', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/workbench/prompt_new_1'));
     expect(screen.getByRole('button', { name: 'Prompt settings' }).textContent).toContain('Complaint response copy');
-    const createRequest = api.requests.find((request) =>
-      request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts')
+    const createRequest = api.requests.find(
+      (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
     );
     expect(createRequest?.body?.name).toBe('Complaint response copy');
-    expect(createRequest?.body?.latest_revision?.messages?.[0]?.content?.[0]?.text).toContain('Draft an email responding');
-    expect(api.requests.some((request) =>
-      request.method === 'GET' && request.url.endsWith('/workbench/prompts')
-    )).toBe(true);
-    expect(api.requests.some((request) =>
-      request.method === 'PUT' && request.url.endsWith('/workbench/prompts/prompt_new_1')
-    )).toBe(false);
-    expect(api.requests.some((request) =>
-      request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_new_1/revisions')
-    )).toBe(false);
+    expect(createRequest?.body?.latest_revision?.messages?.[0]?.content?.[0]?.text).toContain(
+      'Draft an email responding',
+    );
+    expect(api.requests.some((request) => request.method === 'GET' && request.url.endsWith('/workbench/prompts'))).toBe(
+      true,
+    );
+    expect(
+      api.requests.some(
+        (request) => request.method === 'PUT' && request.url.endsWith('/workbench/prompts/prompt_new_1'),
+      ),
+    ).toBe(false);
+    expect(
+      api.requests.some(
+        (request) => request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_new_1/revisions'),
+      ),
+    ).toBe(false);
   });
 
   test('opens the official-style prompt picker with search, ownership toggle, and create action', async () => {
@@ -1571,15 +1703,15 @@ describe('WorkbenchPage', () => {
           id: 'prompt_1',
           name: 'Complaint response',
           workspace_id: 'default',
-          creator: defaultPromptCreator()
+          creator: defaultPromptCreator(),
         },
         {
           id: 'prompt_other',
           name: 'Other author prompt',
           workspace_id: 'default',
-          creator: { tagged_id: 'user_other' }
-        }
-      ]
+          creator: { tagged_id: 'user_other' },
+        },
+      ],
     });
     renderWorkbench();
 
@@ -1597,19 +1729,27 @@ describe('WorkbenchPage', () => {
     expect(ownershipToggle.getAttribute('aria-checked')).toBe('true');
     expect(within(picker).queryByRole('option', { name: /Other author prompt/i })).toBeNull();
 
-    fireEvent.change(within(picker).getByRole('combobox', { name: 'Search prompts' }), { target: { value: 'missing' } });
+    fireEvent.change(within(picker).getByRole('combobox', { name: 'Search prompts' }), {
+      target: { value: 'missing' },
+    });
     expect(within(picker).getByText('No prompts found')).toBeTruthy();
-    fireEvent.change(within(picker).getByRole('combobox', { name: 'Search prompts' }), { target: { value: 'complaint' } });
+    fireEvent.change(within(picker).getByRole('combobox', { name: 'Search prompts' }), {
+      target: { value: 'complaint' },
+    });
     expect(within(picker).getByRole('option', { name: /Complaint response/i })).toBeTruthy();
     fireEvent.click(within(picker).getByRole('button', { name: 'Delete prompt' }));
     expect(screen.getByRole('alertdialog', { name: 'Delete prompt' })).toBeTruthy();
-    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Delete prompt' })).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(
+      within(screen.getByRole('alertdialog', { name: 'Delete prompt' })).getByRole('button', { name: 'Cancel' }),
+    );
     expect(screen.queryByRole('alertdialog', { name: 'Delete prompt' })).toBeNull();
 
     if (!screen.queryByRole('dialog', { name: 'Prompts' })) {
       fireEvent.click(screen.getByRole('button', { name: 'Open prompt list' }));
     }
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Prompts' })).getByRole('button', { name: 'Create New Prompt' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Prompts' })).getByRole('button', { name: 'Create New Prompt' }),
+    );
     await waitFor(() => expect(window.location.pathname).toBe('/workbench/prompt_new_1'));
   });
 
@@ -1643,23 +1783,23 @@ describe('WorkbenchPage', () => {
           name: '',
           workspace_id: 'default',
           created_at: '2026-06-18T06:33:01.369Z',
-          updated_at: '2026-06-23T00:02:51.764Z'
+          updated_at: '2026-06-23T00:02:51.764Z',
         },
         {
           id: 'stale_blank',
           name: '',
           workspace_id: 'default',
           created_at: '2026-06-23T01:32:14.739Z',
-          updated_at: '2026-06-23T01:32:14.774Z'
+          updated_at: '2026-06-23T01:32:14.774Z',
         },
         {
           id: 'named_prompt',
           name: 'Named prompt',
           workspace_id: 'default',
           created_at: '2026-06-11T02:10:24.382Z',
-          updated_at: '2026-06-20T02:10:24.382Z'
-        }
-      ]
+          updated_at: '2026-06-20T02:10:24.382Z',
+        },
+      ],
     });
     renderWorkbench();
 
@@ -1678,12 +1818,12 @@ describe('WorkbenchPage', () => {
     const api = mockWorkbenchApi({
       promptSummaries: [
         { id: 'prompt_1', name: 'Complaint response', workspace_id: 'default' },
-        { id: 'prompt_2', name: 'Saved evaluation prompt', workspace_id: 'default' }
+        { id: 'prompt_2', name: 'Saved evaluation prompt', workspace_id: 'default' },
       ],
       promptTexts: {
         prompt_1: 'Draft a complaint response.',
-        prompt_2: 'Evaluate this saved prompt.'
-      }
+        prompt_2: 'Evaluate this saved prompt.',
+      },
     });
     renderWorkbench();
 
@@ -1699,16 +1839,22 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
-      expect(api.requests.some((request) =>
-        request.method === 'DELETE' && request.url.endsWith('/workbench/prompts/prompt_2')
-      )).toBe(true)
+      expect(
+        api.requests.some(
+          (request) => request.method === 'DELETE' && request.url.endsWith('/workbench/prompts/prompt_2'),
+        ),
+      ).toBe(true),
     );
     expect(window.location.pathname).toBe('/workbench/prompt_1');
     if (!screen.queryByRole('dialog', { name: 'Prompts' })) {
       fireEvent.click(screen.getByRole('button', { name: 'Open prompt list' }));
     }
     await waitFor(() =>
-      expect(within(screen.getByRole('dialog', { name: 'Prompts' })).queryByRole('option', { name: /Saved evaluation prompt/i })).toBeNull()
+      expect(
+        within(screen.getByRole('dialog', { name: 'Prompts' })).queryByRole('option', {
+          name: /Saved evaluation prompt/i,
+        }),
+      ).toBeNull(),
     );
   });
 
@@ -1730,7 +1876,9 @@ describe('WorkbenchPage', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/workbench/prompt_new_1'));
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
     expect(
-      api.requests.filter((request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'))
+      api.requests.filter(
+        (request) => request.method === 'POST' && request.url.endsWith('/workspaces/default/prompts'),
+      ),
     ).toHaveLength(1);
   });
 
@@ -1739,15 +1887,15 @@ describe('WorkbenchPage', () => {
     const api = mockWorkbenchApi({
       promptSummaries: [
         { id: 'prompt_1', name: 'Animal haiku', workspace_id: 'default' },
-        { id: 'prompt_2', name: 'Saved evaluation prompt', workspace_id: 'default' }
+        { id: 'prompt_2', name: 'Saved evaluation prompt', workspace_id: 'default' },
       ],
       promptTexts: {
         prompt_1: 'Write a haiku about {{animal}}.',
-        prompt_2: 'Write a field note about {{animal}}.'
+        prompt_2: 'Write a field note about {{animal}}.',
       },
       revisionIds: {
         prompt_1: 'workbench-revision-prompt-1',
-        prompt_2: 'workbench-revision-prompt-2'
+        prompt_2: 'workbench-revision-prompt-2',
       },
       evaluationsByRevision: {
         'workbench-revision-prompt-2': [
@@ -1756,10 +1904,10 @@ describe('WorkbenchPage', () => {
             test_case_id: 'test_case_saved_2',
             variable_values: { animal: 'lynx' },
             golden_answer: 'A careful lynx field note.',
-            completion_text: 'Saved model output.'
-          }
-        ]
-      }
+            completion_text: 'Saved model output.',
+          },
+        ],
+      },
     });
     renderWorkbench();
 
@@ -1769,11 +1917,13 @@ describe('WorkbenchPage', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/workbench/prompt_2'));
     expect(window.location.search).toBe('?tab=evaluate');
-    expect((await screen.findByLabelText('animal row 1') as HTMLTextAreaElement).value).toBe('lynx');
+    expect(((await screen.findByLabelText('animal row 1')) as HTMLTextAreaElement).value).toBe('lynx');
     expect(document.body.textContent).toContain('Saved model output.');
-    expect(api.requests.some((request) =>
-      request.url.endsWith('/workbench/revisions/workbench-revision-prompt-2/evaluations/list')
-    )).toBe(true);
+    expect(
+      api.requests.some((request) =>
+        request.url.endsWith('/workbench/revisions/workbench-revision-prompt-2/evaluations/list'),
+      ),
+    ).toBe(true);
   });
 
   test('enables the Evaluate tab only when a prompt has variables', async () => {
@@ -1788,7 +1938,9 @@ describe('WorkbenchPage', () => {
 
     fireEvent.change(userPrompt, { target: { value: 'Write a haiku about {{animal}}.' } });
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Evaluate' }).getAttribute('aria-disabled')).not.toBe('true'));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Evaluate' }).getAttribute('aria-disabled')).not.toBe('true'),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Add value for animal' }));
     const variablePanel = screen.getByLabelText('Test Case');
     expect(within(variablePanel).getByRole('textbox', { name: '{{animal}}' })).toBeTruthy();
@@ -1837,8 +1989,12 @@ describe('WorkbenchPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate test case options' }));
     expect(screen.getByRole('menuitem', { name: 'Generate 5 test cases' })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Generate 5 test cases' }));
-    await waitFor(() => expect((screen.getByLabelText('animal row 6') as HTMLTextAreaElement).value).toBe('generated animal 5'));
-    const generateRequest = api.requests.find((request) => request.url.endsWith('/workbench/metaprompt/generate_test_cases'));
+    await waitFor(() =>
+      expect((screen.getByLabelText('animal row 6') as HTMLTextAreaElement).value).toBe('generated animal 5'),
+    );
+    const generateRequest = api.requests.find((request) =>
+      request.url.endsWith('/workbench/metaprompt/generate_test_cases'),
+    );
     expect(generateRequest?.method).toBe('POST');
     expect(generateRequest?.body?.num_testcases).toBe(5);
     expect(generateRequest?.body?.prompt).toBe('Write a haiku about {{animal}}.');
@@ -1862,7 +2018,9 @@ describe('WorkbenchPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Run All/ }));
 
     await waitFor(() =>
-      expect(api.requests.map((request) => `${request.method} ${request.url}`).join('\n')).toContain('/workbench/completions')
+      expect(api.requests.map((request) => `${request.method} ${request.url}`).join('\n')).toContain(
+        '/workbench/completions',
+      ),
     );
     await waitFor(() => expect(document.body.textContent).toContain('Drafted response.'));
     const completionRequests = api.requests.filter((request) => request.url.endsWith('/workbench/completions'));
@@ -1871,11 +2029,13 @@ describe('WorkbenchPage', () => {
     expect(completionRequests[0]?.body?.messages?.[0]?.content).toEqual([
       { type: 'text', text: 'Write a haiku about ', cache_control: { type: 'ephemeral' } },
       { type: 'text', text: 'otter' },
-      { type: 'text', text: '.' }
+      { type: 'text', text: '.' },
     ]);
     expect(api.requests.some((request) => request.url.endsWith('/prepaid/credits'))).toBe(true);
     expect(api.requests.some((request) => request.url.includes('/evaluations/list'))).toBe(true);
-    expect(api.requests.some((request) => request.url.endsWith('/workbench/prompts/prompt_1/revisions?compact=true'))).toBe(true);
+    expect(
+      api.requests.some((request) => request.url.endsWith('/workbench/prompts/prompt_1/revisions?compact=true')),
+    ).toBe(true);
     const saveCompletionRequest = api.requests.find((request) => request.url.includes('/save_completion'));
     expect(saveCompletionRequest?.body?.completion_text).toBe('Drafted response.');
   });
@@ -1888,9 +2048,9 @@ describe('WorkbenchPage', () => {
       revisionsByPrompt: {
         prompt_1: [
           promptRevision('Write a haiku about {{animal}}.', 'workbench-revision-latest'),
-          promptRevision('Compare {{animal}} carefully.', 'workbench-revision-earlier')
-        ]
-      }
+          promptRevision('Compare {{animal}} carefully.', 'workbench-revision-earlier'),
+        ],
+      },
     });
     renderWorkbench();
 
@@ -1903,19 +2063,23 @@ describe('WorkbenchPage', () => {
     expect(screen.getByRole('button', { name: 'Remove v1 comparison' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Run All/ }));
 
-    await waitFor(() => expect(api.requests.filter((request) => request.url.endsWith('/workbench/completions'))).toHaveLength(2));
+    await waitFor(() =>
+      expect(api.requests.filter((request) => request.url.endsWith('/workbench/completions'))).toHaveLength(2),
+    );
     const completionRequests = api.requests.filter((request) => request.url.endsWith('/workbench/completions'));
     expect(completionRequests[0]?.body?.messages?.[0]?.content).toEqual([
       { type: 'text', text: 'Write a haiku about ', cache_control: { type: 'ephemeral' } },
       { type: 'text', text: 'otter' },
-      { type: 'text', text: '.' }
+      { type: 'text', text: '.' },
     ]);
     expect(completionRequests[1]?.body?.messages?.[0]?.content).toEqual([
       { type: 'text', text: 'Compare ', cache_control: { type: 'ephemeral' } },
       { type: 'text', text: 'otter' },
-      { type: 'text', text: ' carefully.' }
+      { type: 'text', text: ' carefully.' },
     ]);
-    await waitFor(() => expect(document.body.textContent?.match(/Drafted response\./g)?.length ?? 0).toBeGreaterThanOrEqual(2));
+    await waitFor(() =>
+      expect(document.body.textContent?.match(/Drafted response\./g)?.length ?? 0).toBeGreaterThanOrEqual(2),
+    );
   });
 
   test('keeps Evaluate read-only until prompt changes are saved as a new revision', async () => {
@@ -1931,17 +2095,17 @@ describe('WorkbenchPage', () => {
             variable_values: { animal: 'owl' },
             golden_answer: '',
             completion_text: '',
-            rating: ''
-          }
-        ]
-      }
+            rating: '',
+          },
+        ],
+      },
     });
     renderWorkbench();
 
     await screen.findByRole('button', { name: /Run All/ });
     fireEvent.click(screen.getByRole('tab', { name: 'Prompt' }));
     fireEvent.change(screen.getByLabelText('User prompt 1'), {
-      target: { value: 'Write a crisp haiku about {{animal}}.' }
+      target: { value: 'Write a crisp haiku about {{animal}}.' },
     });
     fireEvent.click(screen.getByRole('tab', { name: 'Evaluate' }));
 
@@ -1954,7 +2118,7 @@ describe('WorkbenchPage', () => {
 
     await waitFor(
       () => expect(api.requests.some((request) => request.url.endsWith('/kv_store/set/draft_revision'))).toBe(true),
-      { timeout: 1600 }
+      { timeout: 1600 },
     );
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy();
 
@@ -1962,9 +2126,9 @@ describe('WorkbenchPage', () => {
     await waitFor(() =>
       expect(
         api.requests.some(
-          (request) => request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_1/revisions')
-        )
-      ).toBe(true)
+          (request) => request.method === 'POST' && request.url.endsWith('/workbench/prompts/prompt_1/revisions'),
+        ),
+      ).toBe(true),
     );
     expect(screen.queryByText(/evaluation table below has become stale/)).toBeNull();
     expect((screen.getByRole('button', { name: /Run All/ }) as HTMLButtonElement).disabled).toBe(false);
@@ -1987,7 +2151,7 @@ describe('WorkbenchPage', () => {
     fireEvent.change(animalInput, { target: { value: 'badger' } });
     fireEvent.change(idealInput, { target: { value: 'A careful animal poem.' } });
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url.includes('/update_golden_answer'))).toBe(true)
+      expect(api.requests.some((request) => request.url.includes('/update_golden_answer'))).toBe(true),
     );
     fireEvent.change(idealInput, { target: { value: '' } });
     expect(idealInput.value).toBe('');
@@ -2018,9 +2182,11 @@ describe('WorkbenchPage', () => {
     fireEvent.change(screen.getByTestId('workbench-evaluate-import-input'), {
       target: {
         files: [
-          new File(['{{animal}},ideal_output\n"red panda","A bright forest haiku"\n'], 'cases.csv', { type: 'text/csv' })
-        ]
-      }
+          new File(['{{animal}},ideal_output\n"red panda","A bright forest haiku"\n'], 'cases.csv', {
+            type: 'text/csv',
+          }),
+        ],
+      },
     });
 
     await waitFor(() => expect((screen.getByLabelText('animal row 1') as HTMLTextAreaElement).value).toBe('red panda'));
@@ -2066,7 +2232,7 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(panel).getByText('Variable generation logic'));
 
     const logicInput = within(panel).getByRole('textbox', {
-      name: 'Click Generate to populate with some initial logic...'
+      name: 'Click Generate to populate with some initial logic...',
     }) as HTMLTextAreaElement;
     expect(logicInput.placeholder).toBe('Click Generate to populate with some initial logic...');
     fireEvent.click(within(panel).getByRole('button', { name: 'Regenerate variable generation logic' }));
@@ -2076,7 +2242,9 @@ describe('WorkbenchPage', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Generate' }));
 
     await waitFor(() =>
-      expect(api.requests.filter((request) => request.url.endsWith('/workbench/evaluations/generate_test_case'))).toHaveLength(2)
+      expect(
+        api.requests.filter((request) => request.url.endsWith('/workbench/evaluations/generate_test_case')),
+      ).toHaveLength(2),
     );
     const generateRequest = api.requests
       .filter((request) => request.url.endsWith('/workbench/evaluations/generate_test_case'))
@@ -2086,7 +2254,9 @@ describe('WorkbenchPage', () => {
     expect((within(panel).getByRole('textbox', { name: '{{animal}}' }) as HTMLTextAreaElement).value).toBe('owl');
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Delete variable generation logic' }));
-    expect(within(panel).queryByRole('textbox', { name: 'Click Generate to populate with some initial logic...' })).toBeNull();
+    expect(
+      within(panel).queryByRole('textbox', { name: 'Click Generate to populate with some initial logic...' }),
+    ).toBeNull();
   });
 
   test('runs a prompt through the official Workbench completions request and refreshes dependent data', async () => {
@@ -2111,7 +2281,9 @@ describe('WorkbenchPage', () => {
     expect(runRequest?.body?.messages?.[0]?.content?.[0]?.text).toContain('You are Claude, an expert assistant.');
     expect(api.requests.some((request) => request.url.endsWith('/prepaid/credits'))).toBe(true);
     expect(api.requests.some((request) => request.url.includes('/evaluations/list'))).toBe(true);
-    expect(api.requests.some((request) => request.url.endsWith('/workbench/prompts/prompt_1/revisions?compact=true'))).toBe(true);
+    expect(
+      api.requests.some((request) => request.url.endsWith('/workbench/prompts/prompt_1/revisions?compact=true')),
+    ).toBe(true);
   });
 
   test('renders the standardized response error alert when a run fails', async () => {
@@ -2188,7 +2360,9 @@ describe('WorkbenchPage', () => {
     expect(within(panel).queryByRole('slider', { name: 'Budget tokens' })).toBeNull();
     fireEvent.click(within(panel).getByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.filter((request) => request.url.endsWith('/workbench/completions'))).toHaveLength(2));
+    await waitFor(() =>
+      expect(api.requests.filter((request) => request.url.endsWith('/workbench/completions'))).toHaveLength(2),
+    );
     const adaptiveRequest = api.requests.filter((request) => request.url.endsWith('/workbench/completions')).at(-1);
     expect(adaptiveRequest?.body?.thinking).toEqual({ type: 'adaptive', effort: 'high' });
     expect(adaptiveRequest?.body?.thinking).not.toHaveProperty('budget_tokens');
@@ -2211,17 +2385,21 @@ describe('WorkbenchPage', () => {
     expect(within(panel).getByPlaceholderText('Enter an example value…')).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Run ⌘ + ⏎' })).toBeTruthy();
     fireEvent.change(within(panel).getByLabelText('{{animal}}'), { target: { value: 'red panda' } });
-    const headerRun = document.querySelector('.workbench-header-actions button[aria-label="Run ⌘ + ⏎"]') as HTMLButtonElement;
+    const headerRun = document.querySelector(
+      '.workbench-header-actions button[aria-label="Run ⌘ + ⏎"]',
+    ) as HTMLButtonElement;
     fireEvent.click(headerRun);
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     const runRequest = api.requests.find((request) => request.url.endsWith('/workbench/completions'));
     expect(runRequest?.body?.variables).toEqual(['animal']);
     expect(runRequest?.body?.variable_values).toBeUndefined();
     expect(runRequest?.body?.messages?.[0]?.content).toEqual([
       { type: 'text', text: 'Write a polished note about ', cache_control: { type: 'ephemeral' } },
       { type: 'text', text: 'red panda' },
-      { type: 'text', text: '.' }
+      { type: 'text', text: '.' },
     ]);
   });
 
@@ -2235,14 +2413,14 @@ describe('WorkbenchPage', () => {
     const examplesPanel = screen.getByLabelText('Examples');
     fireEvent.click(within(examplesPanel).getByRole('button', { name: 'Add example' }));
     fireEvent.change(within(examplesPanel).getByRole('textbox', { name: '{{animal}}' }), {
-      target: { value: 'falcon' }
+      target: { value: 'falcon' },
     });
     fireEvent.change(within(examplesPanel).getByRole('textbox', { name: 'Ideal output' }), {
-      target: { value: 'A swift sky poem.' }
+      target: { value: 'A swift sky poem.' },
     });
     fireEvent.click(within(examplesPanel).getByRole('button', { name: 'Add additional context' }));
     fireEvent.change(within(examplesPanel).getByRole('textbox', { name: 'Additional context' }), {
-      target: { value: 'Keep the tone playful.' }
+      target: { value: 'Keep the tone playful.' },
     });
     fireEvent.click(within(examplesPanel).getByRole('button', { name: 'Add Example' }));
 
@@ -2251,17 +2429,18 @@ describe('WorkbenchPage', () => {
     fireEvent.change(within(variablesPanel).getByLabelText('{{animal}}'), { target: { value: 'owl' } });
     fireEvent.click(within(variablesPanel).getByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     const runRequest = api.requests.find((request) => request.url.endsWith('/workbench/completions'));
     expect(runRequest?.body?.messages?.[0]?.content).toEqual([
       {
         type: 'text',
-        text:
-          '<examples>\n<example>\n<example_description>\nKeep the tone playful.\n</example_description>\n<animal>\nfalcon\n</animal>\n<ideal_output>\nA swift sky poem.\n</ideal_output>\n</example>\n</examples>\n\n'
+        text: '<examples>\n<example>\n<example_description>\nKeep the tone playful.\n</example_description>\n<animal>\nfalcon\n</animal>\n<ideal_output>\nA swift sky poem.\n</ideal_output>\n</example>\n</examples>\n\n',
       },
       { type: 'text', text: 'Write a haiku about ', cache_control: { type: 'ephemeral' } },
       { type: 'text', text: 'owl' },
-      { type: 'text', text: '.' }
+      { type: 'text', text: '.' },
     ]);
   });
 
@@ -2276,10 +2455,12 @@ describe('WorkbenchPage', () => {
     fireEvent.change(within(panel).getByLabelText('{{ANIMAL}}'), { target: { value: 'cats' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     const titleIndex = api.requests.findIndex((request) => request.url.endsWith('/workbench/generate_title'));
     const updatePromptIndex = api.requests.findIndex(
-      (request) => request.method === 'PUT' && /\/workbench\/prompts\/prompt_1$/.test(request.url)
+      (request) => request.method === 'PUT' && /\/workbench\/prompts\/prompt_1$/.test(request.url),
     );
     const completionIndex = api.requests.findIndex((request) => request.url.endsWith('/workbench/completions'));
     expect(titleIndex).toBeGreaterThan(-1);
@@ -2287,13 +2468,13 @@ describe('WorkbenchPage', () => {
     expect(updatePromptIndex).toBeLessThan(completionIndex);
     expect(api.requests[titleIndex]?.body).toEqual({
       message_content: 'Write a haiku about {{ANIMAL}}.',
-      model: 'claude-opus-4-8'
+      model: 'claude-opus-4-8',
     });
     expect(api.requests[updatePromptIndex]?.body).toEqual({ name: 'Cat haiku' });
     expect(api.requests[completionIndex]?.body?.messages?.[0]?.content).toEqual([
       { type: 'text', text: 'Write a haiku about ', cache_control: { type: 'ephemeral' } },
       { type: 'text', text: 'cats' },
-      { type: 'text', text: '.' }
+      { type: 'text', text: '.' },
     ]);
   });
 
@@ -2304,9 +2485,13 @@ describe('WorkbenchPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(true),
+    );
     expect(api.requests.some((request) => request.url.endsWith('/workbench/generate_title'))).toBe(false);
-    expect(api.requests.some((request) => request.method === 'PUT' && /\/workbench\/prompts\/prompt_1$/.test(request.url))).toBe(false);
+    expect(
+      api.requests.some((request) => request.method === 'PUT' && /\/workbench\/prompts\/prompt_1$/.test(request.url)),
+    ).toBe(false);
   });
 
   test('truncates the first prompt message before automatic title generation', async () => {
@@ -2317,9 +2502,13 @@ describe('WorkbenchPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Run ⌘ + ⏎' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url.endsWith('/workbench/generate_title'))).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url.endsWith('/workbench/generate_title'))).toBe(true),
+    );
     const titleRequest = api.requests.find((request) => request.url.endsWith('/workbench/generate_title'));
-    expect(titleRequest?.body?.message_content).toBe(`${longPrompt.slice(0, 250)}\n\n  [...]\n\n  ${longPrompt.slice(-250)}`);
+    expect(titleRequest?.body?.message_content).toBe(
+      `${longPrompt.slice(0, 250)}\n\n  [...]\n\n  ${longPrompt.slice(-250)}`,
+    );
   });
 
   test('opens the generated Claude API code modal with Highlight.js markup', async () => {
@@ -2347,7 +2536,9 @@ describe('WorkbenchPage', () => {
     expect(languageCombobox.className.includes('bg-secondary')).toBe(false);
     expect(within(dialog).queryByRole('option', { name: 'AWS Bedrock Python' })).toBeNull();
     expect(within(dialog).getByRole('button', { name: 'View Docs' })).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Close' }).classList.contains('workbench-code-dialog-close')).toBe(true);
+    expect(
+      within(dialog).getByRole('button', { name: 'Close' }).classList.contains('workbench-code-dialog-close'),
+    ).toBe(true);
     expect(dialog.querySelector('code.language-python')).toBeTruthy();
     expect(dialog.querySelector('.hljs-string')).toBeTruthy();
     expect(dialog.classList.contains('workbench-code-dialog')).toBe(true);
@@ -2376,15 +2567,15 @@ describe('WorkbenchPage', () => {
       revisionsByPrompt: {
         prompt_1: [
           promptRevision(existingPromptText, 'workbench-revision-latest'),
-          promptRevision('Earlier saved prompt.', 'workbench-revision-earlier')
-        ]
-      }
+          promptRevision('Earlier saved prompt.', 'workbench-revision-earlier'),
+        ],
+      },
     });
     renderWorkbench();
 
     await screen.findByRole('button', { name: 'Get Code' });
     fireEvent.change(screen.getByLabelText('User prompt 1'), {
-      target: { value: 'Draft-only prompt before code.' }
+      target: { value: 'Draft-only prompt before code.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Get Code' }));
 
@@ -2410,7 +2601,7 @@ describe('WorkbenchPage', () => {
 
 function renderWorkbench({
   auth = authContextValue(),
-  workspace = workspaceContextValue('default')
+  workspace = workspaceContextValue('default'),
 }: {
   auth?: ReturnType<typeof authContextValue>;
   workspace?: ReturnType<typeof workspaceContextValue>;
@@ -2420,7 +2611,7 @@ function renderWorkbench({
       <WorkspaceContext.Provider value={workspace}>
         <WorkbenchPage />
       </WorkspaceContext.Provider>
-    </AuthContext.Provider>
+    </AuthContext.Provider>,
   );
 }
 
@@ -2430,7 +2621,7 @@ function defaultAuthAccount() {
     uuid: 'user_default',
     email_address: 'admin@example.local',
     full_name: 'Local Admin',
-    display_name: 'Local Admin'
+    display_name: 'Local Admin',
   };
 }
 
@@ -2440,7 +2631,7 @@ function authContextValue(account: any = defaultAuthAccount()) {
     status: 'authenticated' as const,
     csrfToken: 'csrf_test',
     refresh: async () => ({ account: null }),
-    logout: async () => undefined
+    logout: async () => undefined,
   };
 }
 
@@ -2454,7 +2645,7 @@ function workspaceContextValue(activeWorkspaceId: string) {
     error: null,
     selectWorkspace: () => undefined,
     createWorkspace: async () => defaultWorkspace,
-    refreshWorkspaces: async () => undefined
+    refreshWorkspaces: async () => undefined,
   };
 }
 
@@ -2501,7 +2692,7 @@ function mockWorkbenchApi(
     generatedPromptDelayMs?: number;
     completionErrorMessage?: string;
     prepaidCreditsAmount?: number;
-  } = {}
+  } = {},
 ) {
   const requests: MockRequest[] = [];
   let createdPromptCount = 0;
@@ -2511,13 +2702,15 @@ function mockWorkbenchApi(
   const promptNames = new Map<string, string>();
   const storedEvaluations = new Map<string, Record<string, unknown>>();
   const getPromptRevisions = (promptId: string) =>
-    createdPromptRevisions.has(promptId) ? [createdPromptRevisions.get(promptId)!] : options.revisionsByPrompt?.[promptId] ?? [
-      promptRevision(
-        options.promptTexts?.[promptId] ?? options.initialPromptText ?? existingPromptText,
-        options.revisionIds?.[promptId],
-        options.initialTools
-      )
-    ];
+    createdPromptRevisions.has(promptId)
+      ? [createdPromptRevisions.get(promptId)!]
+      : (options.revisionsByPrompt?.[promptId] ?? [
+          promptRevision(
+            options.promptTexts?.[promptId] ?? options.initialPromptText ?? existingPromptText,
+            options.revisionIds?.[promptId],
+            options.initialTools,
+          ),
+        ]);
   globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname + input.search : input.url;
     const method = init?.method ?? 'GET';
@@ -2534,7 +2727,7 @@ function mockWorkbenchApi(
         filename: uploadedFilename ?? options.uploadedFile?.filename ?? 'brief.pdf',
         mime_type: options.uploadedFile?.mime_type ?? 'application/pdf',
         size_bytes: 12,
-        downloadable: false
+        downloadable: false,
       });
     }
 
@@ -2544,22 +2737,22 @@ function mockWorkbenchApi(
           model_name: 'claude-opus-4-8',
           system_prompt: '',
           temperature: 1,
-          max_tokens_to_sample: 20000
+          max_tokens_to_sample: 20000,
         },
         models: [
           {
             model_name: 'claude-opus-4-8',
             display_name: 'Claude Opus Active',
             supports_thinking: true,
-            supports_tool_use: true
+            supports_tool_use: true,
           },
           {
             model_name: 'claude-sonnet-4-6',
             display_name: 'Claude Sonnet Active',
             supports_thinking: true,
-            supports_tool_use: true
-          }
-        ]
+            supports_tool_use: true,
+          },
+        ],
       });
     }
 
@@ -2569,12 +2762,16 @@ function mockWorkbenchApi(
         return jsonResponse({ error: { message: 'Prompt list unavailable.' } }, 503);
       }
       const summaries = options.promptSummaries ?? defaultPromptSummaries();
-      return jsonResponse([...createdPrompts, ...summaries].map((item) => ({ ...item, name: promptNames.get(item.id) ?? item.name })));
+      return jsonResponse(
+        [...createdPrompts, ...summaries].map((item) => ({ ...item, name: promptNames.get(item.id) ?? item.name })),
+      );
     }
 
     if (url.endsWith('/workbench/prompts') && method === 'GET') {
       const summaries = options.promptSummaries ?? defaultPromptSummaries();
-      return jsonResponse([...createdPrompts, ...summaries].map((item) => ({ ...item, name: promptNames.get(item.id) ?? item.name })));
+      return jsonResponse(
+        [...createdPrompts, ...summaries].map((item) => ({ ...item, name: promptNames.get(item.id) ?? item.name })),
+      );
     }
 
     if (url.endsWith('/workspaces/default/prompts') && method === 'POST') {
@@ -2588,7 +2785,7 @@ function mockWorkbenchApi(
         ? {
             ...promptRevision('', body.latest_revision.id ?? 'workbench-revision-created'),
             ...body.latest_revision,
-            is_latest: true
+            is_latest: true,
           }
         : promptRevision('');
       createdPrompts.unshift({ id: promptId, name, workspace_id: 'default', creator: defaultPromptCreator() });
@@ -2596,7 +2793,7 @@ function mockWorkbenchApi(
       createdPromptRevisions.set(promptId, latestRevision);
       return jsonResponse({
         ...promptDetail(promptId, '', name),
-        latest_revision: latestRevision
+        latest_revision: latestRevision,
       });
     }
 
@@ -2614,7 +2811,7 @@ function mockWorkbenchApi(
         ...body,
         id: 'workbench-revision-saved',
         created_at: '2026-06-12T02:11:00.000000Z',
-        is_latest: true
+        is_latest: true,
       });
     }
 
@@ -2632,7 +2829,8 @@ function mockWorkbenchApi(
       const promptId = decodeURIComponent(revisionDetailMatch[1]);
       const revisionId = decodeURIComponent(revisionDetailMatch[2]);
       return jsonResponse(
-        getPromptRevisions(promptId).find((revision) => revision.id === revisionId) ?? promptRevision(existingPromptText, revisionId)
+        getPromptRevisions(promptId).find((revision) => revision.id === revisionId) ??
+          promptRevision(existingPromptText, revisionId),
       );
     }
 
@@ -2647,9 +2845,9 @@ function mockWorkbenchApi(
           options.revisionIds?.[promptId],
           options.promptCreators?.[promptId],
           options.promptExamples,
-          options.initialTools
+          options.initialTools,
         ),
-        is_shared_with_workspace: true
+        is_shared_with_workspace: true,
       });
     }
 
@@ -2660,39 +2858,50 @@ function mockWorkbenchApi(
         if (typeof body?.name === 'string') {
           promptNames.set(promptId, body.name);
         }
-        return jsonResponse(promptDetail(
+        return jsonResponse(
+          promptDetail(
+            promptId,
+            options.promptTexts?.[promptId] ?? options.initialPromptText ?? existingPromptText,
+            promptNames.get(promptId) ?? options.promptNames?.[promptId] ?? options.initialPromptName,
+            options.revisionIds?.[promptId],
+            options.promptCreators?.[promptId],
+            options.promptExamples,
+            options.initialTools,
+          ),
+        );
+      }
+      if (method === 'DELETE') {
+        return jsonResponse({ id: promptId, deleted: true });
+      }
+      return jsonResponse(
+        promptDetail(
           promptId,
           options.promptTexts?.[promptId] ?? options.initialPromptText ?? existingPromptText,
           promptNames.get(promptId) ?? options.promptNames?.[promptId] ?? options.initialPromptName,
           options.revisionIds?.[promptId],
           options.promptCreators?.[promptId],
           options.promptExamples,
-          options.initialTools
-        ));
-      }
-      if (method === 'DELETE') {
-        return jsonResponse({ id: promptId, deleted: true });
-      }
-      return jsonResponse(promptDetail(
-        promptId,
-        options.promptTexts?.[promptId] ?? options.initialPromptText ?? existingPromptText,
-        promptNames.get(promptId) ?? options.promptNames?.[promptId] ?? options.initialPromptName,
-        options.revisionIds?.[promptId],
-        options.promptCreators?.[promptId],
-        options.promptExamples,
-        options.initialTools
-      ));
+          options.initialTools,
+        ),
+      );
     }
 
     if (url.endsWith('/workbench/completions')) {
       if (options.completionErrorMessage) {
         return jsonResponse({ error: { message: options.completionErrorMessage } }, 500);
       }
-      return sseResponse([
-        ['message_start', { type: 'message_start', message: { id: 'msg_test', role: 'assistant', content: [] } }],
-        ['content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Drafted response.' } }],
-        ['message_stop', { type: 'message_stop' }]
-      ], 0, init?.signal);
+      return sseResponse(
+        [
+          ['message_start', { type: 'message_start', message: { id: 'msg_test', role: 'assistant', content: [] } }],
+          [
+            'content_block_delta',
+            { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Drafted response.' } },
+          ],
+          ['message_stop', { type: 'message_stop' }],
+        ],
+        0,
+        init?.signal,
+      );
     }
 
     if (/\/workbench\/revisions\/[^/?#]+\/evaluations\/create$/.test(url) && method === 'POST') {
@@ -2703,13 +2912,16 @@ function mockWorkbenchApi(
         variable_values: body?.variable_values ?? {},
         golden_answer: body?.golden_answer ?? '',
         completion_text: body?.completion_text ?? '',
-        rating: body?.rating ?? ''
+        rating: body?.rating ?? '',
       };
       storedEvaluations.set(String(evaluation.id), evaluation);
       return jsonResponse(evaluation);
     }
 
-    const evaluationUpdateMatch = /\/workbench\/evaluations\/([^/?#]+)\/(update_variables|update_golden_answer|save_completion|update_rating|delete)$/.exec(url);
+    const evaluationUpdateMatch =
+      /\/workbench\/evaluations\/([^/?#]+)\/(update_variables|update_golden_answer|save_completion|update_rating|delete)$/.exec(
+        url,
+      );
     if (evaluationUpdateMatch && method === 'POST') {
       const evaluationId = decodeURIComponent(evaluationUpdateMatch[1]);
       const action = evaluationUpdateMatch[2];
@@ -2720,7 +2932,7 @@ function mockWorkbenchApi(
         variable_values: {},
         golden_answer: '',
         completion_text: '',
-        rating: ''
+        rating: '',
       };
       const next = { ...existing };
       if (action === 'update_variables') {
@@ -2748,38 +2960,50 @@ function mockWorkbenchApi(
       return sseResponse(
         Array.from({ length: count }, (_, index) => [
           'test_case',
-          { variable_values: { animal: `generated animal ${index + 1}` } }
+          { variable_values: { animal: `generated animal ${index + 1}` } },
         ]),
         0,
-        init?.signal
+        init?.signal,
       );
     }
 
     if (url.endsWith('/workbench/evaluations/generate_test_case')) {
-      return sseResponse([
+      return sseResponse(
         [
-          'content_block_delta',
-          {
-            type: 'content_block_delta',
-            index: 0,
-            delta: {
-              type: 'text_delta',
-              text: '<planning>Generated local Workbench test case.</planning>\n<animal>owl</animal>\nA quiet owl answers in moonlight.'
-            }
-          }
+          [
+            'content_block_delta',
+            {
+              type: 'content_block_delta',
+              index: 0,
+              delta: {
+                type: 'text_delta',
+                text: '<planning>Generated local Workbench test case.</planning>\n<animal>owl</animal>\nA quiet owl answers in moonlight.',
+              },
+            },
+          ],
+          ['message_stop', { type: 'message_stop' }],
         ],
-        ['message_stop', { type: 'message_stop' }]
-      ], 0, init?.signal);
+        0,
+        init?.signal,
+      );
     }
 
     if (url.endsWith('/workbench/generate_prompt')) {
-      return sseResponse([
+      return sseResponse(
         [
-          'content_block_delta',
-          { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: options.generatedPromptText ?? 'Improved prompt.' } }
+          [
+            'content_block_delta',
+            {
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'text_delta', text: options.generatedPromptText ?? 'Improved prompt.' },
+            },
+          ],
+          ['message_stop', { type: 'message_stop' }],
         ],
-        ['message_stop', { type: 'message_stop' }]
-      ], options.generatedPromptDelayMs, init?.signal);
+        options.generatedPromptDelayMs,
+        init?.signal,
+      );
     }
 
     if (url.endsWith('/prepaid/credits')) {
@@ -2806,7 +3030,7 @@ function defaultPromptCreator(): WorkbenchPromptCreator {
     tagged_id: 'user_default',
     uuid: 'user_default',
     full_name: 'Local Admin',
-    email_address: 'admin@example.local'
+    email_address: 'admin@example.local',
   };
 }
 
@@ -2818,8 +3042,8 @@ function defaultPromptSummaries(): MockPromptSummary[] {
       workspace_id: 'default',
       created_at: '2026-06-12T02:10:24.382428Z',
       updated_at: '2026-06-12T02:10:24.382428Z',
-      creator: defaultPromptCreator()
-    }
+      creator: defaultPromptCreator(),
+    },
   ];
 }
 
@@ -2830,7 +3054,7 @@ function promptDetail(
   revisionId?: string,
   creator: WorkbenchPromptCreator = defaultPromptCreator(),
   examples?: Array<Record<string, unknown>>,
-  tools: Array<Record<string, unknown>> = []
+  tools: Array<Record<string, unknown>> = [],
 ) {
   return {
     id,
@@ -2841,11 +3065,15 @@ function promptDetail(
     is_shared_with_workspace: false,
     creator,
     latest_revision: promptRevision(text, revisionId, tools),
-    kv_store: examples ? { examples } : {}
+    kv_store: examples ? { examples } : {},
   };
 }
 
-function promptRevision(text = existingPromptText, id = 'workbench-revision-test', tools: Array<Record<string, unknown>> = []) {
+function promptRevision(
+  text = existingPromptText,
+  id = 'workbench-revision-test',
+  tools: Array<Record<string, unknown>> = [],
+) {
   return {
     id,
     created_at: '2026-06-12T02:10:24.382428Z',
@@ -2862,20 +3090,20 @@ function promptRevision(text = existingPromptText, id = 'workbench-revision-test
     messages: [
       {
         role: 'human',
-        content: [{ type: 'text', text }]
+        content: [{ type: 'text', text }],
       },
       {
         role: 'assistant',
-        content: [{ type: 'text', text: '' }]
-      }
-    ]
+        content: [{ type: 'text', text: '' }],
+      },
+    ],
   };
 }
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -2917,8 +3145,8 @@ function sseResponse(events: [string, Record<string, unknown>][], delayMs = 0, s
           return;
         }
         write();
-      }
+      },
     }),
-    { headers: { 'Content-Type': 'text/event-stream' } }
+    { headers: { 'Content-Type': 'text/event-stream' } },
   );
 }

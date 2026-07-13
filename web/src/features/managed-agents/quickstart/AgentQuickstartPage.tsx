@@ -1,16 +1,54 @@
 import { useI18n } from '../../../shared/i18n';
 import { Button } from '../../../shared/ui/button';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup, type ResizablePanelHandle } from '../../../shared/ui/resizable';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  type ResizablePanelHandle,
+} from '../../../shared/ui/resizable';
 import { toast } from '../../../shared/ui/sonner';
 import { useWorkspace } from '../../../shared/workspaces/context';
-import { buildInitialQuickstartMessage, buildPlatformQuickstartRequest, buildQuickstartTurnContextText, type QuickstartMessage, type QuickstartStep } from './platformQuickstartRequest';
+import {
+  buildInitialQuickstartMessage,
+  buildPlatformQuickstartRequest,
+  buildQuickstartTurnContextText,
+  type QuickstartMessage,
+  type QuickstartStep,
+} from './platformQuickstartRequest';
 import clsx from 'clsx';
 import { Check, Play, RotateCcw, Square } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { agentTemplates, blankAgentTemplate, createDialogAgentConfig, quickstartBuildAgentConfigInput } from '../agentConfig';
-import { createAgent, createQuickstartDeployment, createQuickstartEnvironment, createQuickstartSession, createQuickstartVault, createQuickstartVaultCredential, interruptQuickstartSession, listManagedEntities, postQuickstartProxyStream, postQuickstartSessionMessage } from '../api';
+import {
+  agentTemplates,
+  blankAgentTemplate,
+  createDialogAgentConfig,
+  quickstartBuildAgentConfigInput,
+} from '../agentConfig';
+import {
+  createAgent,
+  createQuickstartDeployment,
+  createQuickstartEnvironment,
+  createQuickstartSession,
+  createQuickstartVault,
+  createQuickstartVaultCredential,
+  interruptQuickstartSession,
+  listManagedEntities,
+  postQuickstartProxyStream,
+  postQuickstartSessionMessage,
+} from '../api';
 import { quickstartStepLabel, templateSearchText } from '../labels';
-import { type AgentApiResponse, type AgentPanelTab, type AgentTemplate, type CodeFormat, type CreateAgentInput, type EnvironmentApiResponse, type QuickstartChatItem, type QuickstartToolCall, type QuickstartToolExecutionResult, type SessionApiResponse } from '../types';
+import {
+  type AgentApiResponse,
+  type AgentPanelTab,
+  type AgentTemplate,
+  type CodeFormat,
+  type CreateAgentInput,
+  type EnvironmentApiResponse,
+  type QuickstartChatItem,
+  type QuickstartToolCall,
+  type QuickstartToolExecutionResult,
+  type SessionApiResponse,
+} from '../types';
 import { agentDetailHref, errorMessage, parseToolInput, titleCase, toRecord } from '../utils';
 import {
   appendQuickstartStatus,
@@ -27,7 +65,7 @@ import {
   TemplateDetailPanel,
   toolResultBlock,
   updateQuickstartMessage,
-  updateQuickstartTool
+  updateQuickstartTool,
 } from './components';
 
 export const quickstartSteps = ['Create agent', 'Configure environment', 'Start session', 'Integrate'] as const;
@@ -90,9 +128,7 @@ export function AgentQuickstartPage() {
     if (!normalized) {
       return agentTemplates;
     }
-    return agentTemplates.filter((template) =>
-      templateSearchText(template, msg).toLowerCase().includes(normalized)
-    );
+    return agentTemplates.filter((template) => templateSearchText(template, msg).toLowerCase().includes(normalized));
   }, [msg, query]);
 
   const detailTemplate = agentTemplates.find((template) => template.id === detailTemplateId) ?? null;
@@ -129,7 +165,7 @@ export function AgentQuickstartPage() {
     () => () => {
       abortRef.current?.abort();
     },
-    []
+    [],
   );
 
   useEffect(() => {
@@ -170,13 +206,13 @@ export function AgentQuickstartPage() {
       step: activeStepRef.current,
       deploymentSchedulePlanned: deploymentSchedulePlannedRef.current,
       agentDescription: initialAgentDescriptionRef.current,
-      agentConfig: createdAgentConfigRef.current ?? {}
-    })
+      agentConfig: createdAgentConfigRef.current ?? {},
+    }),
   });
 
   const buildQuickstartToolResultMessage = (blocks: Array<Record<string, unknown>>): QuickstartMessage => ({
     role: 'user',
-    content: [...blocks, buildCurrentQuickstartTurnContextBlock()]
+    content: [...blocks, buildCurrentQuickstartTurnContextBlock()],
   });
 
   const handleTemplateClick = (template: AgentTemplate) => {
@@ -191,7 +227,11 @@ export function AgentQuickstartPage() {
     }
     if (!orgUuid) {
       setChatError('No organization is available for the managed agent quickstart proxy.');
-      appendQuickstartStatus(setChatItems, 'No organization is available for the managed agent quickstart proxy.', 'error');
+      appendQuickstartStatus(
+        setChatItems,
+        'No organization is available for the managed agent quickstart proxy.',
+        'error',
+      );
       return;
     }
 
@@ -210,15 +250,15 @@ export function AgentQuickstartPage() {
               step: activeStepRef.current,
               deploymentSchedulePlanned: deploymentSchedulePlannedRef.current,
               agentDescription: initialAgentDescriptionRef.current,
-              agentConfig
-            })
+              agentConfig,
+            }),
           ]);
     const requestBody = buildPlatformQuickstartRequest({
       step: activeStepRef.current,
       deploymentSchedulePlanned: deploymentSchedulePlannedRef.current,
       agentConfig,
       agentDescription: initialAgentDescriptionRef.current,
-      messages: baseMessages
+      messages: baseMessages,
     });
 
     const assistantItemId = quickstartItemId('assistant');
@@ -239,28 +279,24 @@ export function AgentQuickstartPage() {
         hasAssistantItem = true;
         setChatItems((current) => [
           ...current,
-          { id: assistantItemId, type: 'message', role: 'assistant', content: displayText }
+          { id: assistantItemId, type: 'message', role: 'assistant', content: displayText },
         ]);
       } else {
         setChatItems((current) => updateQuickstartMessage(current, assistantItemId, displayText));
       }
     };
-    let currentTool:
-      | {
-          id: string;
-          name: string;
-          input: Record<string, unknown>;
-          inputJson: string;
-        }
-      | null = null;
-    let currentServerTool:
-      | {
-          id: string;
-          name: string;
-          input: Record<string, unknown>;
-          inputJson: string;
-        }
-      | null = null;
+    let currentTool: {
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      inputJson: string;
+    } | null = null;
+    let currentServerTool: {
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      inputJson: string;
+    } | null = null;
 
     try {
       await postQuickstartProxyStream({
@@ -277,7 +313,7 @@ export function AgentQuickstartPage() {
                 id: String(contentBlock.id ?? quickstartItemId('tool_use')),
                 name: String(contentBlock.name ?? 'unknown_tool'),
                 input: toRecord(contentBlock.input) ?? {},
-                inputJson: ''
+                inputJson: '',
               };
             }
             if (contentBlock?.type === 'server_tool_use') {
@@ -285,7 +321,7 @@ export function AgentQuickstartPage() {
                 id: String(contentBlock.id ?? quickstartItemId('server_tool_use')),
                 name: String(contentBlock.name ?? 'unknown_server_tool'),
                 input: toRecord(contentBlock.input) ?? {},
-                inputJson: ''
+                inputJson: '',
               };
             }
             return;
@@ -312,7 +348,7 @@ export function AgentQuickstartPage() {
               id: currentServerTool.id,
               name: currentServerTool.name,
               input: parsedInput,
-              status: 'completed'
+              status: 'completed',
             };
             const nextAssistantText = assistantTextWithQuickstartToolContext(assistantText, call);
             if (nextAssistantText !== assistantText) {
@@ -329,7 +365,7 @@ export function AgentQuickstartPage() {
               id: currentTool.id,
               name: currentTool.name,
               input: parsedInput,
-              status: 'running'
+              status: 'running',
             };
             const nextAssistantText = assistantTextWithQuickstartToolContext(assistantText, call);
             if (nextAssistantText !== assistantText) {
@@ -341,7 +377,7 @@ export function AgentQuickstartPage() {
             setChatItems((current) => [...current, { id: quickstartItemId('tool'), type: 'tool', call }]);
             currentTool = null;
           }
-        }
+        },
       });
 
       const assistantMessageText = cleanQuickstartAssistantText(assistantText);
@@ -352,8 +388,8 @@ export function AgentQuickstartPage() {
         ...baseMessages,
         {
           role: 'assistant',
-          content: assistantContent.length ? assistantContent : assistantMessageText
-        }
+          content: assistantContent.length ? assistantContent : assistantMessageText,
+        },
       ];
 
       const resultBlocks: Array<Record<string, unknown>> = [];
@@ -370,7 +406,7 @@ export function AgentQuickstartPage() {
       if (resultBlocks.length && !hasAwaitingTool) {
         const nextMessages: QuickstartMessage[] = [
           ...conversationMessagesRef.current,
-          buildQuickstartToolResultMessage(resultBlocks)
+          buildQuickstartToolResultMessage(resultBlocks),
         ];
         conversationMessagesRef.current = nextMessages;
         await startQuickstartTurn(nextMessages);
@@ -401,7 +437,7 @@ export function AgentQuickstartPage() {
         case 'build_agent_config': {
           const nextConfig = quickstartBuildAgentConfigInput(
             call.input,
-            createdAgentConfigRef.current ?? createDialogAgentConfig(blankAgentTemplate)
+            createdAgentConfigRef.current ?? createDialogAgentConfig(blankAgentTemplate),
           );
           setCreatedAgentConfig(nextConfig);
           createdAgentConfigRef.current = nextConfig;
@@ -415,7 +451,7 @@ export function AgentQuickstartPage() {
             updateQuickstartTool(setChatItems, call.id, { status: 'completed', result: message });
             return {
               content: `${message} Call create_environment with a reuse_environment_id or a new environment config before offering the next step.`,
-              isError: true
+              isError: true,
             };
           }
           if (activeStepRef.current === 'session' && !sessionRef.current) {
@@ -423,7 +459,7 @@ export function AgentQuickstartPage() {
             updateQuickstartTool(setChatItems, call.id, { status: 'completed', result: message });
             return {
               content: `${message} Call agent_ready with a suggested_first_message before offering the next step.`,
-              isError: true
+              isError: true,
             };
           }
           updateQuickstartTool(setChatItems, call.id, { status: 'awaiting_user' });
@@ -443,7 +479,11 @@ export function AgentQuickstartPage() {
           setSelectedEnvironment(environment);
           selectedEnvironmentRef.current = environment;
           if (!reuseEnvironmentId) {
-            toast.success(msg('managedAgents.quickstart.environmentCreatedAria', 'Environment created - {id}', { id: environment.id }));
+            toast.success(
+              msg('managedAgents.quickstart.environmentCreatedAria', 'Environment created - {id}', {
+                id: environment.id,
+              }),
+            );
           }
           setActiveStep(1);
           activeStepRef.current = 'environment';
@@ -452,7 +492,7 @@ export function AgentQuickstartPage() {
             : `Environment created (id: ${environment.id}).`;
           updateQuickstartTool(setChatItems, call.id, {
             status: 'awaiting_user',
-            result: resultText
+            result: resultText,
           });
           return null;
         }
@@ -477,22 +517,26 @@ export function AgentQuickstartPage() {
           const nextVaultIds = Array.from(new Set([...selectedVaultIdsRef.current, vault.id]));
           selectedVaultIdsRef.current = nextVaultIds;
           setSelectedVaultIds(nextVaultIds);
-          updateQuickstartTool(setChatItems, call.id, { status: 'completed', result: `Vault created (id: ${vault.id}).` });
+          updateQuickstartTool(setChatItems, call.id, {
+            status: 'completed',
+            result: `Vault created (id: ${vault.id}).`,
+          });
           return { content: `Vault created (id: ${vault.id}).` };
         }
         case 'create_vault_credential': {
           updateQuickstartTool(setChatItems, call.id, { status: 'awaiting_user' });
           return null;
         }
-        case 'flag_schedule_intent':
-          {
-            const wantsSchedule = Boolean(call.input.wants_schedule);
-            setDeploymentSchedulePlanned(wantsSchedule);
-            deploymentSchedulePlannedRef.current = wantsSchedule;
-            const resultText = wantsSchedule ? 'Deployment schedule intent flagged.' : 'Deployment schedule intent cleared.';
-            updateQuickstartTool(setChatItems, call.id, { status: 'completed', result: resultText });
-            return { content: resultText };
-          }
+        case 'flag_schedule_intent': {
+          const wantsSchedule = Boolean(call.input.wants_schedule);
+          setDeploymentSchedulePlanned(wantsSchedule);
+          deploymentSchedulePlannedRef.current = wantsSchedule;
+          const resultText = wantsSchedule
+            ? 'Deployment schedule intent flagged.'
+            : 'Deployment schedule intent cleared.';
+          updateQuickstartTool(setChatItems, call.id, { status: 'completed', result: resultText });
+          return { content: resultText };
+        }
         case 'create_deployment': {
           const agent = createdAgentRef.current;
           const environmentId = selectedEnvironmentRef.current?.id;
@@ -504,14 +548,14 @@ export function AgentQuickstartPage() {
             environmentId,
             selectedVaultIdsRef.current,
             call.input,
-            activeWorkspaceId
+            activeWorkspaceId,
           );
           updateQuickstartTool(setChatItems, call.id, {
             status: 'completed',
-            result: `Deployment created (id: ${deployment.id}). The schedule is live — runs appear on the deployment page.`
+            result: `Deployment created (id: ${deployment.id}). The schedule is live — runs appear on the deployment page.`,
           });
           return {
-            content: `Deployment created (id: ${deployment.id}). The schedule is live — runs appear on the deployment page.`
+            content: `Deployment created (id: ${deployment.id}). The schedule is live — runs appear on the deployment page.`,
           };
         }
         case 'show_integration_exits':
@@ -520,7 +564,10 @@ export function AgentQuickstartPage() {
           updateQuickstartTool(setChatItems, call.id, { status: 'awaiting_user' });
           return null;
         case 'web_search':
-          updateQuickstartTool(setChatItems, call.id, { status: 'completed', result: 'web_search is handled by the upstream model.' });
+          updateQuickstartTool(setChatItems, call.id, {
+            status: 'completed',
+            result: 'web_search is handled by the upstream model.',
+          });
           return { content: 'web_search is handled by the upstream model.' };
         default:
           updateQuickstartTool(setChatItems, call.id, { status: 'completed', result: `${call.name} completed.` });
@@ -537,11 +584,11 @@ export function AgentQuickstartPage() {
     updateQuickstartTool(setChatItems, call.id, {
       status: result.isError ? 'failed' : 'completed',
       result: result.isError ? undefined : result.content,
-      error: result.isError ? result.content : undefined
+      error: result.isError ? result.content : undefined,
     });
     const nextMessages: QuickstartMessage[] = [
       ...conversationMessagesRef.current,
-      buildQuickstartToolResultMessage([toolResultBlock(call.id, result)])
+      buildQuickstartToolResultMessage([toolResultBlock(call.id, result)]),
     ];
     conversationMessagesRef.current = nextMessages;
     await startQuickstartTurn(nextMessages);
@@ -576,8 +623,13 @@ export function AgentQuickstartPage() {
       initialAgentDescriptionRef.current = null;
       conversationMessagesRef.current = [];
       setChatItems([
-        { id: quickstartItemId('user'), type: 'message', role: 'user', content: descriptionOverride?.trim() || template.body },
-        { id: quickstartItemId('create_agent_result'), type: 'create_agent_result', agentConfig: config }
+        {
+          id: quickstartItemId('user'),
+          type: 'message',
+          role: 'user',
+          content: descriptionOverride?.trim() || template.body,
+        },
+        { id: quickstartItemId('create_agent_result'), type: 'create_agent_result', agentConfig: config },
       ]);
     } catch (error) {
       const message = errorMessage(error);
@@ -623,17 +675,20 @@ export function AgentQuickstartPage() {
       return;
     }
     setReply('');
-    setChatItems((current) => [...current, { id: quickstartItemId('user'), type: 'message', role: 'user', content: trimmedReply }]);
+    setChatItems((current) => [
+      ...current,
+      { id: quickstartItemId('user'), type: 'message', role: 'user', content: trimmedReply },
+    ]);
     const awaitingTools = awaitingQuickstartToolCalls(chatItems);
     const replyMessage: QuickstartMessage = awaitingTools.length
       ? {
           role: 'user',
           content: [
             ...awaitingTools.map((call) =>
-              toolResultBlock(call.id, { content: quickstartChatReplyToolResult(call, trimmedReply) })
+              toolResultBlock(call.id, { content: quickstartChatReplyToolResult(call, trimmedReply) }),
             ),
-            buildCurrentQuickstartTurnContextBlock()
-          ]
+            buildCurrentQuickstartTurnContextBlock(),
+          ],
         }
       : { role: 'user', content: trimmedReply };
     if (awaitingTools.length) {
@@ -646,11 +701,11 @@ export function AgentQuickstartPage() {
                   ...item.call,
                   status: 'completed',
                   result: quickstartChatReplyToolResult(item.call, trimmedReply),
-                  error: undefined
-                }
+                  error: undefined,
+                },
               }
-            : item
-        )
+            : item,
+        ),
       );
     }
     const nextMessages: QuickstartMessage[] = [...conversationMessagesRef.current, replyMessage];
@@ -700,7 +755,7 @@ export function AgentQuickstartPage() {
   const createAgentFromBuildConfig = async (call: QuickstartToolCall) => {
     const config = quickstartBuildAgentConfigInput(
       call.input,
-      createdAgentConfigRef.current ?? createDialogAgentConfig(blankAgentTemplate)
+      createdAgentConfigRef.current ?? createDialogAgentConfig(blankAgentTemplate),
     );
     setCreatedAgentConfig(config);
     createdAgentConfigRef.current = config;
@@ -719,13 +774,16 @@ export function AgentQuickstartPage() {
         if (current.some((item) => item.type === 'create_agent_result')) {
           return current.map((item) => (item.type === 'create_agent_result' ? { ...item, agentConfig: config } : item));
         }
-        return [...current, { id: quickstartItemId('create_agent_result'), type: 'create_agent_result', agentConfig: config }];
+        return [
+          ...current,
+          { id: quickstartItemId('create_agent_result'), type: 'create_agent_result', agentConfig: config },
+        ];
       });
       await completeAwaitingTool(call, { content: 'Agent created.' });
     } catch (error) {
       await completeAwaitingTool(call, {
         content: `Failed to create agent: ${errorMessage(error)} Ask the user if they'd like to retry.`,
-        isError: true
+        isError: true,
       });
     }
   };
@@ -779,7 +837,11 @@ export function AgentQuickstartPage() {
     await completeAwaitingTool(call, { content: resultText });
   };
 
-  const authorizeVaultCredentialFromTool = async (call: QuickstartToolCall, auth?: Record<string, unknown>, displayName?: string) => {
+  const authorizeVaultCredentialFromTool = async (
+    call: QuickstartToolCall,
+    auth?: Record<string, unknown>,
+    displayName?: string,
+  ) => {
     const vaultId =
       typeof call.input.vault_id === 'string' && call.input.vault_id
         ? call.input.vault_id
@@ -789,14 +851,14 @@ export function AgentQuickstartPage() {
     if (!vaultId) {
       updateQuickstartTool(setChatItems, call.id, {
         status: 'awaiting_user',
-        error: 'Select or create a vault before creating a credential.'
+        error: 'Select or create a vault before creating a credential.',
       });
       return;
     }
     if (!credentialAuth) {
       updateQuickstartTool(setChatItems, call.id, {
         status: 'awaiting_user',
-        error: `Credential authorization for ${serverName} is not supported by this backend yet. No credential was created.`
+        error: `Credential authorization for ${serverName} is not supported by this backend yet. No credential was created.`,
       });
       return;
     }
@@ -805,10 +867,10 @@ export function AgentQuickstartPage() {
       const credential = await createQuickstartVaultCredential(
         vaultId,
         { ...call.input, display_name: displayName, auth: credentialAuth },
-        activeWorkspaceId
+        activeWorkspaceId,
       );
       await completeAwaitingTool(call, {
-        content: `Credential created (id: ${credential.id}).`
+        content: `Credential created (id: ${credential.id}).`,
       });
     } catch (error) {
       await completeAwaitingTool(call, { content: errorMessage(error), isError: true });
@@ -818,7 +880,7 @@ export function AgentQuickstartPage() {
   const skipVaultCredentialFromTool = async (call: QuickstartToolCall) => {
     const serverName = typeof call.input.mcp_server_name === 'string' ? titleCase(call.input.mcp_server_name) : 'MCP';
     await completeAwaitingTool(call, {
-      content: `${serverName} authorization skipped — the test session may fail or error when the agent tries to use this server. The user can still proceed; mention the skipped servers in your summary and that they can add credentials later in the vault.`
+      content: `${serverName} authorization skipped — the test session may fail or error when the agent tries to use this server. The user can still proceed; mention the skipped servers in your summary and that they can add credentials later in the vault.`,
     });
   };
 
@@ -826,9 +888,7 @@ export function AgentQuickstartPage() {
     if (exit === 'go_to_agent') {
       const agentId =
         createdAgentRef.current?.id ||
-        (typeof call.input.agent_id === 'string' && call.input.agent_id.trim()
-          ? call.input.agent_id.trim()
-          : '');
+        (typeof call.input.agent_id === 'string' && call.input.agent_id.trim() ? call.input.agent_id.trim() : '');
       await completeAwaitingTool(call, { content: 'User exited to agent detail.' });
       if (agentId) {
         window.location.assign(agentDetailHref(activeWorkspaceId, agentId));
@@ -844,25 +904,29 @@ export function AgentQuickstartPage() {
     if (!agent || !environmentId) {
       await completeAwaitingTool(call, {
         content: 'Agent and environment are required before starting a test session.',
-        isError: true
+        isError: true,
       });
       return;
     }
     try {
       updateQuickstartTool(setChatItems, call.id, { status: 'running' });
-      const createdSession = await createQuickstartSession(agent, environmentId, selectedVaultIdsRef.current, activeWorkspaceId);
+      const createdSession = await createQuickstartSession(
+        agent,
+        environmentId,
+        selectedVaultIdsRef.current,
+        activeWorkspaceId,
+      );
       setSession(createdSession);
       sessionRef.current = createdSession;
       setTestRunStopped(false);
       setActiveStep(2);
       activeStepRef.current = 'session';
       setAgentTab('preview');
-      const suggestedMessage = typeof call.input.suggested_first_message === 'string' ? call.input.suggested_first_message : '';
+      const suggestedMessage =
+        typeof call.input.suggested_first_message === 'string' ? call.input.suggested_first_message : '';
       setTestRunMessage(suggestedMessage);
       await completeAwaitingTool(call, {
-        content: `Session created (id: ${createdSession.id}). Suggested first message: ${
-          suggestedMessage
-        }`
+        content: `Session created (id: ${createdSession.id}). Suggested first message: ${suggestedMessage}`,
       });
     } catch (error) {
       await completeAwaitingTool(call, { content: errorMessage(error), isError: true });
@@ -886,16 +950,18 @@ export function AgentQuickstartPage() {
 
   const activeAwaitTestRunCall = [...chatItems]
     .reverse()
-    .find((item): item is Extract<QuickstartChatItem, { type: 'tool' }> =>
-      item.type === 'tool' && item.call.name === 'await_test_run' && item.call.status === 'awaiting_user'
+    .find(
+      (item): item is Extract<QuickstartChatItem, { type: 'tool' }> =>
+        item.type === 'tool' && item.call.name === 'await_test_run' && item.call.status === 'awaiting_user',
     )?.call;
   const activeOfferNextStepCall = [...chatItems]
     .reverse()
-    .find((item): item is Extract<QuickstartChatItem, { type: 'tool' }> =>
-      item.type === 'tool' && item.call.name === 'offer_next_step' && item.call.status === 'awaiting_user'
+    .find(
+      (item): item is Extract<QuickstartChatItem, { type: 'tool' }> =>
+        item.type === 'tool' && item.call.name === 'offer_next_step' && item.call.status === 'awaiting_user',
     )?.call;
   const hasAwaitingOfferNextStep = chatItems.some(
-    (item) => item.type === 'tool' && item.call.name === 'offer_next_step' && item.call.status === 'awaiting_user'
+    (item) => item.type === 'tool' && item.call.name === 'offer_next_step' && item.call.status === 'awaiting_user',
   );
 
   const sendPreviewTestRunMessage = async () => {
@@ -932,7 +998,12 @@ export function AgentQuickstartPage() {
       return;
     }
     try {
-      const createdSession = await createQuickstartSession(agent, environmentId, selectedVaultIdsRef.current, activeWorkspaceId);
+      const createdSession = await createQuickstartSession(
+        agent,
+        environmentId,
+        selectedVaultIdsRef.current,
+        activeWorkspaceId,
+      );
       setSession(createdSession);
       sessionRef.current = createdSession;
       setTestRunStopped(false);
@@ -990,12 +1061,17 @@ export function AgentQuickstartPage() {
                     ? 'bg-foreground text-background'
                     : index === activeStep
                       ? 'bg-foreground text-background'
-                      : 'bg-secondary text-muted-foreground'
+                      : 'bg-secondary text-muted-foreground',
                 )}
               >
                 {createdTemplate && activeStep > index ? <Check className="size-3.5" aria-hidden /> : index + 1}
               </span>
-              <span className={clsx('truncate', index === activeStep ? 'font-medium text-foreground' : 'text-muted-foreground/70')}>
+              <span
+                className={clsx(
+                  'truncate',
+                  index === activeStep ? 'font-medium text-foreground' : 'text-muted-foreground/70',
+                )}
+              >
                 {quickstartStepLabel(step, msg)}
               </span>
               {index < quickstartSteps.length - 1 ? <span className="h-px w-10 bg-accent" aria-hidden /> : null}
@@ -1045,11 +1121,7 @@ export function AgentQuickstartPage() {
             }
           }}
         >
-          <ResizablePanel
-            id="quickstart-primary"
-            minSize={quickstartPrimaryPaneMinWidth}
-            className="min-w-0"
-          >
+          <ResizablePanel id="quickstart-primary" minSize={quickstartPrimaryPaneMinWidth} className="min-w-0">
             {createdTemplate ? (
               <QuickstartChatPane
                 agent={createdAgent}
@@ -1092,9 +1164,7 @@ export function AgentQuickstartPage() {
             )}
           </ResizablePanel>
 
-          <ResizableHandle
-            aria-label={msg('managedAgents.quickstart.resizePanels', 'Resize quickstart panels')}
-          />
+          <ResizableHandle aria-label={msg('managedAgents.quickstart.resizePanels', 'Resize quickstart panels')} />
 
           <ResizablePanel
             id="quickstart-inspector"
@@ -1106,7 +1176,11 @@ export function AgentQuickstartPage() {
             className="min-w-0"
             onResize={(size) => {
               const nextWidth =
-                size.inPixels > 0 ? size.inPixels : quickstartGridWidth > 0 ? (quickstartGridWidth * size.asPercentage) / 100 : 0;
+                size.inPixels > 0
+                  ? size.inPixels
+                  : quickstartGridWidth > 0
+                    ? (quickstartGridWidth * size.asPercentage) / 100
+                    : 0;
               if (nextWidth > 0) {
                 setQuickstartInspectorPaneWidth(Math.round(nextWidth));
               }
@@ -1124,7 +1198,11 @@ export function AgentQuickstartPage() {
                 testRunMessage={testRunMessage}
                 format={format}
                 tab={agentTab}
-                canSendTestRunMessage={Boolean(session && (activeAwaitTestRunCall || session.status === 'idle')) && !isChatStreaming && !testRunStopped}
+                canSendTestRunMessage={
+                  Boolean(session && (activeAwaitTestRunCall || session.status === 'idle')) &&
+                  !isChatStreaming &&
+                  !testRunStopped
+                }
                 onTestRunMessageChange={setTestRunMessage}
                 onSendTestRunMessage={sendPreviewTestRunMessage}
                 onRerunTestRun={startHeaderTestRun}

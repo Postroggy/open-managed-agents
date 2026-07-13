@@ -3,21 +3,22 @@ import { platformQuickstartOfficialRequest } from './platformQuickstartOfficialR
 import {
   buildPlatformQuickstartRequest,
   buildQuickstartTurnContextText,
-  platformQuickstartToolNames
+  platformQuickstartToolNames,
 } from './platformQuickstartRequest';
 
 const blankAgentConfig = {
   name: 'Untitled agent',
   description: 'A blank starting point with the core toolset.',
   model: 'claude-sonnet-4-6',
-  system: "You are a general-purpose agent that can research, write code, run commands, and use connected tools to complete the user's task end to end.",
+  system:
+    "You are a general-purpose agent that can research, write code, run commands, and use connected tools to complete the user's task end to end.",
   mcp_servers: [],
   tools: [
     {
-      type: 'agent_toolset_20260401'
-    }
+      type: 'agent_toolset_20260401',
+    },
   ],
-  skills: []
+  skills: [],
 };
 
 describe('platform quickstart request builder', () => {
@@ -25,16 +26,24 @@ describe('platform quickstart request builder', () => {
     const request = buildPlatformQuickstartRequest({
       step: 'environment',
       deploymentSchedulePlanned: false,
-      agentConfig: blankAgentConfig
+      agentConfig: blankAgentConfig,
     });
 
-    expect(Object.keys(request)).toEqual(['messages', 'system', 'model', 'max_tokens', 'tools', 'tool_choice', 'stream']);
+    expect(Object.keys(request)).toEqual([
+      'messages',
+      'system',
+      'model',
+      'max_tokens',
+      'tools',
+      'tool_choice',
+      'stream',
+    ]);
     expect(request.model).toBe(platformQuickstartOfficialRequest.model);
     expect(request.max_tokens).toBe(platformQuickstartOfficialRequest.max_tokens);
     expect(request.stream).toBe(true);
     expect(request.tool_choice).toEqual({
       type: 'auto',
-      disable_parallel_tool_use: true
+      disable_parallel_tool_use: true,
     });
     expect(request.system).toEqual(platformQuickstartOfficialRequest.system);
     expect(request.tools).toEqual(platformQuickstartOfficialRequest.tools);
@@ -56,7 +65,7 @@ describe('platform quickstart request builder', () => {
       'show_integration_exits',
       'flag_schedule_intent',
       'create_deployment',
-      'web_search'
+      'web_search',
     ]);
   });
 
@@ -64,10 +73,12 @@ describe('platform quickstart request builder', () => {
     const text = buildQuickstartTurnContextText({
       step: 'session',
       deploymentSchedulePlanned: true,
-      agentConfig: blankAgentConfig
+      agentConfig: blankAgentConfig,
     });
 
-    expect(text).toContain('[Current quickstart step: "session". Follow this step\'s instructions from the system prompt.]');
+    expect(text).toContain(
+      '[Current quickstart step: "session". Follow this step\'s instructions from the system prompt.]',
+    );
     expect(text).toContain('[Deployment schedule planned: yes.]');
     expect(text).toContain("Here's the current config:");
     expect(text).toContain('"model": "claude-sonnet-4-6"');
@@ -79,7 +90,7 @@ describe('platform quickstart request builder', () => {
       step: 'agent',
       deploymentSchedulePlanned: false,
       agentDescription: 'Build an invoice tracker that summarizes inbound invoice emails.',
-      agentConfig: blankAgentConfig
+      agentConfig: blankAgentConfig,
     });
 
     expect(text).toContain("I'm building an agent. Here's my description:");

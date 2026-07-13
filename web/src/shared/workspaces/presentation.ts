@@ -10,7 +10,7 @@ export const workspaceColors = [
   { name: 'Magenta', value: '#C45BC8' },
   { name: 'Coral', value: '#D97861' },
   { name: 'Gold', value: '#D4A04F' },
-  { name: 'Emerald', value: '#2B956E' }
+  { name: 'Emerald', value: '#2B956E' },
 ] as const;
 
 export function workspaceColor(workspace?: Pick<Workspace, 'display_color' | 'color'> | null) {
@@ -42,7 +42,7 @@ export function buildCreateWorkspaceInput(name: string, displayColor: string): C
     name,
     display_color: displayColor,
     data_residency: {
-      workspace_geo: 'us'
-    }
+      workspace_geo: 'us',
+    },
   };
 }

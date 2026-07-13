@@ -5,7 +5,17 @@ import { Button } from '../../../../shared/ui/button';
 import { Card } from '../../../../shared/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../../shared/ui/collapsible';
 import { toast } from '../../../../shared/ui/sonner';
-import { Ban, BriefcaseBusiness, CheckCircle2, ChevronRight, Ellipsis, Hand, RefreshCw, Server, Wrench } from 'lucide-react';
+import {
+  Ban,
+  BriefcaseBusiness,
+  CheckCircle2,
+  ChevronRight,
+  Ellipsis,
+  Hand,
+  RefreshCw,
+  Server,
+  Wrench,
+} from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useMemo, useState } from 'react';
 import { type AgentApiResponse } from '../../types';
@@ -15,7 +25,7 @@ import {
   buildAgentToolDisplayCards,
   type AgentToolDisplayCard,
   type McpToolCatalog,
-  type ToolPermissionState
+  type ToolPermissionState,
 } from './model';
 
 type McpCatalogQueryData = { data: McpToolCatalog[]; version: number };
@@ -32,7 +42,7 @@ type McpRefreshVariables = {
 export function AgentToolsSection({
   agent,
   orgUuid,
-  workspaceId
+  workspaceId,
 }: {
   agent: AgentApiResponse;
   orgUuid: string;
@@ -49,7 +59,7 @@ export function AgentToolsSection({
     queryFn: loadMcpDirectoryServers,
     enabled: hasMcpServers,
     staleTime: 60 * 60 * 1000,
-    retry: false
+    retry: false,
   });
   // 详情页初始加载只读取数据库中最近一次成功快照，不轮询、不自动触发 MCP 探测。
   const catalogQuery = useQuery({
@@ -58,7 +68,7 @@ export function AgentToolsSection({
     enabled: catalogEnabled,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
-    retry: 1
+    retry: 1,
   });
   // 手动刷新会同步等待后端探测并落库；成功响应就是新的权威快照，直接写入 Query 缓存。
   // 探测期间不做乐观替换，因此失败时页面仍保留旧工具列表。
@@ -72,16 +82,17 @@ export function AgentToolsSection({
         variables.agentId,
         variables.version,
         variables.serverName,
-        csrfToken
+        csrfToken,
       ),
     onSuccess: async (response, variables) => {
       const current = queryClient.getQueryData<McpCatalogQueryData>(variables.queryKey);
       queryClient.setQueryData<McpCatalogQueryData>(variables.queryKey, () => {
         const catalogs = current?.data ?? [];
         const existingIndex = catalogs.findIndex((catalog) => catalog.server_name === response.data.server_name);
-        const nextCatalogs = existingIndex >= 0
-          ? catalogs.map((catalog, index) => index === existingIndex ? response.data : catalog)
-          : [...catalogs, response.data];
+        const nextCatalogs =
+          existingIndex >= 0
+            ? catalogs.map((catalog, index) => (index === existingIndex ? response.data : catalog))
+            : [...catalogs, response.data];
         return { data: nextCatalogs, version: response.version || current?.version || variables.version };
       });
 
@@ -91,32 +102,27 @@ export function AgentToolsSection({
         await queryClient.invalidateQueries({
           queryKey: variables.queryKey,
           exact: true,
-          refetchType: 'active'
+          refetchType: 'active',
         });
       }
     },
     onError: (error) => {
-      toast.error(
-        msg('managedAgents.agents.detail.refreshMcpToolsFailed', 'Could not refresh MCP tools.'),
-        { description: errorMessage(error) }
-      );
-    }
+      toast.error(msg('managedAgents.agents.detail.refreshMcpToolsFailed', 'Could not refresh MCP tools.'), {
+        description: errorMessage(error),
+      });
+    },
   });
 
   const cards = useMemo(
-    () => buildAgentToolDisplayCards(
-      agent,
-      directoryQuery.data ?? [],
-      catalogQuery.data?.data ?? []
-    ),
-    [agent, catalogQuery.data?.data, directoryQuery.data]
+    () => buildAgentToolDisplayCards(agent, directoryQuery.data ?? [], catalogQuery.data?.data ?? []),
+    [agent, catalogQuery.data?.data, directoryQuery.data],
   );
   const refreshScopeIsCurrent = Boolean(
     refreshMutation.variables &&
     refreshMutation.variables.orgUuid === orgUuid &&
     refreshMutation.variables.workspaceId === workspaceId &&
     refreshMutation.variables.agentId === agent.id &&
-    refreshMutation.variables.version === agent.version
+    refreshMutation.variables.version === agent.version,
   );
   const refreshPending = refreshMutation.isPending && refreshScopeIsCurrent;
   const refreshSucceeded = refreshMutation.isSuccess && refreshScopeIsCurrent;
@@ -156,14 +162,19 @@ export function AgentToolsSection({
           card={card}
           refreshBusy={refreshPending && refreshMutation.variables?.serverName === card.serverName}
           refreshDisabled={refreshPending || catalogQuery.isFetching}
-          onRefresh={catalogEnabled && card.serverName ? () => refreshMutation.mutate({
-            orgUuid,
-            workspaceId,
-            agentId: agent.id,
-            version: agent.version,
-            serverName: card.serverName!,
-            queryKey: catalogQueryKey
-          }) : undefined}
+          onRefresh={
+            catalogEnabled && card.serverName
+              ? () =>
+                  refreshMutation.mutate({
+                    orgUuid,
+                    workspaceId,
+                    agentId: agent.id,
+                    version: agent.version,
+                    serverName: card.serverName!,
+                    queryKey: catalogQueryKey,
+                  })
+              : undefined
+          }
         />
       ))}
     </div>
@@ -174,7 +185,7 @@ export function AgentToolCard({
   card,
   refreshBusy = false,
   refreshDisabled = false,
-  onRefresh
+  onRefresh,
 }: {
   card: AgentToolDisplayCard;
   refreshBusy?: boolean;
@@ -193,9 +204,10 @@ export function AgentToolCard({
     card.kind === 'custom'
       ? msg('managedAgents.agents.detail.customToolsDescription', 'Client-handled tool definitions')
       : card.subtitle;
-  const triggerLabel = card.kind === 'custom'
-    ? msg('managedAgents.agents.detail.tools', 'Tools')
-    : msg('managedAgents.agents.detail.toolPermissions', 'Tool permissions');
+  const triggerLabel =
+    card.kind === 'custom'
+      ? msg('managedAgents.agents.detail.tools', 'Tools')
+      : msg('managedAgents.agents.detail.toolPermissions', 'Tool permissions');
   const aggregatePermissionLabel = card.aggregatePermission
     ? permissionLabel(card.aggregatePermission, msg)
     : undefined;
@@ -214,9 +226,7 @@ export function AgentToolCard({
             <code className="block truncate font-mono text-xs text-muted-foreground">{subtitle}</code>
           )}
           {catalogStatusLabel ? (
-            <span className="mt-1 block truncate text-xs text-muted-foreground">
-              {catalogStatusLabel}
-            </span>
+            <span className="mt-1 block truncate text-xs text-muted-foreground">{catalogStatusLabel}</span>
           ) : null}
         </div>
         {card.kind === 'mcp' && onRefresh ? (
@@ -226,11 +236,9 @@ export function AgentToolCard({
             size="sm"
             disabled={refreshDisabled}
             onClick={onRefresh}
-            aria-label={msg(
-              'managedAgents.agents.detail.refreshMcpTools',
-              'Refresh MCP tools for {server}',
-              { server: title }
-            )}
+            aria-label={msg('managedAgents.agents.detail.refreshMcpTools', 'Refresh MCP tools for {server}', {
+              server: title,
+            })}
           >
             <RefreshCw className={refreshBusy ? 'animate-spin' : ''} aria-hidden />
             {msg('common.refresh', 'Refresh')}
@@ -239,7 +247,9 @@ export function AgentToolCard({
       </div>
       <Collapsible open={expanded} onOpenChange={setExpanded}>
         <CollapsibleTrigger
-          aria-label={[title, triggerLabel, toolCount, aggregatePermissionLabel, catalogStatusLabel].filter((value) => value !== undefined).join(' ')}
+          aria-label={[title, triggerLabel, toolCount, aggregatePermissionLabel, catalogStatusLabel]
+            .filter((value) => value !== undefined)
+            .join(' ')}
           className="flex h-11 w-full items-center gap-3 border-t border-border px-4 text-left text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         >
           <ChevronRight
@@ -247,7 +257,10 @@ export function AgentToolCard({
             aria-hidden
           />
           {triggerLabel}
-          <Badge variant="secondary" className="h-auto rounded-md px-2 py-0.5 text-xs font-normal text-muted-foreground">
+          <Badge
+            variant="secondary"
+            className="h-auto rounded-md px-2 py-0.5 text-xs font-normal text-muted-foreground"
+          >
             {toolCount}
           </Badge>
           <span className="min-w-0 flex-1" />
@@ -255,7 +268,13 @@ export function AgentToolCard({
         </CollapsibleTrigger>
         <CollapsibleContent className="border-t border-border">
           {card.tools.length ? (
-            <div className={card.kind === 'mcp' ? 'subtle-scrollbar max-h-64 divide-y divide-border overflow-y-auto' : 'divide-y divide-border'}>
+            <div
+              className={
+                card.kind === 'mcp'
+                  ? 'subtle-scrollbar max-h-64 divide-y divide-border overflow-y-auto'
+                  : 'divide-y divide-border'
+              }
+            >
               {card.tools.map((tool, index) => (
                 <div
                   key={`${tool.name}-${index}`}
@@ -271,9 +290,7 @@ export function AgentToolCard({
                   {tool.description ? (
                     <span
                       className={`min-w-0 truncate text-muted-foreground ${
-                        tool.permission
-                          ? 'col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1'
-                          : ''
+                        tool.permission ? 'col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1' : ''
                       }`}
                       title={tool.description}
                     >
@@ -306,7 +323,7 @@ export function AgentToolCard({
 
 function mcpCatalogStatusLabel(
   status: NonNullable<AgentToolDisplayCard['catalogStatus']>,
-  msg: ReturnType<typeof useI18n>['msg']
+  msg: ReturnType<typeof useI18n>['msg'],
 ) {
   switch (status) {
     case 'unknown':
@@ -323,20 +340,20 @@ function PermissionBadge({ permission, className = '' }: { permission: ToolPermi
   const metadata = {
     always_allow: {
       icon: CheckCircle2,
-      className: 'status-success'
+      className: 'status-success',
     },
     always_ask: {
       icon: Hand,
-      className: 'status-warning'
+      className: 'status-warning',
     },
     always_deny: {
       icon: Ban,
-      className: 'status-danger'
+      className: 'status-danger',
     },
     custom: {
       icon: Ellipsis,
-      className: 'border-border bg-muted text-muted-foreground'
-    }
+      className: 'border-border bg-muted text-muted-foreground',
+    },
   } satisfies Record<ToolPermissionState, { icon: typeof CheckCircle2; className: string }>;
   const item = metadata[permission];
   const Icon = item.icon;

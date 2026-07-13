@@ -2,7 +2,17 @@ import { type ReactNode } from 'react';
 import { createdFilterStartISOString } from '../api';
 import { StatusPill } from '../components/common';
 import { numericValueFromKeys } from '../sessions/SessionDetailPage';
-import { type AgentApiResponse, type AgentDetailCreatedFilter, type AgentDetailStatusFilter, type AgentDetailTab, type AgentDetailVersionFilter, type AgentListFilters, type AgentSessionAnalyticsOverview, type AnalyticsMetricBucket, type SessionApiResponse } from '../types';
+import {
+  type AgentApiResponse,
+  type AgentDetailCreatedFilter,
+  type AgentDetailStatusFilter,
+  type AgentDetailTab,
+  type AgentDetailVersionFilter,
+  type AgentListFilters,
+  type AgentSessionAnalyticsOverview,
+  type AnalyticsMetricBucket,
+  type SessionApiResponse,
+} from '../types';
 import { objectRecord } from '../utils';
 
 export const emptyAgents: AgentApiResponse[] = [];
@@ -14,7 +24,7 @@ export function rowFromAgent(agent: AgentApiResponse): Record<string, ReactNode>
     Model: agentModelName(agent.model),
     Status: <StatusPill>{agent.archived_at ? 'Archived' : 'Active'}</StatusPill>,
     Created: relativeTime(agent.created_at),
-    'Last updated': relativeTime(agent.updated_at)
+    'Last updated': relativeTime(agent.updated_at),
   };
 }
 
@@ -129,7 +139,11 @@ export function formatAgentSkillSource(source: string) {
     .join(' ');
 }
 
-export function agentMatchesClientFilters(agent: AgentApiResponse, filters: AgentListFilters, applyCreatedFilter: boolean) {
+export function agentMatchesClientFilters(
+  agent: AgentApiResponse,
+  filters: AgentListFilters,
+  applyCreatedFilter: boolean,
+) {
   if (filters.status !== 'all' && agent.archived_at) {
     return false;
   }
@@ -316,9 +330,9 @@ export function latestAgentVersion(versions: AgentApiResponse[], current: AgentA
 }
 
 export function uniqueVersionNumbers(versions: AgentApiResponse[], fallbackVersion: number) {
-  return [...new Set([fallbackVersion, ...versions.map((version) => version.version).filter((version) => version > 0)])].sort(
-    (left, right) => right - left
-  );
+  return [
+    ...new Set([fallbackVersion, ...versions.map((version) => version.version).filter((version) => version > 0)]),
+  ].sort((left, right) => right - left);
 }
 
 export function formatDetailDate(value: string) {
@@ -331,7 +345,7 @@ export function formatDetailDate(value: string) {
     day: 'numeric',
     year: 'numeric',
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
   }).format(new Date(timestamp));
 }
 
@@ -355,11 +369,31 @@ export function sessionTokenUsage(session: SessionApiResponse) {
     numericValueFromKeys(usage, ['output_tokens', 'outputTokens', 'tokens_out', 'tokensOut', 'output']) ||
     numericValueFromKeys(stats, ['output_tokens', 'outputTokens', 'tokens_out', 'tokensOut', 'output']);
   const cacheRead =
-    numericValueFromKeys(usage, ['cache_read_input_tokens', 'cacheReadInputTokens', 'cache_read_tokens', 'cacheReadTokens']) ||
-    numericValueFromKeys(stats, ['cache_read_input_tokens', 'cacheReadInputTokens', 'cache_read_tokens', 'cacheReadTokens']);
+    numericValueFromKeys(usage, [
+      'cache_read_input_tokens',
+      'cacheReadInputTokens',
+      'cache_read_tokens',
+      'cacheReadTokens',
+    ]) ||
+    numericValueFromKeys(stats, [
+      'cache_read_input_tokens',
+      'cacheReadInputTokens',
+      'cache_read_tokens',
+      'cacheReadTokens',
+    ]);
   const cacheCreation =
-    numericValueFromKeys(usage, ['cache_creation_input_tokens', 'cacheCreationInputTokens', 'cache_creation_tokens', 'cacheCreationTokens']) ||
-    numericValueFromKeys(stats, ['cache_creation_input_tokens', 'cacheCreationInputTokens', 'cache_creation_tokens', 'cacheCreationTokens']);
+    numericValueFromKeys(usage, [
+      'cache_creation_input_tokens',
+      'cacheCreationInputTokens',
+      'cache_creation_tokens',
+      'cacheCreationTokens',
+    ]) ||
+    numericValueFromKeys(stats, [
+      'cache_creation_input_tokens',
+      'cacheCreationInputTokens',
+      'cache_creation_tokens',
+      'cacheCreationTokens',
+    ]);
   return { input: input + cacheRead + cacheCreation, output };
 }
 
@@ -376,7 +410,7 @@ export function emptyAgentSessionAnalyticsOverview(): AgentSessionAnalyticsOverv
     turns_per_session: { p50: 0, p95: 0 },
     tool_call_counts: {},
     stop_reason_counts: {},
-    data_as_of: null
+    data_as_of: null,
   };
 }
 

@@ -15,13 +15,13 @@ describe('consoleApi', () => {
       capturedHeaders = new Headers(init?.headers);
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
     }) as unknown as typeof fetch;
 
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: 'wrkspc_test_uuid'
+      workspaceId: 'wrkspc_test_uuid',
     });
 
     await consoleApi<{ ok: boolean }>('/v1/agents?beta=true');
@@ -38,13 +38,13 @@ describe('filesApi', () => {
       capturedHeaders = new Headers(init?.headers);
       return new Response(JSON.stringify({ data: [], has_more: false }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
     }) as unknown as typeof fetch;
 
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: 'wrkspc_test_uuid'
+      workspaceId: 'wrkspc_test_uuid',
     });
 
     await filesApi<{ data: unknown[]; has_more: boolean }>('/v1/files?beta=true');
@@ -62,13 +62,13 @@ describe('skillsApi', () => {
       capturedHeaders = new Headers(init?.headers);
       return new Response(JSON.stringify({ data: [], has_more: false }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
     }) as unknown as typeof fetch;
 
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: 'wrkspc_test_uuid'
+      workspaceId: 'wrkspc_test_uuid',
     });
 
     await skillsApi<{ data: unknown[]; has_more: boolean }>('/v1/skills?beta=true');
@@ -86,13 +86,13 @@ describe('messageBatchesApi', () => {
       capturedHeaders = new Headers(init?.headers);
       return new Response(JSON.stringify({ data: [], has_more: false }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
     }) as unknown as typeof fetch;
 
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: 'wrkspc_test_uuid'
+      workspaceId: 'wrkspc_test_uuid',
     });
 
     await messageBatchesApi<{ data: unknown[]; has_more: boolean }>('/v1/messages/batches?beta=true');
@@ -111,13 +111,13 @@ describe('webhooksApi', () => {
       capturedHeaders = new Headers(init?.headers);
       return new Response(JSON.stringify({ data: [] }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
     }) as unknown as typeof fetch;
 
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: 'wrkspc_test_uuid'
+      workspaceId: 'wrkspc_test_uuid',
     });
 
     await webhooksApi<{ data: unknown[] }>('/v1/webhooks?beta=true');

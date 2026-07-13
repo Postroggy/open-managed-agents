@@ -1,23 +1,13 @@
-import {
-  AlertCircle,
-  ChevronDown,
-  Code2,
-  Loader2,
-  Plus,
-  Sparkles,
-  Trash2,
-  X
-} from 'lucide-react';
-import {
-  ChangeEvent,
-  Dispatch,
-  SetStateAction,
-  useEffect,
-  useRef,
-  useState
-} from 'react';
+import { AlertCircle, ChevronDown, Code2, Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { ChangeEvent, Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { listWorkbenchRevisions, WorkbenchEvaluation, WorkbenchMessage, WorkbenchRevision, WorkbenchStreamEvent } from './api';
+import {
+  listWorkbenchRevisions,
+  WorkbenchEvaluation,
+  WorkbenchMessage,
+  WorkbenchRevision,
+  WorkbenchStreamEvent,
+} from './api';
 import {
   buildRevisionPayload,
   EvaluateComparison,
@@ -29,7 +19,7 @@ import {
   normalizeRevision,
   titleMessageContent,
   WorkbenchExample,
-  workbenchId
+  workbenchId,
 } from './model';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
@@ -42,7 +32,7 @@ export function ResponsePreview({
   error,
   responseText,
   showCreatePrompt,
-  onCreatePrompt
+  onCreatePrompt,
 }: {
   isRunning: boolean;
   error: string | null;
@@ -79,7 +69,13 @@ export function ResponsePreview({
           {showCreatePrompt ? (
             <>
               <span className="workbench-empty-response-or">or</span>
-              <Button type="button" variant="outline" size="lg" className="bg-secondary" onClick={() => void onCreatePrompt()}>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="bg-secondary"
+                onClick={() => void onCreatePrompt()}
+              >
                 Create New Prompt
               </Button>
             </>
@@ -110,7 +106,7 @@ export function EvaluateView({
   onUpdateVariables,
   onUpdateIdealOutput,
   onDeleteRow,
-  onGenerateTestCases
+  onGenerateTestCases,
 }: {
   variables: string[];
   promptTitle: string;
@@ -144,7 +140,8 @@ export function EvaluateView({
   const visibleVariables = variables.length ? variables : ['VARIABLE'];
   const variableLabel = visibleVariables.length === 1 ? `{{${visibleVariables[0]}}}` : 'Variables';
   const availableComparisonRevisions = comparisonRevisions.filter(
-    (revision) => revision.id !== currentRevisionId && !comparisons.some((comparison) => comparison.revisionId === revision.id)
+    (revision) =>
+      revision.id !== currentRevisionId && !comparisons.some((comparison) => comparison.revisionId === revision.id),
   );
   useEffect(() => {
     if (!isReadOnly) {
@@ -160,8 +157,10 @@ export function EvaluateView({
     'minmax(320px, 1.2fr)',
     ...comparisons.map(() => 'minmax(320px, 1.2fr)'),
     showIdealOutputs ? 'minmax(260px, 1fr)' : null,
-    '148px'
-  ].filter(Boolean).join(' ');
+    '148px',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const handleComparisonMenuOpenChange = async (nextOpen: boolean) => {
     setComparisonMenuOpen(nextOpen);
     if (!nextOpen || isReadOnly) {
@@ -172,9 +171,11 @@ export function EvaluateView({
     }
     setIsLoadingComparisons(true);
     try {
-      setComparisonRevisions((await listWorkbenchRevisions(orgUuid, promptId, false)).map((revision) =>
-        normalizeRevision(revision, fallbackModelName)
-      ));
+      setComparisonRevisions(
+        (await listWorkbenchRevisions(orgUuid, promptId, false)).map((revision) =>
+          normalizeRevision(revision, fallbackModelName),
+        ),
+      );
     } catch {
       setComparisonRevisions([]);
     } finally {
@@ -190,17 +191,19 @@ export function EvaluateView({
       id: revision.id,
       revisionId: revision.id,
       label: revisionIndex >= 0 ? `v${comparisonRevisions.length - revisionIndex}` : 'Version',
-      revision
+      revision,
     };
-    setComparisons((current) => current.some((item) => item.revisionId === revision.id) ? current : [...current, comparison]);
+    setComparisons((current) =>
+      current.some((item) => item.revisionId === revision.id) ? current : [...current, comparison],
+    );
     setRows((current) =>
       current.map((row) => ({
         ...row,
         comparisonOutputs: {
           ...row.comparisonOutputs,
-          [comparison.id]: row.comparisonOutputs[comparison.id] ?? emptyComparisonOutput()
-        }
-      }))
+          [comparison.id]: row.comparisonOutputs[comparison.id] ?? emptyComparisonOutput(),
+        },
+      })),
     );
     setComparisonMenuOpen(false);
   };
@@ -213,7 +216,7 @@ export function EvaluateView({
       current.map((row) => {
         const { [comparisonId]: _removed, ...comparisonOutputs } = row.comparisonOutputs;
         return { ...row, comparisonOutputs };
-      })
+      }),
     );
   };
   const addRows = (count: number) => {
@@ -221,10 +224,7 @@ export function EvaluateView({
       return;
     }
     const createdRows = Array.from({ length: count }, () => createEvaluateRow(visibleVariables));
-    setRows((current) => [
-      ...current,
-      ...createdRows
-    ]);
+    setRows((current) => [...current, ...createdRows]);
     createdRows.forEach((row) => void onCreateRow(row));
     setGenerateMenuOpen(false);
   };
@@ -245,9 +245,7 @@ export function EvaluateView({
       return;
     }
     const nextRow = { ...row, values: { ...row.values, [variable]: value } };
-    setRows((current) =>
-      current.map((item) => (item.id === row.id ? { ...item, values: nextRow.values } : item))
-    );
+    setRows((current) => current.map((item) => (item.id === row.id ? { ...item, values: nextRow.values } : item)));
     void onUpdateVariables(nextRow);
   };
   const updateIdealOutput = (row: EvaluateTestCase, value: string) => {
@@ -320,8 +318,8 @@ export function EvaluateView({
       {isReadOnly ? (
         <div className="workbench-evaluate-stale-card">
           <p>
-            Prompt has been updated, and the evaluation table below has become stale and is read-only.
-            Create a new revision with your changes to evaluate.
+            Prompt has been updated, and the evaluation table below has become stale and is read-only. Create a new
+            revision with your changes to evaluate.
           </p>
           <Button type="button" className="mx-auto mt-4" disabled={!canSaveRevision} onClick={onSaveRevision}>
             Save Changes as {saveRevisionLabel}
@@ -330,7 +328,10 @@ export function EvaluateView({
       ) : null}
 
       <div className="workbench-evaluate-table" aria-label="Evaluation results">
-        <div className="workbench-evaluate-row workbench-evaluate-version-row" style={{ gridTemplateColumns: columnTemplate }}>
+        <div
+          className="workbench-evaluate-row workbench-evaluate-version-row"
+          style={{ gridTemplateColumns: columnTemplate }}
+        >
           <div className="workbench-evaluate-row-label">Row</div>
           {showPrompt ? <div /> : null}
           <div />
@@ -361,9 +362,12 @@ export function EvaluateView({
           {showIdealOutputs ? <div /> : null}
           <div>
             <div className="workbench-evaluate-comparison-anchor">
-              <DropdownMenu open={comparisonMenuOpen} onOpenChange={(nextOpen) => void handleComparisonMenuOpenChange(nextOpen)}>
+              <DropdownMenu
+                open={comparisonMenuOpen}
+                onOpenChange={(nextOpen) => void handleComparisonMenuOpenChange(nextOpen)}
+              >
                 <DropdownMenuTrigger
-                  render={(
+                  render={
                     <Button
                       type="button"
                       variant="ghost"
@@ -372,17 +376,16 @@ export function EvaluateView({
                       aria-expanded={comparisonMenuOpen}
                       disabled={isReadOnly || !orgUuid || !promptId}
                     />
-                  )}
+                  }
                 >
-                  {isLoadingComparisons ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+                  {isLoadingComparisons ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Plus className="size-4" aria-hidden />
+                  )}
                   Add Comparison
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  side="bottom"
-                  sideOffset={8}
-                  className="w-auto min-w-[238px]"
-                >
+                <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-auto min-w-[238px]">
                   {isLoadingComparisons ? (
                     <div className="workbench-evaluate-comparison-empty">Loading versions</div>
                   ) : availableComparisonRevisions.length ? (
@@ -397,7 +400,9 @@ export function EvaluateView({
                           <span className="text-[13px] font-semibold leading-[18px]">
                             {index >= 0 ? `Version ${comparisonRevisions.length - index}` : 'Version'}
                           </span>
-                          <span className="text-xs leading-4 text-muted-foreground">{formatDate(revision.created_at)}</span>
+                          <span className="text-xs leading-4 text-muted-foreground">
+                            {formatDate(revision.created_at)}
+                          </span>
                         </DropdownMenuItem>
                       );
                     })
@@ -516,7 +521,7 @@ export function EvaluateView({
           </Button>
           <DropdownMenu open={generateMenuOpen} onOpenChange={setGenerateMenuOpen}>
             <DropdownMenuTrigger
-              render={(
+              render={
                 <Button
                   type="button"
                   variant="outline"
@@ -526,16 +531,11 @@ export function EvaluateView({
                   aria-expanded={generateMenuOpen}
                   disabled={isReadOnly || isGeneratingTestCases}
                 />
-              )}
+              }
             >
               <ChevronDown className="size-4" aria-hidden />
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              side="top"
-              sideOffset={6}
-              className="w-auto min-w-[180px]"
-            >
+            <DropdownMenuContent align="start" side="top" sideOffset={6} className="w-auto min-w-[180px]">
               <DropdownMenuItem className="px-2 py-1.5 text-sm" onClick={() => void generateRows(1)}>
                 Generate 1 test case
               </DropdownMenuItem>
@@ -569,7 +569,7 @@ export function EvaluateView({
 export function EvaluateOutputCell({
   output,
   error,
-  isRunning
+  isRunning,
 }: {
   output: string;
   error: string | null;
@@ -581,7 +581,7 @@ export function EvaluateOutputCell({
         'workbench-evaluate-output-cell',
         output && 'has-output',
         error && 'has-error',
-        isRunning && 'is-running'
+        isRunning && 'is-running',
       )}
     >
       {isRunning ? (
@@ -602,7 +602,7 @@ export function EvaluateOutputCell({
 
 export function createEvaluateRow(variables: string[], sampleIndex?: number): EvaluateTestCase {
   const values = Object.fromEntries(
-    variables.map((name) => [name, sampleIndex ? `${name} sample ${sampleIndex}` : ''])
+    variables.map((name) => [name, sampleIndex ? `${name} sample ${sampleIndex}` : '']),
   );
   return createEvaluateRowFromValues(variables, values);
 }
@@ -619,7 +619,7 @@ export function createEvaluateRowFromValues(variables: string[], values: Record<
     rating: '',
     runError: null,
     isRunning: false,
-    comparisonOutputs: {}
+    comparisonOutputs: {},
   };
 }
 
@@ -628,7 +628,7 @@ export function emptyComparisonOutput(): EvaluateComparisonOutput {
     modelOutput: '',
     rating: '',
     runError: null,
-    isRunning: false
+    isRunning: false,
   };
 }
 
@@ -643,44 +643,46 @@ export function evaluateRowFromEvaluation(evaluation: WorkbenchEvaluation, varia
   if (!evaluationId.trim()) {
     return null;
   }
-  const rawValues = evaluation.variable_values && typeof evaluation.variable_values === 'object'
-    ? evaluation.variable_values
-    : {};
+  const rawValues =
+    evaluation.variable_values && typeof evaluation.variable_values === 'object' ? evaluation.variable_values : {};
   const row = createEvaluateRowFromValues(
     variables,
-    Object.fromEntries(variables.map((name) => [name, generatedValueString(rawValues[name])]))
+    Object.fromEntries(variables.map((name) => [name, generatedValueString(rawValues[name])])),
   );
   return mergeEvaluationIntoRow(
     {
       ...row,
       id: evaluationId,
       evaluationId,
-      testCaseId: generatedValueString(evaluation.test_case_id).trim() || evaluationId
+      testCaseId: generatedValueString(evaluation.test_case_id).trim() || evaluationId,
     },
     evaluation,
-    variables
+    variables,
   );
 }
 
 export function mergeEvaluationIntoRow(row: EvaluateTestCase, evaluation: WorkbenchEvaluation, variables: string[]) {
-  const rawValues = evaluation.variable_values && typeof evaluation.variable_values === 'object'
-    ? evaluation.variable_values
-    : row.values;
+  const rawValues =
+    evaluation.variable_values && typeof evaluation.variable_values === 'object'
+      ? evaluation.variable_values
+      : row.values;
   return {
     ...row,
     evaluationId: generatedValueString(evaluation.id).trim() || row.evaluationId,
     testCaseId: generatedValueString(evaluation.test_case_id).trim() || row.testCaseId,
-    values: Object.fromEntries(variables.map((name) => [
-      name,
-      hasOwn(rawValues, name) ? generatedValueString(rawValues[name]) : row.values[name] || ''
-    ])),
+    values: Object.fromEntries(
+      variables.map((name) => [
+        name,
+        hasOwn(rawValues, name) ? generatedValueString(rawValues[name]) : row.values[name] || '',
+      ]),
+    ),
     idealOutput: hasOwn(evaluation, 'golden_answer') ? generatedValueString(evaluation.golden_answer) : row.idealOutput,
     modelOutput: hasOwn(evaluation, 'completion_text')
       ? generatedValueString(evaluation.completion_text)
       : hasOwn(evaluation, 'completion')
         ? generatedValueString(evaluation.completion)
         : row.modelOutput,
-    rating: hasOwn(evaluation, 'rating') ? generatedValueString(evaluation.rating) : row.rating
+    rating: hasOwn(evaluation, 'rating') ? generatedValueString(evaluation.rating) : row.rating,
   };
 }
 
@@ -689,27 +691,34 @@ export function mergeCreatedEvaluationIntoRow(row: EvaluateTestCase, evaluation:
     ...row,
     evaluationId: generatedValueString(evaluation.id).trim() || row.evaluationId,
     testCaseId: generatedValueString(evaluation.test_case_id).trim() || row.testCaseId,
-    rating: hasOwn(evaluation, 'rating') ? generatedValueString(evaluation.rating) : row.rating
+    rating: hasOwn(evaluation, 'rating') ? generatedValueString(evaluation.rating) : row.rating,
   };
 }
 
-export function mergeEvaluationVariablesIntoRow(row: EvaluateTestCase, evaluation: WorkbenchEvaluation, variables: string[]) {
-  const rawValues = evaluation.variable_values && typeof evaluation.variable_values === 'object'
-    ? evaluation.variable_values
-    : row.values;
+export function mergeEvaluationVariablesIntoRow(
+  row: EvaluateTestCase,
+  evaluation: WorkbenchEvaluation,
+  variables: string[],
+) {
+  const rawValues =
+    evaluation.variable_values && typeof evaluation.variable_values === 'object'
+      ? evaluation.variable_values
+      : row.values;
   return {
     ...mergeEvaluationMetadataIntoRow(row, evaluation),
-    values: Object.fromEntries(variables.map((name) => [
-      name,
-      hasOwn(rawValues, name) ? generatedValueString(rawValues[name]) : row.values[name] || ''
-    ]))
+    values: Object.fromEntries(
+      variables.map((name) => [
+        name,
+        hasOwn(rawValues, name) ? generatedValueString(rawValues[name]) : row.values[name] || '',
+      ]),
+    ),
   };
 }
 
 export function mergeEvaluationGoldenAnswerIntoRow(row: EvaluateTestCase, evaluation: WorkbenchEvaluation) {
   return {
     ...mergeEvaluationMetadataIntoRow(row, evaluation),
-    idealOutput: hasOwn(evaluation, 'golden_answer') ? generatedValueString(evaluation.golden_answer) : row.idealOutput
+    idealOutput: hasOwn(evaluation, 'golden_answer') ? generatedValueString(evaluation.golden_answer) : row.idealOutput,
   };
 }
 
@@ -717,7 +726,7 @@ export function mergeEvaluationMetadataIntoRow(row: EvaluateTestCase, evaluation
   return {
     ...row,
     evaluationId: generatedValueString(evaluation.id).trim() || row.evaluationId,
-    testCaseId: generatedValueString(evaluation.test_case_id).trim() || row.testCaseId
+    testCaseId: generatedValueString(evaluation.test_case_id).trim() || row.testCaseId,
   };
 }
 
@@ -728,7 +737,7 @@ export function evaluateRowRequestBody(row: EvaluateTestCase): Partial<Workbench
     variable_values: row.values,
     golden_answer: row.idealOutput,
     completion_text: row.modelOutput,
-    rating: row.rating
+    rating: row.rating,
   };
 }
 
@@ -740,24 +749,32 @@ export function buildGenerateTestCasesPayload(draft: WorkbenchRevision, count: n
     existing_examples: examples.map((example) => ({
       variable_values: example.values,
       ideal_output: example.idealOutput,
-      additional_context: example.additionalContext
-    }))
+      additional_context: example.additionalContext,
+    })),
   };
 }
 
-export function buildGenerateVariablePayload(draft: WorkbenchRevision, examples: WorkbenchExample[], customChainOfThought: string) {
+export function buildGenerateVariablePayload(
+  draft: WorkbenchRevision,
+  examples: WorkbenchExample[],
+  customChainOfThought: string,
+) {
   return {
     ...buildRevisionPayload(draft, { includeEmptyMessages: false }),
     custom_chain_of_thought: customChainOfThought,
     existing_examples: examples.map((example) => ({
       variable_values: example.values,
       ideal_output: example.idealOutput,
-      additional_context: example.additionalContext
-    }))
+      additional_context: example.additionalContext,
+    })),
   };
 }
 
-export function buildGenerateExamplePayload(draft: WorkbenchRevision, examples: WorkbenchExample[], customChainOfThought: string) {
+export function buildGenerateExamplePayload(
+  draft: WorkbenchRevision,
+  examples: WorkbenchExample[],
+  customChainOfThought: string,
+) {
   return {
     system_prompt: draft.system_prompt || '',
     messages: buildGenerateExampleMessages(draft),
@@ -765,8 +782,8 @@ export function buildGenerateExamplePayload(draft: WorkbenchRevision, examples: 
     existing_examples: examples.map((example) => ({
       variable_values: example.values,
       ideal_output: example.idealOutput,
-      additional_context: example.additionalContext
-    }))
+      additional_context: example.additionalContext,
+    })),
   };
 }
 
@@ -779,8 +796,8 @@ export function buildGenerateExampleMessages(draft: WorkbenchRevision): Workbenc
     ...messages,
     {
       role: 'assistant',
-      content: [{ type: 'text', text: '' }]
-    }
+      content: [{ type: 'text', text: '' }],
+    },
   ];
 }
 
@@ -793,7 +810,7 @@ export function evaluateRowFromGeneratedEvent(event: WorkbenchStreamEvent, varia
     return null;
   }
   const values = Object.fromEntries(
-    variables.map((name) => [name, generatedValueString((rawValues as Record<string, unknown>)[name])])
+    variables.map((name) => [name, generatedValueString((rawValues as Record<string, unknown>)[name])]),
   );
   if (variables.every((name) => !values[name])) {
     return null;
@@ -806,8 +823,8 @@ export function evaluateRowsToCsv(rows: EvaluateTestCase[], variables: string[])
   const lines = [
     headers.map(escapeCsvCell).join(','),
     ...rows.map((row) =>
-      [...variables.map((name) => row.values[name] ?? ''), row.idealOutput].map(escapeCsvCell).join(',')
-    )
+      [...variables.map((name) => row.values[name] ?? ''), row.idealOutput].map(escapeCsvCell).join(','),
+    ),
   ];
   return `${lines.join('\n')}\n`;
 }
@@ -824,14 +841,15 @@ export function parseEvaluateCsv(text: string, variables: string[]) {
     const bracedName = normalizeEvaluateCsvHeader(`{{${name}}}`);
     return headers.findIndex((header) => header === normalizedName || header === bracedName);
   });
-  return records.slice(1)
+  return records
+    .slice(1)
     .filter((record) => record.some((cell) => cell.trim()))
     .map((record) => ({
       ...createEvaluateRowFromValues(
         variables,
-        Object.fromEntries(variables.map((name, index) => [name, record[variableIndexes[index]] ?? '']))
+        Object.fromEntries(variables.map((name, index) => [name, record[variableIndexes[index]] ?? ''])),
       ),
-      idealOutput: idealIndex >= 0 ? record[idealIndex] ?? '' : ''
+      idealOutput: idealIndex >= 0 ? (record[idealIndex] ?? '') : '',
     }));
 }
 
@@ -881,10 +899,18 @@ export function escapeCsvCell(value: string) {
 }
 
 export function normalizeEvaluateCsvHeader(value: string) {
-  return value.trim().replace(/^{{\s*/, '').replace(/\s*}}$/, '').toLowerCase();
+  return value
+    .trim()
+    .replace(/^{{\s*/, '')
+    .replace(/\s*}}$/, '')
+    .toLowerCase();
 }
 
 export function slugifyFileName(value: string) {
-  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
   return slug || 'workbench';
 }

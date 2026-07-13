@@ -23,7 +23,11 @@ describe('LoginFlow', () => {
     expect(document.querySelector('.surface-card')).toBeNull();
     expect(screen.queryByText('Passwordless sign-in')).toBeNull();
     expect(screen.queryByText('Built for the managed agent console')).toBeNull();
-    expect(screen.queryByText('Use a one-time email code to access workspaces, agents, sessions, and analytics in the same console flow.')).toBeNull();
+    expect(
+      screen.queryByText(
+        'Use a one-time email code to access workspaces, agents, sessions, and analytics in the same console flow.',
+      ),
+    ).toBeNull();
     expect(screen.queryByText('Email-first access')).toBeNull();
     expect(screen.queryByText('Return where you left off')).toBeNull();
     expect(screen.queryByText('Server-backed sessions')).toBeNull();
@@ -50,13 +54,7 @@ describe('LoginFlow', () => {
     const verify = mock(async () => ({ success: true }));
     const authenticated = mock(async () => undefined);
 
-    render(
-      <LoginFlow
-        onAuthenticated={authenticated}
-        onSendMagicLink={send}
-        onVerifyMagicLink={verify}
-      />
-    );
+    render(<LoginFlow onAuthenticated={authenticated} onSendMagicLink={send} onVerifyMagicLink={verify} />);
 
     fireEvent.input(screen.getByLabelText(/Email/i), { target: { value: 'grace@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: /Continue with email/i }));
@@ -97,7 +95,7 @@ describe('LoginFlow', () => {
     render(
       <I18nProvider initialLocale="zh-CN">
         <LoginFlow onAuthenticated={() => undefined} />
-      </I18nProvider>
+      </I18nProvider>,
     );
 
     expect(document.documentElement.lang).toBe('zh-CN');

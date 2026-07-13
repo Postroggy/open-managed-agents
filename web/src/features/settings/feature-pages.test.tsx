@@ -12,11 +12,7 @@ import { BillingSettingsPage } from './BillingSettingsPage';
 import { AdminKeysSettingsPage } from './AdminKeysSettingsPage';
 import { IdentityAndAccessSettingsPage } from './IdentityAndAccessSettingsPage';
 import { WorkloadIdentitySettingsPage } from './WorkloadIdentitySettingsPage';
-import {
-  AppearanceSettingsPage,
-  ProfileSettingsPage,
-  settingsSectionFromPath
-} from './feature-pages';
+import { AppearanceSettingsPage, ProfileSettingsPage, settingsSectionFromPath } from './feature-pages';
 
 const testingLibrary = await import('@testing-library/react');
 const { cleanup, render, screen } = testingLibrary;
@@ -41,10 +37,7 @@ describe('Settings feature pages', () => {
   test('renders profile settings with account identity instead of the organization page', async () => {
     resetTestDom('https://oma.duck.ai/settings/profile');
 
-    const { container } = renderSettingsFeature(
-      '/settings/profile',
-      <ProfileSettingsPage />
-    );
+    const { container } = renderSettingsFeature('/settings/profile', <ProfileSettingsPage />);
 
     expect(screen.getByText('Organization settings')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Profile' })).toBeTruthy();
@@ -59,7 +52,7 @@ describe('Settings feature pages', () => {
     resetTestDom('https://oma.duck.ai/settings/appearance');
 
     const { container } = renderSettingsFeature('/settings/appearance', <AppearanceSettingsPage />, {
-      withThemeProvider: true
+      withThemeProvider: true,
     });
 
     expect(screen.getByRole('heading', { name: 'Appearance' })).toBeTruthy();
@@ -106,7 +99,9 @@ describe('Settings feature pages', () => {
     const { container } = renderSettingsFeature('/settings/workload-identity', <WorkloadIdentitySettingsPage />);
 
     expect(screen.getByRole('heading', { name: 'Workload identity' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'View service accounts' }).getAttribute('href')).toBe('/settings/service-accounts');
+    expect(screen.getByRole('link', { name: 'View service accounts' }).getAttribute('href')).toBe(
+      '/settings/service-accounts',
+    );
     expect(screen.getByRole('link', { name: 'View service accounts' }).getAttribute('data-slot')).toBe('button');
     expect(screen.queryByRole('heading', { name: 'Organization' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Create provider' })).toBeTruthy();
@@ -132,7 +127,7 @@ describe('Settings feature pages', () => {
 function renderSettingsFeature(
   currentPath: string,
   children: ReactNode,
-  options: { withThemeProvider?: boolean } = {}
+  options: { withThemeProvider?: boolean } = {},
 ) {
   const tree = (
     <SettingsFeatureHarness>
@@ -142,7 +137,7 @@ function renderSettingsFeature(
           uuid: 'acct_test',
           email_address: 'ada@example.com',
           display_name: 'Ada Lovelace',
-          memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }]
+          memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }],
         }}
         onLogout={() => undefined}
       >
@@ -154,7 +149,7 @@ function renderSettingsFeature(
   return render(
     <I18nProvider initialLocale="en">
       {options.withThemeProvider ? <ThemeProvider>{tree}</ThemeProvider> : tree}
-    </I18nProvider>
+    </I18nProvider>,
   );
 }
 
@@ -166,14 +161,14 @@ function SettingsFeatureHarness({ children }: { children: ReactNode }) {
         uuid: 'acct_test',
         email_address: 'ada@example.com',
         display_name: 'Ada Lovelace',
-        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }]
+        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }],
       },
       status: 'authenticated',
       csrfToken: 'csrf_test',
       refresh: async () => ({ account: { uuid: 'acct_test', email_address: 'ada@example.com' } }),
-      logout: async () => undefined
+      logout: async () => undefined,
     }),
-    []
+    [],
   );
   const workspaceValue = useMemo<WorkspaceContextValue>(
     () => ({
@@ -185,9 +180,9 @@ function SettingsFeatureHarness({ children }: { children: ReactNode }) {
       error: null,
       selectWorkspace: () => undefined,
       createWorkspace: async () => defaultWorkspace,
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     }),
-    []
+    [],
   );
 
   return (

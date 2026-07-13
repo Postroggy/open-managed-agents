@@ -229,11 +229,7 @@ export type MemoryStoreApiResponse = {
 };
 
 export type ManagedEntityApiResponse =
-  | SessionApiResponse
-  | DeploymentApiResponse
-  | EnvironmentApiResponse
-  | VaultApiResponse
-  | MemoryStoreApiResponse;
+  SessionApiResponse | DeploymentApiResponse | EnvironmentApiResponse | VaultApiResponse | MemoryStoreApiResponse;
 
 export type VaultCredentialApiResponse = {
   id: string;
@@ -270,7 +266,15 @@ export type MemoryBranchState = {
 };
 
 export type MemoryTreeNode =
-  | { type: 'folder'; path: string; label: string; depth: number; expanded: boolean; loading: boolean; error: string | null }
+  | {
+      type: 'folder';
+      path: string;
+      label: string;
+      depth: number;
+      expanded: boolean;
+      loading: boolean;
+      error: string | null;
+    }
   | { type: 'memory'; memory: MemoryApiResponse; label: string; depth: number };
 
 export type DeploymentRunApiResponse = {
@@ -424,14 +428,7 @@ export type DisplayEvent = {
 };
 
 export type TranscriptEntryKind =
-  | 'idle_gap'
-  | 'queued_boundary'
-  | 'outcome'
-  | 'tool_call'
-  | 'tool_batch'
-  | 'message'
-  | 'status'
-  | 'passthrough';
+  'idle_gap' | 'queued_boundary' | 'outcome' | 'tool_call' | 'tool_batch' | 'message' | 'status' | 'passthrough';
 
 export type ToolLifecycle = 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'denied';
 
@@ -526,11 +523,7 @@ export type ModelRequestBracketMeta = {
 };
 
 export type SessionEventListEntry =
-  | IdleGapEntry
-  | QueuedBoundaryEntry
-  | ToolCallEntry
-  | ToolBatchEntry
-  | DisplayEventEntry;
+  IdleGapEntry | QueuedBoundaryEntry | ToolCallEntry | ToolBatchEntry | DisplayEventEntry;
 
 export type ManagedEntityFormValues = {
   name: string;
@@ -661,7 +654,8 @@ export type TranscriptMarkdownBlock =
 
 export type SessionThreadHint = { id: string; name: string };
 
-export type HighlightLanguage = 'bash' | 'bash-yaml' | 'javascript' | 'json' | 'plaintext' | 'python' | 'typescript' | 'yaml';
+export type HighlightLanguage =
+  'bash' | 'bash-yaml' | 'javascript' | 'json' | 'plaintext' | 'python' | 'typescript' | 'yaml';
 
 export type ResourceConfig = {
   section: Exclude<ManagedAgentSection, 'quickstart' | 'dreams'>;

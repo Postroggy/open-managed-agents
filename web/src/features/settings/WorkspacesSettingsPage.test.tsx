@@ -27,8 +27,8 @@ describe('Workspaces settings page', () => {
       color: '#8CCDB5',
       data_residency: {
         workspace_geo: 'us',
-        default_inference_geo: 'global'
-      }
+        default_inference_geo: 'global',
+      },
     };
 
     const { container } = renderWorkspacesSettings({
@@ -41,8 +41,8 @@ describe('Workspaces settings page', () => {
         error: null,
         selectWorkspace: () => undefined,
         createWorkspace: async () => fooWorkspace,
-        refreshWorkspaces: async () => undefined
-      }
+        refreshWorkspaces: async () => undefined,
+      },
     });
 
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeTruthy();
@@ -69,8 +69,8 @@ describe('Workspaces settings page', () => {
       name: 'bar',
       display_color: '#D8D2A6',
       data_residency: {
-        workspace_geo: 'us'
-      }
+        workspace_geo: 'us',
+      },
     });
   });
 
@@ -88,8 +88,8 @@ describe('Workspaces settings page', () => {
         error: new Error('workspace service unavailable'),
         selectWorkspace: () => undefined,
         createWorkspace: async () => defaultWorkspace,
-        refreshWorkspaces
-      }
+        refreshWorkspaces,
+      },
     });
 
     const alert = screen.getByRole('alert');
@@ -102,7 +102,7 @@ describe('Workspaces settings page', () => {
 
 function renderWorkspacesSettings({
   workspaceValue,
-  withSettingsShell = true
+  withSettingsShell = true,
 }: {
   workspaceValue: WorkspaceContextValue;
   withSettingsShell?: boolean;
@@ -114,7 +114,7 @@ function renderWorkspacesSettings({
         uuid: 'acct_test',
         email_address: 'ada@example.com',
         display_name: 'Ada Lovelace',
-        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }]
+        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }],
       }}
       onLogout={() => undefined}
     >
@@ -127,16 +127,10 @@ function renderWorkspacesSettings({
   return render(
     <I18nProvider initialLocale="en">
       <SettingsHarness workspaceValue={workspaceValue}>{content}</SettingsHarness>
-    </I18nProvider>
+    </I18nProvider>,
   );
 }
 
-function SettingsHarness({
-  children,
-  workspaceValue
-}: {
-  children: ReactNode;
-  workspaceValue: WorkspaceContextValue;
-}) {
+function SettingsHarness({ children, workspaceValue }: { children: ReactNode; workspaceValue: WorkspaceContextValue }) {
   return <WorkspaceContext.Provider value={workspaceValue}>{children}</WorkspaceContext.Provider>;
 }

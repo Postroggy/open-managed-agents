@@ -34,17 +34,19 @@ describe('Workspace webhooks page', () => {
         >
           <WorkspaceWebhooksContent routeWorkspaceId="default" />
         </ConsoleShell>
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     expect(
       screen
         .getAllByRole('button', { name: /Default/i })
-        .some((button) => button.getAttribute('aria-label') === 'Default')
+        .some((button) => button.getAttribute('aria-label') === 'Default'),
     ).toBe(true);
     expect(screen.getByRole('heading', { name: 'Webhooks' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add webhook endpoint' })).toBeTruthy();
-    expect(screen.getByText('Webhook endpoints receive event notifications when things happen in your workspace.')).toBeTruthy();
+    expect(
+      screen.getByText('Webhook endpoints receive event notifications when things happen in your workspace.'),
+    ).toBeTruthy();
     expect(screen.getByText('ID')).toBeTruthy();
     expect(screen.getByText('Name')).toBeTruthy();
     expect(screen.getByText('Status')).toBeTruthy();
@@ -69,7 +71,7 @@ describe('Workspace webhooks page', () => {
     render(
       <WorkspaceWebhooksHarness>
         <WorkspaceWebhooksContent routeWorkspaceId="default" />
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     await screen.findByText('No webhook endpoints have been created for Default.');
@@ -82,7 +84,7 @@ describe('Workspace webhooks page', () => {
     expect(within(dialog).getByText('1 of 1')).toBeTruthy();
 
     fireEvent.change(within(dialog).getByPlaceholderText('https://example.com/webhooks'), {
-      target: { value: 'https://example.com/webhooks' }
+      target: { value: 'https://example.com/webhooks' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
 
@@ -93,7 +95,9 @@ describe('Workspace webhooks page', () => {
     expect(createdSecretCard?.className).toContain('bg-card');
     expect(createdSecretCard?.className).not.toContain('bg-secondary');
 
-    const createRequest = api.requests.find((request) => request.method === 'POST' && request.url === '/v1/webhooks?beta=true');
+    const createRequest = api.requests.find(
+      (request) => request.method === 'POST' && request.url === '/v1/webhooks?beta=true',
+    );
     expect(createRequest?.body?.url).toBe('https://example.com/webhooks');
     expect(createRequest?.body?.name).toBe('example.com');
     expect((createRequest?.body?.enabled_events as string[]).length).toBe(15);
@@ -107,7 +111,7 @@ describe('Workspace webhooks page', () => {
     render(
       <WorkspaceWebhooksHarness>
         <WorkspaceWebhooksContent routeWorkspaceId="default" />
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     await screen.findByText('No webhook endpoints have been created for Default.');
@@ -118,15 +122,17 @@ describe('Workspace webhooks page', () => {
     expect(within(dialog).getByText('0 of 4')).toBeTruthy();
 
     fireEvent.change(within(dialog).getByPlaceholderText('https://example.com/webhooks'), {
-      target: { value: 'https://example.com/hooks' }
+      target: { value: 'https://example.com/hooks' },
     });
     fireEvent.change(within(dialog).getByPlaceholderText('My webhook endpoint'), {
-      target: { value: 'Custom events' }
+      target: { value: 'Custom events' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
 
     await screen.findByRole('dialog', { name: 'Webhook endpoint created' });
-    const createRequest = api.requests.find((request) => request.method === 'POST' && request.url === '/v1/webhooks?beta=true');
+    const createRequest = api.requests.find(
+      (request) => request.method === 'POST' && request.url === '/v1/webhooks?beta=true',
+    );
     expect(createRequest?.body?.name).toBe('Custom events');
     expect(createRequest?.body?.enabled_events).not.toContain('session.status_run_started');
     expect((createRequest?.body?.enabled_events as string[]).length).toBe(11);
@@ -139,7 +145,7 @@ describe('Workspace webhooks page', () => {
     render(
       <WorkspaceWebhooksHarness>
         <WorkspaceWebhooksContent routeWorkspaceId="default" />
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     await screen.findByText('Deploy events');
@@ -166,7 +172,7 @@ describe('Workspace webhooks page', () => {
     render(
       <WorkspaceWebhooksHarness>
         <WorkspaceWebhooksContent routeWorkspaceId="default" />
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     await screen.findByText('a');
@@ -209,7 +215,7 @@ describe('Workspace webhooks page', () => {
     render(
       <WorkspaceWebhooksHarness>
         <WorkspaceWebhooksContent routeWorkspaceId="default" />
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     await screen.findByText('Prod events');
@@ -218,17 +224,21 @@ describe('Workspace webhooks page', () => {
     const inspector = screen.getByRole('dialog', { name: 'Prod events' });
     fireEvent.click(within(inspector).getByRole('button', { name: 'Edit webhook' }));
     fireEvent.change(within(inspector).getByLabelText('Name (optional)'), {
-      target: { value: 'Prod deliveries' }
+      target: { value: 'Prod deliveries' },
     });
     fireEvent.change(within(inspector).getByLabelText('Description (optional)'), {
-      target: { value: 'Production webhook stream' }
+      target: { value: 'Production webhook stream' },
     });
     fireEvent.click(within(inspector).getByRole('checkbox', { name: 'Vault lifecycle events' }));
     fireEvent.click(within(inspector).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(api.lastUpdateFor('wh_enabled')?.name).toBe('Prod deliveries'));
     expect(api.lastUpdateFor('wh_enabled')?.description).toBe('Production webhook stream');
-    expect(api.lastUpdateFor('wh_enabled')?.enabled_events).toEqual(['vault.created', 'vault.archived', 'vault.deleted']);
+    expect(api.lastUpdateFor('wh_enabled')?.enabled_events).toEqual([
+      'vault.created',
+      'vault.archived',
+      'vault.deleted',
+    ]);
     expect(api.lastUpdateFor('wh_enabled')?.status).toBeUndefined();
 
     const updatedInspector = await screen.findByRole('dialog', { name: 'Prod deliveries' });
@@ -244,7 +254,7 @@ describe('Workspace webhooks page', () => {
     render(
       <WorkspaceWebhooksHarness>
         <WorkspaceWebhooksContent routeWorkspaceId="default" />
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     await screen.findByText('Prod events');
@@ -254,8 +264,8 @@ describe('Workspace webhooks page', () => {
     const confirmDialog = screen.getByRole('alertdialog', { name: 'Regenerate signing secret?' });
     expect(
       within(confirmDialog).getByText(
-        'This will replace the current signing secret for Prod events. Existing receivers must be updated to verify future deliveries.'
-      )
+        'This will replace the current signing secret for Prod events. Existing receivers must be updated to verify future deliveries.',
+      ),
     ).toBeTruthy();
     fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Regenerate' }));
 
@@ -267,7 +277,8 @@ describe('Workspace webhooks page', () => {
     expect(regeneratedSecretCard?.className).not.toContain('bg-secondary');
 
     const regenerateRequest = api.requests.find(
-      (request) => request.method === 'POST' && request.url === '/v1/webhooks/wh_enabled/regenerate_signing_secret?beta=true'
+      (request) =>
+        request.method === 'POST' && request.url === '/v1/webhooks/wh_enabled/regenerate_signing_secret?beta=true',
     );
     expect(regenerateRequest?.body).toEqual({});
     expect(regenerateRequest?.headers.get('anthropic-beta')).toBe('webhooks-2026-03-01');
@@ -281,7 +292,7 @@ describe('Workspace webhooks page', () => {
     render(
       <WorkspaceWebhooksHarness>
         <WorkspaceWebhooksContent routeWorkspaceId="default" />
-      </WorkspaceWebhooksHarness>
+      </WorkspaceWebhooksHarness>,
     );
 
     await screen.findByText('Prod events');
@@ -309,14 +320,14 @@ function WorkspaceWebhooksHarness({ children }: { children: ReactNode }) {
       error: null,
       selectWorkspace: () => undefined,
       createWorkspace: async () => defaultWorkspace,
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     }),
-    []
+    [],
   );
 
   setConsoleRequestContext({
     organizationUuid: 'org_test',
-    workspaceId: defaultWorkspace.id
+    workspaceId: defaultWorkspace.id,
   });
 
   return (
@@ -362,7 +373,7 @@ function mockWebhooks(initialWebhooks: WebhookEndpoint[]) {
         disabled_reason: null,
         created_at: '2026-06-25T00:00:00Z',
         updated_at: '2026-06-25T00:00:00Z',
-        signing_secret: 'whsec_local_secret'
+        signing_secret: 'whsec_local_secret',
       };
       webhooks = [created, ...webhooks];
       return jsonResponse(created);
@@ -388,7 +399,7 @@ function mockWebhooks(initialWebhooks: WebhookEndpoint[]) {
           ...(body?.status === 'enabled' || body?.status === 'disabled'
             ? { status: body.status, disabled_reason: body.status === 'enabled' ? null : 'manual' }
             : {}),
-          updated_at: '2026-06-25T09:00:00Z'
+          updated_at: '2026-06-25T09:00:00Z',
         };
       });
       return jsonResponse(webhooks.find((webhook) => webhook.id === webhookId) ?? { ...enabledWebhook, id: webhookId });
@@ -418,7 +429,7 @@ function mockWebhooks(initialWebhooks: WebhookEndpoint[]) {
         .filter((request) => request.url === `/v1/webhooks/${webhookId}?beta=true` && request.method === 'POST')
         .at(-1);
       return matching?.body;
-    }
+    },
   };
 }
 
@@ -432,7 +443,7 @@ function parseBody(body: BodyInit | null | undefined) {
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -446,7 +457,7 @@ const disabledWebhook: WebhookEndpoint = {
   status: 'disabled',
   disabled_reason: 'manual',
   created_at: '2026-06-25T07:58:00Z',
-  updated_at: '2026-06-25T08:00:00Z'
+  updated_at: '2026-06-25T08:00:00Z',
 };
 
 const enabledWebhook: WebhookEndpoint = {
@@ -459,7 +470,7 @@ const enabledWebhook: WebhookEndpoint = {
   status: 'enabled',
   disabled_reason: null,
   created_at: '2026-06-24T07:58:00Z',
-  updated_at: '2026-06-24T08:00:00Z'
+  updated_at: '2026-06-24T08:00:00Z',
 };
 
 const detailWebhook: WebhookEndpoint = {
@@ -475,10 +486,10 @@ const detailWebhook: WebhookEndpoint = {
     'session.status_terminated',
     'session.updated',
     'session.deleted',
-    'vault_credential.refresh_failed'
+    'vault_credential.refresh_failed',
   ],
   status: 'enabled',
   disabled_reason: null,
   created_at: '2026-06-25T07:58:00Z',
-  updated_at: '2026-06-25T08:00:00Z'
+  updated_at: '2026-06-25T08:00:00Z',
 };

@@ -7,7 +7,7 @@ import {
   useState,
   type ComponentProps,
   type MouseEvent,
-  type ReactNode
+  type ReactNode,
 } from 'react';
 
 import { copyText } from '@/shared/lib/clipboard';
@@ -44,7 +44,7 @@ export function DataTableRow({
         className={cn(
           'oma-data-table-row border-0 bg-transparent text-foreground hover:bg-transparent data-[state=selected]:bg-transparent',
           clickable && 'cursor-pointer',
-          className
+          className,
         )}
         onMouseEnter={(event) => {
           setHovered(true);
@@ -71,7 +71,7 @@ export function DataTableCell({ edge, className, ...props }: DataTableCellProps)
         'oma-data-table-cell h-10 px-3 align-middle transition-colors',
         edge === 'start' && 'rounded-l-lg',
         edge === 'end' && 'rounded-r-lg',
-        className
+        className,
       )}
       {...props}
     />
@@ -87,7 +87,7 @@ export function CopyIdCell({
   textClassName,
   buttonClassName,
   stopPropagation = false,
-  alwaysVisible = false
+  alwaysVisible = false,
 }: {
   value: string;
   displayValue?: ReactNode;
@@ -140,10 +140,7 @@ export function CopyIdCell({
         data-copy-id-button
         data-copied={copied ? 'true' : undefined}
         style={{ opacity: alwaysVisible || rowHovered || copied || keyboardFocused ? 1 : 0 }}
-        className={cn(
-          'oma-copy-id-button shrink-0 text-muted-foreground/70 hover:text-foreground',
-          buttonClassName
-        )}
+        className={cn('oma-copy-id-button shrink-0 text-muted-foreground/70 hover:text-foreground', buttonClassName)}
         onFocus={(event) => {
           setKeyboardFocused(event.currentTarget.matches(':focus-visible'));
         }}
@@ -175,7 +172,7 @@ export function RowIconButton({
       aria-label={label}
       className={cn(
         'text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
-        className
+        className,
       )}
       {...props}
     >
@@ -184,13 +181,10 @@ export function RowIconButton({
   );
 }
 
-export function MoreActionsButton({ label, className, ...props }: Omit<ComponentProps<typeof Button>, 'aria-label' | 'children'> & { label: string }) {
-  return (
-    <RowIconButton
-      label={label}
-      icon={<EllipsisVertical aria-hidden />}
-      className={className}
-      {...props}
-    />
-  );
+export function MoreActionsButton({
+  label,
+  className,
+  ...props
+}: Omit<ComponentProps<typeof Button>, 'aria-label' | 'children'> & { label: string }) {
+  return <RowIconButton label={label} icon={<EllipsisVertical aria-hidden />} className={className} {...props} />;
 }

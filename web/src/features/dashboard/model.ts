@@ -1,11 +1,7 @@
 import type { ComponentType } from 'react';
 import { copyText } from '@/shared/lib/clipboard';
 import { anthropicBetaApi } from '../../shared/api/anthropic';
-import {
-  filesRequestHeaders,
-  messageBatchesRequestHeaders,
-  skillsRequestHeaders
-} from '../../shared/api/client';
+import { filesRequestHeaders, messageBatchesRequestHeaders, skillsRequestHeaders } from '../../shared/api/client';
 import type { useI18n } from '../../shared/i18n';
 import { useWorkspace } from '../../shared/workspaces/context';
 
@@ -128,7 +124,8 @@ export function useDashboardWorkspaceScope() {
   const routeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   return {
     workspaceId,
-    workspaceName: routeWorkspace?.name || (workspaceId === activeWorkspaceId ? activeWorkspace.name : workspaceId || 'current')
+    workspaceName:
+      routeWorkspace?.name || (workspaceId === activeWorkspaceId ? activeWorkspace.name : workspaceId || 'current'),
   };
 }
 
@@ -141,7 +138,7 @@ function workspaceIdFromCurrentPath() {
 }
 export function listFiles(cursor: FilesPageCursor, workspaceId: string) {
   const params: Record<string, string | number> = {
-    limit: filesPageLimit
+    limit: filesPageLimit,
   };
   if (cursor.afterId) {
     params.after_id = cursor.afterId;
@@ -154,7 +151,7 @@ export function listFiles(cursor: FilesPageCursor, workspaceId: string) {
 
 export function listMessageBatches(cursor: MessageBatchesPageCursor, workspaceId: string) {
   const params: Record<string, string | number> = {
-    limit: messageBatchesPageLimit
+    limit: messageBatchesPageLimit,
   };
   if (cursor.afterId) {
     params.after_id = cursor.afterId;
@@ -164,7 +161,7 @@ export function listMessageBatches(cursor: MessageBatchesPageCursor, workspaceId
   }
   return anthropicBetaApi.messageBatches.list<ConsoleMessageBatch>(
     params,
-    workspaceId
+    workspaceId,
   ) as Promise<MessageBatchesListResponse>;
 }
 
@@ -178,15 +175,12 @@ export function cancelMessageBatch(batchId: string, workspaceId: string) {
 
 export async function listSkills(pageToken: string | undefined, workspaceId: string): Promise<SkillsListResponse> {
   const params: Record<string, string | number> = {
-    limit: skillsPageLimit
+    limit: skillsPageLimit,
   };
   if (pageToken) {
     params.page = pageToken;
   }
-  return (await anthropicBetaApi.skills.list<ConsoleSkill>(
-    params,
-    workspaceId
-  )) as SkillsListResponse;
+  return (await anthropicBetaApi.skills.list<ConsoleSkill>(params, workspaceId)) as SkillsListResponse;
 }
 
 export function retrieveSkill(skillId: string, workspaceId: string) {
@@ -195,7 +189,7 @@ export function retrieveSkill(skillId: string, workspaceId: string) {
 
 export function listSkillVersions(skillId: string, workspaceId: string, pageToken?: string) {
   const params: Record<string, string | number> = {
-    limit: 50
+    limit: 50,
   };
   if (pageToken) {
     params.page = pageToken;
@@ -203,7 +197,7 @@ export function listSkillVersions(skillId: string, workspaceId: string, pageToke
   return anthropicBetaApi.skills.versions.list<ConsoleSkillVersion>(
     skillId,
     params,
-    workspaceId
+    workspaceId,
   ) as Promise<SkillVersionsListResponse>;
 }
 
@@ -211,22 +205,18 @@ export async function createSkillPackage(
   skillId: string | undefined,
   files: FileList | File[],
   workspaceId: string,
-  displayTitle?: string
+  displayTitle?: string,
 ) {
   const uploadFiles = Array.from(files).map(skillUploadFile);
   if (skillId) {
-    return anthropicBetaApi.skills.versions.create<ConsoleSkillVersion>(
-      skillId,
-      { files: uploadFiles },
-      workspaceId
-    );
+    return anthropicBetaApi.skills.versions.create<ConsoleSkillVersion>(skillId, { files: uploadFiles }, workspaceId);
   }
   return anthropicBetaApi.skills.create<ConsoleSkill>(
     {
       display_title: displayTitle?.trim() || null,
-      files: uploadFiles
+      files: uploadFiles,
     },
-    workspaceId
+    workspaceId,
   );
 }
 
@@ -237,7 +227,7 @@ function skillUploadFile(file: File) {
   }
   return new File([file], filename, {
     type: file.type,
-    lastModified: file.lastModified
+    lastModified: file.lastModified,
   });
 }
 
@@ -376,7 +366,7 @@ export function formatRelativeTime(value: string, locale = 'en', lessThanMinuteL
   return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
-    year: new Date(timestamp).getFullYear() === new Date().getFullYear() ? undefined : 'numeric'
+    year: new Date(timestamp).getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
   }).format(timestamp);
 }
 
@@ -393,7 +383,7 @@ export function formatBatchDateTime(value?: string | null) {
     day: 'numeric',
     year: new Date(timestamp).getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
   }).format(timestamp);
 }
 
@@ -420,7 +410,7 @@ export { copyText };
 export async function downloadFile(file: ConsoleFile, workspaceId: string) {
   const response = await fetch(`/v1/files/${encodeURIComponent(file.id)}/content?beta=true`, {
     headers: filesRequestHeaders(workspaceRequestHeaders(workspaceId)),
-    credentials: 'include'
+    credentials: 'include',
   });
   if (!response.ok) {
     throw new Error('File could not be downloaded.');
@@ -439,7 +429,7 @@ export async function downloadFile(file: ConsoleFile, workspaceId: string) {
 export async function downloadMessageBatchResults(batch: ConsoleMessageBatch, workspaceId: string) {
   const response = await fetch(`/v1/messages/batches/${encodeURIComponent(batch.id)}/results?beta=true`, {
     headers: messageBatchesRequestHeaders(workspaceRequestHeaders(workspaceId)),
-    credentials: 'include'
+    credentials: 'include',
   });
   if (!response.ok) {
     throw new Error(await responseErrorMessage(response));
@@ -455,13 +445,18 @@ export async function downloadMessageBatchResults(batch: ConsoleMessageBatch, wo
   URL.revokeObjectURL(url);
 }
 
-export async function downloadSkillVersion(skillId: string, version: string, directory: string | undefined, workspaceId: string) {
+export async function downloadSkillVersion(
+  skillId: string,
+  version: string,
+  directory: string | undefined,
+  workspaceId: string,
+) {
   const response = await fetch(
     `/v1/skills/${encodeURIComponent(skillId)}/versions/${encodeURIComponent(version)}/content?beta=true`,
     {
       headers: skillsRequestHeaders(workspaceRequestHeaders(workspaceId)),
-      credentials: 'include'
-    }
+      credentials: 'include',
+    },
   );
   if (!response.ok) {
     throw new Error(await responseErrorMessage(response));

@@ -11,16 +11,9 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
-  Trash2
+  Trash2,
 } from 'lucide-react';
-import {
-  Dispatch,
-  SetStateAction,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Button } from '@/shared/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/shared/ui/command';
@@ -29,7 +22,7 @@ import {
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -61,20 +54,20 @@ import {
   webSearchToolFormFromTool,
   webSearchToolSummary,
   WORKBENCH_MAX_TOKENS,
-  WorkbenchExample
+  WorkbenchExample,
 } from './model';
 import { IconButton, ToggleRow } from './components';
 
 const webSearchRestrictionOptions: Array<{ value: WebSearchRestriction; label: string; description: string }> = [
   { value: 'none', label: 'None', description: 'Search any domain' },
   { value: 'allowed_domains', label: 'Allow domains', description: 'Only search allowed domains' },
-  { value: 'blocked_domains', label: 'Blocked domains', description: 'Do not search blocked domains' }
+  { value: 'blocked_domains', label: 'Blocked domains', description: 'Do not search blocked domains' },
 ];
 
 const exampleToolMenuItems = [
   { value: 'weather', label: 'get_weather' },
   { value: 'stock_price', label: 'get_stock_price' },
-  { value: 'time', label: 'get_time' }
+  { value: 'time', label: 'get_time' },
 ] as const;
 
 type ExampleToolKind = (typeof exampleToolMenuItems)[number]['value'];
@@ -82,7 +75,7 @@ type ExampleToolKind = (typeof exampleToolMenuItems)[number]['value'];
 const thinkingTypeOptions = ['disabled', 'enabled', 'adaptive'] as const;
 
 function firstSliderValue(value: number | readonly number[]) {
-  return Array.isArray(value) ? value[0] ?? 0 : value;
+  return Array.isArray(value) ? (value[0] ?? 0) : value;
 }
 
 export function ModelDrawer({
@@ -90,7 +83,7 @@ export function ModelDrawer({
   models,
   setDraft,
   onRun,
-  isRunning
+  isRunning,
 }: {
   draft: WorkbenchRevision;
   models: WorkbenchModel[];
@@ -240,7 +233,13 @@ export function ModelDrawer({
         <div className="workbench-model-row">
           <div className="workbench-model-label-with-help">
             <span>Max tokens</span>
-            <Button type="button" variant="ghost" size="icon-xs" className="workbench-model-help" aria-label="Maximum length of Claude’s responses">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="workbench-model-help"
+              aria-label="Maximum length of Claude’s responses"
+            >
               <Info className="size-3.5" aria-hidden />
             </Button>
           </div>
@@ -254,7 +253,7 @@ export function ModelDrawer({
               const value = Math.max(1, Number(event.currentTarget.value) || 1);
               setDraft((current) => ({
                 ...current,
-                max_tokens_to_sample: value
+                max_tokens_to_sample: value,
               }));
             }}
             className="workbench-model-number"
@@ -283,7 +282,7 @@ export function ModelDrawer({
             onValueChange={(value) =>
               setDraft((current) => ({
                 ...current,
-                thinking: nextThinkingForMode(current.thinking, value)
+                thinking: nextThinkingForMode(current.thinking, value),
               }))
             }
             className="workbench-model-radio-group"
@@ -292,11 +291,7 @@ export function ModelDrawer({
               const id = `workbench-thinking-${value}`;
               return (
                 <div key={value} className="workbench-model-radio-option">
-                  <RadioGroupItem
-                    id={id}
-                    aria-label={capitalize(value)}
-                    value={value}
-                  />
+                  <RadioGroupItem id={id} aria-label={capitalize(value)} value={value} />
                   <Label htmlFor={id} className="workbench-model-radio-label">
                     {capitalize(value)}
                   </Label>
@@ -310,7 +305,13 @@ export function ModelDrawer({
             <div className="workbench-model-row">
               <div className="workbench-model-label-with-help">
                 <span>Budget tokens</span>
-                <Button type="button" variant="ghost" size="icon-xs" className="workbench-model-help" aria-label="Budget tokens">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="workbench-model-help"
+                  aria-label="Budget tokens"
+                >
                   <Info className="size-3.5" aria-hidden />
                 </Button>
               </div>
@@ -324,7 +325,7 @@ export function ModelDrawer({
                   const value = clampThinkingBudgetTokens(event.currentTarget.value);
                   setDraft((current) => ({
                     ...current,
-                    thinking: { ...current.thinking, type: 'enabled', budget_tokens: value }
+                    thinking: { ...current.thinking, type: 'enabled', budget_tokens: value },
                   }));
                 }}
                 className="workbench-model-number"
@@ -340,7 +341,7 @@ export function ModelDrawer({
                 const value = clampThinkingBudgetTokens(firstSliderValue(nextValue));
                 setDraft((current) => ({
                   ...current,
-                  thinking: { ...current.thinking, type: 'enabled', budget_tokens: value }
+                  thinking: { ...current.thinking, type: 'enabled', budget_tokens: value },
                 }));
               }}
             />
@@ -405,7 +406,11 @@ export function ModelDrawer({
       </a>
 
       <Button type="button" size="lg" className="mx-5 mb-[18px] mt-auto w-[calc(100%-40px)]" onClick={onRun}>
-        {isRunning ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Play className="size-4" fill="currentColor" strokeWidth={0} aria-hidden />}
+        {isRunning ? (
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+        ) : (
+          <Play className="size-4" fill="currentColor" strokeWidth={0} aria-hidden />
+        )}
         <span>Run</span>
         <span className="text-xs font-normal text-primary-foreground/70">⌘ + ⏎</span>
       </Button>
@@ -449,7 +454,7 @@ export function VariablesDrawer({
   isGeneratingGenerationLogic,
   onRun,
   isRunning,
-  canRun
+  canRun,
 }: {
   variables: string[];
   values: Record<string, string>;
@@ -471,7 +476,8 @@ export function VariablesDrawer({
         <Braces className="mb-3 size-7 text-muted-foreground/70" aria-hidden />
         <h3>No variables</h3>
         <p>
-          Use variables to test the prompt across different scenarios. You can create a variable inline like this: {'{{variable_name}}'}.
+          Use variables to test the prompt across different scenarios. You can create a variable inline like this:{' '}
+          {'{{variable_name}}'}.
         </p>
       </div>
     );
@@ -512,7 +518,12 @@ export function VariablesDrawer({
               <div className="workbench-variable-logic-header">
                 <p>Update the logic for your use case and retry generation.</p>
                 <div className="workbench-variable-logic-actions">
-                  <IconButton label="Regenerate variable generation logic" compact disabled={isGeneratingGenerationLogic} onClick={onGenerateGenerationLogic}>
+                  <IconButton
+                    label="Regenerate variable generation logic"
+                    compact
+                    disabled={isGeneratingGenerationLogic}
+                    onClick={onGenerateGenerationLogic}
+                  >
                     {isGeneratingGenerationLogic ? (
                       <Loader2 className="size-4 animate-spin" aria-hidden />
                     ) : (
@@ -558,7 +569,7 @@ export function ToolsDrawer({
   onRemove,
   onRun,
   isRunning,
-  canRun
+  canRun,
 }: {
   tools: WorkbenchTool[];
   toolForm: ToolForm;
@@ -586,7 +597,7 @@ export function ToolsDrawer({
       weather: {
         name: 'get_weather',
         description: 'Get current weather for a location.',
-        schema: defaultSchema
+        schema: defaultSchema,
       },
       stock_price: {
         name: 'get_stock_price',
@@ -600,7 +611,7 @@ export function ToolsDrawer({
     }
   },
   "required": ["ticker"]
-        }`
+        }`,
       },
       time: {
         name: 'get_time',
@@ -614,8 +625,8 @@ export function ToolsDrawer({
     }
   },
   "required": ["timezone"]
-}`
-      }
+}`,
+      },
     };
     setCustomTool(examples[kind]);
     setExampleMenuOpen(false);
@@ -684,7 +695,11 @@ export function ToolsDrawer({
           <h3>No tools defined</h3>
           <p>
             Tools let you equip Claude with a variety of tasks.{' '}
-            <a href="https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview" target="_blank" rel="noreferrer">
+            <a
+              href="https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview"
+              target="_blank"
+              rel="noreferrer"
+            >
               Learn more
             </a>
           </p>
@@ -742,14 +757,7 @@ export function ToolsDrawer({
             <div className="workbench-tool-menu-anchor">
               <DropdownMenu open={exampleMenuOpen} onOpenChange={setExampleMenuOpen}>
                 <DropdownMenuTrigger
-                  render={(
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="lg"
-                      aria-expanded={exampleMenuOpen}
-                    />
-                  )}
+                  render={<Button type="button" variant="ghost" size="lg" aria-expanded={exampleMenuOpen} />}
                 >
                   Example tools
                   <ChevronDown className="size-3.5" aria-hidden />
@@ -760,9 +768,16 @@ export function ToolsDrawer({
                   sideOffset={6}
                   className="w-auto min-w-[190px] bg-popover"
                 >
-                  <DropdownMenuRadioGroup value="" onValueChange={(value) => applyExampleTool(value as ExampleToolKind)}>
+                  <DropdownMenuRadioGroup
+                    value=""
+                    onValueChange={(value) => applyExampleTool(value as ExampleToolKind)}
+                  >
                     {exampleToolMenuItems.map((item) => (
-                      <DropdownMenuRadioItem key={item.value} value={item.value} className="min-h-[34px] px-2.5 py-2 text-sm font-medium">
+                      <DropdownMenuRadioItem
+                        key={item.value}
+                        value={item.value}
+                        className="min-h-[34px] px-2.5 py-2 text-sm font-medium"
+                      >
                         {item.label}
                       </DropdownMenuRadioItem>
                     ))}
@@ -786,7 +801,9 @@ export function ToolsDrawer({
         <div className="workbench-tool-form-card">
           <div>
             <h3>Web search</h3>
-            <p className="workbench-tool-description">Allow Claude to search the web and cite those results in its responses.</p>
+            <p className="workbench-tool-description">
+              Allow Claude to search the web and cite those results in its responses.
+            </p>
           </div>
           <div className="workbench-tool-field">
             <span>Search restrictions</span>
@@ -800,7 +817,7 @@ export function ToolsDrawer({
                 setWebSearchTool((current) => ({
                   ...current,
                   searchRestriction: nextValue,
-                  domains: nextValue === 'none' ? '' : current.domains
+                  domains: nextValue === 'none' ? '' : current.domains,
                 }));
               }}
             >
@@ -908,13 +925,17 @@ export function ToolsDrawer({
               <Trash2 className="size-4" aria-hidden />
             </IconButton>
           </div>
-        )
+        ),
       )}
 
       {tools.length && !toolForm ? (
         <div className="workbench-tools-run-footer">
           <Button type="button" size="lg" className="w-full" disabled={!canRun} onClick={onRun}>
-            {isRunning ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Play className="size-4" aria-hidden />}
+            {isRunning ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <Play className="size-4" aria-hidden />
+            )}
             <span>Run</span>
             <span className="text-xs font-medium text-primary-foreground/70">⌘ + ⏎</span>
           </Button>
@@ -925,7 +946,10 @@ export function ToolsDrawer({
 }
 
 export function JsonSchemaEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const highlightedSchema = useMemo(() => hljs.highlight(value, { language: 'json', ignoreIllegals: true }).value, [value]);
+  const highlightedSchema = useMemo(
+    () => hljs.highlight(value, { language: 'json', ignoreIllegals: true }).value,
+    [value],
+  );
   const highlightRef = useRef<HTMLPreElement>(null);
 
   return (
@@ -973,7 +997,7 @@ export function ExamplesDrawer({
   onAdd,
   onRun,
   isRunning,
-  canRun
+  canRun,
 }: {
   variables: string[];
   examples: WorkbenchExample[];
@@ -1008,7 +1032,11 @@ export function ExamplesDrawer({
           <h3>No examples defined</h3>
           <p>
             Examples help Claude understand the task better.{' '}
-            <a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/multishot-prompting" target="_blank" rel="noreferrer">
+            <a
+              href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/multishot-prompting"
+              target="_blank"
+              rel="noreferrer"
+            >
               Learn more
             </a>
           </p>
@@ -1033,7 +1061,11 @@ export function ExamplesDrawer({
             <div className="workbench-example-form-header">
               <h3>{isEditing ? 'Edit example' : 'Add example'}</h3>
               <Button type="button" variant="outline" size="lg" disabled={isGenerating} onClick={onGenerate}>
-                {isGenerating ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Sparkles className="size-4" aria-hidden />}
+                {isGenerating ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Sparkles className="size-4" aria-hidden />
+                )}
                 Generate example
               </Button>
             </div>
@@ -1099,7 +1131,11 @@ export function ExamplesDrawer({
                 <div className="workbench-example-card-head">
                   <div className="workbench-example-card-values">
                     {variables.map((name) => (
-                      <span key={name} className="workbench-example-value-pill" title={`${name}: ${example.values[name] || ''}`}>
+                      <span
+                        key={name}
+                        className="workbench-example-value-pill"
+                        title={`${name}: ${example.values[name] || ''}`}
+                      >
                         {name}: {example.values[name] || ''}
                       </span>
                     ))}
@@ -1144,7 +1180,7 @@ export function HistoryDrawer({
   isSaving,
   onSave,
   onDiscard,
-  onRestore
+  onRestore,
 }: {
   orgUuid?: string;
   promptId?: string;
@@ -1274,7 +1310,11 @@ export function HistoryDrawer({
                   </span>
                   <span className="workbench-history-row-meta">{formatHistoryTimestamp(revision.created_at)}</span>
                   <span className="workbench-history-row-preview">
-                    {restoring ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Code2 className="size-3.5" aria-hidden />}
+                    {restoring ? (
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <Code2 className="size-3.5" aria-hidden />
+                    )}
                     {previewText.kind === 'variables' ? (
                       <span className="workbench-history-variables">
                         {previewText.values.map((value) => (
@@ -1291,7 +1331,9 @@ export function HistoryDrawer({
           </div>
         </>
       ) : (
-        <div className="workbench-history-empty">{hasUnsavedChanges ? 'No previous versions' : 'No saved versions'}</div>
+        <div className="workbench-history-empty">
+          {hasUnsavedChanges ? 'No previous versions' : 'No saved versions'}
+        </div>
       )}
     </div>
   );
