@@ -428,7 +428,13 @@ func resolveNetwork(raw json.RawMessage, mcpAllowedHosts []string) (*e2b.Sandbox
 	if config.Networking.AllowMCPServers {
 		hosts = append(hosts, mcpAllowedHosts...)
 	}
-	return &e2b.SandboxNetworkOpts{AllowOut: uniqueStrings(hosts)}, false, nil
+	// When networking is limited, E2B Cloud requires an explicit DenyOut to
+	// block all traffic not in AllowOut. Without this, non-allowed hosts
+	// remain reachable.
+	return &e2b.SandboxNetworkOpts{
+		AllowOut: uniqueStrings(hosts),
+		DenyOut:  []string{e2b.ALL_TRAFFIC},
+	}, false, nil
 }
 
 func mcpAllowedHostsFromWork(work *db.EnvironmentWork) []string {

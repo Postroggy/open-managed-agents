@@ -86,6 +86,10 @@ func TestResolveLimitedNetworkIncludesMCPHostsWhenAllowed(t *testing.T) {
 	if !reflect.DeepEqual(resolution.Network.AllowOut, want) {
 		t.Fatalf("AllowOut = %#v, want %#v", resolution.Network.AllowOut, want)
 	}
+	denyWant := []string{"0.0.0.0/0"}
+	if !reflect.DeepEqual(resolution.Network.DenyOut, denyWant) {
+		t.Fatalf("DenyOut = %#v, want %#v", resolution.Network.DenyOut, denyWant)
+	}
 }
 
 func TestSkillMountVolumeNameUsesFullManifestHash(t *testing.T) {
