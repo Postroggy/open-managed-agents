@@ -58,9 +58,9 @@ func TestLimitedNetworkBlocksAll(t *testing.T) {
 	defer cleanup()
 
 	envConfig := mustJSON(t, map[string]any{
-		"type":    "cloud",
-		"runtime": "self_hosted",
-		"image":   template,
+		"type":     "cloud",
+		"runtime":  "self_hosted",
+		"image":    template,
 		"packages": []any{},
 		"networking": map[string]any{
 			"type":                   "limited",
@@ -93,9 +93,9 @@ func TestLimitedNetworkWithAllowedHosts(t *testing.T) {
 	defer cleanup()
 
 	envConfig := mustJSON(t, map[string]any{
-		"type":    "cloud",
-		"runtime": "self_hosted",
-		"image":   template,
+		"type":     "cloud",
+		"runtime":  "self_hosted",
+		"image":    template,
 		"packages": []any{},
 		"networking": map[string]any{
 			"type":                   "limited",
@@ -128,9 +128,9 @@ func TestLimitedNetworkAllowsPackageManagers(t *testing.T) {
 	defer cleanup()
 
 	envConfig := mustJSON(t, map[string]any{
-		"type":    "cloud",
-		"runtime": "self_hosted",
-		"image":   template,
+		"type":     "cloud",
+		"runtime":  "self_hosted",
+		"image":    template,
 		"packages": []any{},
 		"networking": map[string]any{
 			"type":                   "limited",

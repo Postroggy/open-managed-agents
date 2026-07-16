@@ -9,13 +9,13 @@ import (
 // TestResolveNetworkInvalidConfigs 验证 resolveNetwork 对各种异常输入的处理。
 func TestResolveNetworkInvalidConfigs(t *testing.T) {
 	tests := []struct {
-		name             string
-		raw              string
-		wantAllowOut     []string
-		wantDenyOut      []string
-		wantInternet     bool
-		wantErr          bool
-		wantNilNetwork   bool // 期望返回 nil Network
+		name           string
+		raw            string
+		wantAllowOut   []string
+		wantDenyOut    []string
+		wantInternet   bool
+		wantErr        bool
+		wantNilNetwork bool // 期望返回 nil Network
 	}{
 		{
 			name:           "nil config returns unrestricted",
@@ -54,9 +54,9 @@ func TestResolveNetworkInvalidConfigs(t *testing.T) {
 			wantNilNetwork: true,
 		},
 		{
-			name:           "invalid json returns error",
-			raw:            `{"type":"cloud","networking":broken}`,
-			wantErr:        true,
+			name:    "invalid json returns error",
+			raw:     `{"type":"cloud","networking":broken}`,
+			wantErr: true,
 		},
 		{
 			name:           "empty networking type treated as unknown → no internet, nil network",
