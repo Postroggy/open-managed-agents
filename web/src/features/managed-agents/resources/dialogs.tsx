@@ -4,15 +4,14 @@ import { Card, CardContent } from '../../../shared/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../shared/ui/collapsible';
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '../../../shared/ui/dialog';
-import { ChevronDown, X } from 'lucide-react';
-import { type FormEvent, useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { compactAgentId } from '../agents/AgentsResourcePage';
 import { listAgents, listManagedEntities, localTimezone } from '../api';
 import {
@@ -26,7 +25,7 @@ import {
   ManagedTextField,
   VaultMultiSelect,
 } from '../components/common';
-import { entityDialogSubtitle, submitLabel } from '../labels';
+import { entityDialogSubtitle } from '../labels';
 import {
   type AgentApiResponse,
   type AgentPageResponse,
@@ -45,6 +44,9 @@ import {
 } from '../types';
 import { errorMessage } from '../utils';
 import { credentialFormValues, initialFormValues } from './model';
+import { ManagedDialogCloseControl, ManagedDialogHeader, ManagedEntityDialogActions } from './dialog-components';
+import { DeploymentDialogActions, DeploymentDialogHeader } from './deployment-dialog-components';
+import { EnvironmentEntityDialog } from './environment-dialog';
 
 export function CredentialDialog({
   credential,
@@ -224,15 +226,7 @@ export function MemoryDialog({
   );
 }
 
-export function ManagedEntityDialog({
-  section,
-  title,
-  entity,
-  lockedAgent,
-  workspaceId,
-  onClose,
-  onSubmit,
-}: {
+type ManagedEntityDialogProps = {
   section: ManagedEntitySection;
   title: string;
   entity?: ManagedEntityApiResponse;
@@ -240,12 +234,40 @@ export function ManagedEntityDialog({
   workspaceId: string;
   onClose: () => void;
   onSubmit: (values: ManagedEntityFormValues) => Promise<void>;
-}) {
+};
+
+export function ManagedEntityDialog(props: ManagedEntityDialogProps) {
+  if (props.section === 'environments') {
+    return (
+      <EnvironmentEntityDialog
+        title={props.title}
+        entity={props.entity}
+        onClose={props.onClose}
+        onSubmit={props.onSubmit}
+      />
+    );
+  }
+  return <GenericManagedEntityDialog {...props} />;
+}
+
+function GenericManagedEntityDialog({
+  section,
+  title,
+  entity,
+  lockedAgent,
+  workspaceId,
+  onClose,
+  onSubmit,
+}: ManagedEntityDialogProps) {
   const { msg } = useI18n();
-  const [values, setValues] = useState<ManagedEntityFormValues>(() => ({
-    ...initialFormValues(section, entity),
-    ...(lockedAgent ? { agentId: lockedAgent.id } : {}),
-  }));
+  const initialValues = useMemo<ManagedEntityFormValues>(
+    () => ({
+      ...initialFormValues(section, entity),
+      ...(lockedAgent ? { agentId: lockedAgent.id } : {}),
+    }),
+    [entity, lockedAgent, section],
+  );
+  const [values, setValues] = useState<ManagedEntityFormValues>(initialValues);
   const [agents, setAgents] = useState<EntityOption[]>([]);
   const [environments, setEnvironments] = useState<EntityOption[]>([]);
   const [vaults, setVaults] = useState<EntityOption[]>([]);
@@ -253,9 +275,9 @@ export function ManagedEntityDialog({
   const [loadingOptions, setLoadingOptions] = useState(section === 'sessions' || section === 'deployments');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [resourceDisclosureOpen, setResourceDisclosureOpen] = useState(false);
   const needsReferences = section === 'sessions' || section === 'deployments';
-
   useEffect(() => {
     if (!needsReferences) {
       return;
@@ -355,15 +377,17 @@ export function ManagedEntityDialog({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canSubmit) {
+    if (!canSubmit || submittingRef.current) {
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
       await onSubmit(values);
     } catch (error) {
       setSubmitError(errorMessage(error));
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -377,29 +401,9 @@ export function ManagedEntityDialog({
           showCloseButton={false}
         >
           <form className="relative flex min-h-0 flex-col" onSubmit={handleSubmit}>
-            <DialogClose
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={msg('common.close', 'Close')}
-                  className="absolute right-0 top-0 text-foreground hover:bg-accent"
-                />
-              }
-            >
-              <X className="size-[22px]" aria-hidden />
-            </DialogClose>
+            <ManagedDialogCloseControl />
 
-            <div className="pr-8">
-              <DialogTitle className="text-[22px] font-semibold leading-[26px] text-foreground">{title}</DialogTitle>
-              <DialogDescription className="mt-1 text-sm leading-5 text-muted-foreground">
-                {msg(
-                  'managedAgents.deployments.dialogSubtitle',
-                  'Deploy an agent with a trigger, environment, and credentials.',
-                )}
-              </DialogDescription>
-            </div>
+            <DeploymentDialogHeader title={title} />
 
             <div className="subtle-scrollbar mt-5 min-h-0 flex-1 space-y-[18px] overflow-y-auto pr-1">
               <DeploymentTextField
@@ -507,11 +511,7 @@ export function ManagedEntityDialog({
 
             {submitError ? <p className="mt-4 text-sm text-destructive">{submitError}</p> : null}
 
-            <div className="mt-5 flex justify-end">
-              <Button type="submit" disabled={!canSubmit}>
-                {submitting ? msg('common.saving', 'Saving...') : submitLabel(section, Boolean(entity), msg)}
-              </Button>
-            </div>
+            <DeploymentDialogActions editing={Boolean(entity)} submitting={submitting} canSubmit={canSubmit} />
           </form>
         </DialogContent>
       </Dialog>
@@ -525,28 +525,9 @@ export function ManagedEntityDialog({
         showCloseButton={false}
       >
         <form className="relative flex min-h-0 flex-col" onSubmit={handleSubmit}>
-          <DialogClose
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={msg('common.close', 'Close')}
-                className="absolute right-0 top-0 text-foreground hover:bg-accent"
-              />
-            }
-          >
-            <X className="size-[22px]" aria-hidden />
-          </DialogClose>
+          <ManagedDialogCloseControl />
 
-          <div className="pr-8">
-            <DialogTitle className="text-[22px] font-semibold leading-[26px] text-foreground">{title}</DialogTitle>
-            {dialogSubtitleText ? (
-              <DialogDescription className="mt-1 text-sm leading-5 text-muted-foreground">
-                {dialogSubtitleText}
-              </DialogDescription>
-            ) : null}
-          </div>
+          <ManagedDialogHeader title={title} subtitle={dialogSubtitleText} />
 
           <div className="subtle-scrollbar mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
             <ManagedTextField
@@ -562,23 +543,6 @@ export function ManagedEntityDialog({
               onChange={(name) => setValues((current) => ({ ...current, name }))}
               autoFocus
             />
-
-            {section === 'environments' ? (
-              <>
-                <ManagedTextField
-                  label={msg('managedAgents.environments.hostingType', 'Hosting type')}
-                  value={msg('managedAgents.environments.cloud', 'Cloud')}
-                  disabled
-                  onChange={() => undefined}
-                />
-                <ManagedTextArea
-                  label={msg('common.description', 'Description')}
-                  value={values.description}
-                  placeholder={msg('managedAgents.common.descriptionPlaceholder', 'Add a description')}
-                  onChange={(description) => setValues((current) => ({ ...current, description }))}
-                />
-              </>
-            ) : null}
 
             {section === 'memory-stores' ? (
               <ManagedTextArea
@@ -661,14 +625,12 @@ export function ManagedEntityDialog({
 
           {submitError ? <p className="mt-4 text-sm text-destructive">{submitError}</p> : null}
 
-          <div className="mt-5 flex justify-end gap-2">
-            <DialogClose render={<Button type="button" variant="outline" />}>
-              {msg('common.cancel', 'Cancel')}
-            </DialogClose>
-            <Button type="submit" disabled={!canSubmit}>
-              {submitting ? msg('common.saving', 'Saving...') : submitLabel(section, Boolean(entity), msg)}
-            </Button>
-          </div>
+          <ManagedEntityDialogActions
+            section={section}
+            editing={Boolean(entity)}
+            submitting={submitting}
+            canSubmit={canSubmit}
+          />
         </form>
       </DialogContent>
     </Dialog>

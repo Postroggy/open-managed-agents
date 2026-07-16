@@ -1806,10 +1806,297 @@ export function registerManagedAgentsResourceTests() {
     expect(metadataCard?.className).toContain('bg-card');
 
     expect(screen.getByRole('combobox', { name: 'Type' }).className).not.toContain('bg-secondary');
-    expect(screen.getByRole('combobox', { name: 'Manager' }).className).not.toContain('bg-secondary');
-    expect(screen.getByRole('textbox', { name: 'package package==1.0.0' }).className).not.toContain('bg-secondary');
+    expect(screen.getByRole('combobox', { name: 'Package manager' }).className).not.toContain('bg-secondary');
+    expect(screen.getByRole('textbox', { name: 'Package value 1' }).className).not.toContain('bg-secondary');
     expect(screen.getByRole('textbox', { name: 'Metadata key 1' }).className).not.toContain('bg-secondary');
     expect(screen.getByRole('textbox', { name: 'Metadata value 1' }).className).not.toContain('bg-secondary');
+  });
+
+  test('localizes environment details, work states, and relative times in Chinese', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    const { resources } = mockManagedResourceApi();
+    resources.environments[0].scope = 'organization';
+    renderManagedAgentsPage('environments', 'zh-CN');
+
+    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: '环境' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '概览' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '网络访问' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '软件包' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '元数据' })).toBeTruthy();
+    expect(screen.getByText('组织')).toBeTruthy();
+    expect(screen.queryByText('organization')).toBeNull();
+    expect(screen.queryByText(/lowercase/i)).toBeNull();
+    expect(await screen.findByRole('heading', { name: '工作队列' })).toBeTruthy();
+    for (const status of ['排队中', '启动中', '运行中', '停止中', '已停止', '失败']) {
+      expect(screen.getByText(status)).toBeTruthy();
+    }
+    expect(screen.getByText('未知状态（awaiting_review）')).toBeTruthy();
+    expect(document.body.textContent).toMatch(/分钟前|现在/);
+  });
+
+  test('uses the English fallback for unknown environment work statuses', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    mockManagedResourceApi();
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByText('Unknown status (awaiting_review)')).toBeTruthy();
+  });
+
+  test('submits normalized Environment updates only once', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    const api = mockManagedResourceApi();
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const nameInput = screen.getByRole('textbox', { name: 'Environment name' });
+    fireEvent.click(screen.getByRole('button', { name: 'Add metadata entry' }));
+    fireEvent.change(nameInput, { target: { value: 'Environment Updated' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Package value 1' }), {
+      target: { value: 'httpx==2.0.0' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Metadata key 2' }), { target: { value: 'Team' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Metadata value 2' }), { target: { value: 'Runtime' } });
+    const addMetadataButton = screen.getByRole('button', { name: 'Add metadata entry' });
+    for (let index = 0; index < 14; index += 1) {
+      fireEvent.click(addMetadataButton);
+    }
+    expect((addMetadataButton as HTMLButtonElement).disabled).toBe(true);
+
+    const form = screen.getByRole('button', { name: 'Save changes' }).closest('form') as HTMLFormElement;
+    fireEvent.submit(form);
+    expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.submit(form);
+    expect(await screen.findByRole('heading', { name: 'Environment Updated' })).toBeTruthy();
+    const updateRequests = api.requests.filter(
+      (request) => request.url === '/v1/environments/env_one123456?beta=true' && request.method === 'POST',
+    );
+    expect(updateRequests).toHaveLength(1);
+    expect(updateRequests[0]?.body?.metadata).toEqual({ Team: 'Runtime' });
+    expect(updateRequests[0]?.body?.config).toMatchObject({
+      type: 'cloud',
+      networking: { type: 'unrestricted' },
+      packages: { pip: ['httpx==2.0.0'] },
+    });
+    expect(screen.getAllByText('Environment updated')).toHaveLength(1);
+    expect(window.dispatchEvent(new window.Event('beforeunload', { cancelable: true }))).toBe(true);
+  });
+
+  test('deletes removed environment metadata with backend PATCH semantics', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    const api = mockManagedResourceApi();
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add metadata entry' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Metadata key 2' }), { target: { value: 'Team' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Metadata value 2' }), { target: { value: 'Runtime' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove metadata row 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Metadata' })).toBeTruthy();
+    const updateRequest = api.requests.find(
+      (request) => request.url === '/v1/environments/env_one123456?beta=true' && request.method === 'POST',
+    );
+    expect(updateRequest?.body?.metadata).toEqual({ Owner: null, Team: 'Runtime' });
+    const metadataSection = screen.getByRole('heading', { name: 'Metadata' }).closest('section');
+    expect(metadataSection?.textContent).toContain('Team');
+    expect(metadataSection?.textContent).toContain('Runtime');
+    expect(metadataSection?.textContent).not.toContain('Owner');
+    expect(metadataSection?.textContent).not.toContain('Platform');
+  });
+
+  test('preserves unchanged empty Environment metadata by omitting it from the PATCH', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    const api = mockManagedResourceApi();
+    api.resources.environments[0] = {
+      ...api.resources.environments[0],
+      metadata: { Flag: '', Owner: 'Platform' },
+    };
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Environment name' }), {
+      target: { value: 'Environment with flag' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Environment with flag' })).toBeTruthy();
+    const updateRequest = api.requests.find(
+      (request) => request.url === '/v1/environments/env_one123456?beta=true' && request.method === 'POST',
+    );
+    expect(updateRequest?.body?.metadata).toEqual({});
+    expect(api.resources.environments[0]?.metadata).toEqual({ Flag: '', Owner: 'Platform' });
+    const metadataSection = screen.getByRole('heading', { name: 'Metadata' }).closest('section');
+    expect(metadataSection?.textContent).toContain('Flag');
+  });
+
+  test('preserves Metadata key whitespace as part of PATCH identity', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    const api = mockManagedResourceApi();
+    api.resources.environments[0] = {
+      ...api.resources.environments[0],
+      metadata: { ' FOO': 'left' },
+    };
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Metadata value 1' }), { target: { value: 'updated' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add metadata entry' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Metadata key 2' }), { target: { value: 'FOO' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Metadata value 2' }), { target: { value: 'right' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Metadata' })).toBeTruthy();
+    const updateRequest = api.requests.find(
+      (request) => request.url === '/v1/environments/env_one123456?beta=true' && request.method === 'POST',
+    );
+    expect(updateRequest?.body?.metadata).toEqual({ ' FOO': 'updated', FOO: 'right' });
+    expect(api.resources.environments[0]?.metadata).toEqual({ ' FOO': 'updated', FOO: 'right' });
+  });
+
+  test('allows payload-equivalent Environment edits to close without confirmation', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    mockManagedResourceApi();
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog', { name: 'Discard unsaved changes?' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const packageInput = screen.getByRole('textbox', { name: 'Package value 1' }) as HTMLInputElement;
+    fireEvent.change(packageInput, { target: { value: `  ${packageInput.value}  ` } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add package' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add metadata entry' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog', { name: 'Discard unsaved changes?' })).toBeNull();
+  });
+
+  test('exits environment editing after archiving from the detail page', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    const api = mockManagedResourceApi();
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Environment name' }), {
+      target: { value: 'Environment changed' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Archive' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/environments/env_one123456/archive?beta=true')).toBe(
+        true,
+      ),
+    );
+    expect(
+      await screen.findByText(
+        'This environment is read-only. Its configuration and work queue remain available for reference.',
+      ),
+    ).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Edit' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+  });
+
+  test('renders archived environments as localized read-only details', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments/env_one123456');
+    const api = mockManagedResourceApi();
+    api.resources.environments[0] = {
+      ...api.resources.environments[0],
+      archived_at: new Date().toISOString(),
+      state: 'archived',
+    };
+    renderManagedAgentsPage('environments', 'zh-CN');
+
+    expect(await screen.findByText('此环境为只读状态。其配置和工作队列仍可供查看。')).toBeTruthy();
+    expect((screen.getByRole('button', { name: '编辑' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('heading', { name: '网络访问' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '软件包' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '元数据' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: '工作队列' })).toBeTruthy();
+    expect(screen.queryByText(/Snapshot|Version|Diff|Rollback/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }));
+    expect((screen.getByRole('menuitem', { name: '删除' }) as HTMLElement).getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: '删除' }));
+    const deleteDialog = await screen.findByRole('alertdialog', { name: /删除环境/ });
+    fireEvent.click(within(deleteDialog).getByRole('button', { name: '删除' }));
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) => request.url === '/v1/environments/env_one123456?beta=true' && request.method === 'DELETE',
+        ),
+      ).toBe(true),
+    );
+  });
+
+  test('closes an environment creation dialog without confirmation for payload-equivalent description whitespace', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments');
+    mockManagedResourceApi();
+    renderManagedAgentsPage('environments');
+
+    expect(await screen.findByText('Environment one')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create environment' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create environment' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Description' }), { target: { value: '   ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('alertdialog', { name: 'Discard unsaved changes?' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create environment' })).toBeNull());
+  });
+
+  test('keeps environment creation fields and default payload unchanged in Chinese', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/environments');
+    const api = mockManagedResourceApi();
+    renderManagedAgentsPage('environments', 'zh-CN');
+
+    expect(await screen.findByText('Environment one')).toBeTruthy();
+    expect(screen.getAllByText('云端').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('活跃').length).toBeGreaterThan(0);
+    expect(document.body.textContent).toContain('现在');
+    fireEvent.click(screen.getByRole('button', { name: '创建环境' }));
+    const dialog = screen.getByRole('dialog', { name: '创建环境' });
+    expect(within(dialog).getByText('创建可供 Agent 工具复用的云端容器模板。')).toBeTruthy();
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '名称' }), { target: { value: '中文环境' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '描述' }), { target: { value: '用于测试' } });
+    expect(within(dialog).getByRole('textbox', { name: '托管类型' })).toBeTruthy();
+    expect(within(dialog).queryByText('网络访问')).toBeNull();
+    expect(within(dialog).queryByText('软件包')).toBeNull();
+    expect(within(dialog).queryByText('元数据')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+    const discardDialog = await screen.findByRole('alertdialog', { name: '放弃未保存的更改？' });
+    fireEvent.click(within(discardDialog).getByRole('button', { name: '继续编辑' }));
+
+    const form = within(dialog).getByRole('button', { name: '创建' }).closest('form') as HTMLFormElement;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    await waitFor(() =>
+      expect(
+        api.requests.filter((request) => request.url === '/v1/environments?beta=true' && request.method === 'POST'),
+      ).toHaveLength(1),
+    );
+    const request = api.requests.find((item) => item.url === '/v1/environments?beta=true' && item.method === 'POST');
+    expect(request?.body).toMatchObject({
+      name: '中文环境',
+      description: '用于测试',
+      metadata: {},
+      config: {
+        type: 'cloud',
+        networking: { type: 'unrestricted' },
+        packages: { type: 'packages', apt: [], cargo: [], gem: [], go: [], npm: [], pip: [] },
+      },
+    });
   });
 
   test('runs and pauses deployments from the official-style action menu', async () => {

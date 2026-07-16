@@ -1,5 +1,6 @@
 import { expect, mock } from 'bun:test';
 import type { EditorView } from '@codemirror/view';
+import type { ReactNode } from 'react';
 import { resetTestDom } from '../../test/setup';
 import type { AuthContextValue } from '../../shared/auth/context';
 
@@ -15,6 +16,28 @@ const { resetMcpDirectoryCacheForTests } = await import('./agents/tools/api');
 const { I18nProvider } = await import('../../shared/i18n');
 const { AuthContext } = await import('../../shared/auth/context');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+const { RouterContextProvider, createBrowserHistory, createRootRoute, createRoute, createRouter } =
+  await import('@tanstack/react-router');
+const { useEffect } = await import('react');
+
+const managedAgentsTestRootRoute = createRootRoute();
+const managedAgentsTestEnvironmentListRoute = createRoute({
+  getParentRoute: () => managedAgentsTestRootRoute,
+  path: 'workspaces/$workspaceId/environments',
+});
+const managedAgentsTestEnvironmentDetailRoute = createRoute({
+  getParentRoute: () => managedAgentsTestRootRoute,
+  path: 'workspaces/$workspaceId/environments/$environmentId',
+});
+const managedAgentsTestFallbackRoute = createRoute({
+  getParentRoute: () => managedAgentsTestRootRoute,
+  path: '$',
+});
+const managedAgentsTestRouteTree = managedAgentsTestRootRoute.addChildren([
+  managedAgentsTestEnvironmentListRoute,
+  managedAgentsTestEnvironmentDetailRoute,
+  managedAgentsTestFallbackRoute,
+]);
 
 export const { act, cleanup, fireEvent, screen, waitFor, within } = testingLibrary;
 const originalFetch = globalThis.fetch;
@@ -113,15 +136,31 @@ export function renderManagedAgentsPage(
       },
     },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <I18nProvider initialLocale={locale}>
-        <WorkspaceContext.Provider value={workspaceContextValue('default')}>
-          <ManagedAgentsPage section={section} />
-        </WorkspaceContext.Provider>
-      </I18nProvider>
-    </QueryClientProvider>,
+  const history = createBrowserHistory({ window });
+  const router = createRouter({ history, routeTree: managedAgentsTestRouteTree });
+  const result = render(
+    <ManagedAgentsTestRouterProvider router={router}>
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider initialLocale={locale}>
+          <WorkspaceContext.Provider value={workspaceContextValue('default')}>
+            <ManagedAgentsPage section={section} />
+          </WorkspaceContext.Provider>
+        </I18nProvider>
+      </QueryClientProvider>
+    </ManagedAgentsTestRouterProvider>,
   );
+  return Object.assign(result, { router });
+}
+
+function ManagedAgentsTestRouterProvider({
+  router,
+  children,
+}: {
+  router: ReturnType<typeof createRouter<typeof managedAgentsTestRouteTree>>;
+  children: ReactNode;
+}) {
+  useEffect(() => () => router.history.destroy(), [router]);
+  return <RouterContextProvider router={router}>{children}</RouterContextProvider>;
 }
 
 export type AgentFixture = {
@@ -1125,9 +1164,14 @@ export function mockManagedResourceApi() {
       {
         id: 'env_one123456',
         archived_at: null,
-        config: { type: 'cloud' },
+        config: {
+          type: 'cloud',
+          networking: { type: 'unrestricted' },
+          packages: { type: 'packages', apt: [], cargo: [], gem: [], go: [], npm: [], pip: ['httpx==1.0.0'] },
+        },
         created_at: now,
         description: 'Primary environment',
+        metadata: { Owner: 'Platform' },
         name: 'Environment one',
         scope: 'workspace',
         state: 'active',
@@ -1137,9 +1181,10 @@ export function mockManagedResourceApi() {
       {
         id: 'env_option123456',
         archived_at: null,
-        config: { type: 'cloud' },
+        config: { type: 'cloud', networking: { type: 'limited' }, packages: { type: 'packages' } },
         created_at: now,
         description: 'Option environment',
+        metadata: {},
         name: 'Option environment',
         scope: 'workspace',
         state: 'active',
@@ -1147,6 +1192,16 @@ export function mockManagedResourceApi() {
         updated_at: now,
       },
     ],
+    environmentWork: ['queued', 'starting', 'active', 'stopping', 'stopped', 'failed', 'awaiting_review'].map(
+      (state, index) => ({
+        id: `work_${state}123456`,
+        created_at: new Date(Date.now() - (index + 2) * 60_000).toISOString(),
+        environment_id: 'env_one123456',
+        state,
+        type: 'environment_work',
+        updated_at: new Date(Date.now() - (index + 1) * 60_000).toISOString(),
+      }),
+    ),
     vaults: [
       {
         id: 'vlt_one123456',
@@ -1320,9 +1375,30 @@ export function mockManagedResourceApi() {
       const environment = resources.environments.find((item) => item.id === environmentId);
       return environment ? jsonResponse(environment) : jsonResponse({ error: { message: 'not found' } }, 404);
     }
+    if (retrieveEnvironmentMatch && method === 'POST') {
+      const environmentId = decodeURIComponent(retrieveEnvironmentMatch[1]);
+      const existing = resources.environments.find((item) => item.id === environmentId);
+      if (!existing) {
+        return jsonResponse({ error: { message: 'not found' } }, 404);
+      }
+      const updated = {
+        ...existing,
+        config: body?.config ?? existing.config,
+        description: typeof body?.description === 'string' ? body.description : existing.description,
+        metadata: applyMetadataPatch(existing.metadata, body?.metadata),
+        name: typeof body?.name === 'string' ? body.name : existing.name,
+        updated_at: new Date().toISOString(),
+      };
+      resources.environments = [updated, ...resources.environments.filter((item) => item.id !== environmentId)];
+      return jsonResponse(updated);
+    }
     const environmentWorkMatch = url.match(/^\/v1\/environments\/([^/?]+)\/work\?/);
     if (environmentWorkMatch && method === 'GET') {
-      return jsonResponse({ data: [], next_page: null });
+      const environmentId = decodeURIComponent(environmentWorkMatch[1]);
+      return jsonResponse({
+        data: resources.environmentWork.filter((work) => work.environment_id === environmentId),
+        next_page: null,
+      });
     }
     if (url.startsWith('/v1/vaults?') && method === 'GET') {
       const params = new URL(url, 'https://oma.duck.ai').searchParams;
@@ -1780,6 +1856,26 @@ export function parseBody(body: BodyInit | null | undefined) {
     return undefined;
   }
   return JSON.parse(body) as Record<string, unknown>;
+}
+
+function applyMetadataPatch(current: unknown, patch: unknown) {
+  const metadata: Record<string, string> =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? Object.fromEntries(
+          Object.entries(current).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+        )
+      : {};
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    return metadata;
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null || value === '') {
+      delete metadata[key];
+    } else if (typeof value === 'string') {
+      metadata[key] = value;
+    }
+  }
+  return metadata;
 }
 
 export function persistedSessionEvents<T extends Record<string, unknown>>(events: T[]) {
