@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { setConsoleRequestContext } from '../api/client';
 import { useAuth } from '../auth/context';
 import {
+  archiveConsoleWorkspace,
   createConsoleWorkspace,
   defaultWorkspace,
   listConsoleWorkspaces,
@@ -76,6 +77,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [orgUuid, queryClient],
   );
 
+  const archiveWorkspace = useCallback(
+    async (workspaceId: string) => {
+      if (!orgUuid) {
+        throw new Error('No organization is available for workspace archival.');
+      }
+      await archiveConsoleWorkspace(orgUuid, workspaceId);
+      queryClient.setQueryData<Workspace[]>(['console', 'workspaces', orgUuid], (current) =>
+        (current ?? []).filter((workspace) => workspace.id !== workspaceId),
+      );
+    },
+    [orgUuid, queryClient],
+  );
+
   const refreshWorkspaces = useCallback(async () => {
     await workspacesQuery.refetch();
   }, [workspacesQuery]);
@@ -90,11 +104,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       error: workspacesQuery.error,
       selectWorkspace,
       createWorkspace,
+      archiveWorkspace,
       refreshWorkspaces,
     }),
     [
       activeWorkspace,
       activeWorkspaceId,
+      archiveWorkspace,
       createWorkspace,
       orgUuid,
       refreshWorkspaces,

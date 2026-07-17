@@ -72,6 +72,13 @@ export function createConsoleWorkspace(orgUuid: string, input: CreateWorkspaceIn
   });
 }
 
+export function archiveConsoleWorkspace(orgUuid: string, workspaceId: string) {
+  return consoleApi<Workspace>(
+    `/api/console/organizations/${encodeURIComponent(orgUuid)}/workspaces/${encodeURIComponent(workspaceId)}/archive`,
+    { method: 'POST' },
+  );
+}
+
 export function listWorkspaceApiKeys(orgUuid: string, workspaceId: string) {
   return consoleApi<WorkspaceApiKey[]>(
     `/api/console/organizations/${encodeURIComponent(orgUuid)}/workspaces/${encodeURIComponent(workspaceId)}/api_keys`,
