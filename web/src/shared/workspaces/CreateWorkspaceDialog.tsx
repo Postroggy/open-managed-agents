@@ -16,6 +16,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { workspaceColors } from './presentation';
 
 type CreateWorkspaceDialogProps = {
@@ -113,7 +114,16 @@ export function CreateWorkspaceDialog({ open, onOpenChange, onCreate, trigger }:
 
           <Field className="gap-2">
             <FieldLabel htmlFor="workspace-geo">{msg('workspace.geo', 'Workspace geo')}</FieldLabel>
-            <Input id="workspace-geo" value="US" readOnly aria-readonly="true" />
+            <Select defaultValue="us" items={[{ value: 'us', label: 'US' }]}>
+              <SelectTrigger id="workspace-geo" aria-label={msg('workspace.geo', 'Workspace geo')} className="w-full">
+                <SelectValue>US</SelectValue>
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectItem value="us" label="US">
+                  US
+                </SelectItem>
+              </SelectContent>
+            </Select>
             <FieldDescription>
               {msg(
                 'workspace.geoHelp',
