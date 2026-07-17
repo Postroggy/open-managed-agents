@@ -164,6 +164,16 @@ func (h *Handler) resourceFromFields(r *http.Request, session db.Session, fields
 		if raw, ok := fields["checkout"]; ok && !httpapi.IsJSONNull(raw) {
 			payload["checkout"] = agentsnapshot.RawJSONValue(raw, nil)
 		}
+		if rawToken, ok := fields["authorization_token"]; ok && !httpapi.IsJSONNull(rawToken) {
+			token, err := parseRequiredStringField(fields, "authorization_token")
+			if err != nil {
+				return db.SessionResource{}, err
+			}
+			secret, err = httpapi.MarshalRaw(map[string]any{"authorization_token": token})
+			if err != nil {
+				return db.SessionResource{}, err
+			}
+		}
 	case "memory_store":
 		memoryStoreID, err := parseRequiredStringField(fields, "memory_store_id")
 		if err != nil {
