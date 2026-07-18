@@ -49,7 +49,6 @@ type AdminWorkspace struct {
 	ArchivedAt     *time.Time      `db:"archived_at"`
 	CompartmentID  string          `db:"compartment_id"`
 	DisplayColor   string          `db:"display_color"`
-	DataResidency  json.RawMessage `db:"data_residency"`
 	ExternalKeyID  *string         `db:"external_key_id"`
 	Tags           json.RawMessage `db:"tags"`
 }
@@ -336,14 +335,14 @@ func (d *DB) CreateAdminWorkspace(ctx context.Context, workspace AdminWorkspace)
 	created, err := getAdminRow[AdminWorkspace](ctx, d.sql, `
 		insert into workspaces (
 			uuid, external_id, organization_id, name, created_at, updated_at,
-			compartment_id, display_color, data_residency, external_key_id, tags
+			compartment_id, display_color, external_key_id, tags
 		)
 		values (
 			:uuid, :external_id, :organization_id, :name, :created_at, :created_at,
-			:compartment_id, :display_color, CAST(:data_residency AS jsonb), :external_key_id, CAST(:tags AS jsonb)
+			:compartment_id, :display_color, :external_key_id, CAST(:tags AS jsonb)
 		)
 		returning id, CAST(uuid AS text) as uuid, external_id, organization_id, name, created_at, updated_at,
-			archived_at, compartment_id, display_color, data_residency, external_key_id, tags
+			archived_at, compartment_id, display_color, external_key_id, tags
 	`, adminWorkspaceArguments(workspace))
 	if isUniqueViolation(err) {
 		return AdminWorkspace{}, ErrDuplicate
@@ -395,13 +394,12 @@ func (d *DB) UpdateAdminWorkspace(ctx context.Context, organizationID int64, ext
 	updated, err := getAdminRow[AdminWorkspace](ctx, d.sql, `
 		update workspaces
 		set name = :name,
-			data_residency = CAST(:data_residency AS jsonb),
 			external_key_id = :external_key_id,
 			tags = CAST(:tags AS jsonb),
 			updated_at = :updated_at
 		where organization_id = :organization_id and external_id = :external_id
 		returning id, CAST(uuid AS text) as uuid, external_id, organization_id, name, created_at, updated_at,
-			archived_at, compartment_id, display_color, data_residency, external_key_id, tags
+			archived_at, compartment_id, display_color, external_key_id, tags
 	`, args)
 	if isUniqueViolation(err) {
 		return AdminWorkspace{}, ErrDuplicate
@@ -416,7 +414,7 @@ func (d *DB) ArchiveAdminWorkspace(ctx context.Context, organizationID int64, ex
 			updated_at = now()
 		where organization_id = :organization_id and external_id = :external_id
 		returning id, CAST(uuid AS text) as uuid, external_id, organization_id, name, created_at, updated_at,
-			archived_at, compartment_id, display_color, data_residency, external_key_id, tags
+			archived_at, compartment_id, display_color, external_key_id, tags
 	`, map[string]any{"organization_id": organizationID, "external_id": externalID})
 }
 
@@ -907,7 +905,7 @@ func adminUserSelectSQL() string {
 func adminWorkspaceSelectSQL() string {
 	return `
 		select id, CAST(uuid AS text) as uuid, external_id, organization_id, name, created_at, updated_at,
-			archived_at, compartment_id, display_color, data_residency, external_key_id, tags
+			archived_at, compartment_id, display_color, external_key_id, tags
 		from workspaces
 	`
 }
@@ -1002,7 +1000,6 @@ func adminWorkspaceArguments(workspace AdminWorkspace) map[string]any {
 		"updated_at":      workspace.UpdatedAt,
 		"compartment_id":  workspace.CompartmentID,
 		"display_color":   workspace.DisplayColor,
-		"data_residency":  jsonArg(workspace.DataResidency),
 		"external_key_id": workspace.ExternalKeyID,
 		"tags":            jsonArg(workspace.Tags),
 	}
