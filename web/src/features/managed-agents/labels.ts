@@ -1,6 +1,8 @@
+import { format } from 'date-fns';
 import { type QuickstartStepName } from './quickstart/steps';
 import {
   type AgentCreatedFilter,
+  type CustomCreatedFilter,
   type AgentStatusFilter,
   type AgentTemplate,
   type I18nMsg,
@@ -109,20 +111,28 @@ export function entityKindTitle(section: ManagedEntitySection, msg: I18nMsg) {
   return managedMessage(msg, section, 'kindTitle', titleCase(entityKindLabel(section)));
 }
 
-export function createdFilterLabel(filter: AgentCreatedFilter, msg?: I18nMsg) {
-  const fallback = createdFilterOptions.find((option) => option.value === filter)?.label ?? 'All time';
-  if (!msg) {
+function formatCustomCreatedRange(filter: CustomCreatedFilter, msg?: I18nMsg): string {
+  const fallback = msg ? msg('managedAgents.filters.customRange', 'Custom range') : 'Custom range';
+  const fromMs = Date.parse(filter.from);
+  const toMs = Date.parse(filter.to);
+  if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
     return fallback;
   }
-  switch (filter) {
+  const fromLabel = format(new Date(fromMs), 'MMM d, yyyy');
+  const toLabel = format(new Date(toMs), 'MMM d, yyyy');
+  return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
+}
+
+export function createdFilterLabel(filter: AgentCreatedFilter, msg?: I18nMsg) {
+  switch (filter.kind) {
     case 'all':
-      return msg('managedAgents.filters.allTime', fallback);
+      return msg ? msg('managedAgents.filters.allTime', 'All time') : 'All time';
     case 'last7':
-      return msg('managedAgents.filters.last7Days', fallback);
+      return msg ? msg('managedAgents.filters.last7Days', 'Last 7 days') : 'Last 7 days';
     case 'last30':
-      return msg('managedAgents.filters.last30Days', fallback);
+      return msg ? msg('managedAgents.filters.last30Days', 'Last 30 days') : 'Last 30 days';
     case 'custom':
-      return msg('managedAgents.filters.customRange', fallback);
+      return formatCustomCreatedRange(filter, msg);
   }
 }
 
@@ -137,10 +147,6 @@ export function statusFilterLabel(filter: AgentStatusFilter, msg?: I18nMsg) {
     case 'all':
       return msg('common.all', fallback);
   }
-}
-
-export function createdFilterOptionsFor(msg: I18nMsg): Array<{ value: AgentCreatedFilter; label: string }> {
-  return createdFilterOptions.map((option) => ({ ...option, label: createdFilterLabel(option.value, msg) }));
 }
 
 export function statusFilterOptionsFor(msg: I18nMsg): Array<{ value: AgentStatusFilter; label: string }> {
@@ -242,13 +248,6 @@ export function managedColumnLabel(column: string, msg: I18nMsg) {
       return column;
   }
 }
-
-export const createdFilterOptions: Array<{ value: AgentCreatedFilter; label: string }> = [
-  { value: 'all', label: 'All time' },
-  { value: 'last7', label: 'Last 7 days' },
-  { value: 'last30', label: 'Last 30 days' },
-  { value: 'custom', label: 'Custom range' },
-];
 
 export const statusFilterOptions: Array<{ value: AgentStatusFilter; label: string }> = [
   { value: 'active', label: 'Active' },

@@ -1555,7 +1555,7 @@ export function registerManagedAgentsAgentsTests() {
 
     expect(await screen.findByText('Ancient agent 1')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Created All time' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Last 7 days' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Last 7 days' }));
     expect(await screen.findByText('No matching agents')).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText('Search by name or exact ID'), { target: { value: 'ancient' } });
@@ -1652,13 +1652,11 @@ export function registerManagedAgentsAgentsTests() {
     expect(api.requests.some((request) => request.url.includes('include_archived=true'))).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Created All time' }));
-    const createdMenu = screen
-      .getByRole('menuitemradio', { name: 'All time' })
-      .closest('[data-slot="dropdown-menu-content"]');
+    const createdMenu = screen.getByRole('radio', { name: 'All time' }).closest('[data-slot="popover-content"]');
     expect(createdMenu?.className).toContain('bg-popover');
     expect(createdMenu?.className.includes('bg-secondary')).toBe(false);
-    expect(screen.getByRole('menuitemradio', { name: 'All time' }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Last 7 days' }));
+    expect(screen.getByRole('radio', { name: 'All time' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: 'Last 7 days' }));
 
     await waitFor(() => {
       expect(screen.queryByText('Old active agent')).toBeNull();
