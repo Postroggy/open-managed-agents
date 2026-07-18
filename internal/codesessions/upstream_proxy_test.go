@@ -150,10 +150,10 @@ func TestUpstreamProxyCredentialsMustMatchBothFields(t *testing.T) {
 	t.Parallel()
 
 	for _, request := range []upstreamProxyConnectRequest{
-		{SessionID: "wrong", Token: "cse_test"},
+		{SessionID: "wrong", Token: "sk-ant-si-test"},
 		{SessionID: "cse_test", Token: "wrong"},
 	} {
-		if upstreamProxyCredentialsMatch(request, "cse_test") {
+		if upstreamProxyCredentialsMatch(request, "cse_test", "sk-ant-si-test") {
 			t.Fatalf("upstreamProxyCredentialsMatch(%+v) = true, want false", request)
 		}
 	}
@@ -184,7 +184,7 @@ func TestUpstreamProxyTunnelForwardsBinaryChunks(t *testing.T) {
 
 	targetConnections := make(chan net.Conn, 1)
 	dialTargets := make(chan string, 1)
-	handler := NewHandler(config.Config{}, NewService(nil))
+	handler := NewHandler(config.Config{}, newTestService(t, nil))
 	handler.upstreamProxy = upstreamProxyRuntime{
 		dial: func(_ context.Context, target string) (net.Conn, error) {
 			dialTargets <- target
@@ -196,7 +196,7 @@ func TestUpstreamProxyTunnelForwardsBinaryChunks(t *testing.T) {
 	server := httptest.NewServer(websocket.Server{
 		Handshake: func(*websocket.Config, *http.Request) error { return nil },
 		Handler: func(connection *websocket.Conn) {
-			handler.serveUpstreamProxyTunnel(connection, "cse_test")
+			handler.serveUpstreamProxyTunnel(connection, "cse_test", "sk-ant-si-test")
 		},
 	})
 	defer server.Close()
@@ -211,7 +211,7 @@ func TestUpstreamProxyTunnelForwardsBinaryChunks(t *testing.T) {
 	}
 	defer connection.Close()
 
-	authorization := base64.StdEncoding.EncodeToString([]byte("cse_test:cse_test"))
+	authorization := base64.StdEncoding.EncodeToString([]byte("cse_test:sk-ant-si-test"))
 	connectHead := "CONNECT 1.1.1.1:443 HTTP/1.1\r\nProxy-Authorization: Basic " + authorization + "\r\n\r\n"
 	if err := websocket.Message.Send(connection, encodeUpstreamProxyChunk([]byte(connectHead))); err != nil {
 		t.Fatalf("send CONNECT chunk: %v", err)

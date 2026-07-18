@@ -64,7 +64,7 @@ func TestUpstreamProxyCertificateAuthorityIgnoresDormantPrivateKey(t *testing.T)
 	t.Parallel()
 
 	missingKeyFile := filepath.Join(t.TempDir(), "missing-key.pem")
-	handler := NewHandler(config.Config{CodeSessionUpstreamProxyCAKeyFile: missingKeyFile}, NewService(nil))
+	handler := NewHandler(config.Config{CodeSessionUpstreamProxyCAKeyFile: missingKeyFile}, newTestService(t, nil))
 	authority, err := handler.loadUpstreamProxyCA()
 	if err != nil {
 		t.Fatalf("loadUpstreamProxyCA() error = %v", err)
@@ -243,7 +243,7 @@ func TestUpstreamProxyCACertificateHandlerReturnsGeneratedCertificate(t *testing
 	t.Parallel()
 
 	files := writeTestUpstreamProxyCA(t, "handler")
-	handler := NewHandler(files.config(), NewService(nil))
+	handler := NewHandler(files.config(), newTestService(t, nil))
 	authority, err := handler.loadUpstreamProxyCA()
 	if err != nil {
 		t.Fatalf("load generated handler CA: %v", err)
@@ -279,7 +279,7 @@ func TestUpstreamProxyMITMDecryptsAndForwardsHTTPRequest(t *testing.T) {
 	files := writeTestUpstreamProxyCA(t, "tunnel")
 	upstreamRequests := make(chan *http.Request, 1)
 	dialTargets := make(chan string, 1)
-	handler := NewHandler(files.config(), NewService(nil))
+	handler := NewHandler(files.config(), newTestService(t, nil))
 	authority, err := handler.loadUpstreamProxyCA()
 	if err != nil {
 		t.Fatalf("load generated tunnel CA: %v", err)
@@ -293,14 +293,14 @@ func TestUpstreamProxyMITMDecryptsAndForwardsHTTPRequest(t *testing.T) {
 	server := httptest.NewServer(websocket.Server{
 		Handshake: func(*websocket.Config, *http.Request) error { return nil },
 		Handler: func(connection *websocket.Conn) {
-			handler.serveUpstreamProxyTunnel(connection, "cse_test")
+			handler.serveUpstreamProxyTunnel(connection, "cse_test", "sk-ant-si-test")
 		},
 	})
 	defer server.Close()
 
 	connection := dialTestUpstreamProxyWebSocket(t, server.URL)
 	defer connection.Close()
-	authorization := base64.StdEncoding.EncodeToString([]byte("cse_test:cse_test"))
+	authorization := base64.StdEncoding.EncodeToString([]byte("cse_test:sk-ant-si-test"))
 	connectHead := "CONNECT 1.1.1.1:443 HTTP/1.1\r\nProxy-Authorization: Basic " + authorization + "\r\n\r\n"
 	if err := websocket.Message.Send(connection, encodeUpstreamProxyChunk([]byte(connectHead))); err != nil {
 		t.Fatalf("send CONNECT chunk: %v", err)
