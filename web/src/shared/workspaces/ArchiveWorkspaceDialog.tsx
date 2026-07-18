@@ -40,6 +40,11 @@ export function ArchiveWorkspaceDialog({ workspace, onClose, onArchive }: Archiv
     setError('');
     try {
       await onArchive(workspace.id);
+      // On success the caller unmounts this dialog via onClose. Leave
+      // submitting set so the button keeps its "Archiving…" state until the
+      // dialog is gone; resetting it here would flip the label back to
+      // "Archive" for a frame before unmount and read as a flicker. The
+      // failure path below resets submitting so the action can be retried.
       onClose();
     } catch (archiveError) {
       setError(
@@ -47,7 +52,6 @@ export function ArchiveWorkspaceDialog({ workspace, onClose, onArchive }: Archiv
           ? archiveError.message
           : msg('workspace.archive.error', 'Failed to archive workspace.'),
       );
-    } finally {
       setSubmitting(false);
     }
   };
