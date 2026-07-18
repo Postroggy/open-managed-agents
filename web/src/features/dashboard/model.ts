@@ -5,6 +5,7 @@ import { anthropicBetaApi } from '../../shared/api/anthropic';
 import { filesRequestHeaders, messageBatchesRequestHeaders, skillsRequestHeaders } from '../../shared/api/client';
 import type { useI18n } from '../../shared/i18n';
 import { useWorkspace } from '../../shared/workspaces/context';
+import { workspaceIdFromPath } from '../../shared/workspaces/presentation';
 
 export type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
@@ -120,7 +121,7 @@ function workspaceRequestHeaders(workspaceId: string) {
 
 export function useDashboardWorkspaceScope() {
   const { activeWorkspace, activeWorkspaceId, workspaces } = useWorkspace();
-  const { pathname } = useLocation();
+  const pathname = useLocation({ select: (location) => location.pathname });
   const routeWorkspaceId = workspaceIdFromPath(pathname);
   const workspaceId = routeWorkspaceId || activeWorkspaceId;
   const routeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
@@ -131,10 +132,6 @@ export function useDashboardWorkspaceScope() {
   };
 }
 
-function workspaceIdFromPath(pathname: string) {
-  const match = pathname.match(/^\/workspaces\/([^/]+)/);
-  return match ? decodeURIComponent(match[1]) : '';
-}
 export function listFiles(cursor: FilesPageCursor, workspaceId: string) {
   const params: Record<string, string | number> = {
     limit: filesPageLimit,
