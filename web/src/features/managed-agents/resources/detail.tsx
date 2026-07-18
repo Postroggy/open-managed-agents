@@ -105,6 +105,7 @@ import {
   detailRowsForEntity,
   entityDescription,
   entityDisplayName,
+  entityIsActive,
   entityStatusLabel,
   initialFormValues,
   initialSelectedMemoryId,
@@ -312,7 +313,7 @@ export function ManagedEntityDetailPage({
             {config.section === 'environments' ? (
               <span className="text-foreground">{msg('managedAgents.environments.cloud', 'Cloud')}</span>
             ) : (
-              <StatusPill>{entityStatusLabel(entity)}</StatusPill>
+              <StatusPill tone={entityIsActive(entity) ? 'success' : 'neutral'}>{entityStatusLabel(entity)}</StatusPill>
             )}
             <Button
               type="button"
@@ -1248,7 +1249,7 @@ export function MemoryStorePanel({
                 {store.name || store.id}
               </h1>
               <div className="mt-3">
-                <StatusPill>{entityStatusLabel(store)}</StatusPill>
+                <StatusPill tone={entityIsActive(store) ? 'success' : 'neutral'}>{entityStatusLabel(store)}</StatusPill>
               </div>
             </div>
             {addMemoryButton}

@@ -260,7 +260,9 @@ export function cellsForEntity(
   section: ManagedEntitySection,
   entity: ManagedEntityApiResponse,
 ): Record<string, ReactNode> {
-  const status = <StatusPill>{entityStatusLabel(entity)}</StatusPill>;
+  const status = (
+    <StatusPill tone={entityIsActive(entity) ? 'success' : 'neutral'}>{entityStatusLabel(entity)}</StatusPill>
+  );
 
   switch (section) {
     case 'sessions':
@@ -346,6 +348,10 @@ export function entityStatusLabel(entity: ManagedEntityApiResponse) {
     return titleCase(entity.state);
   }
   return 'Active';
+}
+
+export function entityIsActive(entity: ManagedEntityApiResponse) {
+  return entityStatusLabel(entity) === 'Active';
 }
 
 export function entityAgentLabel(entity: ManagedEntityApiResponse) {
