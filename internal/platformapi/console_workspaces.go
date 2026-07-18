@@ -43,7 +43,8 @@ func handleArchiveConsoleWorkspace(store OrganizationStore) http.HandlerFunc {
 		// session is bound to. This is the backend counterpart of the front-end
 		// guard that disables archiving the active workspace.
 		if principal, ok := auth.PrincipalFromContext(r.Context()); ok {
-			if principal.WorkspaceExternalID != "" && strings.EqualFold(strings.TrimSpace(principal.WorkspaceExternalID), workspaceID) {
+			principalWorkspace := strings.TrimSpace(principal.WorkspaceExternalID)
+			if principalWorkspace != "" && strings.EqualFold(principalWorkspace, workspaceID) {
 				writeJSON(w, http.StatusConflict, map[string]any{
 					"error":   "cannot_archive_current_workspace",
 					"message": "archive the workspace from a different workspace context",

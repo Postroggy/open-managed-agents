@@ -54,7 +54,7 @@ func (d *DB) ArchiveConsoleWorkspace(ctx context.Context, orgUUID, workspaceID s
 		   set archived_at = coalesce(archived_at, now()),
 		       updated_at = now()
 		 where org_uuid = $1 and workspace_id = $2
-	`, orgUUID, workspace.UUID); err != nil {
+	`, orgUUID, workspaceID); err != nil {
 		return platform.ConsoleWorkspace{}, err
 	}
 
