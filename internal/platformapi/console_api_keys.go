@@ -71,7 +71,7 @@ func handleListConsoleWorkspaces(store OrganizationStore) http.HandlerFunc {
 		includeArchived := r.URL.Query().Get("include_archived") == "true"
 		workspaces, err := workspaceLister.ListConsoleWorkspaces(r.Context(), orgUUID, includeArchived)
 		if err != nil {
-			internalError(w, "failed to list workspaces")
+			internalErrorWithCause(w, r, "failed to list workspaces", err)
 			return
 		}
 		out := make([]map[string]any, 0, len(workspaces))
