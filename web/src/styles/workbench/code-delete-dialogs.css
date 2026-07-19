@@ -33,10 +33,25 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--muted-foreground);
+  color: rgba(244, 241, 234, 0.82);
 }
 
 .workbench-code-dialog-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--foreground);
+}
+
+/*
+ * Theme-aware overrides scoped to the Get Code modal. The shared
+ * .workbench-code-dialog-close class is also applied to the rename, share,
+ * generate and attachment-URL dialogs (see web/src/features/workbench/dialogs.tsx),
+ * so the theme variables must not leak into those variants.
+ */
+.workbench-code-dialog .workbench-code-dialog-close {
+  color: var(--muted-foreground);
+}
+
+.workbench-code-dialog .workbench-code-dialog-close:hover {
   background: var(--accent);
   color: var(--foreground);
 }
