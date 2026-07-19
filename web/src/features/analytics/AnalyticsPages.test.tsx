@@ -234,7 +234,13 @@ function renderWithWorkspace(children: ReactNode, workspaces = [defaultWorkspace
   return render(<WorkspaceHarness workspaces={workspaces}>{children}</WorkspaceHarness>);
 }
 
-function WorkspaceHarness({ children, workspaces = [defaultWorkspace] }: { children: ReactNode; workspaces?: Workspace[] }) {
+function WorkspaceHarness({
+  children,
+  workspaces = [defaultWorkspace],
+}: {
+  children: ReactNode;
+  workspaces?: Workspace[];
+}) {
   const workspaceValue = useMemo<WorkspaceContextValue>(
     () => ({
       orgUuid: 'org_test',
