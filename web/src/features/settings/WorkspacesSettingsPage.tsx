@@ -177,7 +177,13 @@ export function WorkspacesSettingsPage() {
                       <TableCell className="text-right">
                         <WorkspaceRowActions
                           workspace={workspace}
-                          canArchive={workspace.id !== defaultWorkspace.id && workspace.id !== activeWorkspaceId}
+                          archiveDisabledReason={
+                            workspace.id === defaultWorkspace.id
+                              ? 'default'
+                              : workspace.id === activeWorkspaceId
+                                ? 'current'
+                                : undefined
+                          }
                           onArchive={() => setArchiveTarget(workspace)}
                         />
                       </TableCell>
@@ -214,14 +220,21 @@ export function WorkspacesSettingsPage() {
 // match the backend guards that prevent archiving those two cases.
 function WorkspaceRowActions({
   workspace,
-  canArchive,
+  archiveDisabledReason,
   onArchive,
 }: {
   workspace: Workspace;
-  canArchive: boolean;
+  archiveDisabledReason?: 'default' | 'current';
   onArchive: () => void;
 }) {
   const { msg } = useI18n();
+  const canArchive = archiveDisabledReason === undefined;
+  const disabledHint =
+    archiveDisabledReason === 'default'
+      ? msg('workspace.archive.defaultDisabledHint', 'The default workspace cannot be archived.')
+      : archiveDisabledReason === 'current'
+        ? msg('workspace.archive.currentDisabledHint', 'Switch to another workspace before archiving the current one.')
+        : undefined;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -248,19 +261,7 @@ function WorkspaceRowActions({
           <Webhook className="size-4" aria-hidden />
           <span>{msg('nav.webhooks', 'Webhooks')}</span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          variant="destructive"
-          disabled={!canArchive}
-          title={
-            canArchive
-              ? undefined
-              : msg(
-                  'workspace.archive.currentDisabledHint',
-                  'Switch to another workspace before archiving the current one.',
-                )
-          }
-          onClick={onArchive}
-        >
+        <DropdownMenuItem variant="destructive" disabled={!canArchive} title={disabledHint} onClick={onArchive}>
           <Archive className="size-4" aria-hidden />
           <span>{msg('workspace.archive.action', 'Archive workspace')}</span>
         </DropdownMenuItem>

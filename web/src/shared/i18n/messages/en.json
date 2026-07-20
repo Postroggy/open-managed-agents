@@ -1215,6 +1215,7 @@
   "workspace.archive.moreActionsAria": "More actions for workspace {name}",
   "workspace.archive.action": "Archive workspace",
   "workspace.archive.currentDisabledHint": "Switch to another workspace before archiving the current one.",
+  "workspace.archive.defaultDisabledHint": "The default workspace cannot be archived.",
   "workspace.geo": "Workspace geo",
   "workspace.geoHelp": "Control where your workspace data, including files, conversation history, and workspace artifacts, is stored. This can't be changed after creation.",
   "workspace.loading": "Loading workspaces...",

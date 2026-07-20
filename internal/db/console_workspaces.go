@@ -55,9 +55,26 @@ func (d *DB) ArchiveConsoleWorkspace(ctx context.Context, orgUUID, workspaceID s
 
 	if _, err := tx.Exec(ctx, `
 		update console_api_keys
-		   set archived_at = coalesce(archived_at, now()),
+		   set status = 'archived',
+		       archived_at = coalesce(archived_at, now()),
 		       updated_at = now()
 		 where org_uuid = $1 and workspace_id = $2
+	`, orgUUID, workspaceID); err != nil {
+		return platform.ConsoleWorkspace{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		update api_keys
+		   set status = 'archived',
+		       updated_at = now()
+		 where status = 'active'
+		   and workspace_id in (
+		       select w.id
+		         from workspaces w
+		         join organizations o on o.id = w.organization_id
+		        where (o.external_id = $1 or o.uuid::text = $1)
+		          and w.external_id = $2
+		   )
 	`, orgUUID, workspaceID); err != nil {
 		return platform.ConsoleWorkspace{}, err
 	}
