@@ -2,14 +2,16 @@ import { format, parseISO } from 'date-fns';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
+import { Radio as RadioPrimitive } from '@base-ui/react/radio';
 import clsx from 'clsx';
 
-import { useI18n } from '../../../shared/i18n';
+import { useI18n, type Locale } from '../../../shared/i18n';
 import { Button } from '../../../shared/ui/button';
 import { Calendar } from '../../../shared/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../../shared/ui/popover';
+import { RadioGroup } from '../../../shared/ui/radio-group';
 import { Separator } from '../../../shared/ui/separator';
-import { createdFilterLabel } from '../labels';
+import { createdFilterLabel, formatCreatedRange, formatCreatedRangeDay } from '../labels';
 import { type AgentCreatedFilter, type AgentCreatedPreset, type AgentFilterMenu } from '../types';
 
 const PRESETS: Array<{ kind: AgentCreatedPreset; labelKey: string; fallback: string }> = [
@@ -30,7 +32,7 @@ type CreatedFilterDropdownProps = {
 // applies immediately, while "Custom range" exposes a `react-day-picker`
 // range Calendar and commits on Apply so partial selections are not sent.
 export function CreatedFilterDropdown({ value, open, onOpenChange, onChange }: CreatedFilterDropdownProps) {
-  const { msg } = useI18n();
+  const { msg, locale } = useI18n();
   const [rangeDraft, setRangeDraft] = useState<DateRange | undefined>(() => initialDraft(value));
   // The Custom range calendar is collapsed by default and only expands when the
   // user opens it. When the committed value is already a custom range it also
@@ -77,31 +79,38 @@ export function CreatedFilterDropdown({ value, open, onOpenChange, onChange }: C
         }
       >
         <span className="text-muted-foreground">{msg('managedAgents.filters.created', 'Created')}</span>
-        <span className="font-medium text-foreground">{createdFilterLabel(value, msg)}</span>
+        <span className="font-medium text-foreground">{createdFilterLabel(value, msg, locale)}</span>
         <ChevronDown className="size-4 text-muted-foreground/70" aria-hidden />
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={8} className="w-auto p-0">
         <div className="p-0.5">
-          <div role="radiogroup" aria-label={msg('managedAgents.filters.created', 'Created')}>
+          {/* The preset list uses the shared `RadioGroup` so arrow-key
+              navigation and roving tabindex come from Base UI. `Radio.Root`
+              is used directly (rather than `RadioGroupItem`) because each
+              option is a full-width row with an active background, not the
+              default circle + label layout. */}
+          <RadioGroup
+            aria-label={msg('managedAgents.filters.created', 'Created')}
+            value={value.kind === 'custom' ? undefined : value.kind}
+            onValueChange={(kind) => selectPreset(kind as AgentCreatedPreset)}
+            className="gap-0"
+          >
             {PRESETS.map((preset) => {
               const active = value.kind === preset.kind;
               return (
-                <button
+                <RadioPrimitive.Root
                   key={preset.kind}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => selectPreset(preset.kind)}
+                  value={preset.kind}
                   className={clsx(
                     'flex h-11 w-full items-center rounded-md pl-3 pr-8 text-left text-[15px] outline-none',
                     active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
                   )}
                 >
                   {msg(preset.labelKey, preset.fallback)}
-                </button>
+                </RadioPrimitive.Root>
               );
             })}
-          </div>
+          </RadioGroup>
           <button
             type="button"
             aria-expanded={customExpanded}
@@ -123,8 +132,8 @@ export function CreatedFilterDropdown({ value, open, onOpenChange, onChange }: C
           <>
             <Separator />
             <div id="created-filter-custom-range" className="px-0.5 pb-1.5 pt-0.5">
-              {rangeLabel(rangeDraft) ? (
-                <div className="mb-1 text-xs text-muted-foreground">{rangeLabel(rangeDraft)}</div>
+              {rangeLabel(rangeDraft, locale) ? (
+                <div className="mb-1 text-xs text-muted-foreground">{rangeLabel(rangeDraft, locale)}</div>
               ) : null}
               <Calendar
                 mode="range"
@@ -172,14 +181,12 @@ function safeParse(value: string): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-function rangeLabel(range: DateRange | undefined): string {
+function rangeLabel(range: DateRange | undefined, locale: Locale = 'en'): string {
   if (!range?.from) {
     return '';
   }
-  const fromLabel = format(range.from, 'MMM d, yyyy');
   if (!range.to) {
-    return fromLabel;
+    return formatCreatedRangeDay(range.from, locale);
   }
-  const toLabel = format(range.to, 'MMM d, yyyy');
-  return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
+  return formatCreatedRange(range.from, range.to, locale);
 }
