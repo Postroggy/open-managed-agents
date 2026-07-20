@@ -1,4 +1,5 @@
-import { format } from 'date-fns';
+import { parseISO } from 'date-fns';
+import { type Locale } from '../../shared/i18n';
 import { type QuickstartStepName } from './quickstart/steps';
 import {
   type AgentCreatedFilter,
@@ -111,19 +112,47 @@ export function entityKindTitle(section: ManagedEntitySection, msg: I18nMsg) {
   return managedMessage(msg, section, 'kindTitle', titleCase(entityKindLabel(section)));
 }
 
-function formatCustomCreatedRange(filter: CustomCreatedFilter, msg?: I18nMsg): string {
-  const fallback = msg ? msg('managedAgents.filters.customRange', 'Custom range') : 'Custom range';
-  const fromMs = Date.parse(filter.from);
-  const toMs = Date.parse(filter.to);
-  if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
-    return fallback;
-  }
-  const fromLabel = format(new Date(fromMs), 'MMM d, yyyy');
-  const toLabel = format(new Date(toMs), 'MMM d, yyyy');
+// Locale tag mapping for the Intl-based date formatting used by the custom
+// range label and the dropdown's draft range preview.
+const createdRangeLocaleTag: Record<Locale, string> = {
+  en: 'en-US',
+  'zh-CN': 'zh-CN',
+};
+
+// Single-day formatter shared by the committed custom-range trigger label and
+// the in-progress draft preview inside the dropdown. `yyyy-MM-dd` values and
+// `react-day-picker` Date objects both denote local calendar days, so we format
+// in the active locale rather than hard-coding `MMM d, yyyy` — the old format
+// always printed English month names and, combined with `Date.parse`, shifted
+// the day by one in UTC− zones.
+export function formatCreatedRangeDay(date: Date, locale: Locale = 'en'): string {
+  return new Intl.DateTimeFormat(createdRangeLocaleTag[locale], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+export function formatCreatedRange(from: Date, to: Date, locale: Locale = 'en'): string {
+  const fromLabel = formatCreatedRangeDay(from, locale);
+  const toLabel = formatCreatedRangeDay(to, locale);
   return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
 }
 
-export function createdFilterLabel(filter: AgentCreatedFilter, msg?: I18nMsg) {
+function formatCustomCreatedRange(filter: CustomCreatedFilter, msg?: I18nMsg, locale: Locale = 'en'): string {
+  const fallback = msg ? msg('managedAgents.filters.customRange', 'Custom range') : 'Custom range';
+  // `parseISO` treats `yyyy-MM-dd` as a local calendar day, matching how the
+  // calendar selects and `applyCustomRange` serializes dates. `Date.parse`
+  // treated them as UTC, which drifted the formatted label in UTC− zones.
+  const from = parseISO(filter.from);
+  const to = parseISO(filter.to);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return fallback;
+  }
+  return formatCreatedRange(from, to, locale);
+}
+
+export function createdFilterLabel(filter: AgentCreatedFilter, msg?: I18nMsg, locale: Locale = 'en') {
   switch (filter.kind) {
     case 'all':
       return msg ? msg('managedAgents.filters.allTime', 'All time') : 'All time';
@@ -132,7 +161,7 @@ export function createdFilterLabel(filter: AgentCreatedFilter, msg?: I18nMsg) {
     case 'last30':
       return msg ? msg('managedAgents.filters.last30Days', 'Last 30 days') : 'Last 30 days';
     case 'custom':
-      return formatCustomCreatedRange(filter, msg);
+      return formatCustomCreatedRange(filter, msg, locale);
   }
 }
 
