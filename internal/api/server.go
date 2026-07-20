@@ -42,6 +42,7 @@ import (
 type Server struct {
 	cfg                  config.Config
 	db                   *db.DB
+	logger               *slog.Logger
 	router               chi.Router
 	platformStore        platformsession.Store
 	filestoreCredentials *filestoreapi.TokenCredentials
@@ -94,6 +95,7 @@ func NewServer(deps ServerDeps) *Server {
 	s := &Server{
 		cfg:                  deps.Config,
 		db:                   deps.DB,
+		logger:               deps.Logger,
 		platformStore:        platformStore,
 		filestoreCredentials: deps.FilestoreCredentials,
 		admin:                adminapi.NewHandler(deps.Config, deps.DB),
@@ -203,7 +205,7 @@ func (s *Server) registerPlatformConsoleRoutes(router chi.Router) {
 			platformapi.RegisterOrganizationOAuthEnvironmentRoutes(r)
 		})
 		r.Route("/api/console/organizations/{orgUuid}", func(r chi.Router) {
-			platformapi.RegisterConsoleOrganizationWorkspaceRoutes(r, s.db)
+			platformapi.RegisterConsoleOrganizationWorkspaceRoutes(r, s.db, s.logger)
 			platformapi.RegisterConsoleOrganizationAdminRequestRoutes(r, s.db)
 			platformapi.RegisterConsoleOrganizationAPIKeyRoutes(r, s.db)
 			platformapi.RegisterConsoleOrganizationMemberRoutes(r, s.db)
