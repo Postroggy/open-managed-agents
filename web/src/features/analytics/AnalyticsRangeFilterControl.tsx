@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { type DateRange } from 'react-day-picker';
 import clsx from 'clsx';
 
-import { useI18n } from '../../shared/i18n';
+import { useFormatters, useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui/button';
 import { Calendar } from '../../shared/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../shared/ui/popover';
@@ -30,6 +30,7 @@ type AnalyticsRangeFilterControlProps = {
 // are not applied. Mirrors the Created filter UX but with data-driven presets.
 export function AnalyticsRangeFilterControl({ label, presets, value, onChange }: AnalyticsRangeFilterControlProps) {
   const { msg } = useI18n();
+  const formatters = useFormatters();
   const [open, setOpen] = useState(false);
   const [rangeDraft, setRangeDraft] = useState<DateRange | undefined>(() => initialDraft(value));
   // The Custom range calendar is collapsed by default and only expands when the
@@ -61,7 +62,7 @@ export function AnalyticsRangeFilterControl({ label, presets, value, onChange }:
   };
 
   const draftComplete = Boolean(rangeDraft?.from && rangeDraft?.to);
-  const valueLabel = rangeFilterLabel(value, presets, msg);
+  const valueLabel = rangeFilterLabel(value, presets, msg, formatters);
   const customActive = value.kind === 'custom';
 
   return (
@@ -122,8 +123,8 @@ export function AnalyticsRangeFilterControl({ label, presets, value, onChange }:
           <>
             <Separator />
             <div id="analytics-range-custom" className="px-0.5 pb-1.5 pt-0.5">
-              {rangeLabel(rangeDraft) ? (
-                <div className="mb-1 text-xs text-muted-foreground">{rangeLabel(rangeDraft)}</div>
+              {rangeLabel(rangeDraft, formatters) ? (
+                <div className="mb-1 text-xs text-muted-foreground">{rangeLabel(rangeDraft, formatters)}</div>
               ) : null}
               <Calendar
                 mode="range"
@@ -171,15 +172,15 @@ function safeParse(value: string): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-function rangeLabel(range: DateRange | undefined): string {
+function rangeLabel(range: DateRange | undefined, formatters: ReturnType<typeof useFormatters>): string {
   if (!range?.from) {
     return '';
   }
-  const fromLabel = format(range.from, 'MMM d, yyyy');
+  const fromLabel = formatters.date(range.from, { dateStyle: 'medium' });
   if (!range.to) {
     return fromLabel;
   }
-  const toLabel = format(range.to, 'MMM d, yyyy');
+  const toLabel = formatters.date(range.to, { dateStyle: 'medium' });
   return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
 }
 
@@ -187,13 +188,14 @@ function rangeFilterLabel(
   value: AnalyticsRangeFilter,
   presets: AnalyticsRangePreset[],
   msg: ReturnType<typeof useI18n>['msg'],
+  formatters: ReturnType<typeof useFormatters>,
 ): string {
   if (value.kind === 'custom') {
     const from = safeParse(value.from);
     const to = safeParse(value.to);
     if (from && to) {
-      const fromLabel = format(from, 'MMM d, yyyy');
-      const toLabel = format(to, 'MMM d, yyyy');
+      const fromLabel = formatters.date(from, { dateStyle: 'medium' });
+      const toLabel = formatters.date(to, { dateStyle: 'medium' });
       return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
     }
     return msg('analytics.filter.customRange', 'Custom range');
