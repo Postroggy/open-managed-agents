@@ -1087,12 +1087,12 @@ function CreateWebhookDialog({
             {error ? <InlineError>{error}</InlineError> : null}
           </div>
 
-          <div className="flex justify-end px-4 py-4">
+          <DialogFooter className="px-4 py-4">
             <Button type="submit" disabled={!canSubmit} size="lg" className="min-w-[82px]">
               {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
               {msg('common.create', 'Create')}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
