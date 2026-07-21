@@ -35,8 +35,8 @@ sequenceDiagram
     participant Tavily as Tavily
 
     CC->>OMA: POST /v1/messages (web_search server tool)
-    OMA->>BYOK: POST /v1/messages (internal oma_web_search custom tool, stream=false)
-    BYOK-->>OMA: tool_use(oma_web_search, query)
+    OMA->>BYOK: POST /v1/messages (web_search tool definition, stream=false)
+    BYOK-->>OMA: tool_use(web_search, query)
     OMA->>Tavily: Search(query)
     Tavily-->>OMA: results or provider error
     OMA->>BYOK: assistant tool_use + user tool_result

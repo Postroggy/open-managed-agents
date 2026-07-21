@@ -16,7 +16,7 @@ import (
 
 const (
 	maxGatewayResponseBytes = 8 << 20
-	internalToolName        = "oma_web_search"
+	searchToolName          = "web_search"
 	defaultGatewayLoops     = 3
 )
 
@@ -192,7 +192,7 @@ func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.Ra
 	for _, tool := range tools {
 		typ, _ := rawString(tool["type"])
 		if strings.HasPrefix(typ, "web_search_") {
-			projectedTools = append(projectedTools, internalSearchTool())
+			projectedTools = append(projectedTools, searchToolDefinition())
 			continue
 		}
 		projectedTools = append(projectedTools, tool)
@@ -205,10 +205,9 @@ func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.Ra
 	return projected, nil
 }
 
-func internalSearchTool() map[string]json.RawMessage {
+func searchToolDefinition() map[string]json.RawMessage {
 	return map[string]json.RawMessage{
-		"type":         json.RawMessage("\"custom\""),
-		"name":         json.RawMessage("\"oma_web_search\""),
+		"name":         json.RawMessage("\"web_search\""),
 		"description":  json.RawMessage("\"Search the public web and return relevant results.\""),
 		"input_schema": json.RawMessage("{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"The web search query\"}},\"required\":[\"query\"]}"),
 	}
@@ -268,7 +267,7 @@ func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
 		if !ok {
 			return nil, errors.New("Messages content block must be an object")
 		}
-		if block["type"] != "tool_use" || block["name"] != internalToolName {
+		if block["type"] != "tool_use" || block["name"] != searchToolName {
 			continue
 		}
 		id, ok := block["id"].(string)

@@ -304,10 +304,13 @@ func TestMessagesWebSearchGateway(t *testing.T) {
 		switch upstreamCalls {
 		case 1:
 			tools, ok := request["tools"].([]any)
-			if !ok || len(tools) != 1 || tools[0].(map[string]any)["name"] != "oma_web_search" {
+			if !ok || len(tools) != 1 || tools[0].(map[string]any)["name"] != "web_search" {
 				t.Fatalf("projected BYOK tools = %#v", request["tools"])
 			}
-			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"oma_web_search\",\"input\":{\"query\":\"latest Go release\"}}],\"stop_reason\":\"tool_use\"}")
+			if _, ok := tools[0].(map[string]any)["type"]; ok {
+				t.Fatalf("projected BYOK tool must omit type: %#v", tools[0])
+			}
+			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"web_search\",\"input\":{\"query\":\"latest Go release\"}}],\"stop_reason\":\"tool_use\"}")
 		case 2:
 			messages, ok := request["messages"].([]any)
 			if !ok || len(messages) != 3 {

@@ -45,7 +45,7 @@ func TestGatewayWithoutProviderIsTransparent(t *testing.T) {
 func TestGatewayToolLoopLimit(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, "{\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_loop\",\"name\":\"oma_web_search\",\"input\":{\"query\":\"query\"}}],\"stop_reason\":\"tool_use\"}")
+		_, _ = io.WriteString(w, "{\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_loop\",\"name\":\"web_search\",\"input\":{\"query\":\"query\"}}],\"stop_reason\":\"tool_use\"}")
 	}))
 	defer upstream.Close()
 	cfg := config.Config{AnthropicUpstreamBaseURL: upstream.URL, AnthropicUpstreamAPIKey: "upstream-key", WebSearch: config.WebSearchConfig{MaxToolLoops: 1}}
@@ -82,7 +82,7 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 		requests = append(requests, request)
 		w.Header().Set("Content-Type", "application/json")
 		if len(requests) == 1 {
-			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"oma_web_search\",\"input\":{\"query\":\"golang release\"}}],\"stop_reason\":\"tool_use\"}")
+			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"web_search\",\"input\":{\"query\":\"golang release\"}}],\"stop_reason\":\"tool_use\"}")
 			return
 		}
 		_, _ = io.WriteString(w, "{\"id\":\"msg_final\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}")
@@ -107,7 +107,7 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 		t.Fatal("Tavily API key reached the BYOK request")
 	}
 	tools, ok := requests[0]["tools"].([]any)
-	if !ok || len(tools) != 1 || tools[0].(map[string]any)["name"] != internalToolName {
+	if !ok || len(tools) != 1 || tools[0].(map[string]any)["name"] != searchToolName {
 		t.Fatalf("projected tools = %#v", requests[0]["tools"])
 	}
 	messages, ok := requests[1]["messages"].([]any)
@@ -130,7 +130,7 @@ func TestGatewayProviderFailureBecomesToolError(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		requestCount++
 		if requestCount == 1 {
-			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"oma_web_search\",\"input\":{\"query\":\"query\"}}],\"stop_reason\":\"tool_use\"}")
+			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"web_search\",\"input\":{\"query\":\"query\"}}],\"stop_reason\":\"tool_use\"}")
 			return
 		}
 		_, _ = io.WriteString(w, "{\"id\":\"msg_final\",\"type\":\"message\",\"content\":[{\"type\":\"text\",\"text\":\"done\"}],\"stop_reason\":\"end_turn\"}")
