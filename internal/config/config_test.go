@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadDatabaseAutoMigrateDefaultDevelopment(t *testing.T) {
@@ -18,6 +19,42 @@ func TestLoadDatabaseAutoMigrateDefaultDevelopment(t *testing.T) {
 	}
 	if !cfg.DatabaseAutoMigrate {
 		t.Fatal("DatabaseAutoMigrate = false, want true")
+	}
+}
+
+func TestLoadWebSearchConfiguration(t *testing.T) {
+	prepareLoadTest(t)
+	t.Setenv("WEB_SEARCH_PROVIDER", "tavily")
+	t.Setenv("WEB_SEARCH_API_KEY", "test-search-key")
+	t.Setenv("WEB_SEARCH_ENDPOINT", "http://localhost:9999/search")
+	t.Setenv("WEB_SEARCH_TIMEOUT", "7s")
+	t.Setenv("WEB_SEARCH_MAX_TOOL_LOOPS", "5")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.WebSearch.Provider != "tavily" || cfg.WebSearch.APIKey != "test-search-key" || cfg.WebSearch.Endpoint != "http://localhost:9999/search" {
+		t.Fatalf("web search provider config = %#v", cfg.WebSearch)
+	}
+	if cfg.WebSearch.Timeout != 7*time.Second || cfg.WebSearch.MaxToolLoops != 5 {
+		t.Fatalf("web search limits = timeout %s, loops %d", cfg.WebSearch.Timeout, cfg.WebSearch.MaxToolLoops)
+	}
+}
+
+func TestLoadWebSearchConfigurationUsesProviderNeutralNames(t *testing.T) {
+	prepareLoadTest(t)
+	t.Setenv("WEB_SEARCH_PROVIDER", "custom")
+	t.Setenv("WEB_SEARCH_API_KEY", "generic-key")
+	t.Setenv("WEB_SEARCH_ENDPOINT", "http://localhost:8888/search")
+	t.Setenv("WEB_SEARCH_TIMEOUT", "9s")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.WebSearch.Provider != "custom" || cfg.WebSearch.APIKey != "generic-key" || cfg.WebSearch.Endpoint != "http://localhost:8888/search" || cfg.WebSearch.Timeout != 9*time.Second {
+		t.Fatalf("web search config = %#v", cfg.WebSearch)
 	}
 }
 
@@ -239,6 +276,11 @@ func prepareLoadTest(t *testing.T) {
 		"CODE_SESSION_UPSTREAM_PROXY_MITM_ENABLED",
 		"CODE_SESSION_UPSTREAM_PROXY_CA_KEY_FILE",
 		"CODE_SESSION_UPSTREAM_PROXY_DISABLE_SSRF_PROTECTION",
+		"WEB_SEARCH_PROVIDER",
+		"WEB_SEARCH_API_KEY",
+		"WEB_SEARCH_ENDPOINT",
+		"WEB_SEARCH_TIMEOUT",
+		"WEB_SEARCH_MAX_TOOL_LOOPS",
 		"DATABASE_URL",
 		"S3_ENDPOINT",
 		"S3_BUCKET",

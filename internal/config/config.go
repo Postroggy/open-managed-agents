@@ -32,6 +32,7 @@ type Config struct {
 	S3ForcePathStyle                    bool
 	AnthropicUpstreamBaseURL            string
 	AnthropicUpstreamAPIKey             string
+	WebSearch                           WebSearchConfig
 	PublicBaseURL                       string
 	MaxFileBytes                        int64
 	WorkspaceStorageLimitBytes          int64
@@ -104,6 +105,14 @@ type Config struct {
 	CodeSessionUpstreamProxyDisableSSRFProtection bool
 }
 
+type WebSearchConfig struct {
+	Provider     string
+	Endpoint     string
+	APIKey       string
+	Timeout      time.Duration
+	MaxToolLoops int
+}
+
 type SeedAPIKey struct {
 	ExternalID string
 	Key        string
@@ -129,6 +138,7 @@ func Load() (Config, error) {
 		S3SecretAccessKey:                   env("S3_SECRET_ACCESS_KEY", "minioadmin"),
 		AnthropicUpstreamBaseURL:            env("ANTHROPIC_UPSTREAM_BASE_URL", "https://api.anthropic.com"),
 		AnthropicUpstreamAPIKey:             env("ANTHROPIC_UPSTREAM_API_KEY", ""),
+		WebSearch:                           loadWebSearchConfig(),
 		PublicBaseURL:                       env("PUBLIC_BASE_URL", ""),
 		MaxFileBytes:                        envInt64("MAX_FILE_BYTES", 500*1024*1024),
 		WorkspaceStorageLimitBytes:          envInt64("WORKSPACE_STORAGE_LIMIT_BYTES", 500*1024*1024*1024),
@@ -282,6 +292,16 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func loadWebSearchConfig() WebSearchConfig {
+	return WebSearchConfig{
+		Provider:     firstNonEmpty(env("WEB_SEARCH_PROVIDER", ""), "tavily"),
+		Endpoint:     firstNonEmpty(env("WEB_SEARCH_ENDPOINT", "")),
+		APIKey:       firstNonEmpty(env("WEB_SEARCH_API_KEY", "")),
+		Timeout:      envDuration("WEB_SEARCH_TIMEOUT", 0),
+		MaxToolLoops: envInt("WEB_SEARCH_MAX_TOOL_LOOPS", 3),
+	}
 }
 
 func envBool(key string, fallback bool) bool {
