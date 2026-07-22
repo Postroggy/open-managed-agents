@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/superduck-ai/open-managed-agents/internal/common/collections"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
+	"github.com/superduck-ai/open-managed-agents/internal/networkpolicy"
 	skillsapi "github.com/superduck-ai/open-managed-agents/internal/skills"
 
 	e2b "github.com/superduck-ai/e2b-go-sdk"
@@ -61,17 +63,31 @@ type SkillMountPreparer interface {
 }
 
 type E2BProvider struct {
-	cfg config.Config
+	cfg config.E2BConfig
 }
 
-func NewProvider(cfg config.Config) *E2BProvider {
+func NewProvider(cfg config.E2BConfig) *E2BProvider {
 	return &E2BProvider{cfg: cfg}
+}
+
+func ConnectionOptsFromConfig(cfg config.E2BConfig) e2b.ConnectionOpts {
+	requestTimeoutMs := int(cfg.RequestTimeout / time.Millisecond)
+	debug := cfg.Debug
+	return e2b.ConnectionOpts{
+		ApiKey:           cfg.APIKey,
+		AccessToken:      cfg.AccessToken,
+		Domain:           cfg.Domain,
+		ApiUrl:           cfg.APIURL,
+		SandboxUrl:       cfg.SandboxURL,
+		Debug:            &debug,
+		RequestTimeoutMs: &requestTimeoutMs,
+	}
 }
 
 func (p *E2BProvider) Resolve(env db.Environment, work *db.EnvironmentWork) (Resolution, error) {
 	template := strings.TrimSpace(env.ResolvedTemplate)
 	if template == "" {
-		template = strings.TrimSpace(p.cfg.E2BTemplate)
+		template = strings.TrimSpace(p.cfg.Template)
 	}
 	if template == "" {
 		template = "claude-code-interpreter"
@@ -80,7 +96,7 @@ func (p *E2BProvider) Resolve(env db.Environment, work *db.EnvironmentWork) (Res
 		Template:            template,
 		Metadata:            map[string]string{"environment_id": env.ExternalID, "workspace_id": fmt.Sprint(env.WorkspaceID)},
 		Envs:                map[string]string{"ANTHROPIC_ENVIRONMENT_ID": env.ExternalID},
-		Timeout:             p.cfg.E2BSandboxTimeout,
+		Timeout:             p.cfg.SandboxTimeout,
 		AllowInternetAccess: true,
 	}
 	if work != nil {
@@ -88,7 +104,7 @@ func (p *E2BProvider) Resolve(env db.Environment, work *db.EnvironmentWork) (Res
 		resolved.Envs["ANTHROPIC_WORK_ID"] = work.ExternalID
 	}
 
-	network, allowInternet, err := resolveNetwork(env.Config, mcpAllowedHostsFromWork(work))
+	network, allowInternet, err := resolveNetwork(env.Config, work)
 	if err != nil {
 		return Resolution{}, err
 	}
@@ -98,8 +114,8 @@ func (p *E2BProvider) Resolve(env db.Environment, work *db.EnvironmentWork) (Res
 }
 
 func (p *E2BProvider) Create(ctx context.Context, env db.Environment, work *db.EnvironmentWork, resolved Resolution) (Sandbox, error) {
-	if strings.TrimSpace(p.cfg.E2BAPIKey) == "" && !p.cfg.E2BDebug {
-		return Sandbox{}, errors.New("E2B_API_KEY is required to create a sandbox")
+	if strings.TrimSpace(p.cfg.APIKey) == "" && !p.cfg.Debug {
+		return Sandbox{}, errors.New("e2b.api_key is required to create a sandbox")
 	}
 	if strings.TrimSpace(resolved.Template) == "" {
 		var err error
@@ -112,19 +128,9 @@ func (p *E2BProvider) Create(ctx context.Context, env db.Environment, work *db.E
 	if timeoutMs <= 0 {
 		timeoutMs = int((5 * time.Minute) / time.Millisecond)
 	}
-	requestTimeoutMs := int(p.cfg.E2BRequestTimeout / time.Millisecond)
-	debug := p.cfg.E2BDebug
 	allowInternet := resolved.AllowInternetAccess
 	opts := &e2b.SandboxOpts{
-		ConnectionOpts: e2b.ConnectionOpts{
-			ApiKey:           p.cfg.E2BAPIKey,
-			AccessToken:      p.cfg.E2BAccessToken,
-			Domain:           p.cfg.E2BDomain,
-			ApiUrl:           p.cfg.E2BAPIURL,
-			SandboxUrl:       p.cfg.E2BSandboxURL,
-			Debug:            &debug,
-			RequestTimeoutMs: &requestTimeoutMs,
-		},
+		ConnectionOpts:      ConnectionOptsFromConfig(p.cfg),
 		Metadata:            resolved.Metadata,
 		Envs:                resolved.Envs,
 		TimeoutMs:           &timeoutMs,
@@ -183,7 +189,7 @@ func (p *E2BProvider) RunCommand(ctx context.Context, sandboxID string, command 
 	if err != nil {
 		return err
 	}
-	timeoutMs := int(p.cfg.E2BRequestTimeout / time.Millisecond)
+	timeoutMs := int(p.cfg.RequestTimeout / time.Millisecond)
 	if timeoutMs <= 0 {
 		timeoutMs = int((60 * time.Second) / time.Millisecond)
 	}
@@ -307,18 +313,8 @@ func (p *E2BProvider) skillVolumeReady(ctx context.Context, volume *e2b.Volume, 
 }
 
 func (p *E2BProvider) connect(ctx context.Context, sandboxID string) (*e2b.Sandbox, error) {
-	requestTimeoutMs := int(p.cfg.E2BRequestTimeout / time.Millisecond)
-	debug := p.cfg.E2BDebug
 	sandbox, err := e2b.Connect(ctx, sandboxID, &e2b.SandboxConnectOpts{
-		ConnectionOpts: e2b.ConnectionOpts{
-			ApiKey:           p.cfg.E2BAPIKey,
-			AccessToken:      p.cfg.E2BAccessToken,
-			Domain:           p.cfg.E2BDomain,
-			ApiUrl:           p.cfg.E2BAPIURL,
-			SandboxUrl:       p.cfg.E2BSandboxURL,
-			Debug:            &debug,
-			RequestTimeoutMs: &requestTimeoutMs,
-		},
+		ConnectionOpts: ConnectionOptsFromConfig(p.cfg),
 	})
 	if err != nil {
 		return nil, err
@@ -394,26 +390,26 @@ func (p *E2BProvider) writeSkillVolume(ctx context.Context, volume *e2b.Volume, 
 }
 
 func (p *E2BProvider) volumeConnectionOpts() *e2b.VolumeConnectionOpts {
-	requestTimeoutMs := int(p.cfg.E2BRequestTimeout / time.Millisecond)
-	debug := p.cfg.E2BDebug
+	requestTimeoutMs := int(p.cfg.RequestTimeout / time.Millisecond)
+	debug := p.cfg.Debug
 	return &e2b.VolumeConnectionOpts{
-		ApiKey:           p.cfg.E2BAPIKey,
-		AccessToken:      p.cfg.E2BAccessToken,
-		Domain:           p.cfg.E2BDomain,
-		ApiUrl:           p.cfg.E2BAPIURL,
-		SandboxUrl:       p.cfg.E2BSandboxURL,
+		ApiKey:           p.cfg.APIKey,
+		AccessToken:      p.cfg.AccessToken,
+		Domain:           p.cfg.Domain,
+		ApiUrl:           p.cfg.APIURL,
+		SandboxUrl:       p.cfg.SandboxURL,
 		Debug:            &debug,
 		RequestTimeoutMs: &requestTimeoutMs,
 	}
 }
 
 func (p *E2BProvider) volumeAPIOpts() *e2b.VolumeApiOpts {
-	requestTimeoutMs := int(p.cfg.E2BRequestTimeout / time.Millisecond)
-	debug := p.cfg.E2BDebug
+	requestTimeoutMs := int(p.cfg.RequestTimeout / time.Millisecond)
+	debug := p.cfg.Debug
 	return &e2b.VolumeApiOpts{
-		Domain:           p.cfg.E2BDomain,
+		Domain:           p.cfg.Domain,
 		Debug:            &debug,
-		ApiUrl:           p.cfg.E2BAPIURL,
+		ApiUrl:           p.cfg.APIURL,
 		RequestTimeoutMs: &requestTimeoutMs,
 	}
 }
@@ -439,91 +435,40 @@ func (p *E2BProvider) volumeWriteOpts() *e2b.VolumeWriteOptions {
 	}
 }
 
-func resolveNetwork(raw json.RawMessage, mcpAllowedHosts []string) (*e2b.SandboxNetworkOpts, bool, error) {
-	var config struct {
-		Type       string `json:"type"`
-		Networking *struct {
-			Type                 string   `json:"type"`
-			AllowedHosts         []string `json:"allowed_hosts"`
-			AllowPackageManagers bool     `json:"allow_package_managers"`
-			AllowMCPServers      bool     `json:"allow_mcp_servers"`
-		} `json:"networking"`
-	}
+func resolveNetwork(raw json.RawMessage, work *db.EnvironmentWork) (*e2b.SandboxNetworkOpts, bool, error) {
 	if len(raw) == 0 {
 		return nil, true, nil
 	}
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return nil, false, err
-	}
-	if config.Type != "cloud" || config.Networking == nil || config.Networking.Type == "unrestricted" {
-		return nil, true, nil
-	}
-	if config.Networking.Type != "limited" {
+	config, err := networkpolicy.ParseConfig(raw)
+	if err != nil {
+		if errors.Is(err, networkpolicy.ErrMalformedConfig) {
+			return nil, false, err
+		}
+		// 未知 networking 类型 fail closed，与既有行为一致。
 		return nil, false, nil
 	}
-	hosts := append([]string(nil), config.Networking.AllowedHosts...)
-	if config.Networking.AllowPackageManagers {
-		hosts = append(hosts, packageManagerHosts()...)
+	if config.Type == networkpolicy.TypeUnrestricted {
+		return nil, true, nil
 	}
-	if config.Networking.AllowMCPServers {
+	hosts := config.AllowedHostPatterns()
+	if config.AllowPackageManagers {
+		hosts = append(hosts, networkpolicy.PackageManagerHosts()...)
+	}
+	if config.AllowMCPServers {
+		mcpAllowedHosts, err := mcpAllowedHostsFromWork(work)
+		if err != nil {
+			return nil, false, err
+		}
 		hosts = append(hosts, mcpAllowedHosts...)
 	}
-	return &e2b.SandboxNetworkOpts{AllowOut: uniqueStrings(hosts)}, false, nil
+	return &e2b.SandboxNetworkOpts{AllowOut: collections.UniqueTrimmedStrings(hosts)}, false, nil
 }
 
-func mcpAllowedHostsFromWork(work *db.EnvironmentWork) []string {
-	if work == nil || len(work.Metadata) == 0 || strings.TrimSpace(string(work.Metadata)) == "null" {
-		return nil
+func mcpAllowedHostsFromWork(work *db.EnvironmentWork) ([]string, error) {
+	if work == nil {
+		return nil, nil
 	}
-	var metadata map[string]any
-	if err := json.Unmarshal(work.Metadata, &metadata); err != nil {
-		return nil
-	}
-	values, ok := metadata["mcp_allowed_hosts"].([]any)
-	if !ok {
-		return nil
-	}
-	hosts := make([]string, 0, len(values))
-	for _, value := range values {
-		host, ok := value.(string)
-		if !ok {
-			continue
-		}
-		hosts = append(hosts, host)
-	}
-	return uniqueStrings(hosts)
-}
-
-func packageManagerHosts() []string {
-	return []string{
-		"archive.ubuntu.com",
-		"security.ubuntu.com",
-		"pypi.org",
-		"files.pythonhosted.org",
-		"registry.npmjs.org",
-		"proxy.golang.org",
-		"sum.golang.org",
-		"crates.io",
-		"index.crates.io",
-		"rubygems.org",
-	}
-}
-
-func uniqueStrings(values []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
+	return networkpolicy.ParseWorkMetadataMCPAllowedHosts(work.Metadata)
 }
 
 func shellQuote(value string) string {

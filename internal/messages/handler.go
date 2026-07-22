@@ -85,8 +85,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, r, httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Missing API key"))
 		return
 	}
-	if strings.TrimSpace(h.cfg.AnthropicUpstreamAPIKey) == "" {
-		httpapi.WriteError(w, r, httpapi.NewError(http.StatusServiceUnavailable, "api_error", "ANTHROPIC_UPSTREAM_API_KEY is required for Messages"))
+	if strings.TrimSpace(h.cfg.AnthropicUpstream.APIKey) == "" {
+		httpapi.WriteError(w, r, httpapi.NewError(http.StatusServiceUnavailable, "api_error", "anthropic_upstream.api_key is required for Messages"))
 		return
 	}
 	if r.ContentLength > maxRequestBodyBytes {
@@ -123,7 +123,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			r.ContentLength = int64(len(body))
 		}
 	}
-	target, err := messagesEndpoint(h.cfg.AnthropicUpstreamBaseURL, r.URL.RawQuery)
+	target, err := messagesEndpoint(h.cfg.AnthropicUpstream.BaseURL, r.URL.RawQuery)
 	if err != nil {
 		log.Printf("build messages upstream endpoint: %v", err)
 		httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadGateway, "api_error", "Messages upstream is unavailable"))
@@ -138,7 +138,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	upstreamRequest.ContentLength = r.ContentLength
 	upstreamRequest.Header = sanitizedRequestHeaders(r.Header)
-	upstreamRequest.Header.Set("X-Api-Key", strings.TrimSpace(h.cfg.AnthropicUpstreamAPIKey))
+	upstreamRequest.Header.Set("X-Api-Key", strings.TrimSpace(h.cfg.AnthropicUpstream.APIKey))
 	upstreamResponse, err := h.client.Do(upstreamRequest)
 	if err != nil {
 		var maxBytesErr *http.MaxBytesError

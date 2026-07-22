@@ -56,8 +56,8 @@ func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provi
 		client = &http.Client{Transport: newProxyTransport()}
 	}
 	return &gateway{
-		upstreamBaseURL: cfg.AnthropicUpstreamBaseURL,
-		upstreamAPIKey:  cfg.AnthropicUpstreamAPIKey,
+		upstreamBaseURL: cfg.AnthropicUpstream.BaseURL,
+		upstreamAPIKey:  cfg.AnthropicUpstream.APIKey,
 		maxToolLoops:    cfg.WebSearch.MaxToolLoops,
 		client:          client,
 		searcher:        searcher,

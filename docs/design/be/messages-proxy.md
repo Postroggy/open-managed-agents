@@ -2,7 +2,7 @@
 
 ## 目标
 
-服务对外提供 Anthropic 兼容的 `POST /v1/messages`，供普通 SDK/API 调用和 Claude Code 沙箱使用。上游 `ANTHROPIC_UPSTREAM_API_KEY` 只存在于服务端进程，不再写入沙箱环境或 `environment-manager` 启动 payload。
+服务对外提供 Anthropic 兼容的 `POST /v1/messages`，供普通 SDK/API 调用和 Claude Code 沙箱使用。上游 `anthropic_upstream.api_key` 只存在于服务端配置，不再写入沙箱环境或 `environment-manager` 启动 payload。
 
 Claude Code 仍要求 OAuth 形态的 Anthropic 凭证。environment-manager 通过 `auth[type=anthropic_oauth]` 和 `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR` 向 Claude 传入 OMA 本地签发的 `sk-ant-oat01-...` lifecycle-bound token，并使用 `startup_context.api_base_url` 作为 `ANTHROPIC_BASE_URL` fallback。该 token 只在 OMA 本地代理生效，不是真实 Anthropic OAuth token；payload 不注入 `ANTHROPIC_API_KEY`、真实上游地址或明文 OAuth 环境变量。
 
@@ -17,13 +17,15 @@ POST /v1/messages
 普通 Messages 请求仍不解析 JSON，直接流式转发请求 body、query 和 Anthropic 合同 header，并执行以下边界处理：
 
 - 删除调用方的 `Authorization`、`X-Api-Key`、`Cookie`、组织/workspace 内部 header 和 hop-by-hop header；
-- 由服务端注入 `ANTHROPIC_UPSTREAM_API_KEY`；
-- 将请求发往 `ANTHROPIC_UPSTREAM_BASE_URL/v1/messages`；
+- 由服务端注入 `anthropic_upstream.api_key`；
+- 将请求发往 `anthropic_upstream.base_url/v1/messages`；
 - 透传上游状态码、响应 body、SSE 数据和限流等响应 header；
 - SSE 响应逐块 flush，并关闭代理缓冲；
 - 请求 body 上限为 32 MiB。
 
 对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在满足以下条件时启用 request-local Web Search gateway：请求声明 Anthropic web_search_* server tool，且服务端配置了 OMA web-search provider。gateway 只依赖 provider-neutral 的 Search 接口；当前 provider registry 仅注册 Tavily。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
+
+Web Search 配置位于 `config/config.yaml` 的 `web_search` 节点；`provider` 默认为 `tavily`，`endpoint` 为空时使用 Tavily 默认地址，`timeout` 和 `max_tool_loops` 分别控制 provider 请求超时和 BYOK continuation 上限。`api_key` 只从服务端配置读取，不通过环境变量、sandbox payload 或上游请求体传递。
 
 gateway 保留 Claude Code 的一次外部请求和下游消息语义，但内部使用非流式 BYOK continuation loop：
 

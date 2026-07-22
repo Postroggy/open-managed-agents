@@ -48,7 +48,7 @@ func TestGatewayToolLoopLimit(t *testing.T) {
 		_, _ = io.WriteString(w, "{\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_loop\",\"name\":\"web_search\",\"input\":{\"query\":\"query\"}}],\"stop_reason\":\"tool_use\"}")
 	}))
 	defer upstream.Close()
-	cfg := config.Config{AnthropicUpstreamBaseURL: upstream.URL, AnthropicUpstreamAPIKey: "upstream-key", WebSearch: config.WebSearchConfig{MaxToolLoops: 1}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxToolLoops: 1}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{})
 	response, handled, err := gateway.handle(context.Background(), []byte("{\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\"}]}"), "", nil)
 	if !handled || err == nil || response.body != nil {
@@ -63,7 +63,7 @@ func TestGatewayUpstreamFailureIsPassedThrough(t *testing.T) {
 		_, _ = io.WriteString(w, "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"try later\"}}")
 	}))
 	defer upstream.Close()
-	cfg := config.Config{AnthropicUpstreamBaseURL: upstream.URL, AnthropicUpstreamAPIKey: "upstream-key"}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{})
 	response, handled, err := gateway.handle(context.Background(), []byte("{\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\"}]}"), "", nil)
 	wantBody := "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"try later\"}}"
@@ -89,7 +89,7 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 	}))
 	defer upstream.Close()
 	searcher := &gatewayTestSearcher{results: []websearch.Result{{Title: "Go", URL: "https://go.dev", Content: "release"}}}
-	cfg := config.Config{AnthropicUpstreamBaseURL: upstream.URL, AnthropicUpstreamAPIKey: "upstream-key", WebSearch: config.WebSearchConfig{MaxToolLoops: 2}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxToolLoops: 2}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher)
 	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[{\"role\":\"user\",\"content\":\"search\"}],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
 	response, handled, err := gateway.handle(context.Background(), body, "beta=true", http.Header{"Anthropic-Version": []string{"2023-06-01"}})
@@ -137,7 +137,7 @@ func TestGatewayProviderFailureBecomesToolError(t *testing.T) {
 	}))
 	defer upstream.Close()
 	searcher := &gatewayTestSearcher{err: errors.New("provider unavailable")}
-	cfg := config.Config{AnthropicUpstreamBaseURL: upstream.URL, AnthropicUpstreamAPIKey: "key"}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher)
 	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
 	response, handled, err := gateway.handle(context.Background(), body, "", http.Header{})
@@ -161,7 +161,7 @@ func TestGatewaySSEResponse(t *testing.T) {
 		_, _ = io.WriteString(w, "{\"id\":\"msg_final\",\"type\":\"message\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}],\"stop_reason\":\"end_turn\",\"usage\":{}}")
 	}))
 	defer upstream.Close()
-	gateway := newGateway(config.Config{AnthropicUpstreamBaseURL: upstream.URL, AnthropicUpstreamAPIKey: "key"}, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{})
+	gateway := newGateway(config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{})
 	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"stream\":true,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
 	response, handled, err := gateway.handle(context.Background(), body, "", http.Header{})
 	if err != nil || !handled || !strings.Contains(string(response.body), "event: message_start") || !strings.Contains(string(response.body), "event: message_stop") {

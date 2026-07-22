@@ -121,7 +121,7 @@ func (h *Handler) uploadBase64(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadRequest, "invalid_request_error", "Invalid file_b64"))
 		return
 	}
-	if int64(len(content)) > h.cfg.MaxFileBytes {
+	if int64(len(content)) > h.cfg.Storage.MaxFileBytes {
 		httpapi.WriteError(w, r, httpapi.NewError(http.StatusRequestEntityTooLarge, "invalid_request_error", "File exceeds maximum size"))
 		return
 	}
@@ -161,7 +161,7 @@ func (h *Handler) uploadBase64(w http.ResponseWriter, r *http.Request) {
 		CreatedByAPIKeyID: principal.APIKeyID,
 		CreatedAt:         time.Now().UTC(),
 	}
-	if err := h.db.CreateFileIfWithinLimit(r.Context(), record, h.cfg.WorkspaceStorageLimitBytes); err != nil {
+	if err := h.db.CreateFileIfWithinLimit(r.Context(), record, h.cfg.Storage.WorkspaceLimitBytes); err != nil {
 		h.cleanupUploadedObjectAfterMetadataFailure(r.Context(), record)
 		if errors.Is(err, db.ErrStorageLimitExceeded) {
 			httpapi.WriteError(w, r, httpapi.NewError(http.StatusForbidden, "permission_error", "Workspace storage limit exceeded"))
@@ -261,14 +261,20 @@ func streamPlatformObject(w http.ResponseWriter, fileUUID string, objectKey stri
 	}
 	w.Header().Set("Cache-Control", platformPreviewCacheControl)
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Length", strconv.FormatInt(object.Size, 10))
+	if object.Size >= 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(object.Size, 10))
+	}
 	w.WriteHeader(http.StatusOK)
 	copied, copyErr := io.Copy(w, object.Body)
 	if copyErr != nil {
-		log.Printf("stream platform file %s failed file_uuid=%s key=%s bytes_copied=%d expected_size=%d: %v", variant, fileUUID, objectKey, copied, object.Size, copyErr)
+		expectedSize := ""
+		if object.Size >= 0 {
+			expectedSize = fmt.Sprintf(" expected_size=%d", object.Size)
+		}
+		log.Printf("stream platform file %s failed file_uuid=%s key=%s bytes_copied=%d%s: %v", variant, fileUUID, objectKey, copied, expectedSize, copyErr)
 		return
 	}
-	if copied != object.Size {
+	if object.Size >= 0 && copied != object.Size {
 		log.Printf("stream platform file %s size mismatch file_uuid=%s key=%s bytes_copied=%d expected_size=%d", variant, fileUUID, objectKey, copied, object.Size)
 	}
 }
@@ -293,7 +299,7 @@ func (h *Handler) resolvePlatformOrganizationScope(r *http.Request, principal au
 }
 
 func (h *Handler) platformUploadBodyLimit() int64 {
-	limit := h.cfg.MaxFileBytes + h.cfg.MaxFileBytes/3 + 1024*1024
+	limit := h.cfg.Storage.MaxFileBytes + h.cfg.Storage.MaxFileBytes/3 + 1024*1024
 	if limit < 1024*1024 {
 		return 1024 * 1024
 	}

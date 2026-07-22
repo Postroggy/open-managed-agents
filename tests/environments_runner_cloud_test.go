@@ -28,13 +28,12 @@ func TestEnvironmentRunnerLaunchesManagedAgentCloudSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	cfg.CodeSessionAPIBaseURL = "http://code-session.example.test"
-	cfg.CodeSessionSandboxAPIBaseURL = "http://code-session-sandbox.example.test"
-	cfg.EnvironmentManagerPath = "/usr/local/bin/environment-manager"
-	cfg.ClaudePath = "/opt/claude-code/bin/claude"
-	cfg.ClaudeAgentVersion = "2.1.120"
-	cfg.E2BTemplate = "fake-template"
-	cfg.AnthropicUpstreamAPIKey = "sk-ant-upstream-must-not-enter-sandbox"
+	cfg.CodeSession.SandboxAPIBaseURL = "http://code-session-sandbox.example.test"
+	cfg.EnvironmentRunner.ManagerPath = "/usr/local/bin/environment-manager"
+	cfg.EnvironmentRunner.ClaudePath = "/opt/claude-code/bin/claude"
+	cfg.EnvironmentRunner.ClaudeAgentVersion = "2.1.120"
+	cfg.E2B.Template = "fake-template"
+	cfg.AnthropicUpstream.APIKey = "sk-ant-upstream-must-not-enter-sandbox"
 
 	app := newTestAppWithStore(t, &cfg, newFakeStore("runner-cloud-bucket"))
 	defer app.close()
@@ -171,7 +170,7 @@ func TestEnvironmentRunnerLaunchesManagedAgentCloudSession(t *testing.T) {
 	if _, ok := payload["environment"].(map[string]any)["environment"]; ok {
 		t.Fatalf("environment-manager payload should not contain Claude credential environment variables: %#v", payload["environment"])
 	}
-	if strings.Contains(string(provider.launches[0].stdin), cfg.AnthropicUpstreamAPIKey) {
+	if strings.Contains(string(provider.launches[0].stdin), cfg.AnthropicUpstream.APIKey) {
 		t.Fatalf("environment-manager payload leaked upstream key: %s", provider.launches[0].stdin)
 	}
 	if !strings.Contains(provider.launches[0].command, "--session '"+codeSession.ExternalID+"'") ||
@@ -200,12 +199,11 @@ func TestEnvironmentRunnerInstallsManagedAgentCustomSkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	cfg.CodeSessionAPIBaseURL = "http://code-session.example.test"
-	cfg.CodeSessionSandboxAPIBaseURL = "http://code-session-sandbox.example.test"
-	cfg.EnvironmentManagerPath = "/usr/local/bin/environment-manager"
-	cfg.ClaudePath = "/opt/claude-code/bin/claude"
-	cfg.ClaudeAgentVersion = "2.1.120"
-	cfg.E2BTemplate = "fake-template"
+	cfg.CodeSession.SandboxAPIBaseURL = "http://code-session-sandbox.example.test"
+	cfg.EnvironmentRunner.ManagerPath = "/usr/local/bin/environment-manager"
+	cfg.EnvironmentRunner.ClaudePath = "/opt/claude-code/bin/claude"
+	cfg.EnvironmentRunner.ClaudeAgentVersion = "2.1.120"
+	cfg.E2B.Template = "fake-template"
 
 	store := newFakeStore("runner-cloud-skills-bucket")
 	app := newTestAppWithStore(t, &cfg, store)
@@ -303,12 +301,11 @@ func TestEnvironmentRunnerFailsWhenSkillResolverUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	cfg.CodeSessionAPIBaseURL = "http://code-session.example.test"
-	cfg.CodeSessionSandboxAPIBaseURL = "http://code-session-sandbox.example.test"
-	cfg.EnvironmentManagerPath = "/usr/local/bin/environment-manager"
-	cfg.ClaudePath = "/opt/claude-code/bin/claude"
-	cfg.ClaudeAgentVersion = "2.1.120"
-	cfg.E2BTemplate = "fake-template"
+	cfg.CodeSession.SandboxAPIBaseURL = "http://code-session-sandbox.example.test"
+	cfg.EnvironmentRunner.ManagerPath = "/usr/local/bin/environment-manager"
+	cfg.EnvironmentRunner.ClaudePath = "/opt/claude-code/bin/claude"
+	cfg.EnvironmentRunner.ClaudeAgentVersion = "2.1.120"
+	cfg.E2B.Template = "fake-template"
 
 	store := newFakeStore("runner-cloud-missing-resolver-bucket")
 	app := newTestAppWithStore(t, &cfg, store)
@@ -366,19 +363,18 @@ func TestEnvironmentRunnerFailsWhenSkillResolverUnavailable(t *testing.T) {
 	}
 }
 
-func TestEnvironmentRunnerResolvesBeforeManagedAgentMetadataPatch(t *testing.T) {
+func TestEnvironmentRunnerResolvesLimitedNetworkWithManagedAgentMCPHosts(t *testing.T) {
 	ctx := context.Background()
 
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	cfg.CodeSessionAPIBaseURL = "http://code-session.example.test"
-	cfg.CodeSessionSandboxAPIBaseURL = "http://code-session-sandbox.example.test"
-	cfg.EnvironmentManagerPath = "/usr/local/bin/environment-manager"
-	cfg.ClaudePath = "/opt/claude-code/bin/claude"
-	cfg.ClaudeAgentVersion = "2.1.120"
-	cfg.E2BTemplate = "fake-template"
+	cfg.CodeSession.SandboxAPIBaseURL = "http://code-session-sandbox.example.test"
+	cfg.EnvironmentRunner.ManagerPath = "/usr/local/bin/environment-manager"
+	cfg.EnvironmentRunner.ClaudePath = "/opt/claude-code/bin/claude"
+	cfg.EnvironmentRunner.ClaudeAgentVersion = "2.1.120"
+	cfg.E2B.Template = "fake-template"
 
 	app := newTestAppWithStore(t, &cfg, newFakeStore("runner-cloud-network-order-bucket"))
 	defer app.close()
@@ -424,8 +420,8 @@ func TestEnvironmentRunnerResolvesBeforeManagedAgentMetadataPatch(t *testing.T) 
 	if len(provider.resolves) != 1 {
 		t.Fatalf("resolves = %#v, want one", provider.resolves)
 	}
-	if hasJSONKey(provider.resolves[0].metadata, "mcp_allowed_hosts") {
-		t.Fatalf("Resolve saw managed-agent MCP metadata: %s", provider.resolves[0].metadata)
+	if !hasJSONKey(provider.resolves[0].metadata, "mcp_allowed_hosts") {
+		t.Fatalf("Resolve did not receive managed-agent MCP metadata: %s", provider.resolves[0].metadata)
 	}
 	if len(provider.creates) != 1 {
 		t.Fatalf("creates = %#v, want one", provider.creates)
@@ -443,8 +439,103 @@ func TestEnvironmentRunnerResolvesBeforeManagedAgentMetadataPatch(t *testing.T) 
 	if !ok {
 		t.Fatalf("Create resolution AllowOut = %#v, want []string", provider.creates[0].resolution.Network.AllowOut)
 	}
-	if slices.Contains(allowOut, "mcp.notion.com") {
-		t.Fatalf("Create resolution allowed agent MCP host: %#v", allowOut)
+	if !slices.Contains(allowOut, "mcp.notion.com") {
+		t.Fatalf("Create resolution did not allow agent MCP host: %#v", allowOut)
+	}
+}
+
+func TestEnvironmentRunnerClearsStaleMCPHosts(t *testing.T) {
+	tests := []struct {
+		name        string
+		networking  string
+		wantLimited bool
+	}{
+		{name: "current snapshot is empty", networking: `{"type":"limited","allowed_hosts":[],"allow_mcp_servers":true}`, wantLimited: true},
+		{name: "MCP access is disabled", networking: `{"type":"limited","allowed_hosts":[],"allow_mcp_servers":false}`, wantLimited: true},
+		{name: "network is unrestricted", networking: `{"type":"unrestricted"}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatalf("load config: %v", err)
+			}
+			cfg.CodeSession.SandboxAPIBaseURL = "http://code-session-sandbox.example.test"
+			cfg.EnvironmentRunner.ManagerPath = "/usr/local/bin/environment-manager"
+			cfg.EnvironmentRunner.ClaudePath = "/opt/claude-code/bin/claude"
+			cfg.EnvironmentRunner.ClaudeAgentVersion = "2.1.120"
+			cfg.E2B.Template = "fake-template"
+
+			app := newTestAppWithStore(t, &cfg, newFakeStore("runner-cloud-stale-mcp-bucket"))
+			defer app.close()
+
+			agent := createAgent(t, app, `{"model":"claude-opus-4-8","name":"Runner Empty MCP Network Agent"}`)
+			defer archiveAgent(t, app, agent.ID)
+			environment := createEnvironment(t, app, `{
+				"name":"runner-empty-mcp-`+strings.ReplaceAll(time.Now().Format("150405.000000000"), ".", "")+`",
+				"config":{"type":"cloud","networking":`+test.networking+`}
+			}`)
+			defer cleanupEnvironmentRows(t, app.db, environment.ID)
+
+			client := anthropic.NewClient(option.WithBaseURL(app.baseURL), option.WithAPIKey(defaultTestKey))
+			session, err := client.Beta.Sessions.New(ctx, anthropic.BetaSessionNewParams{
+				Agent:         anthropic.BetaSessionNewParamsAgentUnion{OfString: anthropic.String(agent.ID)},
+				EnvironmentID: environment.ID,
+				Title:         anthropic.String("Runner empty MCP network session"),
+			})
+			if err != nil {
+				t.Fatalf("create session: %v", err)
+			}
+			defer client.Beta.Sessions.Delete(context.Background(), session.ID, anthropic.BetaSessionDeleteParams{})
+
+			ids := getDefaultDBIDs(t, app.db)
+			work, err := app.db.GetLatestEnvironmentWorkByData(ctx, ids.WorkspaceID, environment.ID, "session", session.ID)
+			if err != nil {
+				t.Fatalf("load environment work: %v", err)
+			}
+			if _, err := app.db.UpdateEnvironmentWorkMetadata(ctx, ids.WorkspaceID, environment.ID, work.ExternalID,
+				json.RawMessage(`{"mcp_allowed_hosts":["stale.example.com"]}`)); err != nil {
+				t.Fatalf("seed stale MCP metadata: %v", err)
+			}
+
+			provider := &recordingRunnerProvider{sandboxID: "sandbox-empty-mcp"}
+			runner := environments.NewRunnerWithConfigStoreAndCredentials(app.db, provider, cfg, nil, app.credentials)
+			processed, err := runner.RunOnce(ctx, "runner-cloud-empty-mcp-test")
+			if err != nil || !processed {
+				t.Fatalf("RunOnce() = processed %v, error %v", processed, err)
+			}
+			if len(provider.resolves) != 1 {
+				t.Fatalf("resolves = %#v, want one", provider.resolves)
+			}
+			var rawMetadata map[string]json.RawMessage
+			if err := json.Unmarshal(provider.resolves[0].metadata, &rawMetadata); err != nil {
+				t.Fatalf("decode Resolve metadata: %v", err)
+			}
+			if string(rawMetadata["mcp_allowed_hosts"]) != "[]" {
+				t.Fatalf("empty MCP hosts metadata = %s, want []", rawMetadata["mcp_allowed_hosts"])
+			}
+			if len(provider.creates) != 1 {
+				t.Fatalf("creates = %#v, want one", provider.creates)
+			}
+			network := provider.creates[0].resolution.Network
+			if !test.wantLimited {
+				if network != nil {
+					t.Fatalf("unrestricted Create resolution network = %#v, want nil", network)
+				}
+				return
+			}
+			if network == nil {
+				t.Fatal("limited Create resolution network is nil")
+			}
+			allowOut, ok := network.AllowOut.([]string)
+			if !ok {
+				t.Fatalf("limited Create resolution AllowOut = %#v, want []string", network.AllowOut)
+			}
+			if slices.Contains(allowOut, "stale.example.com") {
+				t.Fatalf("Create resolution retained stale MCP host: %#v", allowOut)
+			}
+		})
 	}
 }
 
@@ -455,12 +546,11 @@ func TestEnvironmentRunnerDoesNotCreateCodeSessionWhenResolveFails(t *testing.T)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	cfg.CodeSessionAPIBaseURL = "http://code-session.example.test"
-	cfg.CodeSessionSandboxAPIBaseURL = "http://code-session-sandbox.example.test"
-	cfg.EnvironmentManagerPath = "/usr/local/bin/environment-manager"
-	cfg.ClaudePath = "/opt/claude-code/bin/claude"
-	cfg.ClaudeAgentVersion = "2.1.120"
-	cfg.E2BTemplate = "fake-template"
+	cfg.CodeSession.SandboxAPIBaseURL = "http://code-session-sandbox.example.test"
+	cfg.EnvironmentRunner.ManagerPath = "/usr/local/bin/environment-manager"
+	cfg.EnvironmentRunner.ClaudePath = "/opt/claude-code/bin/claude"
+	cfg.EnvironmentRunner.ClaudeAgentVersion = "2.1.120"
+	cfg.E2B.Template = "fake-template"
 
 	app := newTestAppWithStore(t, &cfg, newFakeStore("runner-cloud-resolve-failure-bucket"))
 	defer app.close()
@@ -548,7 +638,7 @@ func (p *recordingRunnerProvider) Resolve(env db.Environment, work *db.Environme
 		p.resolves = append(p.resolves, record)
 		return e2bruntime.Resolution{}, p.resolveErr
 	}
-	resolution, err := e2bruntime.NewProvider(config.Config{E2BTemplate: "fake-template"}).Resolve(env, work)
+	resolution, err := e2bruntime.NewProvider(config.E2BConfig{Template: "fake-template"}).Resolve(env, work)
 	if err != nil {
 		p.resolves = append(p.resolves, record)
 		return e2bruntime.Resolution{}, err

@@ -796,6 +796,9 @@ export type EnvironmentEditValues = {
   name: string;
   description: string;
   networkType: 'unrestricted' | 'limited';
+  allowMcpServers: boolean;
+  allowPackageManagers: boolean;
+  allowedHostsText: string;
   packages: EnvironmentPackageRow[];
   metadataRows: EnvironmentMetadataRow[];
 };
