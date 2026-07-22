@@ -10,51 +10,31 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from '../../shared/ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from '../../shared/ui/alert';
 import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader
-} from '../../shared/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader } from '../../shared/ui/card';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from '../../shared/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '../../shared/ui/dropdown-menu';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle
-} from '../../shared/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '../../shared/ui/empty';
 import { Field, FieldDescription, FieldLabel } from '../../shared/ui/field';
 import { Input } from '../../shared/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '../../shared/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../shared/ui/tabs';
 import { Textarea } from '../../shared/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/ui/tooltip';
@@ -93,10 +73,7 @@ export function AdminKeysSettingsPage() {
   const [copiedRecordId, setCopiedRecordId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<AdminKeyConfirmation>(null);
 
-  const visibleRecords = useMemo(
-    () => records.filter((record) => record.status === activeTab),
-    [activeTab, records]
-  );
+  const visibleRecords = useMemo(() => records.filter((record) => record.status === activeTab), [activeTab, records]);
 
   const resetDraft = () => {
     setDraftName('');
@@ -150,7 +127,7 @@ export function AdminKeysSettingsPage() {
       token: buildAdminKeyToken(sequence, 1),
       createdAt: Date.now(),
       lastUsedAt: null,
-      status: 'active'
+      status: 'active',
     };
     setRecords((current) => [nextRecord, ...current]);
     setActiveTab('active');
@@ -169,10 +146,10 @@ export function AdminKeysSettingsPage() {
           ...item,
           revision: item.revision + 1,
           token: buildAdminKeyToken(item.sequence, item.revision + 1),
-          lastUsedAt: Date.now()
+          lastUsedAt: Date.now(),
         };
         return rotatedRecord;
-      })
+      }),
     );
     setConfirmation(null);
     if (rotatedRecord) {
@@ -186,10 +163,10 @@ export function AdminKeysSettingsPage() {
         item.id === record.id
           ? {
               ...item,
-              status: 'revoked'
+              status: 'revoked',
             }
-          : item
-      )
+          : item,
+      ),
     );
     setConfirmation(null);
   };
@@ -229,18 +206,18 @@ export function AdminKeysSettingsPage() {
       ? msg(
           'adminKeys.rotateConfirm.body',
           'Rotate {name}? A new local preview token will be generated for this admin key.',
-          { name: confirmation?.record.name ?? '' }
+          { name: confirmation?.record.name ?? '' },
         )
       : confirmation?.kind === 'revoke'
         ? msg(
             'adminKeys.revokeConfirm.body',
             'Revoke {name}? It will move to the revoked tab and stop appearing in the active list.',
-            { name: confirmation?.record.name ?? '' }
+            { name: confirmation?.record.name ?? '' },
           )
         : msg(
             'adminKeys.deleteConfirm.body',
             'Delete the local preview row for {name}? This only removes it from the settings demo.',
-            { name: confirmation?.record.name ?? '' }
+            { name: confirmation?.record.name ?? '' },
           );
   const confirmationActionLabel =
     confirmation?.kind === 'rotate'
@@ -273,7 +250,7 @@ export function AdminKeysSettingsPage() {
                 <TooltipContent>
                   {msg(
                     'adminKeys.organizationWideTooltip',
-                    'Admin keys apply across every workspace in this organization.'
+                    'Admin keys apply across every workspace in this organization.',
                   )}
                 </TooltipContent>
               </Tooltip>
@@ -281,7 +258,7 @@ export function AdminKeysSettingsPage() {
             <CardDescription>
               {msg(
                 'adminKeys.description',
-                'Create organization-level keys for automation that needs broader access than a single workspace API key.'
+                'Create organization-level keys for automation that needs broader access than a single workspace API key.',
               )}
             </CardDescription>
           </CardHeader>
@@ -292,7 +269,7 @@ export function AdminKeysSettingsPage() {
               <AlertDescription>
                 {msg(
                   'adminKeys.notice.body',
-                  'Use admin keys only for trusted automation that needs to manage organization settings, audit activity, or coordinate across multiple workspaces.'
+                  'Use admin keys only for trusted automation that needs to manage organization settings, audit activity, or coordinate across multiple workspaces.',
                 )}
               </AlertDescription>
             </Alert>
@@ -322,7 +299,7 @@ export function AdminKeysSettingsPage() {
                     title={msg('adminKeys.empty.activeTitle', 'No admin keys yet')}
                     body={msg(
                       'adminKeys.empty.activeBody',
-                      'Create an admin key when trusted automation needs organization-wide access.'
+                      'Create an admin key when trusted automation needs organization-wide access.',
                     )}
                     action={
                       <Button type="button" onClick={() => openCreateDialog(true)}>
@@ -367,7 +344,7 @@ export function AdminKeysSettingsPage() {
               <DialogDescription>
                 {msg(
                   'adminKeys.createDialog.description',
-                  'Create a local preview admin key for trusted automation that needs organization-level access.'
+                  'Create a local preview admin key for trusted automation that needs organization-level access.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -383,7 +360,7 @@ export function AdminKeysSettingsPage() {
                 <FieldDescription>
                   {msg(
                     'adminKeys.createDialog.nameHelp',
-                    'Use a short label that identifies which automation system owns this key.'
+                    'Use a short label that identifies which automation system owns this key.',
                   )}
                 </FieldDescription>
               </Field>
@@ -395,14 +372,14 @@ export function AdminKeysSettingsPage() {
                   onChange={(event) => setDraftDescription(event.target.value)}
                   placeholder={msg(
                     'adminKeys.createDialog.descriptionPlaceholder',
-                    'Used by the release coordinator to create workspaces and rotate deployment credentials.'
+                    'Used by the release coordinator to create workspaces and rotate deployment credentials.',
                   )}
                   className="min-h-[112px] resize-y"
                 />
                 <FieldDescription>
                   {msg(
                     'adminKeys.createDialog.descriptionHelp',
-                    'Document when this key should be used so reviewers can audit access later.'
+                    'Document when this key should be used so reviewers can audit access later.',
                   )}
                 </FieldDescription>
               </Field>
@@ -426,14 +403,12 @@ export function AdminKeysSettingsPage() {
                 {msg(
                   'adminKeys.revealDialog.description',
                   'Copy the key value for {name}. This local preview dialog lets you verify the shared settings flow.',
-                  { name: revealRecord?.name ?? '' }
+                  { name: revealRecord?.name ?? '' },
                 )}
               </DialogDescription>
             </DialogHeader>
             <Field className="gap-2">
-              <FieldLabel htmlFor="admin-key-token">
-                {msg('adminKeys.revealDialog.label', 'Admin key')}
-              </FieldLabel>
+              <FieldLabel htmlFor="admin-key-token">{msg('adminKeys.revealDialog.label', 'Admin key')}</FieldLabel>
               <div className="flex gap-2">
                 <Input
                   id="admin-key-token"
@@ -450,7 +425,7 @@ export function AdminKeysSettingsPage() {
               <FieldDescription>
                 {msg(
                   'adminKeys.revealDialog.help',
-                  'This preview key is stored only in local page state and is not persisted to the backend.'
+                  'This preview key is stored only in local page state and is not persisted to the backend.',
                 )}
               </FieldDescription>
             </Field>
@@ -514,7 +489,7 @@ function AdminKeysTable({
   onReveal,
   onRotate,
   onRevoke,
-  onDelete
+  onDelete,
 }: {
   locale: string;
   records: AdminKeyRecord[];
@@ -546,9 +521,7 @@ function AdminKeysTable({
                   <div className="min-w-0">
                     <div className="font-medium text-foreground">{record.name}</div>
                     {record.description ? (
-                      <p className="mt-1 max-w-[420px] text-sm leading-6 text-muted-foreground">
-                        {record.description}
-                      </p>
+                      <p className="mt-1 max-w-[420px] text-sm leading-6 text-muted-foreground">{record.description}</p>
                     ) : null}
                   </div>
                 </TableCell>
@@ -565,9 +538,7 @@ function AdminKeysTable({
                 </TableCell>
                 <TableCell className="px-5 py-4 align-top">
                   <Badge variant={record.status === 'active' ? 'secondary' : 'outline'}>
-                    {record.status === 'active'
-                      ? msg('common.active', 'Active')
-                      : msg('adminKeys.revoked', 'Revoked')}
+                    {record.status === 'active' ? msg('common.active', 'Active') : msg('adminKeys.revoked', 'Revoked')}
                   </Badge>
                 </TableCell>
                 <TableCell className="px-5 py-4 text-right align-top">
@@ -593,7 +564,7 @@ function AdminKeyActionsMenu({
   onReveal,
   onRotate,
   onRevoke,
-  onDelete
+  onDelete,
 }: {
   record: AdminKeyRecord;
   onReveal: (record: AdminKeyRecord) => void;
@@ -653,7 +624,7 @@ function AdminKeysEmptyState({
   icon: Icon,
   title,
   body,
-  action
+  action,
 }: {
   icon: typeof KeyRound;
   title: string;
@@ -663,7 +634,10 @@ function AdminKeysEmptyState({
   return (
     <Empty className="min-h-[280px] rounded-lg border-border bg-card">
       <EmptyHeader>
-        <EmptyMedia variant="icon" className="size-10 rounded-full border border-border bg-secondary text-muted-foreground">
+        <EmptyMedia
+          variant="icon"
+          className="size-10 rounded-full border border-border bg-secondary text-muted-foreground"
+        >
           <Icon className="size-5" aria-hidden />
         </EmptyMedia>
         <EmptyTitle>
@@ -683,6 +657,6 @@ function buildAdminKeyToken(sequence: number, revision: number) {
 function formatDateTime(value: number, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
   }).format(value);
 }

@@ -10,7 +10,7 @@ import {
   WorkbenchStreamEvent,
   WorkbenchThinking,
   WorkbenchTool,
-  WorkbenchUploadedFile
+  WorkbenchUploadedFile,
 } from './api';
 
 export type DrawerName = 'model' | 'variables' | 'tools' | 'examples' | 'history';
@@ -22,13 +22,7 @@ export type WorkbenchMode = 'prompt' | 'evaluate';
 export type GeneratePromptStep = 'generate' | 'output';
 
 export type CodeLanguage =
-  | 'python'
-  | 'typescript'
-  | 'curl'
-  | 'bedrock-python'
-  | 'bedrock-typescript'
-  | 'vertex-python'
-  | 'vertex-typescript';
+  'python' | 'typescript' | 'curl' | 'bedrock-python' | 'bedrock-typescript' | 'vertex-python' | 'vertex-typescript';
 
 export type ToolForm = 'custom' | 'web_search' | null;
 
@@ -49,7 +43,7 @@ export const codeLanguageOptions: Array<{ value: CodeLanguage; label: string }> 
   { value: 'bedrock-python', label: 'AWS Bedrock Python' },
   { value: 'bedrock-typescript', label: 'AWS Bedrock TypeScript' },
   { value: 'vertex-python', label: 'Vertex AI Python' },
-  { value: 'vertex-typescript', label: 'Vertex AI TypeScript' }
+  { value: 'vertex-typescript', label: 'Vertex AI TypeScript' },
 ];
 
 export type WorkbenchExample = {
@@ -97,7 +91,7 @@ export const MAX_THINKING_BUDGET_TOKENS = WORKBENCH_MAX_TOKENS - 1;
 export const DEFAULT_THINKING: WorkbenchThinking = {
   type: 'enabled',
   effort: 'high',
-  budget_tokens: DEFAULT_THINKING_BUDGET_TOKENS
+  budget_tokens: DEFAULT_THINKING_BUDGET_TOKENS,
 };
 
 export const thinkingEffortOptions = [
@@ -105,14 +99,24 @@ export const thinkingEffortOptions = [
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
   { value: 'extra_high', label: 'Extra high' },
-  { value: 'max', label: 'Max' }
+  { value: 'max', label: 'Max' },
 ] as const;
 
 export const fallbackModels: WorkbenchModel[] = [
-  { model_name: 'claude-opus-4-8', display_name: 'Claude Opus Active', supports_thinking: true, supports_tool_use: true },
-  { model_name: 'claude-sonnet-4-6', display_name: 'Claude Sonnet Active', supports_thinking: true, supports_tool_use: true },
+  {
+    model_name: 'claude-opus-4-8',
+    display_name: 'Claude Opus Active',
+    supports_thinking: true,
+    supports_tool_use: true,
+  },
+  {
+    model_name: 'claude-sonnet-4-6',
+    display_name: 'Claude Sonnet Active',
+    supports_thinking: true,
+    supports_tool_use: true,
+  },
   { model_name: 'claude-haiku-4-5-20251001', display_name: 'Claude Haiku 4.5', supports_thinking: false },
-  { model_name: 'claude-fable-5', display_name: 'Claude Fable 5', supports_thinking: true, supports_tool_use: true }
+  { model_name: 'claude-fable-5', display_name: 'Claude Fable 5', supports_thinking: true, supports_tool_use: true },
 ];
 
 export const defaultSchema = `{
@@ -132,7 +136,7 @@ export function defaultWebSearchToolForm(): WebSearchToolForm {
     maxUses: 5,
     localize: false,
     searchRestriction: 'none',
-    domains: ''
+    domains: '',
   };
 }
 
@@ -167,11 +171,14 @@ export function createDefaultRevision(): WorkbenchRevision {
     temperature: 1,
     thinking: { ...DEFAULT_THINKING },
     show_raw_thinking: false,
-    skip_system_modification: false
+    skip_system_modification: false,
   };
 }
 
-export function normalizeRevision(value?: Partial<WorkbenchRevision> | null, fallbackModel = 'claude-opus-4-8'): WorkbenchRevision {
+export function normalizeRevision(
+  value?: Partial<WorkbenchRevision> | null,
+  fallbackModel = 'claude-opus-4-8',
+): WorkbenchRevision {
   const base = createDefaultRevision();
   const messages = normalizeMessages(value?.messages);
   return {
@@ -189,11 +196,14 @@ export function normalizeRevision(value?: Partial<WorkbenchRevision> | null, fal
     thinking: normalizeThinking(value?.thinking),
     show_raw_thinking: Boolean(value?.show_raw_thinking),
     skip_system_modification: Boolean(value?.skip_system_modification),
-    is_latest: value?.is_latest !== false
+    is_latest: value?.is_latest !== false,
   };
 }
 
-export function normalizeNewPromptRevision(value?: Partial<WorkbenchRevision> | null, fallbackModel = 'claude-opus-4-8'): WorkbenchRevision {
+export function normalizeNewPromptRevision(
+  value?: Partial<WorkbenchRevision> | null,
+  fallbackModel = 'claude-opus-4-8',
+): WorkbenchRevision {
   return normalizeRevision(
     {
       ...value,
@@ -203,9 +213,9 @@ export function normalizeNewPromptRevision(value?: Partial<WorkbenchRevision> | 
       variables: [],
       tools: [],
       show_raw_thinking: false,
-      skip_system_modification: false
+      skip_system_modification: false,
     },
-    fallbackModel
+    fallbackModel,
   );
 }
 
@@ -216,7 +226,7 @@ export function normalizeMessages(messages?: WorkbenchMessage[]) {
   const normalized = messages
     .map((message): WorkbenchMessage => ({
       role: message.role === 'assistant' ? 'assistant' : 'human',
-      content: normalizeContentBlocks(message.content)
+      content: normalizeContentBlocks(message.content),
     }))
     .filter((message, index) => index === 0 || messageHasContent(message));
   return normalized.length ? normalized : createDefaultRevision().messages;
@@ -235,7 +245,10 @@ export function normalizeContentBlocks(content: WorkbenchMessage['content']): Wo
   return blocks.length ? blocks : [{ type: 'text', text: '' }];
 }
 
-export function cleanMessageContent(content: WorkbenchMessage['content'], includeEmptyText: boolean): WorkbenchContentBlock[] {
+export function cleanMessageContent(
+  content: WorkbenchMessage['content'],
+  includeEmptyText: boolean,
+): WorkbenchContentBlock[] {
   const blocks = normalizeContentBlocks(content).flatMap((block) => {
     if (block.type !== 'text') {
       return [{ ...block }];
@@ -263,7 +276,7 @@ export function replaceMessageText(content: WorkbenchMessage['content'], text: s
 
 export function appendFileBlockToMessageContent(
   content: WorkbenchMessage['content'],
-  uploaded: WorkbenchUploadedFile
+  uploaded: WorkbenchUploadedFile,
 ): WorkbenchContentBlock[] {
   return [...normalizeContentBlocks(content), workbenchFileContentBlock(uploaded)];
 }
@@ -271,7 +284,7 @@ export function appendFileBlockToMessageContent(
 export function appendUrlBlockToMessageContent(
   content: WorkbenchMessage['content'],
   kind: WorkbenchAttachmentKind,
-  url: string
+  url: string,
 ): WorkbenchContentBlock[] {
   return [...normalizeContentBlocks(content), workbenchUrlContentBlock(kind, url)];
 }
@@ -279,14 +292,17 @@ export function appendUrlBlockToMessageContent(
 export function replaceFileBlockInMessageContent(
   content: WorkbenchMessage['content'],
   blockIndex: number,
-  uploaded: WorkbenchUploadedFile
+  uploaded: WorkbenchUploadedFile,
 ): WorkbenchContentBlock[] {
   return normalizeContentBlocks(content).map((block, index) =>
-    index === blockIndex ? workbenchFileContentBlock(uploaded) : block
+    index === blockIndex ? workbenchFileContentBlock(uploaded) : block,
   );
 }
 
-export function removeContentBlockFromMessageContent(content: WorkbenchMessage['content'], blockIndex: number): WorkbenchContentBlock[] {
+export function removeContentBlockFromMessageContent(
+  content: WorkbenchMessage['content'],
+  blockIndex: number,
+): WorkbenchContentBlock[] {
   const blocks = normalizeContentBlocks(content).filter((_, index) => index !== blockIndex);
   return blocks.length ? blocks : [{ type: 'text', text: '' }];
 }
@@ -302,17 +318,19 @@ export function workbenchFileContentBlock(uploaded: WorkbenchUploadedFile): Work
 export function workbenchUrlContentBlock(kind: WorkbenchAttachmentKind, url: string): WorkbenchContentBlock {
   return {
     type: kind === 'image' ? 'image' : 'document',
-    source: { type: 'url', url }
+    source: { type: 'url', url },
   };
 }
 
 export function messageHasContent(message: WorkbenchMessage) {
-  return cleanMessageContent(message.content, false).some((block) => block.type !== 'text' || Boolean(block.text?.trim()));
+  return cleanMessageContent(message.content, false).some(
+    (block) => block.type !== 'text' || Boolean(block.text?.trim()),
+  );
 }
 
 export function revisionHasImageContent(revision: WorkbenchRevision) {
   return revision.messages.some((message) =>
-    normalizeContentBlocks(message.content).some((block) => String(block.type).toLowerCase() === 'image')
+    normalizeContentBlocks(message.content).some((block) => String(block.type).toLowerCase() === 'image'),
   );
 }
 
@@ -327,11 +345,7 @@ export function messageAttachments(message: WorkbenchMessage) {
     .map(({ block, blockIndex }) => {
       const source = block.source && typeof block.source === 'object' ? (block.source as Record<string, unknown>) : {};
       const urlLabel =
-        stringValue(source.type) === 'url'
-          ? String(block.type).toLowerCase() === 'image'
-            ? 'Image'
-            : 'PDF'
-          : '';
+        stringValue(source.type) === 'url' ? (String(block.type).toLowerCase() === 'image' ? 'Image' : 'PDF') : '';
       const label =
         stringValue(block.title) ||
         stringValue(block.filename) ||
@@ -344,7 +358,7 @@ export function messageAttachments(message: WorkbenchMessage) {
         id: `${blockIndex}-${block.type}-${label}`,
         blockIndex,
         kind: String(block.type).toLowerCase(),
-        label
+        label,
       };
     });
 }
@@ -370,7 +384,11 @@ export function normalizeThinking(value: unknown): WorkbenchThinking {
     return { ...DEFAULT_THINKING };
   }
   const thinking = value as WorkbenchThinking;
-  return cleanThinking({ ...thinking, type: thinking.type || DEFAULT_THINKING.type, effort: thinking.effort ?? DEFAULT_THINKING.effort });
+  return cleanThinking({
+    ...thinking,
+    type: thinking.type || DEFAULT_THINKING.type,
+    effort: thinking.effort ?? DEFAULT_THINKING.effort,
+  });
 }
 
 export function parseDraftRevision(value?: string) {
@@ -405,7 +423,7 @@ export const workbenchExampleMetaKeys = new Set([
   'example_description',
   'exampleDescription',
   'description',
-  'context'
+  'context',
 ]);
 
 export function workbenchExamplesFromPromptDetail(detail: WorkbenchPromptDetail, variables: string[]) {
@@ -417,7 +435,7 @@ export function workbenchExamplesFromPromptDetail(detail: WorkbenchPromptDetail,
     detail.kv_store?.examples,
     detail.kv_store?.workbench_examples,
     detail.kv_store?.multishot_examples,
-    detail.kv_store?.multi_shot_examples
+    detail.kv_store?.multi_shot_examples,
   ];
   for (const candidate of candidates) {
     const parsed = normalizeWorkbenchExamples(candidate, variables);
@@ -461,18 +479,29 @@ export function workbenchExampleArray(source: unknown): unknown[] {
   return [];
 }
 
-export function normalizeWorkbenchExample(source: unknown, variables: string[], index: number): WorkbenchExample | null {
+export function normalizeWorkbenchExample(
+  source: unknown,
+  variables: string[],
+  index: number,
+): WorkbenchExample | null {
   if (!source || typeof source !== 'object' || Array.isArray(source)) {
     return null;
   }
   const record = source as Record<string, unknown>;
-  const rawValues = firstRecordValue(record, ['variable_values', 'variableValues', 'values', 'variables', 'inputs', 'input']);
+  const rawValues = firstRecordValue(record, [
+    'variable_values',
+    'variableValues',
+    'values',
+    'variables',
+    'inputs',
+    'input',
+  ]);
   const valuesSource = rawValues ?? record;
   const valueNames = variables.length
     ? variables
     : Object.keys(valuesSource).filter((key) => !workbenchExampleMetaKeys.has(key));
   const values = Object.fromEntries(
-    valueNames.map((name) => [name, generatedValueString(recordValueForName(valuesSource, name)).trim()])
+    valueNames.map((name) => [name, generatedValueString(recordValueForName(valuesSource, name)).trim()]),
   );
   const idealOutput = firstStringValue(record, [
     'ideal_output',
@@ -482,7 +511,7 @@ export function normalizeWorkbenchExample(source: unknown, variables: string[], 
     'expected_output',
     'expectedOutput',
     'output',
-    'answer'
+    'answer',
   ]);
   const additionalContext = firstStringValue(record, [
     'additional_context',
@@ -490,7 +519,7 @@ export function normalizeWorkbenchExample(source: unknown, variables: string[], 
     'example_description',
     'exampleDescription',
     'description',
-    'context'
+    'context',
   ]);
   if (!Object.values(values).some(Boolean) && !idealOutput && !additionalContext) {
     return null;
@@ -499,7 +528,7 @@ export function normalizeWorkbenchExample(source: unknown, variables: string[], 
     id: stringValue(record.id) || `example_${index + 1}`,
     values,
     idealOutput,
-    additionalContext
+    additionalContext,
   };
 }
 
@@ -533,18 +562,20 @@ export function recordValueForName(record: Record<string, unknown>, name: string
 
 export function buildRevisionPayload(
   draft: WorkbenchRevision,
-  options: { includeEmptyMessages?: boolean; newRevisionId?: boolean } = {}
+  options: { includeEmptyMessages?: boolean; newRevisionId?: boolean } = {},
 ): WorkbenchRevision {
   const includeEmptyMessages = Boolean(options.includeEmptyMessages);
   const messages = draft.messages
     .map((message): WorkbenchMessage => ({
       role: message.role === 'assistant' ? 'assistant' : 'human',
-      content: cleanMessageContent(message.content, includeEmptyMessages)
+      content: cleanMessageContent(message.content, includeEmptyMessages),
     }))
     .filter((message) => includeEmptyMessages || messageHasContent(message));
   const revision: WorkbenchRevision = {
     ...draft,
-    id: options.newRevisionId ? `workbench-revision-${workbenchId('')}` : draft.id || `workbench-revision-${workbenchId('')}`,
+    id: options.newRevisionId
+      ? `workbench-revision-${workbenchId('')}`
+      : draft.id || `workbench-revision-${workbenchId('')}`,
     created_at: draft.created_at || new Date().toISOString(),
     is_latest: true,
     messages,
@@ -553,7 +584,7 @@ export function buildRevisionPayload(
     thinking: cleanThinking(draft.thinking),
     max_tokens_to_sample: Math.max(1, Number(draft.max_tokens_to_sample) || 20000),
     show_raw_thinking: Boolean(draft.show_raw_thinking),
-    skip_system_modification: Boolean(draft.skip_system_modification)
+    skip_system_modification: Boolean(draft.skip_system_modification),
   };
   return revision;
 }
@@ -561,7 +592,7 @@ export function buildRevisionPayload(
 export function buildRunRevisionPayload(
   draft: WorkbenchRevision,
   variableValues: Record<string, string>,
-  examples: WorkbenchExample[] = []
+  examples: WorkbenchExample[] = [],
 ): WorkbenchRevision {
   const revision = buildRevisionPayload(draft, { includeEmptyMessages: false });
   const hydratedRevision = revision.variables.length
@@ -571,8 +602,8 @@ export function buildRunRevisionPayload(
           ...message,
           content: Array.isArray(message.content)
             ? message.content.flatMap((block) => replaceVariablesInBlock(block, revision.variables, variableValues))
-            : replaceVariablesInText(message.content, revision.variables, variableValues)
-        }))
+            : replaceVariablesInText(message.content, revision.variables, variableValues),
+        })),
       }
     : revision;
   return prependRunExamples(hydratedRevision, examples);
@@ -594,7 +625,7 @@ export function prependRunExamples(revision: WorkbenchRevision, examples: Workbe
     inserted = true;
     return {
       ...message,
-      content: prependTextBlock(message.content, examplesBlock)
+      content: prependTextBlock(message.content, examplesBlock),
     };
   });
   if (inserted) {
@@ -602,7 +633,7 @@ export function prependRunExamples(revision: WorkbenchRevision, examples: Workbe
   }
   return {
     ...revision,
-    messages: [{ role: 'human', content: [{ type: 'text', text: examplesBlock }] }, ...messages]
+    messages: [{ role: 'human', content: [{ type: 'text', text: examplesBlock }] }, ...messages],
   };
 }
 
@@ -610,7 +641,10 @@ export function prependTextBlock(content: WorkbenchMessage['content'], text: str
   if (Array.isArray(content)) {
     return [{ type: 'text', text }, ...content];
   }
-  return [{ type: 'text', text }, { type: 'text', text: content }];
+  return [
+    { type: 'text', text },
+    { type: 'text', text: content },
+  ];
 }
 
 export function buildRunExamplesBlock(examples: WorkbenchExample[], variables: string[]) {
@@ -636,7 +670,7 @@ export function buildRunExamplesBlock(examples: WorkbenchExample[], variables: s
 export function replaceVariablesInBlock(
   block: WorkbenchContentBlock,
   variables: string[],
-  variableValues: Record<string, string>
+  variableValues: Record<string, string>,
 ): WorkbenchContentBlock[] {
   if (block.type !== 'text' || typeof block.text !== 'string') {
     return [block];
@@ -647,7 +681,7 @@ export function replaceVariablesInBlock(
 export function replaceVariablesInText(
   text: string,
   variables: string[],
-  variableValues: Record<string, string>
+  variableValues: Record<string, string>,
 ): WorkbenchContentBlock[] {
   const matcher = variableMatcher(variables);
   if (!matcher) {
@@ -692,7 +726,9 @@ export function titleMessageBlocksText(message?: WorkbenchMessage) {
   if (typeof message.content === 'string') {
     return message.content;
   }
-  return message.content.map((block) => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('');
+  return message.content
+    .map((block) => (block.type === 'text' && typeof block.text === 'string' ? block.text : ''))
+    .join('');
 }
 
 export function truncateTitleMessageContent(text: string) {
@@ -710,7 +746,7 @@ export function defaultGeneratedPromptTitle(date = new Date()) {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
-    hour12: true
+    hour12: true,
   }).format(date);
   return `Untitled - ${year}-${month}-${day} ${time}`;
 }
@@ -723,7 +759,11 @@ export function displayPromptTitle(promptName: string, draft: WorkbenchRevision)
   return fallbackPromptTitle(draft) || 'Untitled';
 }
 
-export function promptSummaryDisplayTitle(prompt: WorkbenchPromptSummary, selectedPromptId: string | undefined, selectedPromptTitle: string) {
+export function promptSummaryDisplayTitle(
+  prompt: WorkbenchPromptSummary,
+  selectedPromptId: string | undefined,
+  selectedPromptTitle: string,
+) {
   const trimmedName = prompt.name?.trim();
   if (trimmedName) {
     return trimmedName;
@@ -735,7 +775,9 @@ export function promptSummaryDisplayTitle(prompt: WorkbenchPromptSummary, select
 }
 
 export function fallbackPromptTitle(draft: WorkbenchRevision) {
-  return titleMessageContent(draft).replace(/[.!?。！？]+$/g, '').trim();
+  return titleMessageContent(draft)
+    .replace(/[.!?。！？]+$/g, '')
+    .trim();
 }
 
 export function isUntitledName(name: string) {
@@ -756,21 +798,26 @@ export function webSearchToolFromForm(form: WebSearchToolForm, id: string): Work
     ...(form.maxUsesEnabled ? { max_uses: form.maxUses } : {}),
     ...(form.localize ? { user_location: { type: 'approximate' } } : {}),
     ...(form.searchRestriction === 'allowed_domains' && domains.length ? { allowed_domains: domains } : {}),
-    ...(form.searchRestriction === 'blocked_domains' && domains.length ? { blocked_domains: domains } : {})
+    ...(form.searchRestriction === 'blocked_domains' && domains.length ? { blocked_domains: domains } : {}),
   };
 }
 
 export function webSearchToolFormFromTool(tool: WorkbenchTool): WebSearchToolForm {
   const allowedDomains = stringList(tool.allowed_domains);
   const blockedDomains = stringList(tool.blocked_domains);
-  const maxUses = typeof tool.max_uses === 'number' && Number.isFinite(tool.max_uses) ? Math.max(1, Math.round(tool.max_uses)) : 5;
-  const searchRestriction = allowedDomains.length ? 'allowed_domains' : blockedDomains.length ? 'blocked_domains' : 'none';
+  const maxUses =
+    typeof tool.max_uses === 'number' && Number.isFinite(tool.max_uses) ? Math.max(1, Math.round(tool.max_uses)) : 5;
+  const searchRestriction = allowedDomains.length
+    ? 'allowed_domains'
+    : blockedDomains.length
+      ? 'blocked_domains'
+      : 'none';
   return {
     maxUsesEnabled: typeof tool.max_uses === 'number' && Number.isFinite(tool.max_uses),
     maxUses,
     localize: Boolean(tool.user_location),
     searchRestriction,
-    domains: (allowedDomains.length ? allowedDomains : blockedDomains).join(', ')
+    domains: (allowedDomains.length ? allowedDomains : blockedDomains).join(', '),
   };
 }
 
@@ -796,7 +843,13 @@ export function stringList(value: unknown) {
 export function parseDomainList(value: string) {
   return value
     .split(/[,\s]+/)
-    .map((domain) => domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase())
+    .map((domain) =>
+      domain
+        .trim()
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '')
+        .toLowerCase(),
+    )
     .filter(Boolean)
     .filter((domain, index, domains) => domains.indexOf(domain) === index);
 }
@@ -821,7 +874,7 @@ export function clampThinkingBudgetTokens(value: unknown) {
 
 export function nextThinkingForMode(
   current: WorkbenchThinking,
-  mode: 'disabled' | 'enabled' | 'adaptive'
+  mode: 'disabled' | 'enabled' | 'adaptive',
 ): WorkbenchThinking {
   if (mode === 'disabled') {
     return { type: 'disabled' };
@@ -831,7 +884,7 @@ export function nextThinkingForMode(
       ...current,
       type: 'enabled',
       effort: current.effort ?? 'high',
-      budget_tokens: clampThinkingBudgetTokens(current.budget_tokens)
+      budget_tokens: clampThinkingBudgetTokens(current.budget_tokens),
     };
   }
   const { budget_tokens: _budgetTokens, ...rest } = current;
@@ -848,7 +901,7 @@ export function cleanThinking(thinking: WorkbenchThinking): WorkbenchThinking {
       ...thinking,
       type: 'enabled',
       effort: thinking.effort ?? 'high',
-      budget_tokens: clampThinkingBudgetTokens(thinking.budget_tokens)
+      budget_tokens: clampThinkingBudgetTokens(thinking.budget_tokens),
     };
   }
   const { budget_tokens: _budgetTokens, ...rest } = thinking;
@@ -868,9 +921,7 @@ export function messageText(message?: WorkbenchMessage) {
     .join('\n');
 }
 
-export type VariableTextPart =
-  | { type: 'text'; text: string }
-  | { type: 'variable'; name: string };
+export type VariableTextPart = { type: 'text'; text: string } | { type: 'variable'; name: string };
 
 export function splitVariableText(text: string): VariableTextPart[] {
   const parts: VariableTextPart[] = [];
@@ -980,7 +1031,7 @@ export function cleanGeneratedPromptInstructions(text: string) {
     text
       .replace(/\{\$([a-zA-Z_][\w.-]*)\}/g, '{{$1}}')
       .replace(/<\/?Instructions>/g, '')
-      .trim()
+      .trim(),
   );
 }
 
@@ -999,7 +1050,7 @@ export async function streamSmoothedWorkbenchText({
   onRawText,
   onDisplayText,
   displayTextFromRaw = (text) => text,
-  smoothingEnabled = true
+  smoothingEnabled = true,
 }: {
   signal: AbortSignal;
   stream: (onEvent: (event: WorkbenchStreamEvent) => void) => Promise<void>;
@@ -1013,7 +1064,7 @@ export async function streamSmoothedWorkbenchText({
   const smoother = new TextStreamSmoother({
     signal,
     smoothingEnabled,
-    onUpdate: onDisplayText
+    onUpdate: onDisplayText,
   });
 
   try {
@@ -1108,7 +1159,11 @@ export function currentRouteRequestsNewPrompt() {
   return /^\/workbench\/new\/?$/.test(window.location.pathname);
 }
 
-export function syncWorkbenchPromptUrl(promptId: string, mode: 'replace' | 'push', options: { resetTab?: boolean } = {}) {
+export function syncWorkbenchPromptUrl(
+  promptId: string,
+  mode: 'replace' | 'push',
+  options: { resetTab?: boolean } = {},
+) {
   if (typeof window === 'undefined') {
     return;
   }
@@ -1244,9 +1299,9 @@ export function historyRevisionName(revision: WorkbenchRevision) {
   return stringValue(revision.name) || stringValue(revision.title) || 'Untitled version';
 }
 
-export function historyRevisionPreview(revision: WorkbenchRevision):
-  | { kind: 'variables'; values: string[] }
-  | { kind: 'message'; value: string } {
+export function historyRevisionPreview(
+  revision: WorkbenchRevision,
+): { kind: 'variables'; values: string[] } | { kind: 'message'; value: string } {
   const variables = revision.variables?.length ? revision.variables : extractVariables(revision);
   if (variables.length) {
     return { kind: 'variables', values: variables };
@@ -1267,7 +1322,7 @@ export function formatHistoryTimestamp(value?: string) {
     day: 'numeric',
     year: 'numeric',
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
   }).format(date);
 }
 
@@ -1305,12 +1360,9 @@ export function isPromptCreator(prompt: WorkbenchPromptSummary, account: AuthAcc
   if (!creator) {
     return true;
   }
-  const creatorIds = [
-    creator.tagged_id,
-    creator.uuid,
-    creator.email_address,
-    creator.full_name
-  ].map((value) => value?.trim()).filter(Boolean);
+  const creatorIds = [creator.tagged_id, creator.uuid, creator.email_address, creator.full_name]
+    .map((value) => value?.trim())
+    .filter(Boolean);
   if (!creatorIds.length) {
     return true;
   }
@@ -1319,15 +1371,17 @@ export function isPromptCreator(prompt: WorkbenchPromptSummary, account: AuthAcc
     account?.uuid,
     account?.email_address,
     account?.full_name,
-    account?.display_name
-  ].map((value) => value?.trim()).filter(Boolean);
+    account?.display_name,
+  ]
+    .map((value) => value?.trim())
+    .filter(Boolean);
   return accountIds.some((value) => creatorIds.includes(value));
 }
 
 export function mostRecentPromptForWorkbenchEntry(
   prompts: WorkbenchPromptSummary[],
   workspaceId: string,
-  account: AuthAccount | null
+  account: AuthAccount | null,
 ) {
   return [...prompts]
     .filter((prompt) => prompt.workspace_id === workspaceId)
@@ -1358,28 +1412,28 @@ export const generatePromptExamples = [
   {
     id: 'summarize',
     title: 'Summarize a document',
-    task: 'Summarize documents into 10 bullet points max'
+    task: 'Summarize documents into 10 bullet points max',
   },
   {
     id: 'email',
     title: 'Write me an email',
-    task: 'Draft an email responding to a customer complaint email and offer a resolution'
+    task: 'Draft an email responding to a customer complaint email and offer a resolution',
   },
   {
     id: 'translate-code',
     title: 'Translate code',
-    task: 'Translate code to Python'
+    task: 'Translate code to Python',
   },
   {
     id: 'content-moderation',
     title: 'Content moderation',
-    task: 'Classify chat transcripts into categories using our content moderation policy'
+    task: 'Classify chat transcripts into categories using our content moderation policy',
   },
   {
     id: 'recommend-product',
     title: 'Recommend a product',
-    task: 'Recommend a product based on a customer’s previous transactions'
-  }
+    task: 'Recommend a product based on a customer’s previous transactions',
+  },
 ] as const;
 
 export function workbenchAccessState(account: AuthAccount | null, orgUuid?: string | null): WorkbenchAccessState {
@@ -1401,7 +1455,7 @@ export function workbenchAccessState(account: AuthAccount | null, orgUuid?: stri
 export function workbenchPromptGeneratorWarning(
   account: AuthAccount | null,
   orgUuid?: string | null,
-  prepaidCreditAmount?: number | null
+  prepaidCreditAmount?: number | null,
 ): WorkbenchPromptGeneratorWarning | null {
   if (organizationApiDisabledReason(account, orgUuid)) {
     return { title: promptGeneratorWarningTitle };
@@ -1413,7 +1467,8 @@ export function workbenchPromptGeneratorWarning(
 }
 
 export function organizationApiDisabledReason(account: AuthAccount | null, orgUuid?: string | null) {
-  const organization = currentOrganizationMembership(account, orgUuid)?.organization as Record<string, unknown> | undefined;
+  const organization = currentOrganizationMembership(account, orgUuid)?.organization as
+    Record<string, unknown> | undefined;
   return stringValue(organization?.api_disabled_reason);
 }
 
@@ -1429,7 +1484,7 @@ export function hasExplicitDisabledWorkbenchProduct(settings?: Record<string, un
     ['workbench_access', 'enabled'],
     ['enable_workbench'],
     ['workbench_enabled'],
-    ['workbench_access_enabled']
+    ['workbench_access_enabled'],
   ]);
 }
 
@@ -1439,7 +1494,7 @@ export function hasExplicitDisabledWorkbenchRole(settings?: Record<string, unkno
     ['workbench', 'user_role_access_enabled'],
     ['workbench_role_access_enabled'],
     ['workbench_user_role_access_enabled'],
-    ['default_workspace_settings', 'enable_workbench']
+    ['default_workspace_settings', 'enable_workbench'],
   ]);
 }
 
@@ -1469,7 +1524,12 @@ export function formatDate(value?: string) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
 }
 
 export function errorMessage(error: unknown) {
@@ -1505,13 +1565,15 @@ export function trackWorkbenchEvent(name: string, properties: Record<string, unk
     return;
   }
   window.dispatchEvent(new window.CustomEvent('workbench:analytics', { detail: { name, properties } }));
-  const analytics = (window as Window & { analytics?: { track?: (eventName: string, eventProperties: Record<string, unknown>) => void } })
-    .analytics;
+  const analytics = (
+    window as Window & { analytics?: { track?: (eventName: string, eventProperties: Record<string, unknown>) => void } }
+  ).analytics;
   analytics?.track?.(name, properties);
 }
 
 export function workbenchId(prefix: string) {
-  const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  const id =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
   return prefix ? `${prefix}_${id}` : id;
 }
 
@@ -1607,9 +1669,9 @@ export function anthropicCodeRequest(revision: WorkbenchRevision) {
       const content = cleanMessageContent(message.content, false).map(cleanCodeContentBlock);
       return {
         role: message.role === 'assistant' ? 'assistant' : 'user',
-        content: content.length ? content : [cleanCodeContentBlock({ type: 'text', text: '' })]
+        content: content.length ? content : [cleanCodeContentBlock({ type: 'text', text: '' })],
       };
-    })
+    }),
   };
   if (revision.system_prompt.trim()) {
     request.system = revision.system_prompt;
@@ -1627,14 +1689,7 @@ export function anthropicCodeRequest(revision: WorkbenchRevision) {
 
 export function cleanCodeContentBlock(block: WorkbenchContentBlock): WorkbenchContentBlock {
   const blockType = String(block.type || 'text');
-  const {
-    type: _type,
-    text,
-    source,
-    title,
-    cache_control,
-    ...rest
-  } = block;
+  const { type: _type, text, source, title, cache_control, ...rest } = block;
   const ordered: WorkbenchContentBlock = { type: blockType };
   if (blockType === 'text') {
     ordered.text = typeof text === 'string' ? text : '';
@@ -1672,12 +1727,14 @@ export function cleanCodeThinking(thinking: WorkbenchThinking): WorkbenchThinkin
     ...thinking,
     type: 'enabled',
     effort: thinking.effort ?? 'high',
-    budget_tokens: clampThinkingBudgetTokens(thinking.budget_tokens)
+    budget_tokens: clampThinkingBudgetTokens(thinking.budget_tokens),
   };
 }
 
 export function pythonKwargs(request: Record<string, unknown>) {
-  return Object.entries(request)
-    .map(([key, value]) => `\n    ${key}=${JSON.stringify(value, null, 4).replace(/\n/g, '\n    ')}`)
-    .join(',') + '\n)';
+  return (
+    Object.entries(request)
+      .map(([key, value]) => `\n    ${key}=${JSON.stringify(value, null, 4).replace(/\n/g, '\n    ')}`)
+      .join(',') + '\n)'
+  );
 }

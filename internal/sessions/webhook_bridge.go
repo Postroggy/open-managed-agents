@@ -31,7 +31,7 @@ func (h *Handler) enqueueWebhooksForSessionEvents(ctx context.Context, workspace
 				continue
 			}
 			seen[key] = struct{}{}
-			webhooks.Enqueue(ctx, h.db, h.cfg, workspaceID, workspaceIDs.OrganizationExternalID, workspaceIDs.WorkspaceExternalID, webhookEvent.EventType, sessionID, webhookEvent.ThreadID)
+			webhooks.Enqueue(ctx, h.db, h.cfg.Webhook, workspaceID, workspaceIDs.OrganizationExternalID, workspaceIDs.WorkspaceExternalID, webhookEvent.EventType, sessionID, webhookEvent.ThreadID)
 		}
 	}
 }
@@ -39,14 +39,6 @@ func (h *Handler) enqueueWebhooksForSessionEvents(ctx context.Context, workspace
 type sessionWebhookEvent struct {
 	EventType string
 	ThreadID  *string
-}
-
-func webhookEventFromSessionEvent(event db.SessionEvent) (string, *string, bool) {
-	webhookEvents := webhookEventsFromSessionEvent(event)
-	if len(webhookEvents) == 0 {
-		return "", nil, false
-	}
-	return webhookEvents[0].EventType, webhookEvents[0].ThreadID, true
 }
 
 func webhookEventsFromSessionEvent(event db.SessionEvent) []sessionWebhookEvent {

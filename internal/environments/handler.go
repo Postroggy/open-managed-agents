@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
+	"github.com/superduck-ai/open-managed-agents/internal/networkpolicy"
 	"github.com/superduck-ai/open-managed-agents/internal/runtime/e2bruntime"
 
 	"github.com/go-chi/chi/v5"
@@ -25,8 +25,6 @@ import (
 )
 
 const maxEnvironmentBodySize = 4 << 20
-
-var allowedHostPattern = regexp.MustCompile(`^(\*\.)?[A-Za-z0-9.-]+(:[0-9]{1,5})?$`)
 
 type Handler struct {
 	cfg    config.Config
@@ -141,7 +139,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.isOfficialSDKPrincipal(principal) {
-		httpapi.WriteJSON(w, http.StatusOK, h.fixtureEnvironment(h.cfg.OfficialSDKFixtureEnvironmentID, false))
+		httpapi.WriteJSON(w, http.StatusOK, h.fixtureEnvironment(h.cfg.SDKFixtures.EnvironmentID, false))
 		return
 	}
 	name, err := parseRequiredStringField(fields, "name")
@@ -215,7 +213,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	cursor, err := decodeEnvironmentCursor(r.URL.Query().Get("page"))
 	if err != nil {
 		if h.isOfficialSDKPrincipal(principal) {
-			httpapi.WriteJSON(w, http.StatusOK, environmentPageResponse{Data: []environmentResponse{h.fixtureEnvironment(h.cfg.OfficialSDKFixtureEnvironmentID, false)}})
+			httpapi.WriteJSON(w, http.StatusOK, environmentPageResponse{Data: []environmentResponse{h.fixtureEnvironment(h.cfg.SDKFixtures.EnvironmentID, false)}})
 			return
 		}
 		writeBadRequest(w, r, err)
@@ -238,7 +236,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.isOfficialSDKPrincipal(principal) && len(records) == 0 {
-		httpapi.WriteJSON(w, http.StatusOK, environmentPageResponse{Data: []environmentResponse{h.fixtureEnvironment(h.cfg.OfficialSDKFixtureEnvironmentID, false)}})
+		httpapi.WriteJSON(w, http.StatusOK, environmentPageResponse{Data: []environmentResponse{h.fixtureEnvironment(h.cfg.SDKFixtures.EnvironmentID, false)}})
 		return
 	}
 	data := make([]environmentResponse, 0, len(records))
@@ -420,7 +418,7 @@ func (h *Handler) listWorkRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.isOfficialSDKRequest(r) {
-		httpapi.WriteJSON(w, http.StatusOK, workPageResponse{Data: []workResponse{h.fixtureWork(env.ExternalID, h.cfg.OfficialSDKFixtureWorkID, "queued")}})
+		httpapi.WriteJSON(w, http.StatusOK, workPageResponse{Data: []workResponse{h.fixtureWork(env.ExternalID, h.cfg.SDKFixtures.WorkID, "queued")}})
 		return
 	}
 	limit, err := parseLimit(r)
@@ -527,7 +525,7 @@ func (h *Handler) pollWorkRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.isOfficialSDKRequest(r) {
-		httpapi.WriteJSON(w, http.StatusOK, h.fixtureWork(env.ExternalID, h.cfg.OfficialSDKFixtureWorkID, "queued"))
+		httpapi.WriteJSON(w, http.StatusOK, h.fixtureWork(env.ExternalID, h.cfg.SDKFixtures.WorkID, "queued"))
 		return
 	}
 	blockFor, err := parseBlockMS(r)
@@ -718,7 +716,7 @@ func (h *Handler) killSandboxForWork(ctx context.Context, env db.Environment, wo
 	if err := h.db.UpdateEnvironmentSandboxState(ctx, env.WorkspaceID, sandbox.ExternalID, "stopping", &providerSandboxID, nil, nil); err != nil {
 		return err
 	}
-	if err := e2bruntime.NewProvider(h.cfg).Kill(ctx, providerSandboxID); err != nil {
+	if err := e2bruntime.NewProvider(h.cfg.E2B).Kill(ctx, providerSandboxID); err != nil {
 		message := err.Error()
 		_ = h.db.UpdateEnvironmentSandboxState(ctx, env.WorkspaceID, sandbox.ExternalID, "failed", &providerSandboxID, &message, nil)
 		return err
@@ -781,10 +779,10 @@ func isWorkspaceCredential(principal auth.Principal) bool {
 }
 
 func (h *Handler) resolvedTemplate(json.RawMessage) string {
-	if strings.TrimSpace(h.cfg.E2BTemplate) == "" {
+	if strings.TrimSpace(h.cfg.E2B.Template) == "" {
 		return "claude-code-interpreter"
 	}
-	return h.cfg.E2BTemplate
+	return h.cfg.E2B.Template
 }
 
 func responseFromEnvironment(env db.Environment) environmentResponse {
@@ -1007,7 +1005,7 @@ func (h *Handler) fixtureWork(environmentID, workID, state string) workResponse 
 
 func (h *Handler) isOfficialSDKPrincipal(principal auth.Principal) bool {
 	return principal.CredentialType == "api_key" &&
-		principal.APIKeyExternalID == h.cfg.OfficialSDKResourceAPIKeyExternalID
+		principal.APIKeyExternalID == h.cfg.SDKFixtures.APIKeyExternalID
 }
 
 func (h *Handler) isOfficialSDKRequest(r *http.Request) bool {
@@ -1017,14 +1015,13 @@ func (h *Handler) isOfficialSDKRequest(r *http.Request) bool {
 
 func (h *Handler) isOfficialSDKEnvironmentFixture(principal auth.Principal, environmentID string) bool {
 	return h.isOfficialSDKPrincipal(principal) &&
-		environmentID == h.cfg.OfficialSDKFixtureEnvironmentID
+		environmentID == h.cfg.SDKFixtures.EnvironmentID
 }
 
 func (h *Handler) isOfficialSDKWorkFixture(r *http.Request, workID string) bool {
 	principal, _ := auth.PrincipalFromContext(r.Context())
-	return principal.CredentialType == "api_key" &&
-		principal.APIKeyExternalID == h.cfg.OfficialSDKResourceAPIKeyExternalID &&
-		workID == h.cfg.OfficialSDKFixtureWorkID
+	return h.isOfficialSDKPrincipal(principal) &&
+		workID == h.cfg.SDKFixtures.WorkID
 }
 
 func decodeObjectBody(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, error) {
@@ -1250,7 +1247,7 @@ func normalizeNetworking(raw json.RawMessage) (map[string]any, error) {
 				return nil, err
 			}
 			for _, host := range values {
-				if err := validateAllowedHost(host); err != nil {
+				if err := networkpolicy.ValidateAllowedHost(host); err != nil {
 					return nil, err
 				}
 			}
@@ -1273,16 +1270,6 @@ func normalizeNetworking(raw json.RawMessage) (map[string]any, error) {
 	default:
 		return nil, errors.New("config.networking.type must be unrestricted or limited")
 	}
-}
-
-func validateAllowedHost(host string) error {
-	if strings.Contains(host, "://") || strings.Contains(host, "/") || !allowedHostPattern.MatchString(host) {
-		return errors.New("config.networking.allowed_hosts entries must be hostnames without URL schemes")
-	}
-	if len(host) > 253 {
-		return errors.New("config.networking.allowed_hosts entries must be at most 253 characters")
-	}
-	return nil
 }
 
 func normalizeMetadata(raw json.RawMessage) (json.RawMessage, error) {

@@ -10,7 +10,10 @@ export function BreadcrumbList({ className, ...props }: ComponentProps<'ol'>) {
   return (
     <ol
       data-slot="breadcrumb-list"
-      className={cn('flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5', className)}
+      className={cn(
+        'flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5',
+        className,
+      )}
       {...props}
     />
   );
@@ -21,7 +24,9 @@ export function BreadcrumbItem({ className, ...props }: ComponentProps<'li'>) {
 }
 
 export function BreadcrumbLink({ className, ...props }: ComponentProps<'a'>) {
-  return <a data-slot="breadcrumb-link" className={cn('transition-colors hover:text-foreground', className)} {...props} />;
+  return (
+    <a data-slot="breadcrumb-link" className={cn('transition-colors hover:text-foreground', className)} {...props} />
+  );
 }
 
 export function BreadcrumbPage({ className, ...props }: ComponentProps<'span'>) {

@@ -1,5 +1,13 @@
-import { quickstartSteps } from './quickstart/AgentQuickstartPage';
-import { type AgentCreatedFilter, type AgentStatusFilter, type AgentTemplate, type I18nMsg, type ManagedAgentSection, type ManagedEntitySection, type ResourceConfig } from './types';
+import { type QuickstartStepName } from './quickstart/steps';
+import {
+  type AgentCreatedFilter,
+  type AgentStatusFilter,
+  type AgentTemplate,
+  type I18nMsg,
+  type ManagedAgentSection,
+  type ManagedEntitySection,
+  type ResourceConfig,
+} from './types';
 import { titleCase } from './utils';
 
 export function managedSectionKey(section: ManagedAgentSection | ManagedEntitySection) {
@@ -19,7 +27,7 @@ export function managedMessage(
   msg: I18nMsg,
   section: ManagedAgentSection | ManagedEntitySection,
   suffix: string,
-  fallback: string
+  fallback: string,
 ) {
   return msg(`managedAgents.${managedSectionKey(section)}.${suffix}`, fallback);
 }
@@ -33,10 +41,14 @@ export function templateBody(template: AgentTemplate, msg: I18nMsg) {
 }
 
 export function templateSearchText(template: AgentTemplate, msg: I18nMsg) {
-  return [templateTitle(template, msg), templateBody(template, msg), ...(template.tags?.map((tag) => tag.label) ?? [])].join(' ');
+  return [
+    templateTitle(template, msg),
+    templateBody(template, msg),
+    ...(template.tags?.map((tag) => tag.label) ?? []),
+  ].join(' ');
 }
 
-export function quickstartStepLabel(step: (typeof quickstartSteps)[number], msg: I18nMsg) {
+export function quickstartStepLabel(step: QuickstartStepName, msg: I18nMsg) {
   switch (step) {
     case 'Create agent':
       return msg('managedAgents.quickstart.steps.createAgent', step);
@@ -187,10 +199,14 @@ export function entityActionLabel(action: 'edit' | 'archive' | 'delete', section
   }
 }
 
-export function managedToastMessage(section: ManagedEntitySection, action: 'created' | 'updated' | 'archived' | 'deleted', msg: I18nMsg) {
+export function managedToastMessage(
+  section: ManagedEntitySection,
+  action: 'created' | 'updated' | 'archived' | 'deleted',
+  msg: I18nMsg,
+) {
   return msg(`managedAgents.common.toast.${action}`, '{label} {action}', {
     label: entityKindTitle(section, msg),
-    action
+    action,
   });
 }
 
@@ -231,12 +247,12 @@ export const createdFilterOptions: Array<{ value: AgentCreatedFilter; label: str
   { value: 'all', label: 'All time' },
   { value: 'last7', label: 'Last 7 days' },
   { value: 'last30', label: 'Last 30 days' },
-  { value: 'custom', label: 'Custom range' }
+  { value: 'custom', label: 'Custom range' },
 ];
 
 export const statusFilterOptions: Array<{ value: AgentStatusFilter; label: string }> = [
   { value: 'active', label: 'Active' },
-  { value: 'all', label: 'All' }
+  { value: 'all', label: 'All' },
 ];
 
 export function dialogSubtitle(section: ManagedEntitySection) {

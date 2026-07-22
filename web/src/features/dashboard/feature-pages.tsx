@@ -23,17 +23,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 } from '@/shared/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/shared/ui/field';
 import { InputGroup, InputGroupButton, InputGroupInput } from '@/shared/ui/input-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
 import {
   ConsolePageFrame,
@@ -45,14 +39,14 @@ import {
   PanelCard,
   PrimaryAction,
   SecondaryAction,
-  SettingRow
+  SettingRow,
 } from './frame';
 import { formatRole, titleize, type IconComponent } from './model';
 
 const workbenchModelOptions = [
   { value: 'sonnet-4-6', label: 'Claude Sonnet 4.6' },
   { value: 'opus-4-8', label: 'Claude Opus 4.8' },
-  { value: 'haiku-4-5', label: 'Claude Haiku 4.5' }
+  { value: 'haiku-4-5', label: 'Claude Haiku 4.5' },
 ];
 
 export function ConsolePlaceholderPage({ section }: { section: string }) {
@@ -120,13 +114,18 @@ export function PlaygroundPage() {
         <PanelCard title={msg('playground.configuration', 'Configuration')}>
           <div className="space-y-3">
             <ControlRow label={msg('analytics.table.model', 'Model')} value="Sonnet 4.6" />
-            <ControlRow label={msg('playground.systemPrompt', 'System prompt')} value={msg('playground.none', 'None')} />
+            <ControlRow
+              label={msg('playground.systemPrompt', 'System prompt')}
+              value={msg('playground.none', 'None')}
+            />
             <ControlRow label={msg('playground.tools', 'Tools')} value={msg('playground.disabled', 'Disabled')} />
           </div>
         </PanelCard>
         <Card className="flex flex-col gap-0 rounded-lg p-0">
           <CardHeader className="border-b border-border px-4 py-3">
-            <CardTitle className="text-sm font-semibold text-foreground">{msg('playground.messages', 'Messages')}</CardTitle>
+            <CardTitle className="text-sm font-semibold text-foreground">
+              {msg('playground.messages', 'Messages')}
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
             {msg('playground.empty', "Start a conversation to preview Claude's response.")}
@@ -158,14 +157,23 @@ export function LimitsPage() {
       icon={Gauge}
       description={msg(
         'limits.description',
-        'Limits help us mitigate against misuse and manage API capacity. Rate limits restrict API usage frequency over a certain period of time.'
+        'Limits help us mitigate against misuse and manage API capacity. Rate limits restrict API usage frequency over a certain period of time.',
       )}
       eyebrow={msg('limits.customPlan', 'Custom Plan')}
-      actions={<SecondaryAction href="/usage/limits" icon={Gauge} label={msg('limits.monitorUsage', 'Monitor rate limit usage')} />}
+      actions={
+        <SecondaryAction
+          href="/usage/limits"
+          icon={Gauge}
+          label={msg('limits.monitorUsage', 'Monitor rate limit usage')}
+        />
+      }
     >
       <NoticeCard
         icon={LifeBuoy}
-        title={msg('limits.notice.title', 'Contact the Anthropic accounts team to learn more about custom rate limits.')}
+        title={msg(
+          'limits.notice.title',
+          'Contact the Anthropic accounts team to learn more about custom rate limits.',
+        )}
         action={
           <ButtonLink
             href="https://www.anthropic.com/contact-sales"
@@ -183,7 +191,7 @@ export function LimitsPage() {
           msg('analytics.table.model', 'Model'),
           msg('analytics.rateLimits.requestsPerMinute', 'Requests per Minute'),
           msg('analytics.rateLimits.inputTokensPerMinute', 'Input Tokens per Minute'),
-          msg('analytics.rateLimits.outputTokensPerMinute', 'Output Tokens per Minute')
+          msg('analytics.rateLimits.outputTokensPerMinute', 'Output Tokens per Minute'),
         ]}
         rows={limitRows}
       />
@@ -196,7 +204,10 @@ export function MembersPage() {
   const { account } = useAuth();
   const primaryMembership = account?.memberships?.[0];
   const displayName =
-    account?.display_name || account?.full_name || account?.email_address?.split('@')[0] || msg('members.currentUser', 'Current user');
+    account?.display_name ||
+    account?.full_name ||
+    account?.email_address?.split('@')[0] ||
+    msg('members.currentUser', 'Current user');
   const emailAddress = account?.email_address || msg('members.unknownEmail', 'Unknown email');
   const role = formatRole(primaryMembership?.role, msg);
 
@@ -207,7 +218,10 @@ export function MembersPage() {
       eyebrow="1"
       actions={<PrimaryAction href="/members/invite" icon={Plus} label={msg('members.invite', 'Invite')} />}
     >
-      <DataTable columns={[msg('common.name', 'Name'), msg('members.email', 'Email'), msg('members.role', 'Role')]} rows={[[displayName, emailAddress, role]]} />
+      <DataTable
+        columns={[msg('common.name', 'Name'), msg('members.email', 'Email'), msg('members.role', 'Role')]}
+        rows={[[displayName, emailAddress, role]]}
+      />
     </ConsolePageFrame>
   );
 }
@@ -236,21 +250,22 @@ export function ClaudeCodeSettingsPage() {
   const workspacePermissionOptions = [
     {
       value: 'seat-holders',
-      label: msg('claudeCode.settings.workspacePermissions.optionSeatHolders', 'Members with a Claude Code seat')
+      label: msg('claudeCode.settings.workspacePermissions.optionSeatHolders', 'Members with a Claude Code seat'),
     },
     {
       value: 'developers-and-admins',
-      label: msg('claudeCode.settings.workspacePermissions.optionDevelopers', 'Developers and admins')
+      label: msg('claudeCode.settings.workspacePermissions.optionDevelopers', 'Developers and admins'),
     },
     {
       value: 'disabled',
-      label: msg('claudeCode.settings.workspacePermissions.optionDisabled', 'Disabled by default')
-    }
+      label: msg('claudeCode.settings.workspacePermissions.optionDisabled', 'Disabled by default'),
+    },
   ];
   const [workspacePermission, setWorkspacePermission] = useState('seat-holders');
   const [workspacePermissionDraft, setWorkspacePermissionDraft] = useState(workspacePermission);
   const [workspacePermissionsOpen, setWorkspacePermissionsOpen] = useState(false);
-  const selectedWorkspacePermissionLabel = workspacePermissionOptions.find((option) => option.value === workspacePermission)?.label ?? workspacePermission;
+  const selectedWorkspacePermissionLabel =
+    workspacePermissionOptions.find((option) => option.value === workspacePermission)?.label ?? workspacePermission;
   const openWorkspacePermissionsDialog = (nextOpen: boolean) => {
     setWorkspacePermissionsOpen(nextOpen);
     if (nextOpen) {
@@ -274,25 +289,28 @@ export function ClaudeCodeSettingsPage() {
         <Dialog open={workspacePermissionsOpen} onOpenChange={openWorkspacePermissionsDialog}>
           <SettingRow
             title={msg('claudeCode.settings.workspacePermissions.title', 'Workspace permissions')}
-            body={msg('claudeCode.settings.workspacePermissions.body', 'Configure default access for Claude Code workspaces.')}
+            body={msg(
+              'claudeCode.settings.workspacePermissions.body',
+              'Configure default access for Claude Code workspaces.',
+            )}
             detail={msg('claudeCode.settings.workspacePermissions.current', 'Current default: {value}', {
-              value: selectedWorkspacePermissionLabel
+              value: selectedWorkspacePermissionLabel,
             })}
             action={
-              <DialogTrigger
-                render={<Button type="button" variant="outline" size="lg" />}
-              >
+              <DialogTrigger render={<Button type="button" variant="outline" size="lg" />}>
                 {msg('common.configure', 'Configure')}
               </DialogTrigger>
             }
           />
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
-              <DialogTitle>{msg('claudeCode.settings.workspacePermissions.dialogTitle', 'Configure workspace permissions')}</DialogTitle>
+              <DialogTitle>
+                {msg('claudeCode.settings.workspacePermissions.dialogTitle', 'Configure workspace permissions')}
+              </DialogTitle>
               <DialogDescription>
                 {msg(
                   'claudeCode.settings.workspacePermissions.dialogBody',
-                  'Choose the default Claude Code access level for newly configured workspaces.'
+                  'Choose the default Claude Code access level for newly configured workspaces.',
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -327,7 +345,7 @@ export function ClaudeCodeSettingsPage() {
               <FieldDescription>
                 {msg(
                   'claudeCode.settings.workspacePermissions.help',
-                  'This default applies when new Claude Code workspaces are enabled.'
+                  'This default applies when new Claude Code workspaces are enabled.',
                 )}
               </FieldDescription>
             </Field>
@@ -360,7 +378,7 @@ export function ConsoleFeaturePage({ section }: { section: string }) {
     icon: placeholderIcons[`/${section}` as keyof typeof placeholderIcons] ?? Activity,
     description: 'Manage this Open Managed Agents resource for the active workspace.',
     emptyTitle: `No ${fallbackTitle.toLowerCase()} configured`,
-    emptyBody: 'New resources and configuration changes appear here.'
+    emptyBody: 'New resources and configuration changes appear here.',
   };
   const copy = featurePageCopy(section, config, fallbackTitle, msg);
 
@@ -375,7 +393,7 @@ const limitRows = [
   ['Claude Fable 5', '5', '10K excluding cache reads', '4K'],
   ['Claude Opus 4.8', '5', '10K excluding cache reads', '4K'],
   ['Claude Sonnet 4.6', '50', '40K excluding cache reads', '16K'],
-  ['Claude Haiku 4.5', '50', '50K excluding cache reads', '20K']
+  ['Claude Haiku 4.5', '50', '50K excluding cache reads', '20K'],
 ];
 
 const featurePageConfig: Record<
@@ -396,7 +414,7 @@ const featurePageConfig: Record<
     description: 'Expose local MCP servers to managed agent sessions.',
     emptyTitle: 'No MCP tunnels',
     emptyBody: 'Preview tunnels and connection status appear here.',
-    eyebrow: 'Preview'
+    eyebrow: 'Preview',
   },
   tags: {
     title: 'Tags',
@@ -404,8 +422,8 @@ const featurePageConfig: Record<
     description: 'Organize resources with tags across workspaces.',
     emptyTitle: 'No tags',
     emptyBody: 'Create tags to classify resources and filter operational views.',
-    action: 'Create tag'
-  }
+    action: 'Create tag',
+  },
 };
 
 function featurePageCopy(
@@ -419,7 +437,7 @@ function featurePageCopy(
     action?: string;
   },
   fallbackTitle: string,
-  msg: ReturnType<typeof useI18n>['msg']
+  msg: ReturnType<typeof useI18n>['msg'],
 ) {
   switch (section) {
     case 'mcp-tunnels':
@@ -429,7 +447,7 @@ function featurePageCopy(
         emptyTitle: msg('featurePage.mcpTunnels.emptyTitle', config.emptyTitle),
         emptyBody: msg('featurePage.mcpTunnels.emptyBody', config.emptyBody),
         eyebrow: msg('nav.preview', config.eyebrow ?? 'Preview'),
-        action: config.action
+        action: config.action,
       };
     case 'tags':
       return {
@@ -438,7 +456,7 @@ function featurePageCopy(
         emptyTitle: msg('featurePage.tags.emptyTitle', config.emptyTitle),
         emptyBody: msg('featurePage.tags.emptyBody', config.emptyBody),
         eyebrow: config.eyebrow,
-        action: msg('featurePage.tags.action', config.action ?? 'Create tag')
+        action: msg('featurePage.tags.action', config.action ?? 'Create tag'),
       };
     default:
       return {
@@ -447,7 +465,7 @@ function featurePageCopy(
         emptyTitle: msg('featurePage.default.emptyTitle', config.emptyTitle, { title: fallbackTitle.toLowerCase() }),
         emptyBody: msg('featurePage.default.emptyBody', config.emptyBody),
         eyebrow: config.eyebrow,
-        action: config.action
+        action: config.action,
       };
   }
 }

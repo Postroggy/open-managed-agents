@@ -9,7 +9,7 @@ import {
   Search,
   Sparkles,
   Trash2,
-  Upload
+  Upload,
 } from 'lucide-react';
 import { Editor, EditorContent, JSONContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -22,7 +22,7 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState
+  useState,
 } from 'react';
 import clsx from 'clsx';
 import { Button } from '@/shared/ui/button';
@@ -33,7 +33,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -43,7 +43,7 @@ import {
   messageText,
   splitVariableText,
   WorkbenchAttachmentKind,
-  WorkbenchPromptGeneratorWarning
+  WorkbenchPromptGeneratorWarning,
 } from './model';
 import { Dialog } from './dialogs';
 import { IconButton } from './components';
@@ -64,7 +64,7 @@ export const workbenchPlainTextStarterKit = StarterKit.configure({
   listKeymap: false,
   orderedList: false,
   strike: false,
-  underline: false
+  underline: false,
 });
 
 export function TiptapTextInput({
@@ -72,7 +72,7 @@ export function TiptapTextInput({
   text,
   onChange,
   className,
-  isReadOnly = false
+  isReadOnly = false,
 }: {
   ariaLabel: string;
   text: string;
@@ -98,8 +98,8 @@ export function TiptapTextInput({
           'aria-label': ariaLabel,
           'aria-multiline': 'true',
           spellcheck: 'false',
-          class: clsx(className, isReadOnly && 'is-read-only')
-        }
+          class: clsx(className, isReadOnly && 'is-read-only'),
+        },
       },
       onUpdate: ({ editor: updatedEditor }) => {
         const nextText = readTiptapEditorText(updatedEditor);
@@ -107,9 +107,9 @@ export function TiptapTextInput({
           textRef.current = nextText;
           onChangeRef.current(nextText);
         }
-      }
+      },
     },
-    [ariaLabel, className, isReadOnly]
+    [ariaLabel, className, isReadOnly],
   );
 
   const syncTextFromEditor = useCallback(() => {
@@ -157,7 +157,7 @@ export function TiptapTextInput({
 export function SystemPromptEditableInput({
   text,
   onChange,
-  isReadOnly = false
+  isReadOnly = false,
 }: {
   text: string;
   onChange: (text: string) => void;
@@ -179,7 +179,7 @@ export function MessageEditableInput({
   index,
   text,
   onChange,
-  isReadOnly = false
+  isReadOnly = false,
 }: {
   label: string;
   index: number;
@@ -214,7 +214,7 @@ export function MessageEditor({
   promptGeneratorWarning = null,
   isGeneratingPrompt = false,
   isUploading = false,
-  uploadError = null
+  uploadError = null,
 }: {
   message: WorkbenchMessage;
   index: number;
@@ -351,169 +351,191 @@ export function MessageEditor({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-      <div className="workbench-message-header">
-        <h2 className="workbench-message-title">{label}</h2>
-        <div className="flex items-center gap-1">
-          {message.role === 'human' ? (
-            <>
-              <input
-                ref={imageUploadInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                aria-hidden="true"
-                tabIndex={-1}
-                data-testid={`workbench-upload-input-${index}-image`}
-                className="workbench-hidden-file-input"
-                onChange={handleUploadChange}
-              />
-              <input
-                ref={pdfUploadInputRef}
-                type="file"
-                multiple
-                accept=".pdf,application/pdf"
-                aria-hidden="true"
-                tabIndex={-1}
-                data-testid={`workbench-upload-input-${index}`}
-                className="workbench-hidden-file-input"
-                onChange={handleUploadChange}
-              />
-              <div className="workbench-attachment-control">
-                <DropdownMenu open={attachmentMenuOpen} onOpenChange={setAttachmentMenuOpen}>
-                  <DropdownMenuTrigger
-                    render={(
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Upload up to 100 files, 20MB per file."
-                        title="Upload up to 100 files, 20MB per file."
-                        aria-expanded={attachmentMenuOpen}
-                        className={clsx('workbench-attachment-trigger', attachmentMenuOpen && 'is-open')}
-                        disabled={isUploading || isReadOnly}
+        <div className="workbench-message-header">
+          <h2 className="workbench-message-title">{label}</h2>
+          <div className="flex items-center gap-1">
+            {message.role === 'human' ? (
+              <>
+                <input
+                  ref={imageUploadInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  data-testid={`workbench-upload-input-${index}-image`}
+                  className="workbench-hidden-file-input"
+                  onChange={handleUploadChange}
+                />
+                <input
+                  ref={pdfUploadInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,application/pdf"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  data-testid={`workbench-upload-input-${index}`}
+                  className="workbench-hidden-file-input"
+                  onChange={handleUploadChange}
+                />
+                <div className="workbench-attachment-control">
+                  <DropdownMenu open={attachmentMenuOpen} onOpenChange={setAttachmentMenuOpen}>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Upload up to 100 files, 20MB per file."
+                          title="Upload up to 100 files, 20MB per file."
+                          aria-expanded={attachmentMenuOpen}
+                          className={clsx('workbench-attachment-trigger', attachmentMenuOpen && 'is-open')}
+                          disabled={isUploading || isReadOnly}
+                        />
+                      }
+                    >
+                      {isUploading ? (
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                      ) : (
+                        <Paperclip className="size-4" aria-hidden />
+                      )}
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      aria-label="Attachment type"
+                      align="end"
+                      side="bottom"
+                      sideOffset={8}
+                      className="w-32 min-w-32 rounded-xl p-1.5"
+                    >
+                      <AttachmentTypeSubmenu
+                        kind="image"
+                        label="Image"
+                        onUpload={openUploadPicker}
+                        onAddUrl={openUrlDialog}
                       />
-                    )}
-                  >
-                    {isUploading ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Paperclip className="size-4" aria-hidden />
-                    )}
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    aria-label="Attachment type"
-                    align="end"
-                    side="bottom"
-                    sideOffset={8}
-                    className="w-32 min-w-32 rounded-xl p-1.5"
-                  >
-                    <AttachmentTypeSubmenu kind="image" label="Image" onUpload={openUploadPicker} onAddUrl={openUrlDialog} />
-                    <AttachmentTypeSubmenu kind="pdf" label="PDF" onUpload={openUploadPicker} onAddUrl={openUrlDialog} />
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </>
-          ) : null}
-          {index > 0 ? (
-            <IconButton label={removalLabel} disabled={isReadOnly} compact onClick={() => onRemove(index)}>
-              <Trash2 className="size-4" aria-hidden />
-            </IconButton>
-          ) : null}
+                      <AttachmentTypeSubmenu
+                        kind="pdf"
+                        label="PDF"
+                        onUpload={openUploadPicker}
+                        onAddUrl={openUrlDialog}
+                      />
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </>
+            ) : null}
+            {index > 0 ? (
+              <IconButton label={removalLabel} disabled={isReadOnly} compact onClick={() => onRemove(index)}>
+                <Trash2 className="size-4" aria-hidden />
+              </IconButton>
+            ) : null}
+          </div>
         </div>
-      </div>
-      {message.role === 'human' ? (
-        <div className="workbench-message-drop-target" aria-hidden={!isDragOver}>
-          <Paperclip className="size-4" aria-hidden />
-          <span>Drop here to insert into user message</span>
-          <small>Max 100 files at 20MB each</small>
-        </div>
-      ) : null}
-      <div
-        className={clsx(
-          'workbench-message-input-wrap',
-          hasVariableTokens && 'has-variable-layer',
-          showPlaceholder && 'has-placeholder',
-          showPlaceholder && isFirstUserMessage && 'has-generator-placeholder'
-        )}
-      >
-        {showPlaceholder ? (
-          <MessageEditorPlaceholder
-            placeholder={isFirstUserMessage ? 'or enter instructions or prompt for Claude…' : 'Enter instructions or prompt for Claude…'}
-            showGeneratePrompt={isFirstUserMessage}
-            warning={promptGeneratorWarning}
-            isReadOnly={isReadOnly}
-            isGenerating={isGeneratingPrompt}
-            onShowPromptGenerator={onShowPromptGenerator}
-          />
+        {message.role === 'human' ? (
+          <div className="workbench-message-drop-target" aria-hidden={!isDragOver}>
+            <Paperclip className="size-4" aria-hidden />
+            <span>Drop here to insert into user message</span>
+            <small>Max 100 files at 20MB each</small>
+          </div>
         ) : null}
-        {hasVariableTokens ? (
-          <div className="workbench-message-variable-layer">
-            {variableParts.map((part, partIndex) =>
-              part.type === 'variable' ? (
-                <span key={`${part.name}-${partIndex}`} className="workbench-message-variable-token">
-                  <span className="workbench-message-variable-name" aria-hidden>
-                    {part.name}
+        <div
+          className={clsx(
+            'workbench-message-input-wrap',
+            hasVariableTokens && 'has-variable-layer',
+            showPlaceholder && 'has-placeholder',
+            showPlaceholder && isFirstUserMessage && 'has-generator-placeholder',
+          )}
+        >
+          {showPlaceholder ? (
+            <MessageEditorPlaceholder
+              placeholder={
+                isFirstUserMessage
+                  ? 'or enter instructions or prompt for Claude…'
+                  : 'Enter instructions or prompt for Claude…'
+              }
+              showGeneratePrompt={isFirstUserMessage}
+              warning={promptGeneratorWarning}
+              isReadOnly={isReadOnly}
+              isGenerating={isGeneratingPrompt}
+              onShowPromptGenerator={onShowPromptGenerator}
+            />
+          ) : null}
+          {hasVariableTokens ? (
+            <div className="workbench-message-variable-layer">
+              {variableParts.map((part, partIndex) =>
+                part.type === 'variable' ? (
+                  <span key={`${part.name}-${partIndex}`} className="workbench-message-variable-token">
+                    <span className="workbench-message-variable-name" aria-hidden>
+                      {part.name}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Add value for ${part.name}`}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onVariableClick(part.name)}
+                    >
+                      <PencilLine className="size-3.5" aria-hidden />
+                    </Button>
                   </span>
+                ) : (
+                  <span key={`text-${partIndex}`} aria-hidden>
+                    {part.text}
+                  </span>
+                ),
+              )}
+            </div>
+          ) : null}
+          <MessageEditableInput label={label} index={index} text={text} onChange={onChange} isReadOnly={isReadOnly} />
+        </div>
+        {attachments.length ? (
+          <div className="workbench-message-attachments" aria-label={`${label} prompt attachments`}>
+            {attachments.map((attachment) => (
+              <div key={attachment.id} className="workbench-message-attachment">
+                <span className="workbench-message-attachment-thumb" aria-hidden>
+                  {attachment.kind === 'image' ? <ImageIcon className="size-4" /> : <Paperclip className="size-4" />}
+                </span>
+                <span className="workbench-message-attachment-name">{attachment.label}</span>
+                <span className="workbench-message-attachment-actions">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Add value for ${part.name}`}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onVariableClick(part.name)}
+                    aria-label={`Preview ${attachment.label}`}
+                    disabled
                   >
-                    <PencilLine className="size-3.5" aria-hidden />
+                    <Search className="size-3.5" aria-hidden />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Replace ${attachment.label}`}
+                    disabled={isUploading || isReadOnly}
+                    onClick={() =>
+                      openUploadPicker(attachment.kind === 'image' ? 'image' : 'pdf', attachment.blockIndex)
+                    }
+                  >
+                    <RefreshCw className="size-3.5" aria-hidden />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Remove ${attachment.label}`}
+                    disabled={isReadOnly}
+                    onClick={() => onRemoveFile(index, attachment.blockIndex)}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
                   </Button>
                 </span>
-              ) : (
-                <span key={`text-${partIndex}`} aria-hidden>
-                  {part.text}
-                </span>
-              )
-            )}
+              </div>
+            ))}
           </div>
         ) : null}
-        <MessageEditableInput label={label} index={index} text={text} onChange={onChange} isReadOnly={isReadOnly} />
-      </div>
-      {attachments.length ? (
-        <div className="workbench-message-attachments" aria-label={`${label} prompt attachments`}>
-          {attachments.map((attachment) => (
-            <div key={attachment.id} className="workbench-message-attachment">
-              <span className="workbench-message-attachment-thumb" aria-hidden>
-                {attachment.kind === 'image' ? <ImageIcon className="size-4" /> : <Paperclip className="size-4" />}
-              </span>
-              <span className="workbench-message-attachment-name">{attachment.label}</span>
-              <span className="workbench-message-attachment-actions">
-                <Button type="button" variant="ghost" size="icon-xs" aria-label={`Preview ${attachment.label}`} disabled>
-                  <Search className="size-3.5" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={`Replace ${attachment.label}`}
-                  disabled={isUploading || isReadOnly}
-                  onClick={() => openUploadPicker(attachment.kind === 'image' ? 'image' : 'pdf', attachment.blockIndex)}
-                >
-                  <RefreshCw className="size-3.5" aria-hidden />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={`Remove ${attachment.label}`}
-                  disabled={isReadOnly}
-                  onClick={() => onRemoveFile(index, attachment.blockIndex)}
-                >
-                  <Trash2 className="size-3.5" aria-hidden />
-                </Button>
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {uploadError ? <div className="workbench-message-upload-error">{uploadError}</div> : null}
-    </section>
+        {uploadError ? <div className="workbench-message-upload-error">{uploadError}</div> : null}
+      </section>
       {urlDialogKind ? (
         <AttachmentUrlDialog
           kind={urlDialogKind}
@@ -531,7 +553,7 @@ export function AttachmentTypeSubmenu({
   kind,
   label,
   onUpload,
-  onAddUrl
+  onAddUrl,
 }: {
   kind: WorkbenchAttachmentKind;
   label: string;
@@ -546,11 +568,17 @@ export function AttachmentTypeSubmenu({
         <span>{label}</span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent aria-label={`${kind} attachment source`} className="min-w-[188px] rounded-xl p-1.5">
-        <DropdownMenuItem className="min-h-9 gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium" onClick={() => onUpload(kind)}>
+        <DropdownMenuItem
+          className="min-h-9 gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium"
+          onClick={() => onUpload(kind)}
+        >
           <Upload className="size-4" aria-hidden />
           <span>Upload from device</span>
         </DropdownMenuItem>
-        <DropdownMenuItem className="min-h-9 gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium" onClick={() => onAddUrl(kind)}>
+        <DropdownMenuItem
+          className="min-h-9 gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium"
+          onClick={() => onAddUrl(kind)}
+        >
           <Link2 className="size-4" aria-hidden />
           <span>Add from URL</span>
         </DropdownMenuItem>
@@ -564,7 +592,7 @@ export function AttachmentUrlDialog({
   url,
   setUrl,
   onSubmit,
-  onClose
+  onClose,
 }: {
   kind: WorkbenchAttachmentKind;
   url: string;
@@ -614,7 +642,7 @@ export function MessageEditorPlaceholder({
   warning,
   isReadOnly,
   isGenerating,
-  onShowPromptGenerator
+  onShowPromptGenerator,
 }: {
   placeholder: string;
   showGeneratePrompt: boolean;
@@ -640,7 +668,11 @@ export function MessageEditorPlaceholder({
               }
             }}
           >
-            {isGenerating ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Sparkles className="size-4" aria-hidden />}
+            {isGenerating ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <Sparkles className="size-4" aria-hidden />
+            )}
             <span>Generate Prompt</span>
           </Button>
         </span>
@@ -680,13 +712,15 @@ export function plainTextToTiptapDoc(text: string): JSONContent {
     type: 'doc',
     content: lines.map((line) => ({
       type: 'paragraph',
-      ...(line ? { content: [{ type: 'text', text: line }] } : {})
-    }))
+      ...(line ? { content: [{ type: 'text', text: line }] } : {}),
+    })),
   };
 }
 
 export function normalizeEditorText(text: unknown) {
-  return String(text ?? '').replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ');
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u00a0/g, ' ');
 }
 
 export function readTiptapEditorText(editor: Editor) {
@@ -703,10 +737,10 @@ export function installTiptapTextValueShim(element: HTMLElement, editor: Editor)
     get: () => readTiptapEditorText(editor),
     set: (value) => {
       setTiptapEditorText(editor, normalizeEditorText(value), false);
-    }
+    },
   });
   Object.defineProperty(element, 'placeholder', {
     configurable: true,
-    get: () => element.querySelector('[data-placeholder]')?.getAttribute('data-placeholder') ?? ''
+    get: () => element.querySelector('[data-placeholder]')?.getAttribute('data-placeholder') ?? '',
   });
 }

@@ -28,7 +28,7 @@ import {
   UsersRound,
   Vault,
   WalletCards,
-  Webhook
+  Webhook,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
@@ -72,8 +72,8 @@ export const consoleNavigation: NavItem[] = [
       { href: '/workbench', label: 'Workbench', labelId: 'nav.workbench' },
       { href: '/files', label: 'Files', labelId: 'nav.files' },
       { href: '/skills', label: 'Skills', labelId: 'nav.skills' },
-      { href: '/batches', label: 'Batches', labelId: 'nav.batches' }
-    ]
+      { href: '/batches', label: 'Batches', labelId: 'nav.batches' },
+    ],
   },
   {
     type: 'group',
@@ -87,8 +87,8 @@ export const consoleNavigation: NavItem[] = [
       { href: '/deployments', label: 'Deployments', labelId: 'nav.deployments', badge: 'New', badgeId: 'nav.new' },
       { href: '/environments', label: 'Environments', labelId: 'nav.environments' },
       { href: '/credential-vaults', label: 'Credential vaults', labelId: 'nav.credentialVaults' },
-      { href: '/memory-stores', label: 'Memory stores', labelId: 'nav.memoryStores' }
-    ]
+      { href: '/memory-stores', label: 'Memory stores', labelId: 'nav.memoryStores' },
+    ],
   },
   {
     type: 'group',
@@ -100,8 +100,8 @@ export const consoleNavigation: NavItem[] = [
       { href: '/usage/cache', label: 'Caching', labelId: 'nav.caching' },
       { href: '/usage/limits', label: 'Rate limits', labelId: 'nav.rateLimits' },
       { href: '/cost', label: 'Cost', labelId: 'nav.cost' },
-      { href: '/logs', label: 'Logs', labelId: 'nav.logs' }
-    ]
+      { href: '/logs', label: 'Logs', labelId: 'nav.logs' },
+    ],
   },
   {
     type: 'group',
@@ -110,8 +110,8 @@ export const consoleNavigation: NavItem[] = [
     icon: TerminalSquare,
     children: [
       { href: '/claude-code/usage', label: 'Usage', labelId: 'nav.usage' },
-      { href: '/claude-code/settings', label: 'Settings', labelId: 'nav.settings' }
-    ]
+      { href: '/claude-code/settings', label: 'Settings', labelId: 'nav.settings' },
+    ],
   },
   {
     type: 'group',
@@ -124,9 +124,9 @@ export const consoleNavigation: NavItem[] = [
       { href: '/service-accounts', label: 'Service accounts', labelId: 'nav.serviceAccounts' },
       { href: '/privacy-controls', label: 'Privacy controls', labelId: 'nav.privacyControls' },
       { href: '/security', label: 'Security', labelId: 'nav.security' },
-      { href: '/webhooks', label: 'Webhooks', labelId: 'nav.webhooks' }
-    ]
-  }
+      { href: '/webhooks', label: 'Webhooks', labelId: 'nav.webhooks' },
+    ],
+  },
 ];
 
 export const settingsNavigation = [
@@ -142,7 +142,7 @@ export const settingsNavigation = [
   { href: '/settings/service-accounts', label: 'Service accounts', labelId: 'nav.serviceAccounts' },
   { href: '/settings/workload-identity', label: 'Workload identity', labelId: 'nav.workloadIdentity' },
   { href: '/settings/privacy-controls', label: 'Privacy controls', labelId: 'nav.privacyControls' },
-  { href: '/settings/identity-and-access', label: 'Identity and access', labelId: 'nav.identityAndAccess' }
+  { href: '/settings/identity-and-access', label: 'Identity and access', labelId: 'nav.identityAndAccess' },
 ] as const;
 
 export const placeholderIcons = {
@@ -178,5 +178,5 @@ export const placeholderIcons = {
   '/billing': WalletCards,
   '/settings/appearance': Palette,
   '/settings/organization': Building2,
-  copy: Copy
+  copy: Copy,
 } as const;

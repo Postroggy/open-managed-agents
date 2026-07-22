@@ -13,7 +13,7 @@ import {
   MoreVertical,
   Plus,
   Power,
-  Trash2
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../shared/auth/context';
 import { Alert, AlertDescription } from '../../shared/ui/alert';
@@ -29,7 +29,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from '../../shared/ui/alert-dialog';
 import {
   Dialog,
@@ -37,24 +37,17 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from '../../shared/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '../../shared/ui/dropdown-menu';
 import { Field, FieldDescription, FieldError, FieldLabel } from '../../shared/ui/field';
 import { Input } from '../../shared/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '../../shared/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/ui/tooltip';
 import {
   createWorkspaceApiKey,
@@ -62,7 +55,7 @@ import {
   listWorkspaceApiKeys,
   updateWorkspaceApiKeyStatus,
   type Workspace,
-  type WorkspaceApiKey
+  type WorkspaceApiKey,
 } from '../../shared/workspaces/api';
 import { useI18n } from '../../shared/i18n';
 import { useWorkspace } from '../../shared/workspaces/context';
@@ -99,11 +92,11 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const workspace = useMemo(
     () => resolveWorkspace(routeWorkspaceId, workspaces, activeWorkspace),
-    [activeWorkspace, routeWorkspaceId, workspaces]
+    [activeWorkspace, routeWorkspaceId, workspaces],
   );
   const queryKey = useMemo(
     () => ['console', 'workspace-api-keys', orgUuid, workspace.id] as const,
-    [orgUuid, workspace.id]
+    [orgUuid, workspace.id],
   );
 
   useEffect(() => {
@@ -116,7 +109,7 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
     queryKey,
     queryFn: () => listWorkspaceApiKeys(orgUuid ?? '', workspace.id),
     enabled: Boolean(orgUuid && workspace.id),
-    retry: false
+    retry: false,
   });
 
   const createMutation = useMutation({
@@ -130,7 +123,7 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
       setCreateOpen(false);
       setCreatedKey(apiKey);
       await queryClient.invalidateQueries({ queryKey });
-    }
+    },
   });
 
   const updateMutation = useMutation({
@@ -157,7 +150,7 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
         return replaced ? next : [updatedApiKey, ...next];
       });
       void queryClient.invalidateQueries({ queryKey });
-    }
+    },
   });
 
   const keys = useMemo(() => (keysQuery.data ?? []).filter((apiKey) => !isArchivedKey(apiKey)), [keysQuery.data]);
@@ -190,7 +183,7 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
                 variant="secondary"
                 className="h-6 min-w-6 rounded-md px-2 text-muted-foreground"
                 aria-label={msg('apiKeys.countAria', '{count, plural, one {# API key} other {# API keys}}', {
-                  count: keys.length
+                  count: keys.length,
                 })}
               >
                 {keys.length}
@@ -199,15 +192,11 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
             <p className="mt-2 max-w-[760px] text-sm leading-5 text-muted-foreground">
               {msg(
                 'apiKeys.description',
-                'API keys are owned by workspaces and remain active even after the creator is removed'
+                'API keys are owned by workspaces and remain active even after the creator is removed',
               )}
             </p>
           </div>
-          <Button
-            type="button"
-            size="lg"
-            onClick={() => setCreateOpen(true)}
-          >
+          <Button type="button" size="lg" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" aria-hidden />
             {msg('apiKeys.create', 'Create key')}
           </Button>
@@ -227,21 +216,35 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
               <TableHeader className="text-[13px] text-muted-foreground">
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="px-3 py-3 text-muted-foreground">{msg('apiKeys.key', 'Key')}</TableHead>
-                  <TableHead className="px-3 py-3 text-muted-foreground">{msg('apiKeys.createdBy', 'Created by')}</TableHead>
-                  <TableHead className="px-3 py-3 text-muted-foreground">{msg('apiKeys.createdAt', 'Created at')}</TableHead>
-                  <TableHead className="px-3 py-3 text-muted-foreground">{msg('apiKeys.lastUsedAt', 'Last used at')}</TableHead>
+                  <TableHead className="px-3 py-3 text-muted-foreground">
+                    {msg('apiKeys.createdBy', 'Created by')}
+                  </TableHead>
+                  <TableHead className="px-3 py-3 text-muted-foreground">
+                    {msg('apiKeys.createdAt', 'Created at')}
+                  </TableHead>
+                  <TableHead className="px-3 py-3 text-muted-foreground">
+                    {msg('apiKeys.lastUsedAt', 'Last used at')}
+                  </TableHead>
                   <TableHead className="px-3 py-3 text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       {msg('analytics.cost.title', 'Cost')}
-                      <InfoTooltip label={msg('apiKeys.costTooltip', 'API key cost attribution appears after usage is recorded.')} />
+                      <InfoTooltip
+                        label={msg('apiKeys.costTooltip', 'API key cost attribution appears after usage is recorded.')}
+                      />
                     </span>
                   </TableHead>
-                  <TableHead className="px-3 py-3 text-right text-muted-foreground">{msg('common.actions', 'Actions')}</TableHead>
+                  <TableHead className="px-3 py-3 text-right text-muted-foreground">
+                    {msg('common.actions', 'Actions')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {keysQuery.isLoading ? (
-                  <ApiKeysState text={msg('apiKeys.loading', 'Loading {workspaceName} API keys...', { workspaceName: workspace.name })} />
+                  <ApiKeysState
+                    text={msg('apiKeys.loading', 'Loading {workspaceName} API keys...', {
+                      workspaceName: workspace.name,
+                    })}
+                  />
                 ) : errorMessage ? (
                   <ApiKeysState tone="error" text={errorMessage} />
                 ) : keys.length > 0 ? (
@@ -254,7 +257,11 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
                     />
                   ))
                 ) : (
-                  <ApiKeysState text={msg('apiKeys.empty', 'No API keys have been created for {workspaceName}.', { workspaceName: workspace.name })} />
+                  <ApiKeysState
+                    text={msg('apiKeys.empty', 'No API keys have been created for {workspaceName}.', {
+                      workspaceName: workspace.name,
+                    })}
+                  />
                 )}
               </TableBody>
             </Table>
@@ -289,7 +296,7 @@ export function WorkspaceApiKeysContent({ routeWorkspaceId }: WorkspaceApiKeysCo
 function ApiKeyRow({
   apiKey,
   identity,
-  onAction
+  onAction,
 }: {
   apiKey: WorkspaceApiKey;
   identity: Identity;
@@ -333,7 +340,7 @@ function ApiKeyRow({
                 size="icon"
                 className="text-muted-foreground hover:text-foreground"
                 aria-label={msg('apiKeys.moreActionsAria', 'More actions for {keyName}', {
-                  keyName: apiKey.name || msg('apiKeys.thisKey', 'this key')
+                  keyName: apiKey.name || msg('apiKeys.thisKey', 'this key'),
                 })}
               />
             }
@@ -343,7 +350,9 @@ function ApiKeyRow({
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem onClick={() => onAction(inactive ? 'enable' : 'disable')}>
               {inactive ? <Power className="size-4" aria-hidden /> : <Ban className="size-4" aria-hidden />}
-              <span>{inactive ? msg('apiKeys.enable', 'Enable API key') : msg('apiKeys.disable', 'Disable API key')}</span>
+              <span>
+                {inactive ? msg('apiKeys.enable', 'Enable API key') : msg('apiKeys.disable', 'Disable API key')}
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={() => onAction('delete')}>
               <Trash2 className="size-4" aria-hidden />
@@ -360,7 +369,7 @@ function CreateApiKeyModal({
   workspace,
   isSubmitting,
   onClose,
-  onCreate
+  onCreate,
 }: {
   workspace: Workspace;
   isSubmitting: boolean;
@@ -404,18 +413,22 @@ function CreateApiKeyModal({
           <Field className="gap-2">
             <FieldLabel className="flex items-center gap-1.5">
               {msg('apiKeys.workspace', 'Workspace')}
-              <InfoTooltip label={msg('apiKeys.workspaceTooltip', 'This key will be scoped to the selected workspace.')} />
+              <InfoTooltip
+                label={msg('apiKeys.workspaceTooltip', 'This key will be scoped to the selected workspace.')}
+              />
             </FieldLabel>
             <FieldDescription className="flex h-5 items-center gap-2 text-sm text-foreground">
-              <Box className="size-4 shrink-0" style={{ color: workspace.display_color || workspace.color }} aria-hidden />
+              <Box
+                className="size-4 shrink-0"
+                style={{ color: workspace.display_color || workspace.color }}
+                aria-hidden
+              />
               <span className="truncate">{workspace.name}</span>
             </FieldDescription>
           </Field>
 
           <Field data-invalid={Boolean(error)}>
-            <FieldLabel htmlFor="api-key-name">
-              {msg('common.name', 'Name')}
-            </FieldLabel>
+            <FieldLabel htmlFor="api-key-name">{msg('common.name', 'Name')}</FieldLabel>
             <Input
               id="api-key-name"
               value={name}
@@ -469,10 +482,7 @@ function RawApiKeyModal({ apiKey, onClose }: { apiKey: WorkspaceApiKey; onClose:
         <DialogHeader>
           <DialogTitle>{msg('apiKeys.createdTitle', 'API key created')}</DialogTitle>
           <DialogDescription className="leading-6">
-            {msg(
-              'apiKeys.copyRaw',
-              "Copy this key now. You won't be able to view it again after closing this window."
-            )}
+            {msg('apiKeys.copyRaw', "Copy this key now. You won't be able to view it again after closing this window.")}
           </DialogDescription>
         </DialogHeader>
         <Card size="sm" className="mt-5 py-0">
@@ -507,11 +517,11 @@ async function copyTextToClipboard(text: string) {
       const didCopy = await Promise.race([
         navigator.clipboard.writeText(text).then(
           () => true,
-          () => false
+          () => false,
         ),
         new Promise<boolean>((resolve) => {
           window.setTimeout(() => resolve(false), 300);
-        })
+        }),
       ]);
       if (didCopy) {
         return true;
@@ -545,7 +555,7 @@ function ConfirmKeyActionModal({
   isSubmitting,
   error,
   onClose,
-  onConfirm
+  onConfirm,
 }: {
   pendingAction: PendingAction;
   isSubmitting: boolean;
@@ -565,11 +575,11 @@ function ConfirmKeyActionModal({
   const body =
     pendingAction.action === 'delete'
       ? msg('apiKeys.deleteBody', "Are you sure you want to delete {keyName}? This action can't be undone.", {
-          keyName
+          keyName,
         })
       : msg('apiKeys.confirmBody', 'Are you sure you want to {action} {keyName}?', {
           action: actionVerb,
-          keyName
+          keyName,
         });
   const icon =
     pendingAction.action === 'delete' ? (
@@ -592,9 +602,7 @@ function ConfirmKeyActionModal({
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
           <AlertDialogMedia
-            className={
-              destructive ? 'bg-destructive/10 text-destructive dark:bg-destructive/20' : undefined
-            }
+            className={destructive ? 'bg-destructive/10 text-destructive dark:bg-destructive/20' : undefined}
           >
             {icon}
           </AlertDialogMedia>
@@ -603,9 +611,7 @@ function ConfirmKeyActionModal({
         </AlertDialogHeader>
         {error ? <InlineError>{error}</InlineError> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isSubmitting}>
-            {msg('common.cancel', 'Cancel')}
-          </AlertDialogCancel>
+          <AlertDialogCancel disabled={isSubmitting}>{msg('common.cancel', 'Cancel')}</AlertDialogCancel>
           <AlertDialogAction
             type="button"
             variant={destructive ? 'destructive' : 'default'}
@@ -636,7 +642,13 @@ function InfoTooltip({ label }: { label: string }) {
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button type="button" variant="ghost" size="icon-xs" aria-label={label} className="-m-1 text-muted-foreground hover:text-foreground">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={label}
+            className="-m-1 text-muted-foreground hover:text-foreground"
+          >
             <Info className="size-3.5" aria-hidden />
           </Button>
         }
@@ -677,7 +689,7 @@ function resolveWorkspace(routeWorkspaceId: string | undefined, workspaces: Work
   return {
     ...defaultWorkspace,
     id: routeWorkspaceId,
-    name: routeWorkspaceId
+    name: routeWorkspaceId,
   };
 }
 
@@ -702,7 +714,7 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat('en', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
   }).format(date);
 }
 
@@ -710,7 +722,7 @@ function displayIdentity(account: { email_address?: string; display_name?: strin
   const email = account?.email_address ?? 'test@openmanagedagent.local';
   return {
     email,
-    name: account?.display_name ?? account?.full_name ?? email.split('@')[0] ?? 'test'
+    name: account?.display_name ?? account?.full_name ?? email.split('@')[0] ?? 'test',
   };
 }
 
@@ -719,7 +731,7 @@ function displayCreator(apiKey: WorkspaceApiKey, fallback: Identity) {
   const email = createdBy?.email ?? fallback.email;
   return {
     email,
-    name: createdBy?.name ?? email.split('@')[0] ?? fallback.name
+    name: createdBy?.name ?? email.split('@')[0] ?? fallback.name,
   };
 }
 

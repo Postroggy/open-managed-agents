@@ -1,7 +1,17 @@
 import { useFormatters, useI18n } from '../../../shared/i18n';
 import { Button } from '../../../shared/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../shared/ui/tooltip';
-import { type DisplayEvent, type DisplayEventEntry, type I18nMsg, type IdleGapEntry, type QueuedBoundaryEntry, type QuickstartSessionEvent, type SessionEventListEntry, type ToolBatchEntry, type ToolCallEntry } from '../types';
+import {
+  type DisplayEvent,
+  type DisplayEventEntry,
+  type I18nMsg,
+  type IdleGapEntry,
+  type QueuedBoundaryEntry,
+  type QuickstartSessionEvent,
+  type SessionEventListEntry,
+  type ToolBatchEntry,
+  type ToolCallEntry,
+} from '../types';
 import { compactEntityId, toRecord } from '../utils';
 import clsx from 'clsx';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
@@ -9,7 +19,21 @@ import { type MouseEvent as ReactMouseEvent, type ReactNode, useContext } from '
 import { SessionDetailDeltaFramesContext } from './sessionDetailData';
 import { formatSessionDuration, numericValueFromKeys } from './sessionDetailModel';
 import { HeaderRow, InProgressChip, MetaStrip, OutcomeStatusChip, SynchronizedShimmerText } from './sessionTimeline';
-import { sessionEventFamily, sessionEventIsThinking, sessionEventLabel, sessionEventStructuredContentText, sessionEventSummary, sessionEventTranscriptText, sessionEventType, sessionResultText, sessionSubagentName, sessionSubagentThreadId, sessionThinkingPreview, sessionThinkingText, sessionToolResultText } from './sessionTraceModel';
+import {
+  sessionEventFamily,
+  sessionEventIsThinking,
+  sessionEventLabel,
+  sessionEventStructuredContentText,
+  sessionEventSummary,
+  sessionEventTranscriptText,
+  sessionEventType,
+  sessionResultText,
+  sessionSubagentName,
+  sessionSubagentThreadId,
+  sessionThinkingPreview,
+  sessionThinkingText,
+  sessionToolResultText,
+} from './sessionTraceModel';
 import { EventTypeBadge } from './SessionTracePanel';
 
 export function IdleGapRow({ entry }: { entry: IdleGapEntry }) {
@@ -23,10 +47,7 @@ export function IdleGapRow({ entry }: { entry: IdleGapEntry }) {
       data-entry-kind="idle_gap"
       className="oma-session-idle-gap relative my-2 flex h-6 items-center justify-center overflow-hidden rounded-md border text-xs"
     >
-      <span
-        className="oma-session-idle-gap-stripes absolute inset-0"
-        aria-hidden
-      />
+      <span className="oma-session-idle-gap-stripes absolute inset-0" aria-hidden />
       <span className="relative">
         {msg('managedAgents.sessions.trace.sessionIdleDot', 'Session idle · {duration}', { duration })}
       </span>
@@ -36,7 +57,11 @@ export function IdleGapRow({ entry }: { entry: IdleGapEntry }) {
 
 export function QueuedBoundaryRow({ entry }: { entry: QueuedBoundaryEntry }) {
   const { msg } = useI18n();
-  const label = msg('managedAgents.sessions.trace.queuedMessages', '{count, plural, one {# queued message} other {# queued messages}}', { count: entry.count });
+  const label = msg(
+    'managedAgents.sessions.trace.queuedMessages',
+    '{count, plural, one {# queued message} other {# queued messages}}',
+    { count: entry.count },
+  );
   return (
     <div
       role="separator"
@@ -56,7 +81,7 @@ export function DisplayEventRow({
   selected,
   onSelect,
   threadNameById,
-  onThreadClick
+  onThreadClick,
 }: {
   entry: DisplayEventEntry;
   selected: boolean;
@@ -69,23 +94,30 @@ export function DisplayEventRow({
   const textInProgress = Boolean(entry.inProgress || entry.displayEvent.isQueued || entry.displayEvent.isStreaming);
   const showGenerating = Boolean(entry.inProgress || entry.displayEvent.isStreaming);
   return (
-    <div data-event-id={entry.traceEntry.id} data-entry-kind={entry.kind} data-display-kind={entry.traceEntry.displayKind} className="w-full">
+    <div
+      data-event-id={entry.traceEntry.id}
+      data-entry-kind={entry.kind}
+      data-display-kind={entry.traceEntry.displayKind}
+      className="w-full"
+    >
       <HeaderRow isSelected={selected} onSelect={onSelect}>
         <span className="flex w-14 shrink-0 items-center">
-          <EventTypeBadge type={entry.displayEvent.type} label={sessionDisplayEventBadge(entry, msg)} variant="compact" />
+          <EventTypeBadge
+            type={entry.displayEvent.type}
+            label={sessionDisplayEventBadge(entry, msg)}
+            variant="compact"
+          />
         </span>
         {entry.displayEvent.type === 'subagent' ? (
           <SubagentLabel entry={entry} msg={msg} threadNameById={threadNameById} onThreadClick={onThreadClick} />
         ) : (
           <TraceRowText inProgress={textInProgress}>
-            {entry.displayEvent.isStreaming ? (
-              <LiveRowPreview displayEvent={entry.displayEvent} msg={msg} />
-            ) : (
-              title
-            )}
+            {entry.displayEvent.isStreaming ? <LiveRowPreview displayEvent={entry.displayEvent} msg={msg} /> : title}
           </TraceRowText>
         )}
-        {showGenerating ? <InProgressChip label={msg('managedAgents.sessions.trace.generating', 'Generating')} /> : null}
+        {showGenerating ? (
+          <InProgressChip label={msg('managedAgents.sessions.trace.generating', 'Generating')} />
+        ) : null}
         <MetaStrip
           usage={entry.kind === 'passthrough' || entry.kind === 'message' ? entry.usage : undefined}
           inferenceMs={entry.kind === 'passthrough' || entry.kind === 'message' ? entry.inferenceMs : undefined}
@@ -98,17 +130,27 @@ export function DisplayEventRow({
   );
 }
 
-export function ToolCallRow({ entry, selected, onSelect }: { entry: ToolCallEntry; selected: boolean; onSelect: () => void }) {
+export function ToolCallRow({
+  entry,
+  selected,
+  onSelect,
+}: {
+  entry: ToolCallEntry;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   return (
-    <div data-event-id={entry.traceEntry.id} data-entry-kind={entry.kind} data-display-kind={entry.traceEntry.displayKind} className="w-full">
+    <div
+      data-event-id={entry.traceEntry.id}
+      data-entry-kind={entry.kind}
+      data-display-kind={entry.traceEntry.displayKind}
+      className="w-full"
+    >
       <HeaderRow isSelected={selected} onSelect={onSelect}>
         <span className="flex w-14 shrink-0 items-center">
           <EventTypeBadge type="tool_use" variant="compact" />
         </span>
-        <TraceRowText
-          inProgress={entry.lifecycle === 'running'}
-          suffix={entry.inputPreview || undefined}
-        >
+        <TraceRowText inProgress={entry.lifecycle === 'running'} suffix={entry.inputPreview || undefined}>
           {entry.name}
         </TraceRowText>
         <MetaStrip
@@ -125,10 +167,23 @@ export function ToolCallRow({ entry, selected, onSelect }: { entry: ToolCallEntr
   );
 }
 
-export function ToolBatchRow({ entry, selected, onSelect }: { entry: ToolBatchEntry; selected: boolean; onSelect: () => void }) {
+export function ToolBatchRow({
+  entry,
+  selected,
+  onSelect,
+}: {
+  entry: ToolBatchEntry;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const summary = sessionToolBatchSummary(entry);
   return (
-    <div data-event-id={entry.traceEntry.id} data-entry-kind={entry.kind} data-display-kind={entry.traceEntry.displayKind} className="w-full">
+    <div
+      data-event-id={entry.traceEntry.id}
+      data-entry-kind={entry.kind}
+      data-display-kind={entry.traceEntry.displayKind}
+      className="w-full"
+    >
       <HeaderRow isSelected={selected} onSelect={onSelect}>
         <span className="flex w-14 shrink-0 items-center">
           <EventTypeBadge type="tool_use" variant="compact" />
@@ -148,12 +203,25 @@ export function ToolBatchRow({ entry, selected, onSelect }: { entry: ToolBatchEn
   );
 }
 
-export function OutcomeRow({ entry, selected, onSelect }: { entry: DisplayEventEntry; selected: boolean; onSelect: () => void }) {
+export function OutcomeRow({
+  entry,
+  selected,
+  onSelect,
+}: {
+  entry: DisplayEventEntry;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const { msg } = useI18n();
   const iteration = entry.outcomeIteration ?? sessionOutcomeIteration(entry.event);
   const status = entry.outcomeStatus ?? sessionOutcomeStatus(entry.event);
   return (
-    <div data-event-id={entry.traceEntry.id} data-entry-kind={entry.kind} data-display-kind={entry.traceEntry.displayKind} className="w-full">
+    <div
+      data-event-id={entry.traceEntry.id}
+      data-entry-kind={entry.kind}
+      data-display-kind={entry.traceEntry.displayKind}
+      className="w-full"
+    >
       <HeaderRow isSelected={selected} onSelect={onSelect}>
         <span className="flex w-14 shrink-0 items-center">
           <EventTypeBadge type="outcome" variant="compact" />
@@ -161,7 +229,11 @@ export function OutcomeRow({ entry, selected, onSelect }: { entry: DisplayEventE
         <TraceRowText inProgress={!status}>
           {msg('managedAgents.sessions.trace.gradingIteration', 'Grading iteration {iteration}', { iteration })}
         </TraceRowText>
-        {status ? <OutcomeStatusChip status={status} /> : <InProgressChip label={msg('managedAgents.sessions.trace.evaluating', 'Evaluating')} />}
+        {status ? (
+          <OutcomeStatusChip status={status} />
+        ) : (
+          <InProgressChip label={msg('managedAgents.sessions.trace.evaluating', 'Evaluating')} />
+        )}
         <MetaStrip
           usage={entry.usage}
           executionMs={entry.durationMs}
@@ -178,7 +250,7 @@ export function SubagentLabel({
   entry,
   msg,
   threadNameById,
-  onThreadClick
+  onThreadClick,
 }: {
   entry: DisplayEventEntry;
   msg: I18nMsg;
@@ -191,9 +263,12 @@ export function SubagentLabel({
   const direction = sessionSubagentDirection(entry.event);
   const threadRef = sessionSubagentThreadRef(entry.event);
   const threadId = threadRef.threadId;
-  const label = sent || received
-    ? threadNameById.get(threadId) || threadRef.agentName || (threadId ? compactSubagentThreadId(threadId) : msg('managedAgents.sessions.trace.thread', 'Thread'))
-    : sessionSubagentRowLabel(entry.event, msg);
+  const label =
+    sent || received
+      ? threadNameById.get(threadId) ||
+        threadRef.agentName ||
+        (threadId ? compactSubagentThreadId(threadId) : msg('managedAgents.sessions.trace.thread', 'Thread'))
+      : sessionSubagentRowLabel(entry.event, msg);
   const Icon = direction === 'received' ? ArrowLeft : ArrowRight;
   const clickable = Boolean(threadId);
   const handleClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -226,7 +301,7 @@ export function SubagentLabel({
 export function TraceRowText({
   children,
   suffix,
-  inProgress = false
+  inProgress = false,
 }: {
   children: ReactNode;
   suffix?: string;
@@ -275,7 +350,7 @@ export function sessionOutcomeStatus(event: QuickstartSessionEvent) {
     data?.outcome_status,
     metadata?.status,
     metadata?.result,
-    metadata?.outcome_status
+    metadata?.outcome_status,
   ];
   const status = candidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0);
   return status?.trim();
@@ -328,32 +403,35 @@ export function sessionSubagentRowLabel(event: QuickstartSessionEvent, msg: I18n
   const sessionThread = toRecord(event.session_thread);
   const subagent = toRecord(event.subagent);
   const agent = toRecord(event.agent);
-  const nameCandidates = direction === 'received'
-    ? [
-      event.from_agent_name,
-      data?.from_agent_name,
-      metadata?.from_agent_name,
-      event.agent_name,
-      data?.agent_name,
-      metadata?.agent_name,
-      subagent?.name,
-      agent?.name,
-      sessionThread?.name,
-      sessionThread?.role
-    ]
-    : [
-      event.to_agent_name,
-      data?.to_agent_name,
-      metadata?.to_agent_name,
-      event.agent_name,
-      data?.agent_name,
-      metadata?.agent_name,
-      subagent?.name,
-      agent?.name,
-      sessionThread?.name,
-      sessionThread?.role
-    ];
-  const name = nameCandidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim();
+  const nameCandidates =
+    direction === 'received'
+      ? [
+          event.from_agent_name,
+          data?.from_agent_name,
+          metadata?.from_agent_name,
+          event.agent_name,
+          data?.agent_name,
+          metadata?.agent_name,
+          subagent?.name,
+          agent?.name,
+          sessionThread?.name,
+          sessionThread?.role,
+        ]
+      : [
+          event.to_agent_name,
+          data?.to_agent_name,
+          metadata?.to_agent_name,
+          event.agent_name,
+          data?.agent_name,
+          metadata?.agent_name,
+          subagent?.name,
+          agent?.name,
+          sessionThread?.name,
+          sessionThread?.role,
+        ];
+  const name = nameCandidates
+    .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    ?.trim();
   if (name) {
     return name;
   }
@@ -375,8 +453,12 @@ export function sessionSubagentThreadRef(event: QuickstartSessionEvent) {
   const agentCandidates = sent
     ? [event.to_agent_name, data?.to_agent_name, metadata?.to_agent_name]
     : [event.from_agent_name, data?.from_agent_name, metadata?.from_agent_name];
-  const threadId = threadCandidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() || sessionSubagentThreadId(event);
-  const agentName = agentCandidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() || sessionSubagentName(event);
+  const threadId =
+    threadCandidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() ||
+    sessionSubagentThreadId(event);
+  const agentName =
+    agentCandidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim() ||
+    sessionSubagentName(event);
   return { threadId, agentName };
 }
 
@@ -393,7 +475,7 @@ export function TranscriptRow({
   selected,
   onSelect,
   threadNameById,
-  onThreadClick
+  onThreadClick,
 }: {
   entry: SessionEventListEntry;
   selected: boolean;
@@ -433,7 +515,7 @@ export function DebugRow({
   entry,
   selected,
   onSelect,
-  onOpenDeltas
+  onOpenDeltas,
 }: {
   entry: DisplayEventEntry;
   selected: boolean;
@@ -445,7 +527,12 @@ export function DebugRow({
   const hasDeltas = entry.type === 'agent.message' || entry.type === 'agent.thinking';
   const deltasLabel = msg('managedAgents.sessions.trace.openDeltas', 'Open deltas');
   return (
-    <div data-event-id={entry.traceEntry.id} data-entry-kind={entry.kind} data-display-kind={entry.traceEntry.displayKind} className="w-full">
+    <div
+      data-event-id={entry.traceEntry.id}
+      data-entry-kind={entry.kind}
+      data-display-kind={entry.traceEntry.displayKind}
+      className="w-full"
+    >
       <HeaderRow isSelected={selected} onSelect={onSelect}>
         <span className="flex min-w-32 shrink-0 items-center">
           <EventTypeBadge
@@ -456,13 +543,15 @@ export function DebugRow({
             className="font-mono"
           />
         </span>
-        <span className={clsx('min-w-0 flex-1 truncate text-sm', entry.isError ? 'text-destructive' : 'text-foreground')}>
+        <span
+          className={clsx('min-w-0 flex-1 truncate text-sm', entry.isError ? 'text-destructive' : 'text-foreground')}
+        >
           {title}
         </span>
         {hasDeltas ? (
           <Tooltip>
             <TooltipTrigger
-              render={(
+              render={
                 <span className="inline-flex shrink-0">
                   <Button
                     type="button"
@@ -477,7 +566,7 @@ export function DebugRow({
                     {msg('managedAgents.sessions.trace.deltas', 'Deltas')}
                   </Button>
                 </span>
-              )}
+              }
             />
             <TooltipContent>{deltasLabel}</TooltipContent>
           </Tooltip>
@@ -513,7 +602,11 @@ export function sessionDisplayEventInlinePreview(entry: DisplayEventEntry, msg: 
   if (entry.displayEvent.type === 'thinking') {
     return sessionThinkingPreview(msg);
   }
-  const preview = entry.traceEntry.preview || entry.displayEvent.content || entry.displayEvent.label || sessionEventSummary(entry.event);
+  const preview =
+    entry.traceEntry.preview ||
+    entry.displayEvent.content ||
+    entry.displayEvent.label ||
+    sessionEventSummary(entry.event);
   return sessionInlineRowPreview(preview);
 }
 
@@ -550,5 +643,5 @@ export const sessionDebugBadgeLabels: Record<string, string> = {
   'span.model_request_end': 'span.model…end',
   'span.outcome_evaluation_start': 'span.outcome…start',
   'span.outcome_evaluation_ongoing': 'span.outcome…ongoing',
-  'span.outcome_evaluation_end': 'span.outcome…end'
+  'span.outcome_evaluation_end': 'span.outcome…end',
 };

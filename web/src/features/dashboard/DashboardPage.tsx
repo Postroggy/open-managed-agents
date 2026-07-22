@@ -8,7 +8,7 @@ import {
   ConsoleFeaturePage,
   LimitsPage,
   PlaygroundPage,
-  WorkbenchPage
+  WorkbenchPage,
 } from './feature-pages';
 import { FilesPage } from './files';
 import { DashboardHome } from './home';

@@ -36,13 +36,13 @@ describe('Workspace API keys page', () => {
         >
           <WorkspaceApiKeysContent routeWorkspaceId="default" />
         </ConsoleShell>
-      </WorkspaceApiKeysHarness>
+      </WorkspaceApiKeysHarness>,
     );
 
     expect(
       screen
         .getAllByRole('button', { name: /Default/i })
-        .some((button) => button.getAttribute('aria-label') === 'Default')
+        .some((button) => button.getAttribute('aria-label') === 'Default'),
     ).toBe(true);
     expect(screen.getByRole('heading', { name: 'API keys' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Create key' })).toBeTruthy();
@@ -66,7 +66,7 @@ describe('Workspace API keys page', () => {
     render(
       <WorkspaceApiKeysHarness>
         <WorkspaceApiKeysContent routeWorkspaceId="default" />
-      </WorkspaceApiKeysHarness>
+      </WorkspaceApiKeysHarness>,
     );
 
     await screen.findByText('foo');
@@ -99,14 +99,14 @@ describe('Workspace API keys page', () => {
     const fallbackCopy = mock((_command: string) => true);
     Object.defineProperty(globalThis.navigator, 'clipboard', {
       configurable: true,
-      value: { writeText: clipboardWrite }
+      value: { writeText: clipboardWrite },
     });
     document.execCommand = fallbackCopy as typeof document.execCommand;
 
     render(
       <WorkspaceApiKeysHarness>
         <WorkspaceApiKeysContent routeWorkspaceId="default" />
-      </WorkspaceApiKeysHarness>
+      </WorkspaceApiKeysHarness>,
     );
 
     await screen.findByText('foo');
@@ -129,14 +129,14 @@ describe('Workspace API keys page', () => {
     const fallbackCopy = mock((_command: string) => true);
     Object.defineProperty(globalThis.navigator, 'clipboard', {
       configurable: true,
-      value: { writeText: clipboardWrite }
+      value: { writeText: clipboardWrite },
     });
     document.execCommand = fallbackCopy as typeof document.execCommand;
 
     render(
       <WorkspaceApiKeysHarness>
         <WorkspaceApiKeysContent routeWorkspaceId="default" />
-      </WorkspaceApiKeysHarness>
+      </WorkspaceApiKeysHarness>,
     );
 
     await screen.findByText('foo');
@@ -159,7 +159,7 @@ describe('Workspace API keys page', () => {
     render(
       <WorkspaceApiKeysHarness>
         <WorkspaceApiKeysContent routeWorkspaceId="default" />
-      </WorkspaceApiKeysHarness>
+      </WorkspaceApiKeysHarness>,
     );
 
     await screen.findByText('foo');
@@ -183,7 +183,7 @@ describe('Workspace API keys page', () => {
     render(
       <WorkspaceApiKeysHarness>
         <WorkspaceApiKeysContent routeWorkspaceId="default" />
-      </WorkspaceApiKeysHarness>
+      </WorkspaceApiKeysHarness>,
     );
 
     await screen.findByText('foo');
@@ -239,9 +239,9 @@ function WorkspaceApiKeysHarness({ children }: { children: ReactNode }) {
       account: { uuid: 'acct_test', email_address: 'test@example.com', display_name: 'test' },
       status: 'authenticated',
       refresh: async () => ({ account: { uuid: 'acct_test', email_address: 'test@example.com' } }),
-      logout: async () => undefined
+      logout: async () => undefined,
     }),
-    []
+    [],
   );
   const workspaceValue = useMemo<WorkspaceContextValue>(
     () => ({
@@ -253,9 +253,9 @@ function WorkspaceApiKeysHarness({ children }: { children: ReactNode }) {
       error: null,
       selectWorkspace: () => undefined,
       createWorkspace: async () => defaultWorkspace,
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     }),
-    []
+    [],
   );
 
   return (
@@ -299,7 +299,7 @@ function mockWorkspaceApiKeys(initialKeys: WorkspaceApiKey[]) {
         key_suffix: 'lraw',
         created_at: '2026-06-18T00:00:00Z',
         last_used_at: null,
-        status: 'active'
+        status: 'active',
       };
       keys = [created, ...keys];
       return jsonResponse(created);
@@ -313,9 +313,9 @@ function mockWorkspaceApiKeys(initialKeys: WorkspaceApiKey[]) {
           ? {
               ...apiKey,
               status: typeof status === 'string' ? status : apiKey.status,
-              archived_at: status === 'archived' ? '2026-06-18T01:00:00Z' : null
+              archived_at: status === 'archived' ? '2026-06-18T01:00:00Z' : null,
             }
-          : apiKey
+          : apiKey,
       );
       return jsonResponse(keys.find((apiKey) => apiKey.id === keyId) ?? { ...activeKey, id: keyId });
     }
@@ -332,7 +332,7 @@ function mockWorkspaceApiKeys(initialKeys: WorkspaceApiKey[]) {
         .filter((request) => request.url.endsWith(`/api_keys/${apiKeyId}`) && request.method === 'POST')
         .at(-1);
       return matching?.body?.status;
-    }
+    },
   };
 }
 
@@ -346,7 +346,7 @@ function parseBody(body: BodyInit | null | undefined) {
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -359,7 +359,7 @@ const activeKey: WorkspaceApiKey = {
   key_suffix: '1234',
   created_at: '2026-06-18T00:00:00Z',
   last_used_at: null,
-  status: 'active'
+  status: 'active',
 };
 
 const inactiveKey: WorkspaceApiKey = {
@@ -371,7 +371,7 @@ const inactiveKey: WorkspaceApiKey = {
   key_suffix: '5678',
   created_at: '2026-06-17T00:00:00Z',
   last_used_at: null,
-  status: 'inactive'
+  status: 'inactive',
 };
 
 const archivedKey: WorkspaceApiKey = {
@@ -382,5 +382,5 @@ const archivedKey: WorkspaceApiKey = {
   created_at: '2026-06-16T00:00:00Z',
   last_used_at: null,
   archived_at: '2026-06-18T00:00:00Z',
-  status: 'archived'
+  status: 'archived',
 };

@@ -74,12 +74,12 @@ export function getAnthropicClient() {
     dangerouslyAllowBrowser: true,
     defaultHeaders: {
       'x-api-key': null,
-      authorization: null
+      authorization: null,
     },
     fetch: anthropicFetch,
     fetchOptions: {
-      credentials: 'include'
-    }
+      credentials: 'include',
+    },
   });
   return cachedClient;
 }
@@ -99,7 +99,7 @@ export function anthropicRequestHeaders(context: AnthropicRequestContext = {}): 
   }
   const headers: AnthropicHeaders = {
     'x-api-key': null,
-    authorization: null
+    authorization: null,
   };
   if (activeContext.organizationUuid) {
     headers['x-organization-uuid'] = activeContext.organizationUuid;
@@ -112,14 +112,14 @@ export function anthropicRequestHeaders(context: AnthropicRequestContext = {}): 
 
 function requestOptions(workspaceId?: string) {
   return {
-    headers: anthropicRequestHeaders({ workspaceId })
+    headers: anthropicRequestHeaders({ workspaceId }),
   };
 }
 
 export function toPlainPage<T>(page: PageLike<T>): AnthropicPageResponse<T> {
   const response: AnthropicPageResponse<T> = {
     data: page.data ?? [],
-    has_more: page.has_more ?? Boolean(page.next_page)
+    has_more: page.has_more ?? Boolean(page.next_page),
   };
   if ('first_id' in page) {
     response.first_id = page.first_id ?? null;
@@ -157,16 +157,12 @@ function normalizeSdkError(error: unknown) {
     stringValue(payload.type) ??
     stringValue(payload.code) ??
     'request_failed';
-  const message =
-    stringValue(nestedError.message) ??
-    stringValue(payload.message) ??
-    error.message ??
-    'Request failed';
+  const message = stringValue(nestedError.message) ?? stringValue(payload.message) ?? error.message ?? 'Request failed';
 
   return {
     status: error.status ?? 0,
     code,
-    message
+    message,
   } satisfies ApiError;
 }
 
@@ -192,31 +188,43 @@ export const anthropicBetaApi = {
       return sdkPage<T>(() => getAnthropicClient().beta.files.list(params, requestOptions(workspaceId)));
     },
     retrieveMetadata<T>(fileId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.files.retrieveMetadata(fileId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.files.retrieveMetadata(fileId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     upload<T>(file: Uploadable, workspaceId?: string) {
       return sdkCall(() => getAnthropicClient().beta.files.upload({ file }, requestOptions(workspaceId))) as Promise<T>;
     },
     delete<T>(fileId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.files.delete(fileId, {}, requestOptions(workspaceId))) as Promise<T>;
-    }
+      return sdkCall(() =>
+        getAnthropicClient().beta.files.delete(fileId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
+    },
   },
   messageBatches: {
     create<T>(params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.messages.batches.create(sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.messages.batches.create(sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.messages.batches.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(batchId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.messages.batches.retrieve(batchId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.messages.batches.retrieve(batchId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     cancel<T>(batchId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.messages.batches.cancel(batchId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.messages.batches.cancel(batchId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     delete<T>(batchId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.messages.batches.delete(batchId, {}, requestOptions(workspaceId))) as Promise<T>;
-    }
+      return sdkCall(() =>
+        getAnthropicClient().beta.messages.batches.delete(batchId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
+    },
   },
   skills: {
     create<T>(params: { display_title?: string | null; files?: Uploadable[] | null }, workspaceId?: string) {
@@ -226,179 +234,259 @@ export const anthropicBetaApi = {
       return sdkPage<T>(() => getAnthropicClient().beta.skills.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(skillId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.skills.retrieve(skillId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.skills.retrieve(skillId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     delete<T>(skillId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.skills.delete(skillId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.skills.delete(skillId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     versions: {
       create<T>(skillId: string, params: { files?: Uploadable[] | null }, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.skills.versions.create(skillId, params, requestOptions(workspaceId))
+          getAnthropicClient().beta.skills.versions.create(skillId, params, requestOptions(workspaceId)),
         ) as Promise<T>;
       },
       list<T>(skillId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.skills.versions.list(skillId, params, requestOptions(workspaceId)));
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.skills.versions.list(skillId, params, requestOptions(workspaceId)),
+        );
       },
       retrieve<T>(skillId: string, version: string, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.skills.versions.retrieve(version, { skill_id: skillId }, requestOptions(workspaceId))
+          getAnthropicClient().beta.skills.versions.retrieve(
+            version,
+            { skill_id: skillId },
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
       },
       delete<T>(skillId: string, version: string, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.skills.versions.delete(version, { skill_id: skillId }, requestOptions(workspaceId))
+          getAnthropicClient().beta.skills.versions.delete(version, { skill_id: skillId }, requestOptions(workspaceId)),
         ) as Promise<T>;
-      }
-    }
+      },
+    },
   },
   agents: {
     create<T>(params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.agents.create(sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.agents.create(sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.agents.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(agentId: string, params: Record<string, unknown> = {}, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.agents.retrieve(agentId, params, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.agents.retrieve(agentId, params, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     update<T>(agentId: string, params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.agents.update(agentId, sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.agents.update(agentId, sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     archive<T>(agentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.agents.archive(agentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.agents.archive(agentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     versions: {
       list<T>(agentId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.agents.versions.list(agentId, params, requestOptions(workspaceId)));
-      }
-    }
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.agents.versions.list(agentId, params, requestOptions(workspaceId)),
+        );
+      },
+    },
   },
   sessions: {
     create<T>(params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.sessions.create(sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.sessions.create(sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.sessions.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(sessionId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.sessions.retrieve(sessionId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.sessions.retrieve(sessionId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     update<T>(sessionId: string, params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.sessions.update(sessionId, sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.sessions.update(sessionId, sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     archive<T>(sessionId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.sessions.archive(sessionId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.sessions.archive(sessionId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     delete<T>(sessionId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.sessions.delete(sessionId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.sessions.delete(sessionId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     events: {
       list<T>(sessionId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.sessions.events.list(sessionId, params, requestOptions(workspaceId)));
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.sessions.events.list(sessionId, params, requestOptions(workspaceId)),
+        );
       },
       send<T>(sessionId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkCall(() => getAnthropicClient().beta.sessions.events.send(sessionId, sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
-      }
+        return sdkCall(() =>
+          getAnthropicClient().beta.sessions.events.send(sessionId, sdkParams(params), requestOptions(workspaceId)),
+        ) as Promise<T>;
+      },
     },
     resources: {
       list<T>(sessionId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.sessions.resources.list(sessionId, params, requestOptions(workspaceId)));
-      }
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.sessions.resources.list(sessionId, params, requestOptions(workspaceId)),
+        );
+      },
     },
     threads: {
       list<T>(sessionId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.sessions.threads.list(sessionId, params, requestOptions(workspaceId)));
-      }
-    }
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.sessions.threads.list(sessionId, params, requestOptions(workspaceId)),
+        );
+      },
+    },
   },
   environments: {
     create<T>(params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.environments.create(sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.environments.create(sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.environments.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(environmentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.environments.retrieve(environmentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.environments.retrieve(environmentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     update<T>(environmentId: string, params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.environments.update(environmentId, sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.environments.update(environmentId, sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     archive<T>(environmentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.environments.archive(environmentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.environments.archive(environmentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     delete<T>(environmentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.environments.delete(environmentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.environments.delete(environmentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     work: {
       list<T>(environmentId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.environments.work.list(environmentId, params, requestOptions(workspaceId)));
-      }
-    }
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.environments.work.list(environmentId, params, requestOptions(workspaceId)),
+        );
+      },
+    },
   },
   deployments: {
     create<T>(params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.deployments.create(sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.deployments.create(sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.deployments.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(deploymentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.deployments.retrieve(deploymentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.deployments.retrieve(deploymentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     update<T>(deploymentId: string, params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.deployments.update(deploymentId, sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.deployments.update(deploymentId, sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     archive<T>(deploymentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.deployments.archive(deploymentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.deployments.archive(deploymentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     run<T>(deploymentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.deployments.run(deploymentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.deployments.run(deploymentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     pause<T>(deploymentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.deployments.pause(deploymentId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.deployments.pause(deploymentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     unpause<T>(deploymentId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.deployments.unpause(deploymentId, {}, requestOptions(workspaceId))) as Promise<T>;
-    }
+      return sdkCall(() =>
+        getAnthropicClient().beta.deployments.unpause(deploymentId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
+    },
   },
   deploymentRuns: {
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.deploymentRuns.list(params, requestOptions(workspaceId)));
-    }
+    },
   },
   vaults: {
     create<T>(params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.vaults.create(sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.vaults.create(sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.vaults.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(vaultId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.vaults.retrieve(vaultId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.vaults.retrieve(vaultId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     update<T>(vaultId: string, params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.vaults.update(vaultId, sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.vaults.update(vaultId, sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     archive<T>(vaultId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.vaults.archive(vaultId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.vaults.archive(vaultId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     delete<T>(vaultId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.vaults.delete(vaultId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.vaults.delete(vaultId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     credentials: {
       create<T>(vaultId: string, params: Record<string, unknown>, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.vaults.credentials.create(vaultId, sdkParams(params), requestOptions(workspaceId))
+          getAnthropicClient().beta.vaults.credentials.create(vaultId, sdkParams(params), requestOptions(workspaceId)),
         ) as Promise<T>;
       },
       list<T>(vaultId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.vaults.credentials.list(vaultId, params, requestOptions(workspaceId)));
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.vaults.credentials.list(vaultId, params, requestOptions(workspaceId)),
+        );
       },
       retrieve<T>(vaultId: string, credentialId: string, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.vaults.credentials.retrieve(credentialId, { vault_id: vaultId }, requestOptions(workspaceId))
+          getAnthropicClient().beta.vaults.credentials.retrieve(
+            credentialId,
+            { vault_id: vaultId },
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
       },
       update<T>(vaultId: string, credentialId: string, params: Record<string, unknown>, workspaceId?: string) {
@@ -406,59 +494,81 @@ export const anthropicBetaApi = {
           getAnthropicClient().beta.vaults.credentials.update(
             credentialId,
             sdkParams({ vault_id: vaultId, ...params }),
-            requestOptions(workspaceId)
-          )
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
       },
       archive<T>(vaultId: string, credentialId: string, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.vaults.credentials.archive(credentialId, { vault_id: vaultId }, requestOptions(workspaceId))
+          getAnthropicClient().beta.vaults.credentials.archive(
+            credentialId,
+            { vault_id: vaultId },
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
       },
       delete<T>(vaultId: string, credentialId: string, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.vaults.credentials.delete(credentialId, { vault_id: vaultId }, requestOptions(workspaceId))
+          getAnthropicClient().beta.vaults.credentials.delete(
+            credentialId,
+            { vault_id: vaultId },
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
-      }
-    }
+      },
+    },
   },
   memoryStores: {
     create<T>(params: Record<string, unknown>, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.memoryStores.create(sdkParams(params), requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.memoryStores.create(sdkParams(params), requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     list<T>(params: Record<string, unknown>, workspaceId?: string) {
       return sdkPage<T>(() => getAnthropicClient().beta.memoryStores.list(params, requestOptions(workspaceId)));
     },
     retrieve<T>(memoryStoreId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.memoryStores.retrieve(memoryStoreId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.memoryStores.retrieve(memoryStoreId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     update<T>(memoryStoreId: string, params: Record<string, unknown>, workspaceId?: string) {
       return sdkCall(() =>
-        getAnthropicClient().beta.memoryStores.update(memoryStoreId, sdkParams(params), requestOptions(workspaceId))
+        getAnthropicClient().beta.memoryStores.update(memoryStoreId, sdkParams(params), requestOptions(workspaceId)),
       ) as Promise<T>;
     },
     archive<T>(memoryStoreId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.memoryStores.archive(memoryStoreId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.memoryStores.archive(memoryStoreId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     delete<T>(memoryStoreId: string, workspaceId?: string) {
-      return sdkCall(() => getAnthropicClient().beta.memoryStores.delete(memoryStoreId, {}, requestOptions(workspaceId))) as Promise<T>;
+      return sdkCall(() =>
+        getAnthropicClient().beta.memoryStores.delete(memoryStoreId, {}, requestOptions(workspaceId)),
+      ) as Promise<T>;
     },
     memories: {
       create<T>(memoryStoreId: string, params: Record<string, unknown>, workspaceId?: string) {
         return sdkCall(() =>
-          getAnthropicClient().beta.memoryStores.memories.create(memoryStoreId, sdkParams(params), requestOptions(workspaceId))
+          getAnthropicClient().beta.memoryStores.memories.create(
+            memoryStoreId,
+            sdkParams(params),
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
       },
       list<T>(memoryStoreId: string, params: Record<string, unknown>, workspaceId?: string) {
-        return sdkPage<T>(() => getAnthropicClient().beta.memoryStores.memories.list(memoryStoreId, params, requestOptions(workspaceId)));
+        return sdkPage<T>(() =>
+          getAnthropicClient().beta.memoryStores.memories.list(memoryStoreId, params, requestOptions(workspaceId)),
+        );
       },
       retrieve<T>(memoryStoreId: string, memoryId: string, params: Record<string, unknown>, workspaceId?: string) {
         return sdkCall(() =>
           getAnthropicClient().beta.memoryStores.memories.retrieve(
             memoryId,
             sdkParams({ memory_store_id: memoryStoreId, ...params }),
-            requestOptions(workspaceId)
-          )
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
       },
       update<T>(memoryStoreId: string, memoryId: string, params: Record<string, unknown>, workspaceId?: string) {
@@ -466,8 +576,8 @@ export const anthropicBetaApi = {
           getAnthropicClient().beta.memoryStores.memories.update(
             memoryId,
             sdkParams({ memory_store_id: memoryStoreId, ...params }),
-            requestOptions(workspaceId)
-          )
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
       },
       delete<T>(memoryStoreId: string, memoryId: string, workspaceId?: string) {
@@ -475,10 +585,10 @@ export const anthropicBetaApi = {
           getAnthropicClient().beta.memoryStores.memories.delete(
             memoryId,
             { memory_store_id: memoryStoreId },
-            requestOptions(workspaceId)
-          )
+            requestOptions(workspaceId),
+          ),
         ) as Promise<T>;
-      }
-    }
-  }
+      },
+    },
+  },
 };

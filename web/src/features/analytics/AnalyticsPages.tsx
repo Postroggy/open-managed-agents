@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Search,
   Server,
-  SlidersHorizontal
+  SlidersHorizontal,
 } from 'lucide-react';
 import { type ComponentType, type ReactNode, useState } from 'react';
 import { cn } from '@/shared/lib/utils';
@@ -25,26 +25,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle
-} from '@/shared/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Input } from '@/shared/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/shared/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 import { useI18n } from '../../shared/i18n';
 import { defaultWorkspace } from '../../shared/workspaces/api';
 import { useWorkspace } from '../../shared/workspaces/context';
@@ -55,25 +41,25 @@ type FilterOption = { value: string; label: string };
 const modelRows = [
   { name: 'Opus 4.8', rpm: '4,000', itpm: '400,000', otpm: '80,000' },
   { name: 'Sonnet 4.6', rpm: '4,000', itpm: '400,000', otpm: '80,000' },
-  { name: 'Haiku 4.5', rpm: '4,000', itpm: '400,000', otpm: '80,000' }
+  { name: 'Haiku 4.5', rpm: '4,000', itpm: '400,000', otpm: '80,000' },
 ];
 
 const analyticsModelOptions = modelRows.map((row) => ({
   value: row.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-  label: row.name
+  label: row.name,
 }));
 
 const usageMonthOptions: FilterOption[] = [
   { value: '2026-06', label: 'June 2026' },
   { value: '2026-05', label: 'May 2026' },
-  { value: '2026-04', label: 'April 2026' }
+  { value: '2026-04', label: 'April 2026' },
 ];
 
 const linesPerPageOptions: FilterOption[] = [
   { value: '10', label: '10' },
   { value: '25', label: '25' },
   { value: '50', label: '50' },
-  { value: '100', label: '100' }
+  { value: '100', label: '100' },
 ];
 
 export function UsagePage() {
@@ -81,23 +67,23 @@ export function UsagePage() {
   const workspaceLabel = useWorkspaceLabel();
   const workspaceOptions: FilterOption[] = [
     { value: 'all', label: msg('common.all', 'All') },
-    { value: 'default', label: workspaceLabel }
+    { value: 'default', label: workspaceLabel },
   ];
   const viewByOptions: FilterOption[] = [
     { value: 'month', label: msg('analytics.filter.month', 'Month') },
     { value: 'week', label: msg('analytics.filter.week', 'Week') },
-    { value: 'day', label: msg('analytics.filter.day', 'Day') }
+    { value: 'day', label: msg('analytics.filter.day', 'Day') },
   ];
   const serviceAccountOptions: FilterOption[] = [
     { value: 'all', label: msg('common.all', 'All') },
     { value: 'batch-runner', label: 'Batch runner' },
-    { value: 'ops-bot', label: 'Ops bot' }
+    { value: 'ops-bot', label: 'Ops bot' },
   ];
   const modelOptions: FilterOption[] = [{ value: 'all', label: msg('common.all', 'All') }, ...analyticsModelOptions];
   const groupByOptions: FilterOption[] = [
     { value: 'model', label: msg('analytics.table.model', 'Model') },
     { value: 'workspace', label: msg('analytics.filter.workspace', 'Workspace') },
-    { value: 'service-account', label: msg('analytics.filter.serviceAccount', 'Service account') }
+    { value: 'service-account', label: msg('analytics.filter.serviceAccount', 'Service account') },
   ];
   const [filters, setFilters] = useState({
     workspace: 'all',
@@ -105,7 +91,7 @@ export function UsagePage() {
     month: '2026-06',
     serviceAccount: 'all',
     model: 'all',
-    groupBy: 'model'
+    groupBy: 'model',
   });
 
   return (
@@ -174,28 +160,28 @@ export function CachingPage() {
   const workspaceLabel = useWorkspaceLabel();
   const workspaceOptions: FilterOption[] = [
     { value: 'default', label: workspaceLabel },
-    { value: 'all', label: msg('common.all', 'All') }
+    { value: 'all', label: msg('common.all', 'All') },
   ];
   const modelOptions: FilterOption[] = [{ value: 'all', label: msg('common.all', 'All') }, ...analyticsModelOptions];
   const rangeOptions: FilterOption[] = [
     { value: 'last-7-days', label: msg('analytics.filter.last7Days', 'Last 7 days') },
     { value: 'last-30-days', label: msg('analytics.filter.last30Days', 'Last 30 days') },
-    { value: 'month-to-date', label: msg('analytics.filter.monthToDate', 'Month to date') }
+    { value: 'month-to-date', label: msg('analytics.filter.monthToDate', 'Month to date') },
   ];
   const groupByOptions: FilterOption[] = [
     { value: 'model', label: msg('analytics.table.model', 'Model') },
-    { value: 'workspace', label: msg('analytics.filter.workspace', 'Workspace') }
+    { value: 'workspace', label: msg('analytics.filter.workspace', 'Workspace') },
   ];
   const [filters, setFilters] = useState({
     workspace: 'default',
     model: 'all',
     range: 'last-7-days',
-    groupBy: 'model'
+    groupBy: 'model',
   });
   const cachingBody = msg(
     'analytics.caching.body',
     'Add {code} to eligible prompt blocks to reuse common context and reduce input costs.',
-    { code: 'cache_control' }
+    { code: 'cache_control' },
   );
   const [cachingBodyBeforeCode, ...cachingBodyAfterCode] = cachingBody.split('cache_control');
 
@@ -231,7 +217,10 @@ export function CachingPage() {
       <Card className="rounded-lg p-0">
         <Empty className="min-h-[390px] rounded-lg border-0 px-6 py-16">
           <EmptyHeader className="max-w-[560px]">
-            <EmptyMedia variant="icon" className="size-12 rounded-full border border-border bg-secondary text-foreground">
+            <EmptyMedia
+              variant="icon"
+              className="size-12 rounded-full border border-border bg-secondary text-foreground"
+            >
               <Server className="size-5" aria-hidden />
             </EmptyMedia>
             <EmptyTitle>
@@ -260,7 +249,7 @@ export function CachingPage() {
             <p className="mt-4 text-xs leading-5 text-muted-foreground/70">
               {msg(
                 'analytics.caching.alreadyCaching',
-                'Already caching? It can take a few minutes for new usage to appear.'
+                'Already caching? It can take a few minutes for new usage to appear.',
               )}
             </p>
           </EmptyContent>
@@ -275,12 +264,12 @@ export function RateLimitsPage() {
   const workspaceLabel = useWorkspaceLabel();
   const workspaceOptions: FilterOption[] = [
     { value: 'default', label: workspaceLabel },
-    { value: 'all', label: msg('common.all', 'All') }
+    { value: 'all', label: msg('common.all', 'All') },
   ];
   const modelOptions: FilterOption[] = [{ value: 'all', label: msg('common.all', 'All') }, ...analyticsModelOptions];
   const [filters, setFilters] = useState({
     workspace: 'default',
-    model: 'all'
+    model: 'all',
   });
   const [hasRefreshed, setHasRefreshed] = useState(false);
 
@@ -302,15 +291,29 @@ export function RateLimitsPage() {
       </FilterBar>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <MetricPanel title={msg('analytics.rateLimits.requestsPerMinute', 'Requests per Minute')} value="0%" detail="0 of 4,000 used" />
-        <MetricPanel title={msg('analytics.rateLimits.inputTokensPerMinute', 'Input Tokens per Minute')} value="0%" detail="0 of 400,000 used" />
-        <MetricPanel title={msg('analytics.rateLimits.outputTokensPerMinute', 'Output Tokens per Minute')} value="0%" detail="0 of 80,000 used" />
+        <MetricPanel
+          title={msg('analytics.rateLimits.requestsPerMinute', 'Requests per Minute')}
+          value="0%"
+          detail="0 of 4,000 used"
+        />
+        <MetricPanel
+          title={msg('analytics.rateLimits.inputTokensPerMinute', 'Input Tokens per Minute')}
+          value="0%"
+          detail="0 of 400,000 used"
+        />
+        <MetricPanel
+          title={msg('analytics.rateLimits.outputTokensPerMinute', 'Output Tokens per Minute')}
+          value="0%"
+          detail="0 of 80,000 used"
+        />
       </div>
 
       <Card className="gap-0 rounded-lg p-0">
         <CardHeader className="border-b border-border px-5 py-4">
           <div>
-            <CardTitle className="text-sm font-semibold text-foreground">{msg('analytics.rateLimits.modelLimits', 'Model limits')}</CardTitle>
+            <CardTitle className="text-sm font-semibold text-foreground">
+              {msg('analytics.rateLimits.modelLimits', 'Model limits')}
+            </CardTitle>
             <CardDescription className="mt-1 text-sm text-muted-foreground">
               {msg('analytics.rateLimits.currentUsage', 'Current minute usage across requests and tokens.')}
               {hasRefreshed ? (
@@ -338,10 +341,18 @@ export function RateLimitsPage() {
           <Table className="min-w-full text-left">
             <TableHeader className="text-xs text-muted-foreground/70">
               <TableRow className="border-b border-border hover:bg-transparent">
-                <TableHead className="px-5 py-3 text-muted-foreground/70">{msg('analytics.table.model', 'Model')}</TableHead>
-                <TableHead className="px-5 py-3 text-muted-foreground/70">{msg('analytics.table.requests', 'Requests')}</TableHead>
-                <TableHead className="px-5 py-3 text-muted-foreground/70">{msg('analytics.table.inputTokens', 'Input Tokens')}</TableHead>
-                <TableHead className="px-5 py-3 text-muted-foreground/70">{msg('analytics.table.outputTokens', 'Output Tokens')}</TableHead>
+                <TableHead className="px-5 py-3 text-muted-foreground/70">
+                  {msg('analytics.table.model', 'Model')}
+                </TableHead>
+                <TableHead className="px-5 py-3 text-muted-foreground/70">
+                  {msg('analytics.table.requests', 'Requests')}
+                </TableHead>
+                <TableHead className="px-5 py-3 text-muted-foreground/70">
+                  {msg('analytics.table.inputTokens', 'Input Tokens')}
+                </TableHead>
+                <TableHead className="px-5 py-3 text-muted-foreground/70">
+                  {msg('analytics.table.outputTokens', 'Output Tokens')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -370,24 +381,24 @@ export function CostPage() {
     ? [{ value: 'current', label: workspaceLabel }]
     : [
         { value: 'all-workspaces', label: allWorkspacesLabel },
-        { value: 'default', label: workspaceLabel }
+        { value: 'default', label: workspaceLabel },
       ];
   const groupByOptions: FilterOption[] = [
     { value: 'model', label: msg('analytics.table.model', 'Model') },
     { value: 'workspace', label: msg('analytics.filter.workspace', 'Workspace') },
-    { value: 'service-account', label: msg('analytics.filter.serviceAccount', 'Service account') }
+    { value: 'service-account', label: msg('analytics.filter.serviceAccount', 'Service account') },
   ];
   const modelOptions: FilterOption[] = [{ value: 'all', label: msg('common.all', 'All') }, ...analyticsModelOptions];
   const rangeOptions: FilterOption[] = [
-    { value: 'month-to-date', label: msg('analytics.filter.monthToDate', 'Month to date') },
+    { value: 'last-7-days', label: msg('analytics.filter.last7Days', 'Last 7 days') },
     { value: 'last-30-days', label: msg('analytics.filter.last30Days', 'Last 30 days') },
-    { value: 'last-7-days', label: msg('analytics.filter.last7Days', 'Last 7 days') }
+    { value: 'month-to-date', label: msg('analytics.filter.monthToDate', 'Month to date') },
   ];
   const [filters, setFilters] = useState({
     workspace: routeWorkspaceId ? 'current' : 'all-workspaces',
     groupBy: 'model',
     model: 'all',
-    range: 'month-to-date'
+    range: 'month-to-date',
   });
 
   return (
@@ -423,7 +434,10 @@ export function CostPage() {
       <div className="grid gap-3 xl:grid-cols-3">
         <MetricPanel title={msg('analytics.cost.totalTokenCost', 'Total token cost')} value="USD 0.00" />
         <MetricPanel title={msg('analytics.cost.totalWebSearchCost', 'Total web search cost')} value="USD 0.00" />
-        <MetricPanel title={msg('analytics.cost.totalCodeExecutionCost', 'Total code execution cost')} value="USD 0.00" />
+        <MetricPanel
+          title={msg('analytics.cost.totalCodeExecutionCost', 'Total code execution cost')}
+          value="USD 0.00"
+        />
       </div>
 
       <ChartPanel title={msg('analytics.cost.dailyTokenCost', 'Daily token cost')}>
@@ -442,29 +456,29 @@ export function LogsPage() {
     ? [{ value: 'current', label: workspaceLabel }]
     : [
         { value: 'all-workspaces', label: allWorkspacesLabel },
-        { value: 'default', label: workspaceLabel }
+        { value: 'default', label: workspaceLabel },
       ];
   const modelOptions: FilterOption[] = [{ value: 'all', label: msg('common.all', 'All') }, ...analyticsModelOptions];
   const serviceAccountOptions: FilterOption[] = [
     { value: 'all', label: msg('common.all', 'All') },
     { value: 'batch-runner', label: 'Batch runner' },
-    { value: 'ops-bot', label: 'Ops bot' }
+    { value: 'ops-bot', label: 'Ops bot' },
   ];
   const requestTypeOptions: FilterOption[] = [
     { value: 'messages', label: msg('analytics.logs.typeMessages', 'Messages') },
     { value: 'batches', label: msg('analytics.logs.typeBatches', 'Batches') },
     { value: 'files', label: msg('analytics.logs.typeFiles', 'Files') },
-    { value: 'managed-agents', label: msg('analytics.logs.typeManagedAgents', 'Managed agents') }
+    { value: 'managed-agents', label: msg('analytics.logs.typeManagedAgents', 'Managed agents') },
   ];
   const serviceTierFilterOptions: FilterOption[] = [
     { value: 'standard', label: msg('analytics.logs.serviceTierStandard', 'Standard') },
     { value: 'priority', label: msg('analytics.logs.serviceTierPriority', 'Priority') },
-    { value: 'batch', label: msg('analytics.logs.serviceTierBatch', 'Batch') }
+    { value: 'batch', label: msg('analytics.logs.serviceTierBatch', 'Batch') },
   ];
   const rangeOptions: FilterOption[] = [
     { value: 'last-24-hours', label: msg('analytics.filter.last24Hours', 'Last 24 hours') },
     { value: 'last-7-days', label: msg('analytics.filter.last7Days', 'Last 7 days') },
-    { value: 'last-30-days', label: msg('analytics.filter.last30Days', 'Last 30 days') }
+    { value: 'last-30-days', label: msg('analytics.filter.last30Days', 'Last 30 days') },
   ];
   const [filters, setFilters] = useState({
     workspace: routeWorkspaceId ? 'current' : 'all-workspaces',
@@ -473,7 +487,7 @@ export function LogsPage() {
     range: 'last-24-hours',
     requestTypes: [] as string[],
     serviceTiers: [] as string[],
-    linesPerPage: '10'
+    linesPerPage: '10',
   });
   const hasAdvancedFilters = filters.requestTypes.length > 0 || filters.serviceTiers.length > 0;
   const clearAdvancedFilters = () => {
@@ -549,7 +563,7 @@ export function LogsPage() {
                   msg('analytics.table.outputTokens', 'Output Tokens'),
                   msg('analytics.table.type', 'Type'),
                   msg('analytics.table.serviceTier', 'Service Tier'),
-                  msg('analytics.table.request', 'Request')
+                  msg('analytics.table.request', 'Request'),
                 ].map((heading) => (
                   <TableHead key={heading} className="px-4 py-3 text-muted-foreground/70">
                     {heading}
@@ -569,10 +583,13 @@ export function LogsPage() {
                     </div>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {hasAdvancedFilters
-                        ? msg('analytics.logs.filteredEmptyBody', 'Try clearing filters or broadening the selected range.')
+                        ? msg(
+                            'analytics.logs.filteredEmptyBody',
+                            'Try clearing filters or broadening the selected range.',
+                          )
                         : msg(
                             'analytics.logs.emptyBody',
-                            'Requests will appear here after API traffic is sent from this workspace.'
+                            'Requests will appear here after API traffic is sent from this workspace.',
                           )}
                     </p>
                     {hasAdvancedFilters ? (
@@ -625,7 +642,7 @@ export function LogsPage() {
 function AnalyticsPageRoot({
   title,
   icon: Icon,
-  children
+  children,
 }: {
   title: string;
   icon: IconComponent;
@@ -657,7 +674,7 @@ function FilterControl({
   value,
   options,
   disabled = false,
-  onValueChange
+  onValueChange,
 }: {
   label?: string;
   value: string;
@@ -706,7 +723,7 @@ function LogsFiltersMenu({
   selectedServiceTiers,
   onRequestTypesChange,
   onServiceTiersChange,
-  onClear
+  onClear,
 }: {
   requestTypeOptions: FilterOption[];
   selectedRequestTypes: string[];
@@ -725,7 +742,7 @@ function LogsFiltersMenu({
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
-        render={(
+        render={
           <Button
             type="button"
             variant="outline"
@@ -737,10 +754,10 @@ function LogsFiltersMenu({
             }
             className={cn(
               'gap-2',
-              activeFilterCount > 0 && 'border-primary/30 bg-primary/5 text-foreground hover:bg-primary/10'
+              activeFilterCount > 0 && 'border-primary/30 bg-primary/5 text-foreground hover:bg-primary/10',
             )}
           />
-        )}
+        }
       >
         <SlidersHorizontal className="size-3.5" aria-hidden />
         {msg('common.filters', 'Filters')}
@@ -854,7 +871,17 @@ function EmptyChart({ label }: { label: string }) {
   );
 }
 
-function SideNotice({ title, body, href, linkLabel }: { title: string; body: string; href: string; linkLabel: string }) {
+function SideNotice({
+  title,
+  body,
+  href,
+  linkLabel,
+}: {
+  title: string;
+  body: string;
+  href: string;
+  linkLabel: string;
+}) {
   return (
     <Card role="note" className="rounded-lg p-5">
       <div className="flex items-start gap-3">
@@ -891,7 +918,10 @@ function useWorkspaceLabel(routeWorkspaceId?: string | null) {
   const { activeWorkspace, workspaces } = useWorkspace();
   const workspaceId = routeWorkspaceId || activeWorkspace.id;
   const workspace = workspaces.find((item) => item.id === workspaceId);
-  return workspace?.name || (workspaceId === defaultWorkspace.id ? defaultWorkspace.name : workspaceId || defaultWorkspace.name);
+  return (
+    workspace?.name ||
+    (workspaceId === defaultWorkspace.id ? defaultWorkspace.name : workspaceId || defaultWorkspace.name)
+  );
 }
 
 function getWorkspaceIdFromPath() {

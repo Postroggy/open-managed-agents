@@ -15,7 +15,7 @@ import {
   RotateCcw,
   Trash2,
   Webhook,
-  X
+  X,
 } from 'lucide-react';
 import { Button } from '../../shared/ui/button';
 import { Checkbox } from '../../shared/ui/checkbox';
@@ -29,7 +29,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from '../../shared/ui/alert-dialog';
 import {
   Dialog,
@@ -37,26 +37,19 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from '../../shared/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '../../shared/ui/dropdown-menu';
 import { Badge } from '../../shared/ui/badge';
 import { Card, CardContent } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { Label } from '../../shared/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '../../shared/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/ui/table';
 import { Textarea } from '../../shared/ui/textarea';
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '../../shared/ui/sheet';
 import { useI18n } from '../../shared/i18n';
@@ -73,7 +66,7 @@ import {
   type CreateWebhookEndpointInput,
   type UpdateWebhookEndpointInput,
   type WebhookEndpoint,
-  type WebhookEndpointStatus
+  type WebhookEndpointStatus,
 } from './webhooksApi';
 
 type WorkspaceWebhooksContentProps = {
@@ -114,28 +107,28 @@ const webhookEventGroups: WebhookEventGroup[] = [
       { label: 'Run started', type: 'session.status_run_started' },
       { label: 'Rescheduled', type: 'session.status_rescheduled' },
       { label: 'Idled', type: 'session.status_idled' },
-      { label: 'Terminated', type: 'session.status_terminated' }
-    ]
+      { label: 'Terminated', type: 'session.status_terminated' },
+    ],
   },
   {
     label: 'Threads',
     events: [
       { label: 'Created', type: 'session.thread_created' },
       { label: 'Idled', type: 'session.thread_idled' },
-      { label: 'Terminated', type: 'session.thread_terminated' }
-    ]
+      { label: 'Terminated', type: 'session.thread_terminated' },
+    ],
   },
   {
     label: 'Outcomes',
-    events: [{ label: 'Evaluation ended', type: 'session.outcome_evaluation_ended' }]
+    events: [{ label: 'Evaluation ended', type: 'session.outcome_evaluation_ended' }],
   },
   {
     label: 'Vault lifecycle',
     events: [
       { label: 'Created', type: 'vault.created' },
       { label: 'Archived', type: 'vault.archived' },
-      { label: 'Deleted', type: 'vault.deleted' }
-    ]
+      { label: 'Deleted', type: 'vault.deleted' },
+    ],
   },
   {
     label: 'Credential lifecycle',
@@ -143,9 +136,9 @@ const webhookEventGroups: WebhookEventGroup[] = [
       { label: 'Created', type: 'vault_credential.created' },
       { label: 'Archived', type: 'vault_credential.archived' },
       { label: 'Deleted', type: 'vault_credential.deleted' },
-      { label: 'Refresh failed', type: 'vault_credential.refresh_failed' }
-    ]
-  }
+      { label: 'Refresh failed', type: 'vault_credential.refresh_failed' },
+    ],
+  },
 ];
 
 const allWebhookEventTypes = webhookEventGroups.flatMap((group) => group.events.map((event) => event.type));
@@ -158,13 +151,15 @@ const webhookDetailEventGroups: WebhookEventGroup[] = [
       { label: 'Updated', type: 'session.updated' },
       { label: 'Deleted', type: 'session.deleted' },
       { label: 'Updated', type: 'session.record_updated' },
-      { label: 'Deleted', type: 'session.record_deleted' }
-    ]
+      { label: 'Deleted', type: 'session.record_deleted' },
+    ],
   },
-  ...webhookEventGroups.slice(3)
+  ...webhookEventGroups.slice(3),
 ];
 
-const knownDetailEventTypes = new Set(webhookDetailEventGroups.flatMap((group) => group.events.map((event) => event.type)));
+const knownDetailEventTypes = new Set(
+  webhookDetailEventGroups.flatMap((group) => group.events.map((event) => event.type)),
+);
 
 export function WorkspaceWebhooksPage() {
   const location = useLocation();
@@ -181,11 +176,11 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
   const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
   const workspace = useMemo(
     () => resolveWorkspace(routeWorkspaceId, workspaces, activeWorkspace),
-    [activeWorkspace, routeWorkspaceId, workspaces]
+    [activeWorkspace, routeWorkspaceId, workspaces],
   );
   const queryKey = useMemo(
     () => ['console', 'workspace-webhooks', orgUuid, workspace.id] as const,
-    [orgUuid, workspace.id]
+    [orgUuid, workspace.id],
   );
 
   useEffect(() => {
@@ -198,7 +193,7 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
     queryKey,
     queryFn: listWebhookEndpoints,
     enabled: Boolean(workspace.id),
-    retry: false
+    retry: false,
   });
 
   const createMutation = useMutation({
@@ -208,7 +203,7 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
       setSecretDisclosure({ webhook, source: 'created' });
       queryClient.setQueryData<WebhookEndpoint[]>(queryKey, (current) => upsertWebhook(current ?? [], webhook));
       await queryClient.invalidateQueries({ queryKey });
-    }
+    },
   });
 
   const statusMutation = useMutation({
@@ -217,7 +212,7 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
     onSuccess: (updatedWebhook) => {
       queryClient.setQueryData<WebhookEndpoint[]>(queryKey, (current) => upsertWebhook(current ?? [], updatedWebhook));
       void queryClient.invalidateQueries({ queryKey });
-    }
+    },
   });
 
   const updateDetailsMutation = useMutation({
@@ -226,18 +221,18 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
     onSuccess: (updatedWebhook) => {
       queryClient.setQueryData<WebhookEndpoint[]>(queryKey, (current) => upsertWebhook(current ?? [], updatedWebhook));
       void queryClient.invalidateQueries({ queryKey });
-    }
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (webhook: WebhookEndpoint) => deleteWebhookEndpoint(webhook.id),
     onSuccess: (_deleted, webhook) => {
       queryClient.setQueryData<WebhookEndpoint[]>(queryKey, (current) =>
-        (current ?? []).filter((item) => item.id !== webhook.id)
+        (current ?? []).filter((item) => item.id !== webhook.id),
       );
       setSelectedWebhookId((current) => (current === webhook.id ? null : current));
       void queryClient.invalidateQueries({ queryKey });
-    }
+    },
   });
 
   const regenerateSecretMutation = useMutation({
@@ -245,14 +240,16 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
     onSuccess: (response, webhook) => {
       setSecretDisclosure({
         webhook: { ...webhook, signing_secret: response.signing_secret },
-        source: 'regenerated'
+        source: 'regenerated',
       });
       void queryClient.invalidateQueries({ queryKey });
-    }
+    },
   });
 
   const webhooks = webhooksQuery.data ?? [];
-  const selectedWebhook = selectedWebhookId ? (webhooks.find((webhook) => webhook.id === selectedWebhookId) ?? null) : null;
+  const selectedWebhook = selectedWebhookId
+    ? (webhooks.find((webhook) => webhook.id === selectedWebhookId) ?? null)
+    : null;
   const errorMessage = readableError(webhooksQuery.error);
   const updateDetailsError = readableError(updateDetailsMutation.error);
   const actionError = readableError(
@@ -260,13 +257,13 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
       ? deleteMutation.error
       : pendingAction?.action === 'regenerate'
         ? regenerateSecretMutation.error
-        : statusMutation.error
+        : statusMutation.error,
   );
 
   const handleCreate = async (input: Omit<CreateWebhookEndpointInput, 'name'> & { name?: string }) => {
     await createMutation.mutateAsync({
       ...input,
-      name: input.name?.trim() || deriveWebhookName(input.url)
+      name: input.name?.trim() || deriveWebhookName(input.url),
     });
   };
 
@@ -285,14 +282,18 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
     } else {
       await statusMutation.mutateAsync({
         webhook: pendingAction.webhook,
-        status: pendingAction.action === 'enable' ? 'enabled' : 'disabled'
+        status: pendingAction.action === 'enable' ? 'enabled' : 'disabled',
       });
     }
     setPendingAction(null);
   };
 
   useEffect(() => {
-    if (selectedWebhookId && !webhooksQuery.isLoading && !webhooks.some((webhook) => webhook.id === selectedWebhookId)) {
+    if (
+      selectedWebhookId &&
+      !webhooksQuery.isLoading &&
+      !webhooks.some((webhook) => webhook.id === selectedWebhookId)
+    ) {
       setSelectedWebhookId(null);
     }
   }, [selectedWebhookId, webhooks, webhooksQuery.isLoading]);
@@ -308,16 +309,11 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
             <p className="mt-2 max-w-[760px] text-sm leading-5 text-muted-foreground">
               {msg(
                 'webhooks.description',
-                'Webhook endpoints receive event notifications when things happen in your workspace.'
+                'Webhook endpoints receive event notifications when things happen in your workspace.',
               )}
             </p>
           </div>
-          <Button
-            type="button"
-            size="lg"
-            className="shrink-0"
-            onClick={() => setCreateOpen(true)}
-          >
+          <Button type="button" size="lg" className="shrink-0" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" aria-hidden />
             {msg('webhooks.addEndpoint', 'Add webhook endpoint')}
           </Button>
@@ -336,8 +332,12 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
               <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="px-3 py-3 text-muted-foreground">{msg('webhooks.table.id', 'ID')}</TableHead>
                 <TableHead className="px-3 py-3 text-muted-foreground">{msg('webhooks.table.name', 'Name')}</TableHead>
-                <TableHead className="px-3 py-3 text-muted-foreground">{msg('webhooks.table.status', 'Status')}</TableHead>
-                <TableHead className="px-3 py-3 text-muted-foreground">{msg('webhooks.table.createdAt', 'Created at')}</TableHead>
+                <TableHead className="px-3 py-3 text-muted-foreground">
+                  {msg('webhooks.table.status', 'Status')}
+                </TableHead>
+                <TableHead className="px-3 py-3 text-muted-foreground">
+                  {msg('webhooks.table.createdAt', 'Created at')}
+                </TableHead>
                 <TableHead className="px-3 py-3 text-right text-muted-foreground">
                   <span className="sr-only">{msg('common.actions', 'Actions')}</span>
                 </TableHead>
@@ -361,7 +361,7 @@ export function WorkspaceWebhooksContent({ routeWorkspaceId }: WorkspaceWebhooks
               ) : (
                 <WebhooksState
                   text={msg('webhooks.empty', 'No webhook endpoints have been created for {workspaceName}.', {
-                    workspaceName: workspace.name
+                    workspaceName: workspace.name,
                   })}
                 />
               )}
@@ -407,7 +407,7 @@ function WebhookRow({
   webhook,
   selected,
   onSelect,
-  onAction
+  onAction,
 }: {
   webhook: WebhookEndpoint;
   selected: boolean;
@@ -430,7 +430,7 @@ function WebhookRow({
     <TableRow
       className={clsx(
         'h-[58px] cursor-pointer border-border text-sm text-foreground hover:bg-accent',
-        selected && 'bg-secondary'
+        selected && 'bg-secondary',
       )}
       aria-selected={selected}
       onClick={onSelect}
@@ -464,7 +464,9 @@ function WebhookRow({
             onSelect();
           }}
         >
-          <span className="block truncate font-medium">{webhook.name || msg('webhooks.untitled', 'Untitled webhook')}</span>
+          <span className="block truncate font-medium">
+            {webhook.name || msg('webhooks.untitled', 'Untitled webhook')}
+          </span>
           <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">{webhook.url}</span>
         </Button>
       </TableCell>
@@ -508,7 +510,7 @@ function WebhookDetailInspector({
   updateError,
   onClose,
   onAction,
-  onSave
+  onSave,
 }: {
   webhook: WebhookEndpoint;
   isUpdating: boolean;
@@ -565,7 +567,7 @@ function WebhookDetailInspector({
               <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <span>
                   {msg('webhooks.createdRelative', 'Created {time}', {
-                    time: formatRelativeTime(webhook.created_at)
+                    time: formatRelativeTime(webhook.created_at),
                   })}
                 </span>
                 <span aria-hidden>·</span>
@@ -658,15 +660,7 @@ function WebhookDetailInspector({
   );
 }
 
-function WebhookEndpointDisplay({
-  url,
-  copied,
-  onCopy
-}: {
-  url: string;
-  copied: boolean;
-  onCopy: () => void;
-}) {
+function WebhookEndpointDisplay({ url, copied, onCopy }: { url: string; copied: boolean; onCopy: () => void }) {
   const { msg } = useI18n();
   return (
     <section className="border-t border-border pt-8 first:border-t-0 first:pt-0">
@@ -710,7 +704,7 @@ function WebhookSubscribedEvents({ events }: { events: string[] }) {
       <p className="mt-2 text-sm leading-5 text-muted-foreground">
         {msg(
           'webhooks.subscribedEventsHelp',
-          'A POST request is sent to the endpoint each time one of these events occurs in this workspace.'
+          'A POST request is sent to the endpoint each time one of these events occurs in this workspace.',
         )}
       </p>
 
@@ -727,7 +721,9 @@ function WebhookSubscribedEvents({ events }: { events: string[] }) {
           ))}
         </div>
       ) : (
-        <p className="mt-5 text-sm text-muted-foreground">{msg('webhooks.noSubscribedEvents', 'No events selected.')}</p>
+        <p className="mt-5 text-sm text-muted-foreground">
+          {msg('webhooks.noSubscribedEvents', 'No events selected.')}
+        </p>
       )}
     </section>
   );
@@ -738,7 +734,7 @@ function WebhookDetailEditForm({
   isSubmitting,
   error,
   onCancel,
-  onSave
+  onSave,
 }: {
   webhook: WebhookEndpoint;
   isSubmitting: boolean;
@@ -793,7 +789,7 @@ function WebhookDetailEditForm({
     await onSave({
       name: name.trim(),
       description: description.trim(),
-      enabled_events: selectedEvents
+      enabled_events: selectedEvents,
     });
   };
 
@@ -865,21 +861,10 @@ function WebhookDetailEditForm({
       {error ? <InlineError>{error}</InlineError> : null}
 
       <div className="mt-6 flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          onClick={onCancel}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={isSubmitting}>
           {msg('common.cancel', 'Cancel')}
         </Button>
-        <Button
-          type="submit"
-          disabled={!canSubmit}
-          size="lg"
-          className="min-w-[82px]"
-        >
+        <Button type="submit" disabled={!canSubmit} size="lg" className="min-w-[82px]">
           {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
           {msg('common.save', 'Save')}
         </Button>
@@ -896,7 +881,7 @@ function WebhookStatusBadge({ status }: { status: WebhookEndpointStatus }) {
       variant="secondary"
       className={clsx(
         'h-6 rounded-md px-2 font-medium',
-        disabled ? 'bg-secondary text-muted-foreground' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+        disabled ? 'bg-secondary text-muted-foreground' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
       )}
     >
       {disabled ? msg('webhooks.disabled', 'Disabled') : msg('webhooks.enabled', 'Enabled')}
@@ -906,7 +891,7 @@ function WebhookStatusBadge({ status }: { status: WebhookEndpointStatus }) {
 
 function WebhookActionsMenuContent({
   disabled,
-  onAction
+  onAction,
 }: {
   disabled: boolean;
   onAction: (action: WebhookAction) => void;
@@ -935,7 +920,7 @@ function CreateWebhookDialog({
   open,
   isSubmitting,
   onClose,
-  onCreate
+  onCreate,
 }: {
   open: boolean;
   isSubmitting: boolean;
@@ -972,7 +957,7 @@ function CreateWebhookDialog({
         url: url.trim(),
         name: name.trim(),
         description: description.trim(),
-        enabled_events: selectedEvents
+        enabled_events: selectedEvents,
       });
     } catch (createError) {
       setError(readableError(createError) ?? msg('webhooks.createFailed', 'Failed to create webhook endpoint.'));
@@ -1086,7 +1071,9 @@ function CreateWebhookDialog({
                             onCheckedChange={() => toggleEvent(event.type)}
                           />
                           <span className="min-w-0 flex-1 truncate">{event.label}</span>
-                          <span className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline">{event.type}</span>
+                          <span className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline">
+                            {event.type}
+                          </span>
                         </Label>
                       ))}
                     </div>
@@ -1114,21 +1101,14 @@ function GroupCheckbox({
   checked,
   indeterminate,
   ariaLabel,
-  onChange
+  onChange,
 }: {
   checked: boolean;
   indeterminate: boolean;
   ariaLabel: string;
   onChange: () => void;
 }) {
-  return (
-    <Checkbox
-      aria-label={ariaLabel}
-      checked={checked}
-      indeterminate={indeterminate}
-      onCheckedChange={onChange}
-    />
-  );
+  return <Checkbox aria-label={ariaLabel} checked={checked} indeterminate={indeterminate} onCheckedChange={onChange} />;
 }
 
 function WebhookSecretDialog({ disclosure, onClose }: { disclosure: SecretDisclosure | null; onClose: () => void }) {
@@ -1169,7 +1149,7 @@ function WebhookSecretDialog({ disclosure, onClose }: { disclosure: SecretDisclo
           <DialogDescription className="mt-3 text-sm leading-6 text-muted-foreground">
             {msg(
               'webhooks.copySecret',
-              "Copy this signing secret now. You won't be able to view it again after closing this window."
+              "Copy this signing secret now. You won't be able to view it again after closing this window.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -1197,7 +1177,7 @@ function ConfirmWebhookActionDialog({
   isSubmitting,
   error,
   onClose,
-  onConfirm
+  onConfirm,
 }: {
   pendingAction: PendingAction;
   isSubmitting: boolean;
@@ -1223,23 +1203,23 @@ function ConfirmWebhookActionDialog({
     ? msg('webhooks.deleteTitle', 'Delete webhook endpoint')
     : regenerating
       ? msg('webhooks.regenerateTitle', 'Regenerate signing secret?')
-    : msg('webhooks.statusTitle', '{action} webhook endpoint?', { action });
+      : msg('webhooks.statusTitle', '{action} webhook endpoint?', { action });
   const body = destructive
     ? msg('webhooks.deleteBody', "Are you sure you want to delete {name}? This action can't be undone.", {
-        name: pendingAction.webhook.name || pendingAction.webhook.id
+        name: pendingAction.webhook.name || pendingAction.webhook.id,
       })
     : regenerating
       ? msg(
           'webhooks.regenerateBody',
           'This will replace the current signing secret for {name}. Existing receivers must be updated to verify future deliveries.',
           {
-            name: pendingAction.webhook.name || pendingAction.webhook.id
-          }
+            name: pendingAction.webhook.name || pendingAction.webhook.id,
+          },
         )
-    : msg('webhooks.statusBody', 'Are you sure you want to {action} {name}?', {
-        action: action.toLowerCase(),
-        name: pendingAction.webhook.name || pendingAction.webhook.id
-      });
+      : msg('webhooks.statusBody', 'Are you sure you want to {action} {name}?', {
+          action: action.toLowerCase(),
+          name: pendingAction.webhook.name || pendingAction.webhook.id,
+        });
 
   return (
     <AlertDialog
@@ -1322,7 +1302,7 @@ function resolveWorkspace(routeWorkspaceId: string | undefined, workspaces: Work
   return {
     ...defaultWorkspace,
     id: routeWorkspaceId,
-    name: routeWorkspaceId
+    name: routeWorkspaceId,
   };
 }
 
@@ -1441,7 +1421,7 @@ function formatAbsoluteDate(value?: string | null) {
   return new Intl.DateTimeFormat('en', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
   }).format(date);
 }
 

@@ -1,6 +1,13 @@
 import { useI18n } from '../../../shared/i18n';
 import { cn } from '../../../shared/lib/utils';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '../../../shared/ui/breadcrumb';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '../../../shared/ui/breadcrumb';
 import { type ReactNode } from 'react';
 import { handleInternalLinkClick } from '../utils';
 
@@ -9,7 +16,7 @@ export function ManagedDetailBreadcrumb({
   listLabel,
   currentLabel,
   className,
-  currentClassName
+  currentClassName,
 }: {
   listHref: string;
   listLabel: string;

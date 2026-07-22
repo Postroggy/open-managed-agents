@@ -32,19 +32,19 @@ describe('Organization members settings', () => {
             uuid: 'acct_test',
             email_address: 'test@example.com',
             display_name: 'test',
-            memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }]
+            memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }],
           }}
           onLogout={() => undefined}
         >
           <OrganizationMembersPage />
         </SettingsShell>
-      </OrganizationMembersHarness>
+      </OrganizationMembersHarness>,
     );
 
     expect(
       screen
         .getAllByRole('button', { name: /Default/i })
-        .some((button) => button.getAttribute('aria-label') === 'Default')
+        .some((button) => button.getAttribute('aria-label') === 'Default'),
     ).toBe(true);
     expect(screen.getByText('Organization settings')).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Members 3' })).toBeTruthy();
@@ -72,7 +72,7 @@ describe('Organization members settings', () => {
     render(
       <OrganizationMembersHarness>
         <OrganizationMembersPage />
-      </OrganizationMembersHarness>
+      </OrganizationMembersHarness>,
     );
 
     const alert = await screen.findByRole('alert');
@@ -93,7 +93,7 @@ describe('Organization members settings', () => {
     const { container } = render(
       <OrganizationMembersHarness>
         <OrganizationMembersPage />
-      </OrganizationMembersHarness>
+      </OrganizationMembersHarness>,
     );
 
     expect(await screen.findByRole('heading', { name: 'Members 3' })).toBeTruthy();
@@ -111,12 +111,12 @@ describe('Organization members settings', () => {
         uuid: 'acct_test',
         email_address: 'test@example.com',
         display_name: 'test',
-        memberships: []
+        memberships: [],
       },
       status: 'authenticated',
       csrfToken: 'csrf_test',
       refresh: async () => ({ account: { uuid: 'acct_test', email_address: 'test@example.com' } }),
-      logout: async () => undefined
+      logout: async () => undefined,
     };
     const workspaceValue: WorkspaceContextValue = {
       orgUuid: null,
@@ -127,23 +127,19 @@ describe('Organization members settings', () => {
       error: null,
       selectWorkspace: () => undefined,
       createWorkspace: async () => defaultWorkspace,
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     };
 
     const { container } = render(
       <QueryClientProvider client={queryClient}>
         <AuthContext.Provider value={authValue}>
           <WorkspaceContext.Provider value={workspaceValue}>
-            <SettingsShell
-              currentPath="/settings/members"
-              account={authValue.account}
-              onLogout={() => undefined}
-            >
+            <SettingsShell currentPath="/settings/members" account={authValue.account} onLogout={() => undefined}>
               <OrganizationMembersPage />
             </SettingsShell>
           </WorkspaceContext.Provider>
         </AuthContext.Provider>
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
 
     expect(screen.getByRole('heading', { name: 'Members' })).toBeTruthy();
@@ -160,14 +156,14 @@ function OrganizationMembersHarness({ children }: { children: ReactNode }) {
         uuid: 'acct_test',
         email_address: 'test@example.com',
         display_name: 'test',
-        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }]
+        memberships: [{ organization: { uuid: 'org_test', name: 'default' }, role: 'admin' }],
       },
       status: 'authenticated',
       csrfToken: 'csrf_test',
       refresh: async () => ({ account: { uuid: 'acct_test', email_address: 'test@example.com' } }),
-      logout: async () => undefined
+      logout: async () => undefined,
     }),
-    []
+    [],
   );
   const workspaceValue = useMemo<WorkspaceContextValue>(
     () => ({
@@ -179,9 +175,9 @@ function OrganizationMembersHarness({ children }: { children: ReactNode }) {
       error: null,
       selectWorkspace: () => undefined,
       createWorkspace: async () => defaultWorkspace,
-      refreshWorkspaces: async () => undefined
+      refreshWorkspaces: async () => undefined,
     }),
-    []
+    [],
   );
 
   return (
@@ -201,7 +197,7 @@ function mockMembersApi(options: { failMembersOnce?: boolean; failInvitesOnce?: 
       name: 'Current User',
       email: 'test@example.com',
       role: 'admin',
-      added_at: '2026-01-01T00:00:00Z'
+      added_at: '2026-01-01T00:00:00Z',
     },
     {
       id: 'user_ada',
@@ -209,8 +205,8 @@ function mockMembersApi(options: { failMembersOnce?: boolean; failInvitesOnce?: 
       name: 'Ada Lovelace',
       email: 'ada@example.com',
       role: 'user',
-      added_at: '2026-01-02T00:00:00Z'
-    }
+      added_at: '2026-01-02T00:00:00Z',
+    },
   ];
   const roleUpdates: Array<{ body: Record<string, unknown>; csrfToken: string | null }> = [];
   const inviteCreates: Array<{ body: Record<string, unknown>; csrfToken: string | null }> = [];
@@ -228,8 +224,8 @@ function mockMembersApi(options: { failMembersOnce?: boolean; failInvitesOnce?: 
       role: 'billing',
       status: 'pending',
       invited_at: '2026-06-24T00:00:00Z',
-      expires_at: '2026-07-15T00:00:00Z'
-    }
+      expires_at: '2026-07-15T00:00:00Z',
+    },
   ];
 
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -273,7 +269,7 @@ function mockMembersApi(options: { failMembersOnce?: boolean; failInvitesOnce?: 
         role: String(body.role),
         status: 'pending',
         invited_at: '2026-06-25T00:00:00Z',
-        expires_at: '2026-07-16T00:00:00Z'
+        expires_at: '2026-07-16T00:00:00Z',
       };
       invites.push(invite);
       return jsonResponse(invite);
@@ -293,7 +289,7 @@ function mockMembersApi(options: { failMembersOnce?: boolean; failInvitesOnce?: 
           ...invites[inviteIndex],
           status: 'pending',
           invited_at: '2026-06-26T00:00:00Z',
-          expires_at: '2026-07-17T00:00:00Z'
+          expires_at: '2026-07-17T00:00:00Z',
         };
         return jsonResponse(invites[inviteIndex]);
       }
@@ -322,10 +318,9 @@ function mockMembersApi(options: { failMembersOnce?: boolean; failInvitesOnce?: 
     },
     get inviteListRequests() {
       return inviteListRequests;
-    }
+    },
   };
 }
-
 
 function parseBody(body: BodyInit | null | undefined) {
   if (typeof body !== 'string' || body === '') {
@@ -345,7 +340,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      'Content-Type': 'application/json'
-    }
+      'Content-Type': 'application/json',
+    },
   });
 }

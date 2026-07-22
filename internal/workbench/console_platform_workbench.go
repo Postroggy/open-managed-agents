@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
+	"github.com/superduck-ai/open-managed-agents/internal/config"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,13 +28,6 @@ const (
 	workbenchDefaultCreatedAt  = "2026-06-12T02:10:24.382428Z"
 	workbenchDefaultModel      = "claude-opus-4-8"
 )
-
-var platformClaudeLegacyRateLimitModelGroups = []string{
-	"claude_fable_5",
-	"claude_haiku_4",
-	"claude_opus_4_5",
-	"claude_sonnet_4",
-}
 
 const (
 	platformClaudeFastInputTokensPerMinute  = 10000
@@ -58,6 +51,7 @@ type workbenchKVEntry struct {
 }
 
 type workbenchPersistenceContextKey struct{}
+type workbenchAnthropicUpstreamContextKey struct{}
 
 type workbenchPersistenceStore interface {
 	GetWorkbenchPrompt(ctx context.Context, orgUUID string, promptUUID string) (*WorkbenchPromptRecord, error)
@@ -78,10 +72,10 @@ type workbenchPersistenceStore interface {
 	TakeWorkbenchGeneratedTestCase(ctx context.Context, orgUUID string, requested map[string]any) (map[string]any, bool, error)
 }
 
-func registerOrgWorkbenchRoutes(r chi.Router, store OrganizationStore) {
+func registerOrgWorkbenchRoutes(r chi.Router, store OrganizationStore, upstream config.AnthropicUpstreamConfig) {
 	workbenchStore := workbenchPersistenceFromStore(store)
 	h := func(handler http.HandlerFunc) http.HandlerFunc {
-		return withWorkbenchPersistence(workbenchStore, handler)
+		return withWorkbenchDependencies(workbenchStore, upstream, handler)
 	}
 	r.Get("/models", h(handleWorkbenchModels))
 	r.Get("/rate_limits_v2", h(handleWorkbenchRateLimitsV2))
@@ -124,11 +118,13 @@ func workbenchPersistenceFromStore(store OrganizationStore) workbenchPersistence
 	return persistence
 }
 
-func withWorkbenchPersistence(store workbenchPersistenceStore, handler http.HandlerFunc) http.HandlerFunc {
+func withWorkbenchDependencies(store workbenchPersistenceStore, upstream config.AnthropicUpstreamConfig, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), workbenchAnthropicUpstreamContextKey{}, upstream)
 		if store != nil {
-			r = r.WithContext(context.WithValue(r.Context(), workbenchPersistenceContextKey{}, store))
+			ctx = context.WithValue(ctx, workbenchPersistenceContextKey{}, store)
 		}
+		r = r.WithContext(ctx)
 		handler(w, r)
 	}
 }
@@ -136,6 +132,11 @@ func withWorkbenchPersistence(store workbenchPersistenceStore, handler http.Hand
 func workbenchPersistenceFromRequest(r *http.Request) workbenchPersistenceStore {
 	store, _ := r.Context().Value(workbenchPersistenceContextKey{}).(workbenchPersistenceStore)
 	return store
+}
+
+func workbenchAnthropicUpstreamFromRequest(r *http.Request) config.AnthropicUpstreamConfig {
+	upstream, _ := r.Context().Value(workbenchAnthropicUpstreamContextKey{}).(config.AnthropicUpstreamConfig)
+	return upstream
 }
 
 func workbenchWritePersistenceError(w http.ResponseWriter, err error) bool {
@@ -589,28 +590,6 @@ func handleWorkbenchModels(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleRateLimits(w http.ResponseWriter, _ *http.Request) {
-	limiters := make([]map[string]any, 0, 14)
-	for _, modelGroup := range platformClaudeLegacyRateLimitModelGroups {
-		for _, limit := range platformClaudeLegacyRateLimitsForModelGroup(modelGroup) {
-			limiters = append(limiters, map[string]any{
-				"limiter":     limit["type"],
-				"value":       limit["value"],
-				"source":      "default",
-				"model_group": modelGroup,
-			})
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"rate_limit_tier":              "auto_api_evaluation",
-		"tier_model_rate_limiters":     limiters,
-		"custom_default_rate_limiters": nil,
-		"custom_model_rate_limiters":   nil,
-		"spend_threshold":              50000,
-		"effective_rate_limiters":      nil,
-	})
-}
-
 func handleWorkbenchRateLimitsV2(w http.ResponseWriter, r *http.Request) {
 	if !visibleOrgUUIDOrPlatformClaudeMirror(w, r) {
 		return
@@ -677,16 +656,6 @@ func platformClaudeRateLimitsV2() map[string]any {
 			platformClaudeRateLimit("tool_uses_per_second", 30),
 		},
 	}
-}
-
-func platformClaudeLegacyRateLimitsForModelGroup(modelGroup string) []map[string]any {
-	if modelGroup == "claude_opus_4_5" {
-		return append([]map[string]any{
-			platformClaudeRateLimit("fast_itpmca", platformClaudeFastInputTokensPerMinute),
-			platformClaudeRateLimit("fast_otpm", platformClaudeFastOutputTokensPerMinute),
-		}, workbenchStandardRateLimitMaps()...)
-	}
-	return workbenchStandardRateLimitMaps()
 }
 
 func handleWorkbenchStream(text string) http.HandlerFunc {
@@ -785,11 +754,12 @@ func workbenchGenerateTestCasesFromAnthropic(r *http.Request, body map[string]an
 }
 
 func workbenchAnthropicTextFromBody(r *http.Request, upstreamBody map[string]any) (string, int, int, bool) {
-	token := proxyMessagesAnthropicToken()
+	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
+	token := proxyMessagesAnthropicToken(upstreamConfig)
 	if token == "" {
 		return "", 0, 0, false
 	}
-	endpoint, err := anthropicMessagesEndpoint()
+	endpoint, err := anthropicMessagesEndpoint(upstreamConfig)
 	if err != nil {
 		return "", 0, 0, false
 	}
@@ -1192,12 +1162,13 @@ func handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
 		writeProxyMessagesAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "at least one non-empty message is required")
 		return
 	}
-	token := proxyMessagesAnthropicToken()
+	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
+	token := proxyMessagesAnthropicToken(upstreamConfig)
 	if token == "" {
-		writeProxyMessagesAnthropicError(w, http.StatusInternalServerError, "authentication_error", "ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY is not set")
+		writeProxyMessagesAnthropicError(w, http.StatusInternalServerError, "authentication_error", "anthropic_upstream.api_key is not configured")
 		return
 	}
-	endpoint, err := anthropicMessagesEndpoint()
+	endpoint, err := anthropicMessagesEndpoint(upstreamConfig)
 	if err != nil {
 		writeProxyMessagesAnthropicError(w, http.StatusBadGateway, "api_error", err.Error())
 		return
@@ -1647,11 +1618,12 @@ func handleWorkbenchGenerateTitle(w http.ResponseWriter, r *http.Request) {
 }
 
 func workbenchGenerateTitleFromAnthropic(r *http.Request, messageContent string, model string) (string, int, int) {
-	token := proxyMessagesAnthropicToken()
+	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
+	token := proxyMessagesAnthropicToken(upstreamConfig)
 	if token == "" {
 		return "", 0, 0
 	}
-	endpoint, err := anthropicMessagesEndpoint()
+	endpoint, err := anthropicMessagesEndpoint(upstreamConfig)
 	if err != nil {
 		return "", 0, 0
 	}
@@ -1775,13 +1747,14 @@ func handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
 		writeProxyMessagesAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "task is required")
 		return
 	}
-	token := proxyMessagesAnthropicToken()
+	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
+	token := proxyMessagesAnthropicToken(upstreamConfig)
 	if token == "" {
 		log.Printf("workbench generate_prompt fallback reason=no_anthropic_token org=%s task_chars=%d thinking=%t", chi.URLParam(r, "orgUUID"), len([]rune(task)), payload.TargetThinkingMode)
 		workbenchWriteGeneratePromptFallbackStream(w, task, payload.TargetThinkingMode)
 		return
 	}
-	endpoint, err := anthropicMessagesEndpoint()
+	endpoint, err := anthropicMessagesEndpoint(upstreamConfig)
 	if err != nil {
 		log.Printf("workbench generate_prompt fallback reason=invalid_anthropic_endpoint org=%s err=%v", chi.URLParam(r, "orgUUID"), err)
 		workbenchWriteGeneratePromptFallbackStream(w, task, payload.TargetThinkingMode)
@@ -1915,28 +1888,6 @@ func workbenchGeneratePromptSystemPrompt(targetThinkingMode bool) string {
 
 func workbenchProxyGeneratePromptStream(w http.ResponseWriter, body io.Reader) {
 	proxyMessagesStream(w, body)
-}
-
-func eventNameForPayload(eventName, eventType string) string {
-	if strings.TrimSpace(eventName) != "" {
-		return eventName
-	}
-	return eventType
-}
-
-func writeRawSSEEvent(w http.ResponseWriter, flusher http.Flusher, eventName, data string) {
-	if strings.TrimSpace(eventName) != "" {
-		_, _ = w.Write([]byte("event: " + eventName + "\n"))
-	}
-	if data != "" {
-		for _, line := range strings.Split(data, "\n") {
-			_, _ = w.Write([]byte("data: " + line + "\n"))
-		}
-	}
-	_, _ = w.Write([]byte("\n"))
-	if flusher != nil {
-		flusher.Flush()
-	}
 }
 
 func workbenchPromptSummary(r *http.Request, promptID string, workspaceID string, name string) map[string]any {
@@ -2846,10 +2797,6 @@ func workbenchTestCaseCount(body map[string]any) int {
 	return count
 }
 
-func workbenchGeneratedTestCaseText(body map[string]any, index int) string {
-	return workbenchGeneratedTestCaseTextFromValues(workbenchGeneratedVariableValues(body, index))
-}
-
 func workbenchGeneratedTestCaseTextFromValues(values map[string]any) string {
 	var text strings.Builder
 	text.WriteString("<planning>Generated local Workbench test case.</planning>\n")
@@ -3126,24 +3073,6 @@ func workbenchCloneMap(value map[string]any) map[string]any {
 	return cloned
 }
 
-func workbenchDraftRevisionString() string {
-	payload := map[string]any{
-		"system_prompt":            "",
-		"model_name":               workbenchDefaultModel,
-		"variables":                []any{},
-		"max_tokens_to_sample":     20000,
-		"thinking":                 map[string]any{"type": "enabled", "budget_tokens": 16000},
-		"show_raw_thinking":        false,
-		"skip_system_modification": false,
-		"is_latest":                true,
-		"id":                       workbenchDefaultRevisionID,
-		"created_at":               workbenchDefaultCreatedAt,
-		"tools":                    []any{},
-		"messages":                 workbenchDefaultMessages(),
-	}
-	return workbenchRevisionString(payload)
-}
-
 func workbenchPromptDraftRevisionString(r *http.Request, promptID string) string {
 	if entry, ok := workbenchStoredKV(r, promptID, "draft_revision"); ok && strings.TrimSpace(entry.Value) != "" {
 		return entry.Value
@@ -3205,85 +3134,6 @@ func workbenchCreator(r *http.Request) map[string]any {
 	}
 }
 
-func workbenchBootstrapCreator(r *http.Request) (map[string]any, bool) {
-	if r == nil || !isPlatformClaudeHost(r.Host) || strings.TrimSpace(r.Header.Get("Cookie")) == "" {
-		return nil, false
-	}
-	orgUUID := workbenchOrgUUID(r)
-	if orgUUID == "" {
-		return nil, false
-	}
-	return fetchWorkbenchBootstrapCreator(r, orgUUID)
-}
-
-func fetchWorkbenchBootstrapCreator(r *http.Request, orgUUID string) (map[string]any, bool) {
-	baseURL := strings.TrimRight(firstNonEmpty(os.Getenv("PLATFORM_BOOTSTRAP_BASE_URL"), "http://127.0.0.1:8081"), "/")
-	if baseURL == "" {
-		return nil, false
-	}
-	endpoint, err := url.Parse(baseURL + "/api/bootstrap/" + url.PathEscape(orgUUID) + "/app_start")
-	if err != nil {
-		return nil, false
-	}
-	query := endpoint.Query()
-	query.Set("statsig_hashing_algorithm", "djb2")
-	query.Set("growthbook_format", "sdk")
-	query.Set("include_system_prompts", "false")
-	endpoint.RawQuery = query.Encode()
-
-	ctx, cancel := context.WithTimeout(r.Context(), 700*time.Millisecond)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return nil, false
-	}
-	req.Host = r.Host
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Cookie", r.Header.Get("Cookie"))
-	if userAgent := strings.TrimSpace(r.UserAgent()); userAgent != "" {
-		req.Header.Set("User-Agent", userAgent)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, false
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, false
-	}
-	var body struct {
-		Account map[string]any `json:"account"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
-		return nil, false
-	}
-	account := normalizeWorkbenchCreatorAccount(body.Account)
-	if strings.TrimSpace(workbenchString(account["tagged_id"])) == "" {
-		return nil, false
-	}
-	return account, true
-}
-
-func normalizeWorkbenchCreatorAccount(account map[string]any) map[string]any {
-	if account == nil {
-		return nil
-	}
-	out := map[string]any{
-		"tagged_id":     strings.TrimSpace(workbenchString(account["tagged_id"])),
-		"uuid":          strings.TrimSpace(workbenchString(account["uuid"])),
-		"full_name":     strings.TrimSpace(workbenchString(account["full_name"])),
-		"email_address": strings.TrimSpace(workbenchString(account["email_address"])),
-	}
-	if out["full_name"] == "" {
-		out["full_name"] = strings.TrimSpace(workbenchString(account["display_name"]))
-	}
-	if out["full_name"] == "" {
-		out["full_name"] = out["email_address"]
-	}
-	return out
-}
-
 func workbenchModel(modelName string, displayName string, rateLimitGroup string, maxTokens int, maxOutputTokens int, latest bool, thinking bool, effort bool) map[string]any {
 	model := map[string]any{
 		"model_name":                modelName,
@@ -3315,14 +3165,6 @@ func workbenchModel(modelName string, displayName string, rateLimitGroup string,
 
 func workbenchStandardRateLimits() []any {
 	return []any{
-		platformClaudeRateLimit("input_tokens_per_minute_cache_aware", 10000),
-		platformClaudeRateLimit("output_tokens_per_minute", 4000),
-		platformClaudeRateLimit("requests_per_minute", 5),
-	}
-}
-
-func workbenchStandardRateLimitMaps() []map[string]any {
-	return []map[string]any{
 		platformClaudeRateLimit("input_tokens_per_minute_cache_aware", 10000),
 		platformClaudeRateLimit("output_tokens_per_minute", 4000),
 		platformClaudeRateLimit("requests_per_minute", 5),

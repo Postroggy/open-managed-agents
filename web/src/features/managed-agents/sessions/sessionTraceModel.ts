@@ -1,7 +1,39 @@
 import { sessionNullableProcessedAt } from '../api';
-import { type BaseSessionEventEntry, type DisplayEvent, type DisplayEventEntry, type DisplayEventType, type HighlightLanguage, type I18nMsg, type IdleGapEntry, type ModelBracketTargetEntry, type ModelRequestBracket, type ModelRequestBracketMeta, type QueuedBoundaryEntry, type QuickstartSessionEvent, type SessionEventListEntry, type SessionEventUsage, type SessionThreadHint, type SessionTraceBuildOptions, type SessionTraceDisplayKind, type SessionTraceEntry, type SessionTraceFamily, type SessionTraceView, type ToolBatchEntry, type ToolCallEntry, type ToolLifecycle, type TranscriptMarkdownBlock } from '../types';
+import {
+  type BaseSessionEventEntry,
+  type DisplayEvent,
+  type DisplayEventEntry,
+  type DisplayEventType,
+  type HighlightLanguage,
+  type I18nMsg,
+  type IdleGapEntry,
+  type ModelBracketTargetEntry,
+  type ModelRequestBracket,
+  type ModelRequestBracketMeta,
+  type QueuedBoundaryEntry,
+  type QuickstartSessionEvent,
+  type SessionEventListEntry,
+  type SessionEventUsage,
+  type SessionThreadHint,
+  type SessionTraceBuildOptions,
+  type SessionTraceDisplayKind,
+  type SessionTraceEntry,
+  type SessionTraceFamily,
+  type SessionTraceView,
+  type ToolBatchEntry,
+  type ToolCallEntry,
+  type ToolLifecycle,
+  type TranscriptMarkdownBlock,
+} from '../types';
 import { compactEntityId, objectRecord, toRecord } from '../utils';
-import { addSessionEventUsage, emptySessionEventUsage, extractSessionEventUsage, numericValueFromKeys, sessionEventDurationMs, stringValueFromKeys } from './sessionDetailModel';
+import {
+  addSessionEventUsage,
+  emptySessionEventUsage,
+  extractSessionEventUsage,
+  numericValueFromKeys,
+  sessionEventDurationMs,
+  stringValueFromKeys,
+} from './sessionDetailModel';
 import { sessionCanonicalDisplayEvent } from './SessionTracePanel';
 import { sessionOutcomeIteration, sessionOutcomeStatus } from './sessionTraceRows';
 
@@ -10,7 +42,7 @@ export function buildSessionTraceEntries(
   view: SessionTraceView,
   traceStartMs = 0,
   msg?: I18nMsg,
-  options: SessionTraceBuildOptions = {}
+  options: SessionTraceBuildOptions = {},
 ): SessionTraceEntry[] {
   const toolResults = new Map<string, QuickstartSessionEvent[]>();
   const toolConfirmations = new Map<string, QuickstartSessionEvent[]>();
@@ -40,7 +72,16 @@ export function buildSessionTraceEntries(
       return [];
     }
 
-    const contentEntries = sessionContentBlockEntries(enrichedEvent, index, toolResults, toolConfirmations, view, traceStartMs, threadHints.byToolUseId, msg);
+    const contentEntries = sessionContentBlockEntries(
+      enrichedEvent,
+      index,
+      toolResults,
+      toolConfirmations,
+      view,
+      traceStartMs,
+      threadHints.byToolUseId,
+      msg,
+    );
     if (contentEntries.length) {
       return contentEntries;
     }
@@ -55,14 +96,16 @@ export function buildSessionTraceEntries(
       family === 'tool_use' && toolUseId
         ? selectSessionToolCompanionEvent(toolConfirmations.get(toolUseId), enrichedEvent, threadHints.byToolUseId)
         : undefined;
-    return [sessionTraceEntryFromEvent(enrichedEvent, index, family, resultEvent, confirmationEvent, traceStartMs, msg)];
+    return [
+      sessionTraceEntryFromEvent(enrichedEvent, index, family, resultEvent, confirmationEvent, traceStartMs, msg),
+    ];
   });
 }
 
 function addSessionToolCompanionEvent(
   eventsByToolUseId: Map<string, QuickstartSessionEvent[]>,
   toolUseId: string,
-  event: QuickstartSessionEvent
+  event: QuickstartSessionEvent,
 ) {
   const existing = eventsByToolUseId.get(toolUseId);
   if (existing) {
@@ -75,7 +118,7 @@ function addSessionToolCompanionEvent(
 function selectSessionToolCompanionEvent(
   events: QuickstartSessionEvent[] | undefined,
   toolEvent: QuickstartSessionEvent,
-  threadHintsByToolUseId: Map<string, SessionThreadHint>
+  threadHintsByToolUseId: Map<string, SessionThreadHint>,
 ): QuickstartSessionEvent | undefined {
   if (!events?.length) {
     return undefined;
@@ -109,7 +152,7 @@ function selectSessionToolCompanionEvent(
 
 function sessionToolCompanionThreadId(
   event: QuickstartSessionEvent,
-  threadHintsByToolUseId: Map<string, SessionThreadHint>
+  threadHintsByToolUseId: Map<string, SessionThreadHint>,
 ) {
   const explicitThreadId = sessionSubagentThreadId(event);
   if (explicitThreadId) {
@@ -126,7 +169,11 @@ function sessionToolCompanionThreadId(
 }
 
 function sessionToolCompanionToolUseId(event: QuickstartSessionEvent) {
-  return sessionToolConfirmationToolUseId(event) || sessionToolResultToolUseId(event) || (sessionIsToolUseEvent(event) ? sessionToolUseId(event) : '');
+  return (
+    sessionToolConfirmationToolUseId(event) ||
+    sessionToolResultToolUseId(event) ||
+    (sessionIsToolUseEvent(event) ? sessionToolUseId(event) : '')
+  );
 }
 
 export function buildSessionEventEntries(
@@ -134,7 +181,7 @@ export function buildSessionEventEntries(
   view: SessionTraceView,
   traceStartMs = 0,
   msg?: I18nMsg,
-  options: SessionTraceBuildOptions = {}
+  options: SessionTraceBuildOptions = {},
 ): SessionEventListEntry[] {
   const traceEntries = buildSessionTraceEntries(events, view, traceStartMs, msg, options);
   if (view === 'debug') {
@@ -192,7 +239,10 @@ export function buildSessionEventEntries(
   return mergeToolCallBatches(entriesWithModelMetadata).sort((left, right) => left.createdAtMs - right.createdAtMs);
 }
 
-export function applyModelRequestBrackets(entries: SessionEventListEntry[], rawEvents: QuickstartSessionEvent[]): SessionEventListEntry[] {
+export function applyModelRequestBrackets(
+  entries: SessionEventListEntry[],
+  rawEvents: QuickstartSessionEvent[],
+): SessionEventListEntry[] {
   const modelEvents = rawEvents.filter(sessionIsModelEvent);
   if (!modelEvents.length) {
     return entries;
@@ -204,17 +254,17 @@ export function applyModelRequestBrackets(entries: SessionEventListEntry[], rawE
 
   const items: ModelTimelineItem[] = [
     ...modelEvents.map((event, index) => ({
-      kind: sessionEventType(event) === 'span.model_request_start' ? 'model_start' as const : 'model_end' as const,
+      kind: sessionEventType(event) === 'span.model_request_start' ? ('model_start' as const) : ('model_end' as const),
       event,
       time: sessionEventTimestamp(event),
-      order: index
+      order: index,
     })),
     ...entries.map((entry, index) => ({
       kind: 'entry' as const,
       entry,
       time: entry.createdAtMs,
-      order: index
-    }))
+      order: index,
+    })),
   ].sort((left, right) => {
     const byTime = left.time - right.time;
     if (byTime) {
@@ -234,7 +284,7 @@ export function applyModelRequestBrackets(entries: SessionEventListEntry[], rawE
       activeBracket = {
         startId,
         startMs: item.time,
-        entries: []
+        entries: [],
       };
       bracketsByStartId.set(startId, activeBracket);
       return;
@@ -304,13 +354,16 @@ export function sessionIsSubagentSentDisplayEntry(entry: SessionEventListEntry):
   return entry.kind === 'passthrough' && sessionEventType(entry.event) === 'agent.thread_message_sent';
 }
 
-export function modelRequestBracketMeta(bracket: ModelRequestBracket, endEvent: QuickstartSessionEvent): ModelRequestBracketMeta {
+export function modelRequestBracketMeta(
+  bracket: ModelRequestBracket,
+  endEvent: QuickstartSessionEvent,
+): ModelRequestBracketMeta {
   const endMs = sessionEventTimestamp(endEvent) || bracket.startMs;
   return {
     startId: bracket.startId,
     startMs: bracket.startMs,
     inferenceMs: Math.max(0, endMs - bracket.startMs),
-    usage: extractSessionEventUsage(endEvent)
+    usage: extractSessionEventUsage(endEvent),
   };
 }
 
@@ -337,7 +390,12 @@ export function sessionModelRequestStartRef(event: QuickstartSessionEvent) {
   return stringValueFromKeys(event, ['model_request_start_id', 'start_event_id', 'parent_event_id']);
 }
 
-export function h(event: QuickstartSessionEvent, traceStartMs = 0, msg?: I18nMsg, traceEntry?: SessionTraceEntry): DisplayEvent {
+export function h(
+  event: QuickstartSessionEvent,
+  traceStartMs = 0,
+  msg?: I18nMsg,
+  traceEntry?: SessionTraceEntry,
+): DisplayEvent {
   const canonicalEvent = sessionCanonicalDisplayEvent(event);
   const family = sessionEventFamily(canonicalEvent);
   const type = displayEventType(canonicalEvent, family);
@@ -345,7 +403,10 @@ export function h(event: QuickstartSessionEvent, traceStartMs = 0, msg?: I18nMsg
   const processedAtMs = sessionEventProcessedTimestamp(canonicalEvent) || createdAtMs;
   const displayText = sessionEventIsThinking(canonicalEvent)
     ? sessionThinkingText(canonicalEvent)
-    : sessionEventTranscriptText(canonicalEvent) || sessionEventStructuredContentText(canonicalEvent) || sessionToolResultText(canonicalEvent) || sessionResultText(canonicalEvent);
+    : sessionEventTranscriptText(canonicalEvent) ||
+      sessionEventStructuredContentText(canonicalEvent) ||
+      sessionToolResultText(canonicalEvent) ||
+      sessionResultText(canonicalEvent);
   return {
     id: sessionEventDisplayId(canonicalEvent, traceEntry?.id ?? sessionEventKey(canonicalEvent)),
     type,
@@ -357,12 +418,15 @@ export function h(event: QuickstartSessionEvent, traceStartMs = 0, msg?: I18nMsg
     isStreaming:
       canonicalEvent.is_streaming === true ||
       canonicalEvent.streaming === true ||
-      ((sessionEventType(canonicalEvent) === 'agent.message' || sessionEventType(canonicalEvent) === 'agent.thinking') &&
+      ((sessionEventType(canonicalEvent) === 'agent.message' ||
+        sessionEventType(canonicalEvent) === 'agent.thinking') &&
         sessionNullableProcessedAt(canonicalEvent) === null),
-    isError: traceEntry?.isError ?? (family === 'error' || canonicalEvent.is_error === true || Boolean(toRecord(canonicalEvent.error))),
+    isError:
+      traceEntry?.isError ??
+      (family === 'error' || canonicalEvent.is_error === true || Boolean(toRecord(canonicalEvent.error))),
     createdAtMs,
     processedAtMs,
-    relativeTime: traceEntry?.relativeTime ?? sessionEventElapsedTime(canonicalEvent, traceStartMs)
+    relativeTime: traceEntry?.relativeTime ?? sessionEventElapsedTime(canonicalEvent, traceStartMs),
   };
 }
 
@@ -418,7 +482,11 @@ export function sessionStatusBadgeType(event: QuickstartSessionEvent): DisplayEv
   }
 }
 
-export function transcriptEntryFromTraceEntry(traceEntry: SessionTraceEntry, traceStartMs: number, msg?: I18nMsg): SessionEventListEntry {
+export function transcriptEntryFromTraceEntry(
+  traceEntry: SessionTraceEntry,
+  traceStartMs: number,
+  msg?: I18nMsg,
+): SessionEventListEntry {
   if (traceEntry.family === 'tool_use') {
     return toolCallEntryFromTraceEntry(traceEntry, traceStartMs, msg);
   }
@@ -428,7 +496,12 @@ export function transcriptEntryFromTraceEntry(traceEntry: SessionTraceEntry, tra
   if (traceEntry.family === 'status' || traceEntry.family === 'thread' || traceEntry.family === 'error') {
     return displayEntryFromTraceEntry(traceEntry, 'status', traceStartMs, msg);
   }
-  if (traceEntry.family === 'system' || traceEntry.family === 'env' || traceEntry.family === 'span' || traceEntry.family === 'model') {
+  if (
+    traceEntry.family === 'system' ||
+    traceEntry.family === 'env' ||
+    traceEntry.family === 'span' ||
+    traceEntry.family === 'model'
+  ) {
     return displayEntryFromTraceEntry(traceEntry, 'passthrough', traceStartMs, msg);
   }
   return displayEntryFromTraceEntry(traceEntry, 'message', traceStartMs, msg);
@@ -438,7 +511,7 @@ export function displayEntryFromTraceEntry(
   traceEntry: SessionTraceEntry,
   kind: DisplayEventEntry['kind'],
   traceStartMs: number,
-  msg?: I18nMsg
+  msg?: I18nMsg,
 ): DisplayEventEntry {
   const event = traceEntry.event;
   const outcomeStatus = kind === 'outcome' ? sessionOutcomeStatus(event) : undefined;
@@ -453,11 +526,15 @@ export function displayEntryFromTraceEntry(
     outcomeStatus,
     outcomeIteration: kind === 'outcome' ? sessionOutcomeIteration(event) : undefined,
     durationMs,
-    bracketId: sessionEventBracketId(event)
+    bracketId: sessionEventBracketId(event),
   };
 }
 
-export function toolCallEntryFromTraceEntry(traceEntry: SessionTraceEntry, traceStartMs: number, msg?: I18nMsg): ToolCallEntry {
+export function toolCallEntryFromTraceEntry(
+  traceEntry: SessionTraceEntry,
+  traceStartMs: number,
+  msg?: I18nMsg,
+): ToolCallEntry {
   const event = traceEntry.event;
   const resultEvent = traceEntry.resultEvent;
   const confirmationEvent = traceEntry.confirmationEvent;
@@ -473,7 +550,7 @@ export function toolCallEntryFromTraceEntry(traceEntry: SessionTraceEntry, trace
     executionMs: sessionEventDurationMs(resultEvent ?? event) || sessionEventDurationMs(event),
     lifecycle: sessionToolLifecycle(event, resultEvent, confirmationEvent),
     bracketId: sessionEventBracketId(event),
-    isError: traceEntry.isError || sessionToolResultIsError(resultEvent)
+    isError: traceEntry.isError || sessionToolResultIsError(resultEvent),
   };
 }
 
@@ -481,7 +558,7 @@ export function baseEventEntry(
   traceEntry: SessionTraceEntry,
   kind: BaseSessionEventEntry['kind'],
   traceStartMs: number,
-  msg?: I18nMsg
+  msg?: I18nMsg,
 ): BaseSessionEventEntry {
   const displayEvent = h(traceEntry.event, traceStartMs, msg, traceEntry);
   return {
@@ -496,7 +573,7 @@ export function baseEventEntry(
     processedAtMs: displayEvent.processedAtMs,
     relativeTime: traceEntry.relativeTime,
     searchText: traceEntry.searchText,
-    isError: traceEntry.isError
+    isError: traceEntry.isError,
   };
 }
 
@@ -532,11 +609,16 @@ export function idleGapEntry(idleAtMs: number, nextAtMs: number, traceStartMs: n
     processedAtMs: idleAtMs,
     relativeTime: sessionEventElapsedTime({ created_at: new Date(idleAtMs).toISOString() }, traceStartMs),
     searchText: `idle gap ${durationMs}`,
-    isError: false
+    isError: false,
   };
 }
 
-export function queuedBoundaryEntry(count: number, createdAtMs: number, traceStartMs: number, msg?: I18nMsg): QueuedBoundaryEntry {
+export function queuedBoundaryEntry(
+  count: number,
+  createdAtMs: number,
+  traceStartMs: number,
+  msg?: I18nMsg,
+): QueuedBoundaryEntry {
   const text = msg
     ? msg('managedAgents.sessions.trace.queuedMessages', '{count} queued messages', { count })
     : `${count} queued messages`;
@@ -548,7 +630,7 @@ export function queuedBoundaryEntry(count: number, createdAtMs: number, traceSta
     processedAtMs: createdAtMs,
     relativeTime: sessionEventElapsedTime({ created_at: new Date(createdAtMs).toISOString() }, traceStartMs),
     searchText: text.toLowerCase(),
-    isError: false
+    isError: false,
   };
 }
 
@@ -599,20 +681,22 @@ export function toolBatchEntry(calls: ToolCallEntry[]): ToolBatchEntry {
   const first = calls[0];
   const usage = calls.reduce<SessionEventUsage>(
     (total, call) => addSessionEventUsage(total, call.usage),
-    emptySessionEventUsage()
+    emptySessionEventUsage(),
   );
   const executionMs = calls.reduce((max, call) => Math.max(max, call.executionMs), 0);
   const inferenceMs = calls.reduce((total, call) => total + call.inferenceMs, 0);
-  const toolCounts = [...calls.reduce((counts, call) => {
-    counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
-    return counts;
-  }, new Map<string, number>())].map(([name, count]) => ({ name, count }));
+  const toolCounts = [
+    ...calls.reduce((counts, call) => {
+      counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>()),
+  ].map(([name, count]) => ({ name, count }));
   const lifecyclePriority: Record<ToolLifecycle, number> = {
     awaiting_approval: 0,
     running: 1,
     failed: 2,
     denied: 3,
-    completed: 4
+    completed: 4,
   };
   const lifecycle = calls
     .map((call) => call.lifecycle)
@@ -630,9 +714,9 @@ export function toolBatchEntry(calls: ToolCallEntry[]): ToolBatchEntry {
     displayEvent: {
       ...first.displayEvent,
       label: 'Tool batch',
-      content: calls.map((call) => `${call.name}: ${call.inputPreview}`).join('\n')
+      content: calls.map((call) => `${call.name}: ${call.inputPreview}`).join('\n'),
     },
-    isError: calls.some((call) => call.isError)
+    isError: calls.some((call) => call.isError),
   };
 }
 
@@ -648,7 +732,7 @@ export function sessionEventInferenceMs(event: QuickstartSessionEvent) {
 export function sessionToolLifecycle(
   event: QuickstartSessionEvent,
   resultEvent?: QuickstartSessionEvent,
-  confirmationEvent?: QuickstartSessionEvent
+  confirmationEvent?: QuickstartSessionEvent,
 ): ToolLifecycle {
   const permission = normalizedToolPermission(event);
   const confirmationResult = normalizedToolConfirmationResult(confirmationEvent);
@@ -674,68 +758,25 @@ export function sessionToolResultIsError(event?: QuickstartSessionEvent) {
 export function normalizedToolPermission(event: QuickstartSessionEvent): 'ask' | 'allow' | 'deny' {
   const data = toRecord(event.data);
   const metadata = toRecord(event.metadata);
-  const permissionRecord =
-    toRecord(event.evaluated_permission) ??
-    toRecord(event.permission) ??
-    toRecord(event.permission_policy) ??
-    toRecord(event.permission_decision) ??
-    toRecord(event.confirmation) ??
-    (data ? toRecord(data.evaluated_permission) : null) ??
-    (data ? toRecord(data.permission) : null) ??
-    (data ? toRecord(data.permission_policy) : null) ??
-    (metadata ? toRecord(metadata.evaluated_permission) : null) ??
-    (metadata ? toRecord(metadata.permission) : null) ??
-    (metadata ? toRecord(metadata.permission_policy) : null);
-  const requiresActionDetails =
-    toRecord(event.requires_action_details) ??
-    (data ? toRecord(data.requires_action_details) : null) ??
-    (metadata ? toRecord(metadata.requires_action_details) : null);
-  const stopReason =
-    toRecord(event.stop_reason) ??
-    (data ? toRecord(data.stop_reason) : null) ??
-    (metadata ? toRecord(metadata.stop_reason) : null);
-  const permissionRaw = [
-    event.evaluated_permission,
-    event.permission,
-    event.permission_policy,
-    event.permission_decision,
-    event.confirmation,
-    data?.evaluated_permission,
-    data?.permission,
-    data?.permission_policy,
-    data?.permission_decision,
-    metadata?.evaluated_permission,
-    metadata?.permission,
-    metadata?.permission_policy,
-    metadata?.permission_decision,
-    permissionRecord?.result,
-    permissionRecord?.decision,
-    permissionRecord?.type,
-    permissionRecord?.policy,
-    permissionRecord?.state,
-    permissionRecord?.status
-  ]
-    .map(normalizedStringValue)
-    .find(Boolean);
-  const requiresActionRaw = [
-    requiresActionDetails?.type,
-    requiresActionDetails?.status,
-    stopReason?.type,
-    stopReason?.status
-  ]
-    .map(normalizedStringValue)
-    .find(Boolean);
-  const statusRaw = [
-    event.status,
-    event.lifecycle,
-    data?.status,
-    data?.lifecycle,
-    metadata?.status,
-    metadata?.lifecycle
-  ]
-    .map(normalizedStringValue)
-    .find(Boolean);
-  const raw = permissionRaw || requiresActionRaw || statusRaw;
+  const permissionRecord = toolPermissionRecord(event, data, metadata);
+  const requiresActionDetails = nestedEventRecord(event, data, metadata, 'requires_action_details');
+  const stopReason = nestedEventRecord(event, data, metadata, 'stop_reason');
+  const raw =
+    toolPermissionValue(event, data, metadata, permissionRecord) ||
+    firstNormalizedString([
+      requiresActionDetails?.type,
+      requiresActionDetails?.status,
+      stopReason?.type,
+      stopReason?.status,
+    ]) ||
+    firstNormalizedString([
+      event.status,
+      event.lifecycle,
+      data?.status,
+      data?.lifecycle,
+      metadata?.status,
+      metadata?.lifecycle,
+    ]);
 
   switch (raw) {
     case 'ask':
@@ -759,6 +800,84 @@ export function normalizedToolPermission(event: QuickstartSessionEvent): 'ask' |
     default:
       return event.requires_action === true ? 'ask' : 'allow';
   }
+}
+
+function toolPermissionRecord(
+  event: QuickstartSessionEvent,
+  data: Record<string, unknown> | null,
+  metadata: Record<string, unknown> | null,
+) {
+  return firstRecord([
+    event.evaluated_permission,
+    event.permission,
+    event.permission_policy,
+    event.permission_decision,
+    event.confirmation,
+    data?.evaluated_permission,
+    data?.permission,
+    data?.permission_policy,
+    metadata?.evaluated_permission,
+    metadata?.permission,
+    metadata?.permission_policy,
+  ]);
+}
+
+function nestedEventRecord(
+  event: QuickstartSessionEvent,
+  data: Record<string, unknown> | null,
+  metadata: Record<string, unknown> | null,
+  field: string,
+) {
+  return firstRecord([event[field], data?.[field], metadata?.[field]]);
+}
+
+function firstRecord(values: unknown[]) {
+  for (const value of values) {
+    const record = toRecord(value);
+    if (record) {
+      return record;
+    }
+  }
+  return null;
+}
+
+function toolPermissionValue(
+  event: QuickstartSessionEvent,
+  data: Record<string, unknown> | null,
+  metadata: Record<string, unknown> | null,
+  permissionRecord: Record<string, unknown> | null,
+) {
+  return firstNormalizedString([
+    event.evaluated_permission,
+    event.permission,
+    event.permission_policy,
+    event.permission_decision,
+    event.confirmation,
+    data?.evaluated_permission,
+    data?.permission,
+    data?.permission_policy,
+    data?.permission_decision,
+    metadata?.evaluated_permission,
+    metadata?.permission,
+    metadata?.permission_policy,
+    metadata?.permission_decision,
+    permissionRecord?.result,
+    permissionRecord?.decision,
+    permissionRecord?.type,
+    permissionRecord?.policy,
+    permissionRecord?.state,
+    permissionRecord?.status,
+  ]);
+}
+
+function firstNormalizedString(values: unknown[]) {
+  for (const value of values) {
+    const normalized = normalizedStringValue(value);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return undefined;
 }
 
 export function normalizedToolConfirmationResult(event?: QuickstartSessionEvent): 'allow' | 'deny' | undefined {
@@ -787,7 +906,7 @@ export function sessionEventBracketId(event: QuickstartSessionEvent) {
     event.parent_span_id,
     event.parent_event_id,
     toRecord(event.metadata)?.bracket_id,
-    toRecord(event.metadata)?.model_request_id
+    toRecord(event.metadata)?.model_request_id,
   ];
   const bracketId = candidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0);
   return bracketId ? bracketId.trim() : '';
@@ -808,7 +927,7 @@ export function sessionContentBlockEntries(
   view: SessionTraceView,
   traceStartMs: number,
   threadHintsByToolUseId: Map<string, { id: string; name: string }>,
-  msg?: I18nMsg
+  msg?: I18nMsg,
 ) {
   const content = sessionEventContentBlocks(event);
   if (!content.length) {
@@ -823,7 +942,9 @@ export function sessionContentBlockEntries(
   const text = contentBlocksText(textBlocks);
   if (text) {
     const textEvent = { ...event, content: textBlocks };
-    entries.push(sessionTraceEntryFromEvent(textEvent, index, sessionEventFamily(event), undefined, undefined, traceStartMs, msg));
+    entries.push(
+      sessionTraceEntryFromEvent(textEvent, index, sessionEventFamily(event), undefined, undefined, traceStartMs, msg),
+    );
   }
 
   content.forEach((block, blockIndex) => {
@@ -837,7 +958,7 @@ export function sessionContentBlockEntries(
         id: `${sessionEventKey(event)}-thinking-${blockIndex}`,
         type: 'agent.thinking',
         content: [record],
-        parent_event_id: sessionEventKey(event)
+        parent_event_id: sessionEventKey(event),
       };
       entries.push(sessionTraceEntryFromEvent(thinkingEvent, index, 'agent', undefined, undefined, traceStartMs, msg));
       return;
@@ -854,7 +975,7 @@ export function sessionContentBlockEntries(
         created_at: event.created_at,
         name: typeof record.name === 'string' ? record.name : 'tool_use',
         input: record.input ?? {},
-        parent_event_id: sessionEventKey(event)
+        parent_event_id: sessionEventKey(event),
       };
       if (view === 'transcript' && sessionIsAgentSubagentToolUse(toolEvent)) {
         return;
@@ -867,14 +988,17 @@ export function sessionContentBlockEntries(
           selectSessionToolCompanionEvent(toolResults.get(id), toolEvent, threadHintsByToolUseId),
           selectSessionToolCompanionEvent(toolConfirmations.get(id), toolEvent, threadHintsByToolUseId),
           traceStartMs,
-          msg
-        )
+          msg,
+        ),
       );
       return;
     }
     if (record.type === 'tool_result' && view === 'debug') {
       const resultEvent: QuickstartSessionEvent = {
-        id: typeof record.tool_use_id === 'string' ? `${record.tool_use_id}-result` : `${sessionEventKey(event)}-result-${blockIndex}`,
+        id:
+          typeof record.tool_use_id === 'string'
+            ? `${record.tool_use_id}-result`
+            : `${sessionEventKey(event)}-result-${blockIndex}`,
         type: 'agent.tool_result',
         session_id: event.session_id,
         session_thread_id: event.session_thread_id,
@@ -883,9 +1007,11 @@ export function sessionContentBlockEntries(
         tool_use_id: record.tool_use_id,
         content: record.content,
         is_error: record.is_error,
-        parent_event_id: sessionEventKey(event)
+        parent_event_id: sessionEventKey(event),
       };
-      entries.push(sessionTraceEntryFromEvent(resultEvent, index, 'tool_result', undefined, undefined, traceStartMs, msg));
+      entries.push(
+        sessionTraceEntryFromEvent(resultEvent, index, 'tool_result', undefined, undefined, traceStartMs, msg),
+      );
       return;
     }
     if (record.type === 'tool_result' && view === 'transcript') {
@@ -902,7 +1028,7 @@ export function sessionContentBlockEntries(
         from_session_thread_id: threadHint.id,
         from_agent_name: threadHint.name,
         content: sessionVisibleToolResultContent(record),
-        parent_event_id: sessionEventKey(event)
+        parent_event_id: sessionEventKey(event),
       };
       entries.push(sessionTraceEntryFromEvent(resultEvent, index, 'subagent', undefined, undefined, traceStartMs, msg));
     }
@@ -954,7 +1080,10 @@ export function sessionThreadHintToolUseId(event: QuickstartSessionEvent) {
   return sessionToolConfirmationToolUseId(event) || sessionToolResultToolUseId(event);
 }
 
-export function sessionEventWithThreadHint(event: QuickstartSessionEvent, threadHintsByThreadId: Map<string, SessionThreadHint>) {
+export function sessionEventWithThreadHint(
+  event: QuickstartSessionEvent,
+  threadHintsByThreadId: Map<string, SessionThreadHint>,
+) {
   if (sessionSubagentName(event)) {
     return event;
   }
@@ -999,13 +1128,16 @@ export function sessionTraceEntryFromEvent(
   resultEvent?: QuickstartSessionEvent,
   confirmationEvent?: QuickstartSessionEvent,
   traceStartMs = 0,
-  msg?: I18nMsg
+  msg?: I18nMsg,
 ): SessionTraceEntry {
   const type = sessionEventType(event);
   const createdAtMs = sessionEventTimestamp(event) || index;
   const displayText = sessionEventIsThinking(event)
     ? ''
-    : sessionEventTranscriptText(event) || sessionEventStructuredContentText(event) || sessionToolResultText(event) || sessionResultText(event);
+    : sessionEventTranscriptText(event) ||
+      sessionEventStructuredContentText(event) ||
+      sessionToolResultText(event) ||
+      sessionResultText(event);
   const displayKind = sessionTraceDisplayKind(event, family, displayText);
   const label = sessionEventLabel(event, family, msg);
   const preview = sessionEventPreview(event, displayText, family, msg);
@@ -1021,8 +1153,10 @@ export function sessionTraceEntryFromEvent(
     typeof event.id === 'string' ? event.id : '',
     resultEvent ? sessionEventDebugJson(resultEvent) : '',
     confirmationEvent ? sessionEventDebugJson(confirmationEvent) : '',
-    sessionEventDebugJson(event)
-  ].join('\n').toLowerCase();
+    sessionEventDebugJson(event),
+  ]
+    .join('\n')
+    .toLowerCase();
 
   return {
     id,
@@ -1039,7 +1173,7 @@ export function sessionTraceEntryFromEvent(
     relativeTime: sessionEventElapsedTime(event, traceStartMs),
     rawEventId,
     searchText,
-    isError
+    isError,
   };
 }
 
@@ -1077,7 +1211,7 @@ export function sessionTraceFilterValue(entry: SessionTraceEntry, view: SessionT
 export function sessionTraceDisplayKind(
   event: QuickstartSessionEvent,
   family: SessionTraceFamily,
-  displayText: string
+  displayText: string,
 ): SessionTraceDisplayKind {
   if (sessionEventIsThinking(event)) {
     return 'thinking';
@@ -1175,14 +1309,14 @@ export function sessionEventAppearsInTranscript(event: QuickstartSessionEvent, o
     family === 'model' ||
     family === 'outcome' ||
     family === 'result' ||
-      family === 'thread' ||
-      family === 'status' ||
-      family === 'error' ||
-      family === 'system' ||
-      family === 'env'
-    ) {
-      return true;
-    }
+    family === 'thread' ||
+    family === 'status' ||
+    family === 'error' ||
+    family === 'system' ||
+    family === 'env'
+  ) {
+    return true;
+  }
   return sessionEventType(event) === 'user.interrupt';
 }
 
@@ -1215,7 +1349,11 @@ export function sessionEventFamily(event: QuickstartSessionEvent): SessionTraceF
   if (type.startsWith('span.')) {
     return 'span';
   }
-  if ((type === 'user' || type.startsWith('user.')) && !sessionIsToolResultEvent(event) && type !== 'user.tool_confirmation') {
+  if (
+    (type === 'user' || type.startsWith('user.')) &&
+    !sessionIsToolResultEvent(event) &&
+    type !== 'user.tool_confirmation'
+  ) {
     return 'user';
   }
   if (type === 'user.tool_confirmation') {
@@ -1224,13 +1362,23 @@ export function sessionEventFamily(event: QuickstartSessionEvent): SessionTraceF
   if (type === 'agent.message' || type === 'assistant.message' || type === 'agent' || type === 'agent.thinking') {
     return 'agent';
   }
-  if (type === 'session.error' || type.endsWith('.error') || event.is_error === true || Boolean(toRecord(event.error))) {
+  if (
+    type === 'session.error' ||
+    type.endsWith('.error') ||
+    event.is_error === true ||
+    Boolean(toRecord(event.error))
+  ) {
     return 'error';
   }
   if (sessionIsThreadLifecycleEvent(event)) {
     return 'thread';
   }
-  if (type.startsWith('session.status_') || type === 'session.deleted' || type === 'session.updated' || type === 'user.interrupt') {
+  if (
+    type.startsWith('session.status_') ||
+    type === 'session.deleted' ||
+    type === 'session.updated' ||
+    type === 'user.interrupt'
+  ) {
     return 'status';
   }
   if (sessionIsSubagentEvent(event)) {
@@ -1364,9 +1512,10 @@ export function sessionThreadMessageHasCanonicalPeerRef(event: QuickstartSession
   const data = toRecord(event.data);
   const metadata = toRecord(event.metadata);
   const toolUseResult = toRecord(event.tool_use_result);
-  const candidates = type === 'agent.thread_message_received'
-    ? [event.from_agent_name, data?.from_agent_name, metadata?.from_agent_name]
-    : [event.to_agent_name, data?.to_agent_name, metadata?.to_agent_name];
+  const candidates =
+    type === 'agent.thread_message_received'
+      ? [event.from_agent_name, data?.from_agent_name, metadata?.from_agent_name]
+      : [event.to_agent_name, data?.to_agent_name, metadata?.to_agent_name];
   return candidates.some((value) => typeof value === 'string' && value.trim().length > 0) || Boolean(toolUseResult);
 }
 
@@ -1447,7 +1596,7 @@ export function sessionSubagentThreadId(event: QuickstartSessionEvent) {
     event.subagent,
     subagent?.id,
     data?.subagent_id,
-    metadata?.subagent_id
+    metadata?.subagent_id,
   ];
   const threadId = candidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0);
   return threadId ? threadId.trim() : '';
@@ -1478,7 +1627,7 @@ export function sessionSubagentName(event: QuickstartSessionEvent) {
     subagent?.name,
     agent?.name,
     sessionThread?.name,
-    sessionThread?.role
+    sessionThread?.role,
   ];
   const name = candidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0);
   return name ? name.trim() : '';
@@ -1524,21 +1673,22 @@ export function sessionToolDisplayName(event: QuickstartSessionEvent) {
   const message = toRecord(event.message);
   const tool = toRecord(event.tool);
   const input = toRecord(event.input);
-  const rawName = typeof event.name === 'string' && event.name.trim()
-    ? event.name.trim()
-    : typeof event.tool_name === 'string' && event.tool_name.trim()
-      ? event.tool_name.trim()
-      : typeof event.mcp_tool_name === 'string' && event.mcp_tool_name.trim()
-        ? event.mcp_tool_name.trim()
-        : typeof event.custom_tool_name === 'string' && event.custom_tool_name.trim()
-          ? event.custom_tool_name.trim()
-          : typeof tool?.name === 'string' && tool.name.trim()
-            ? tool.name.trim()
-            : typeof input?.tool_name === 'string' && input.tool_name.trim()
-              ? input.tool_name.trim()
-    : typeof message?.name === 'string' && message.name.trim()
-      ? message.name.trim()
-      : '';
+  const rawName =
+    typeof event.name === 'string' && event.name.trim()
+      ? event.name.trim()
+      : typeof event.tool_name === 'string' && event.tool_name.trim()
+        ? event.tool_name.trim()
+        : typeof event.mcp_tool_name === 'string' && event.mcp_tool_name.trim()
+          ? event.mcp_tool_name.trim()
+          : typeof event.custom_tool_name === 'string' && event.custom_tool_name.trim()
+            ? event.custom_tool_name.trim()
+            : typeof tool?.name === 'string' && tool.name.trim()
+              ? tool.name.trim()
+              : typeof input?.tool_name === 'string' && input.tool_name.trim()
+                ? input.tool_name.trim()
+                : typeof message?.name === 'string' && message.name.trim()
+                  ? message.name.trim()
+                  : '';
   if (!rawName) {
     return 'Tool';
   }
@@ -1679,7 +1829,10 @@ export function sessionEventStructuredContentText(event: QuickstartSessionEvent)
   }
   const structuredBlocks = content
     .map(toRecord)
-    .filter((block): block is Record<string, unknown> => block !== null && block.type !== 'text' && block.type !== 'tool_use' && block.type !== 'tool_result');
+    .filter(
+      (block): block is Record<string, unknown> =>
+        block !== null && block.type !== 'text' && block.type !== 'tool_use' && block.type !== 'tool_result',
+    );
   if (!structuredBlocks.length) {
     return '';
   }
@@ -1692,7 +1845,11 @@ export function sessionEventHasThinkingContent(event: QuickstartSessionEvent) {
 }
 
 export function sessionEventIsThinking(event: QuickstartSessionEvent) {
-  return sessionEventType(event) === 'agent.thinking' || sessionEventHasThinkingContent(event) || typeof event.thinking === 'string';
+  return (
+    sessionEventType(event) === 'agent.thinking' ||
+    sessionEventHasThinkingContent(event) ||
+    typeof event.thinking === 'string'
+  );
 }
 
 export function sessionThinkingText(event: QuickstartSessionEvent) {
@@ -1731,7 +1888,11 @@ export function sessionThinkingPreview(msg?: I18nMsg) {
 
 export function sessionEventLabel(event: QuickstartSessionEvent, family: SessionTraceFamily, msg?: I18nMsg) {
   if (family === 'tool_use' || family === 'tool_result') {
-    return family === 'tool_use' ? sessionToolDisplayName(event) : msg ? msg('managedAgents.sessions.trace.result', 'Result') : 'Result';
+    return family === 'tool_use'
+      ? sessionToolDisplayName(event)
+      : msg
+        ? msg('managedAgents.sessions.trace.result', 'Result')
+        : 'Result';
   }
   if (family === 'model') {
     return msg ? msg('managedAgents.sessions.trace.model', 'Model') : 'Model';
@@ -1772,7 +1933,12 @@ export function sessionEventLabel(event: QuickstartSessionEvent, family: Session
   return sessionEventType(event);
 }
 
-export function sessionEventPreview(event: QuickstartSessionEvent, displayText: string, family: SessionTraceFamily, msg?: I18nMsg) {
+export function sessionEventPreview(
+  event: QuickstartSessionEvent,
+  displayText: string,
+  family: SessionTraceFamily,
+  msg?: I18nMsg,
+) {
   if (family === 'agent' && sessionEventIsThinking(event)) {
     return sessionThinkingPreview(msg);
   }
@@ -1911,16 +2077,24 @@ export function sessionOutcomeDescription(event: QuickstartSessionEvent, msg?: I
   switch (type) {
     case 'span.outcome_evaluation_start':
       return msg
-        ? msg('managedAgents.sessions.trace.outcomeEvaluationStarted', 'Grading started (iteration {iteration})', { iteration })
+        ? msg('managedAgents.sessions.trace.outcomeEvaluationStarted', 'Grading started (iteration {iteration})', {
+            iteration,
+          })
         : `Grading started (iteration ${iteration})`;
     case 'span.outcome_evaluation_ongoing':
       return msg
-        ? msg('managedAgents.sessions.trace.outcomeEvaluationOngoing', 'Grading in progress (iteration {iteration})', { iteration })
+        ? msg('managedAgents.sessions.trace.outcomeEvaluationOngoing', 'Grading in progress (iteration {iteration})', {
+            iteration,
+          })
         : `Grading in progress (iteration ${iteration})`;
     case 'span.outcome_evaluation_end': {
       const result = typeof event.result === 'string' && event.result ? ` ${event.result}` : '';
       return msg
-        ? msg('managedAgents.sessions.trace.outcomeEvaluationCompleted', 'Grading result (iteration {iteration}){result}', { iteration, result })
+        ? msg(
+            'managedAgents.sessions.trace.outcomeEvaluationCompleted',
+            'Grading result (iteration {iteration}){result}',
+            { iteration, result },
+          )
         : `Grading result (iteration ${iteration})${result}`;
     }
     case 'user.define_outcome':
@@ -1942,7 +2116,7 @@ export function sessionSpanDescription(event: QuickstartSessionEvent, msg?: I18n
       ? msg
         ? msg('managedAgents.sessions.trace.modelUsage', '{input} input → {output} output', {
             input: String(usage.input),
-            output: String(usage.output)
+            output: String(usage.output),
           })
         : `${usage.input} input → ${usage.output} output`
       : '';
@@ -1950,7 +2124,12 @@ export function sessionSpanDescription(event: QuickstartSessionEvent, msg?: I18n
     case 'span.model_request_start':
       return msg ? msg('managedAgents.sessions.trace.modelRequestStart', 'Model request start') : 'Model request start';
     case 'span.model_request_end':
-      return usageText || (msg ? msg('managedAgents.sessions.trace.modelRequestComplete', 'Model request complete') : 'Model request complete');
+      return (
+        usageText ||
+        (msg
+          ? msg('managedAgents.sessions.trace.modelRequestComplete', 'Model request complete')
+          : 'Model request complete')
+      );
     case 'span.outcome_evaluation_start':
       return 'Outcome evaluation started';
     case 'span.outcome_evaluation_ongoing':
@@ -2107,7 +2286,7 @@ export function parseTranscriptCode(value: string): { value: string; language?: 
     const body = fenced[2].trim();
     return {
       value: language === 'json' && !body.includes('\n') ? prettyCode(body) : body,
-      language
+      language,
     };
   }
   if (looksLikeJson(trimmed)) {
@@ -2188,7 +2367,8 @@ export function sessionEventCanonicalKey(event: QuickstartSessionEvent) {
   ) {
     return null;
   }
-  const text = sessionEventTranscriptText(event) || sessionToolResultText(event) || sessionStatusDescription(type, event) || '';
+  const text =
+    sessionEventTranscriptText(event) || sessionToolResultText(event) || sessionStatusDescription(type, event) || '';
   return `${type}:${text}`;
 }
 
@@ -2206,7 +2386,11 @@ export function preferSessionEvent(left: QuickstartSessionEvent, right: Quicksta
 }
 
 export function sessionEventCompletenessScore(event: QuickstartSessionEvent) {
-  return (sessionEventTimestamp(event) ? 4 : 0) + (typeof event.id === 'string' && event.id ? 2 : 0) + Object.keys(event).length;
+  return (
+    (sessionEventTimestamp(event) ? 4 : 0) +
+    (typeof event.id === 'string' && event.id ? 2 : 0) +
+    Object.keys(event).length
+  );
 }
 
 export function sessionEventKey(event: QuickstartSessionEvent) {
@@ -2309,10 +2493,7 @@ export function contentBlocksText(content: unknown) {
   if (!Array.isArray(content)) {
     return '';
   }
-  return content
-    .map(contentBlockText)
-    .filter(Boolean)
-    .join('\n');
+  return content.map(contentBlockText).filter(Boolean).join('\n');
 }
 
 export function contentBlockText(block: unknown): string {

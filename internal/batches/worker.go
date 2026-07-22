@@ -43,7 +43,7 @@ func StartBatchWorker(ctx context.Context, database *db.DB, store storage.Object
 }
 
 func StartBatchExpirySweep(ctx context.Context, database *db.DB, cfg config.Config) {
-	interval := cfg.BatchExpirySweepInterval
+	interval := cfg.Batch.ExpirySweepInterval
 	if interval <= 0 {
 		interval = 5 * time.Minute
 	}
@@ -78,7 +78,7 @@ func RunBatchExpirySweepOnce(ctx context.Context, database *db.DB, now time.Time
 }
 
 func RunBatchOnce(ctx context.Context, database *db.DB, store storage.ObjectStore, cfg config.Config, upstream UpstreamClient, workerID string) error {
-	jobs, err := database.LeaseMessageBatchJobs(ctx, workerID, cfg.BatchWorkerConcurrency, cfg.BatchJobLeaseDuration)
+	jobs, err := database.LeaseMessageBatchJobs(ctx, workerID, cfg.Batch.WorkerConcurrency, cfg.Batch.JobLeaseDuration)
 	if err != nil {
 		return err
 	}
@@ -111,8 +111,8 @@ func processBatchJob(ctx context.Context, database *db.DB, store storage.ObjectS
 		return database.CompleteMessageBatchJob(ctx, job.ID)
 	}
 
-	staleBefore := time.Now().UTC().Add(-cfg.BatchUpstreamTimeout - time.Minute)
-	if cfg.BatchUpstreamTimeout <= 0 {
+	staleBefore := time.Now().UTC().Add(-cfg.Batch.UpstreamTimeout - time.Minute)
+	if cfg.Batch.UpstreamTimeout <= 0 {
 		staleBefore = time.Now().UTC().Add(-11 * time.Minute)
 	}
 	if _, err := database.MarkStaleInFlightRequestsErrored(ctx, batch.ID, staleBefore, unknownStatusResult()); err != nil {
@@ -191,11 +191,11 @@ func processBatchJob(ctx context.Context, database *db.DB, store storage.ObjectS
 
 func startHeartbeat(ctx context.Context, database *db.DB, jobID int64, workerID string, cfg config.Config) <-chan error {
 	errCh := make(chan error, 1)
-	interval := cfg.BatchJobLeaseHeartbeatInterval
+	interval := cfg.Batch.JobLeaseHeartbeatInterval
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
-	lease := cfg.BatchJobLeaseDuration
+	lease := cfg.Batch.JobLeaseDuration
 	if lease <= 0 {
 		lease = 2 * time.Minute
 	}
@@ -231,14 +231,40 @@ func pollHeartbeat(errCh <-chan error) error {
 
 func uploadResults(ctx context.Context, store storage.ObjectStore, database *db.DB, batch db.MessageBatch) (bucket, key string, size int64, shaHex string, err error) {
 	key = fmt.Sprintf("workspaces/%s/message_batches/%s/results.jsonl", batch.WorkspaceUUID, batch.UUID)
+	// producer 和对象存储通过无缓冲 pipe 传输结果。uploadResults 持有读取端，
+	// 因此必须保证所有返回路径都会关闭读取端。
 	pr, pw := io.Pipe()
+	defer pr.Close()
+
+	// 使用子 context，使 Put 提前返回时可以中断数据库读取；如果 producer
+	// 已经阻塞在 Write，后续关闭 pipe 会负责解除阻塞。
+	producerCtx, cancelProducer := context.WithCancel(ctx)
+	defer cancelProducer()
+	// 使用带缓冲的结果通道，避免 Put 返回期间 producer 因上报结果而再次阻塞。
+	producerDone := make(chan error, 1)
 	go func() {
-		err := writeResultsJSONL(ctx, database, batch.ID, pw)
-		_ = pw.CloseWithError(err)
+		producerErr := writeResultsJSONL(producerCtx, database, batch.ID, pw)
+		_ = pw.CloseWithError(producerErr)
+		producerDone <- producerErr
 	}()
 	reader := newCountingHashReader(pr)
-	if err := store.Put(ctx, key, reader, -1, "application/x-jsonl"); err != nil {
-		return "", "", 0, "", err
+	putErr := store.Put(ctx, key, reader, -1, "application/x-jsonl")
+	// Put 可能在未消费完 body 时失败。等待 producer 前必须先关闭读取端，
+	// 让阻塞在 PipeWriter.Write 的 producer 能够退出。
+	cancelProducer()
+	if putErr != nil {
+		_ = pr.CloseWithError(putErr)
+	} else {
+		_ = pr.Close()
+	}
+	producerErr := <-producerDone
+	if putErr != nil {
+		// 优先保留真实的存储错误；producer 错误通常只是上述取消操作或
+		// CloseWithError 派生出的后续错误。
+		return "", "", 0, "", putErr
+	}
+	if producerErr != nil {
+		return "", "", 0, "", producerErr
 	}
 	return store.Bucket(), key, reader.Size(), reader.SHA256Hex(), nil
 }

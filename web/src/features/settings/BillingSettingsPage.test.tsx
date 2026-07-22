@@ -17,7 +17,7 @@ describe('Billing settings page', () => {
     const { container } = render(
       <I18nProvider initialLocale="en">
         <BillingSettingsPage />
-      </I18nProvider>
+      </I18nProvider>,
     );
 
     expect(container.querySelectorAll('[data-slot="card"]').length).toBeGreaterThan(1);
@@ -43,9 +43,7 @@ describe('Billing settings page', () => {
     expect(screen.getByText('Current default: All members')).toBeTruthy();
 
     press(configureButtons()[2]);
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Configure billing digest cadence' })).toBeTruthy()
-    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Configure billing digest cadence' })).toBeTruthy());
     press(screen.getByRole('button', { name: 'Close' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

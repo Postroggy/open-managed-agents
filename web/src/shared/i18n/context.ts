@@ -9,7 +9,7 @@ export type MessageValues = Record<string, PrimitiveType>;
 export const defaultLocale: Locale = 'en';
 export const localeLabels: Record<Locale, string> = {
   en: 'English',
-  'zh-CN': '简体中文'
+  'zh-CN': '简体中文',
 };
 
 export type I18nContextValue = {
@@ -22,15 +22,15 @@ const fallbackIntl = createIntl(
   {
     locale: defaultLocale,
     defaultLocale,
-    messages: enMessages
+    messages: enMessages,
   },
-  createIntlCache()
+  createIntlCache(),
 );
 
 export const I18nContext = createContext<I18nContextValue>({
   locale: defaultLocale,
   setLocale: () => undefined,
-  msg: (id, defaultMessage, values) => fallbackIntl.formatMessage({ id, defaultMessage } as MessageDescriptor, values)
+  msg: (id, defaultMessage, values) => fallbackIntl.formatMessage({ id, defaultMessage } as MessageDescriptor, values),
 });
 
 export function useI18n() {
@@ -42,6 +42,6 @@ export function useLocale() {
   return {
     locale,
     setLocale,
-    supportedLocales
+    supportedLocales,
   };
 }

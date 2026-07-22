@@ -44,7 +44,7 @@ export async function consoleApi<T>(path: string, options: RequestOptions = {}):
   return requestJson<T>(path, {
     ...options,
     headers,
-    credentials: 'include'
+    credentials: 'include',
   });
 }
 
@@ -55,7 +55,7 @@ export async function filesApi<T>(path: string, options: RequestInit = {}): Prom
   return requestJson<T>(path, {
     ...options,
     headers,
-    credentials: 'include'
+    credentials: 'include',
   });
 }
 
@@ -66,7 +66,7 @@ export async function skillsApi<T>(path: string, options: RequestInit = {}): Pro
   return requestJson<T>(path, {
     ...options,
     headers,
-    credentials: 'include'
+    credentials: 'include',
   });
 }
 
@@ -77,7 +77,7 @@ export async function messageBatchesApi<T>(path: string, options: RequestInit = 
   return requestJson<T>(path, {
     ...options,
     headers,
-    credentials: 'include'
+    credentials: 'include',
   });
 }
 
@@ -88,7 +88,7 @@ export async function webhooksApi<T>(path: string, options: RequestInit = {}): P
   return requestJson<T>(path, {
     ...options,
     headers,
-    credentials: 'include'
+    credentials: 'include',
   });
 }
 

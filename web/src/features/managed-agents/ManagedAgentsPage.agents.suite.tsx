@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   ManagedAgentsPage,
   WorkspaceContext,
+  act,
   cleanup,
   codeBlockContaining,
   createAgentRequestFixture,
@@ -20,7 +21,7 @@ import {
   setAgentConfigEditorValue,
   waitFor,
   within,
-  workspaceContextValue
+  workspaceContextValue,
 } from './ManagedAgentsPage.test-utils';
 
 export function registerManagedAgentsAgentsTests() {
@@ -35,7 +36,7 @@ export function registerManagedAgentsAgentsTests() {
     expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0);
     expect(screen.queryByText('No agents yet')).toBeNull();
     expect(screen.getByRole('link', { name: 'Server agent' }).getAttribute('href')).toBe(
-      '/workspaces/default/agents/agent_server123456'
+      '/workspaces/default/agents/agent_server123456',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
@@ -69,7 +70,9 @@ export function registerManagedAgentsAgentsTests() {
     expect(yamlEditor.closest('.cm-editor')?.className).toContain('cm-editor');
     expect(yamlEditor.closest('.agent-config-codemirror')?.parentElement?.className).toContain('flex-1');
     expect(yamlEditor.closest('.agent-config-codemirror')?.parentElement?.className).toContain('overflow-hidden');
-    expect(yamlEditor.closest('.agent-config-codemirror')?.getAttribute('style')).toContain('--agent-config-editor-min-height: 0px');
+    expect(yamlEditor.closest('.agent-config-codemirror')?.getAttribute('style')).toContain(
+      '--agent-config-editor-min-height: 0px',
+    );
 
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Template' }));
 
@@ -88,28 +91,38 @@ export function registerManagedAgentsAgentsTests() {
     const templateExpectations = [
       {
         button: /Blank agent config/i,
-        yaml: ['name: Untitled agent', 'description: A blank starting point with the core toolset.', 'mcp_servers: []']
+        yaml: ['name: Untitled agent', 'description: A blank starting point with the core toolset.', 'mcp_servers: []'],
       },
       {
         button: /Deep researcher/i,
-        yaml: ['name: Deep researcher', 'You are a research agent', 'confidence & gaps', 'template: deep-research']
+        yaml: ['name: Deep researcher', 'You are a research agent', 'confidence & gaps', 'template: deep-research'],
       },
       {
         button: /Structured extractor/i,
-        yaml: ['name: Structured extractor', 'No prose, no markdown fences', '_extraction_notes', 'template: structured-extractor']
+        yaml: [
+          'name: Structured extractor',
+          'No prose, no markdown fences',
+          '_extraction_notes',
+          'template: structured-extractor',
+        ],
       },
       {
         button: /Field monitor/i,
-        yaml: ['name: Field monitor', 'https://mcp.notion.com/mcp', 'mcp_server_name: notion', 'type: always_allow']
+        yaml: ['name: Field monitor', 'https://mcp.notion.com/mcp', 'mcp_server_name: notion', 'type: always_allow'],
       },
       {
         button: /Support agent/i,
-        yaml: ['name: Support agent', 'https://mcp.slack.com/mcp', 'mcp_server_name: slack', '≥80% confidence']
+        yaml: ['name: Support agent', 'https://mcp.slack.com/mcp', 'mcp_server_name: slack', '≥80% confidence'],
       },
       {
         button: /Incident commander/i,
-        yaml: ['name: Incident commander', 'model: claude-opus-4-8', 'https://api.githubcopilot.com/mcp/', 'mcp_server_name: github']
-      }
+        yaml: [
+          'name: Incident commander',
+          'model: claude-opus-4-8',
+          'https://api.githubcopilot.com/mcp/',
+          'mcp_server_name: github',
+        ],
+      },
     ];
 
     const openStartingPoint = () => {
@@ -130,7 +143,11 @@ export function registerManagedAgentsAgentsTests() {
     openStartingPoint();
     fireEvent.click(within(dialog).getByRole('button', { name: /Deep researcher/i }));
     expect(dialog.textContent).toContain('name: Deep researcher');
-    expect(within(dialog).getByRole('button', { name: /^Starting point$/i }).getAttribute('aria-expanded')).toBe('false');
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /^Starting point$/i })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
     const collapsedSummary = within(dialog)
       .getAllByText('Deep researcher')
       .find((node) => node.closest('[data-slot="badge"]'));
@@ -141,7 +158,9 @@ export function registerManagedAgentsAgentsTests() {
     expect(dialog.querySelector('[role="tabpanel"]')?.className).toContain('flex-1');
 
     fireEvent.click(within(dialog).getByRole('tab', { name: 'JSON' }));
-    expect(within(dialog).getByRole('textbox', { name: 'Agent config JSON' }).closest('.cm-editor')?.className).toContain('cm-editor');
+    expect(
+      within(dialog).getByRole('textbox', { name: 'Agent config JSON' }).closest('.cm-editor')?.className,
+    ).toContain('cm-editor');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create agent' }));
 
@@ -200,18 +219,15 @@ export function registerManagedAgentsAgentsTests() {
           model: 'claude-sonnet-4-6',
           system: 'Summarize pull requests clearly and ask before taking irreversible actions.',
           mcp_servers: [{ name: 'github', type: 'url', url: 'https://api.githubcopilot.com/mcp/' }],
-          tools: [
-            { type: 'agent_toolset_20260401' },
-            { type: 'mcp_toolset', mcp_server_name: 'github' }
-          ],
+          tools: [{ type: 'agent_toolset_20260401' }, { type: 'mcp_toolset', mcp_server_name: 'github' }],
           skills: [],
-          metadata: { source: 'description' }
-        })
+          metadata: { source: 'description' },
+        }),
     });
     render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="agents" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     expect(await screen.findByText('No agents yet')).toBeTruthy();
@@ -223,29 +239,49 @@ export function registerManagedAgentsAgentsTests() {
     expect(within(dialog).getByText(/JSON is not valid/i)).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Create agent' }).hasAttribute('disabled')).toBe(true);
 
-    setAgentConfigEditorValue(dialog, JSON.stringify(createAgentRequestFixture('Temporary config'), null, 2), 'Agent config JSON');
+    setAgentConfigEditorValue(
+      dialog,
+      JSON.stringify(createAgentRequestFixture('Temporary config'), null, 2),
+      'Agent config JSON',
+    );
     expect(within(dialog).queryByText(/JSON is not valid/i)).toBeNull();
 
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Describe your agent' }), {
-      target: { value: 'Summarizes new GitHub PRs and posts a digest to Slack.' }
+      target: { value: 'Summarizes new GitHub PRs and posts a digest to Slack.' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Generate' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(true));
-    const proxyRequest = api.requests.find((request) => request.url === '/api/organizations/org_test/proxy/v1/messages');
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/api/organizations/org_test/proxy/v1/messages')).toBe(
+        true,
+      ),
+    );
+    const proxyRequest = api.requests.find(
+      (request) => request.url === '/api/organizations/org_test/proxy/v1/messages',
+    );
     expect(proxyRequest?.body?.tool_choice).toEqual({
       type: 'tool',
       name: 'build_agent_config',
-      disable_parallel_tool_use: true
+      disable_parallel_tool_use: true,
     });
     await waitFor(() => expect(dialog.textContent).toContain('PR digest'));
-    expect(within(dialog).getByRole('button', { name: /^Starting point$/i }).getAttribute('aria-expanded')).toBe('true');
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /^Starting point$/i })
+        .getAttribute('aria-expanded'),
+    ).toBe('true');
     expect(dialog.textContent).toContain('PR digest');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create agent' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(true));
-    const createRequest = api.requests.find((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST');
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/agents?beta=true' && request.method === 'POST')).toBe(
+        true,
+      ),
+    );
+    const createRequest = api.requests.find(
+      (request) => request.url === '/v1/agents?beta=true' && request.method === 'POST',
+    );
     expect(createRequest?.body?.name).toBe('PR digest');
     expect(createRequest?.headers['x-workspace-id']).toBe('default');
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create agent' })).toBeNull());
@@ -265,7 +301,7 @@ export function registerManagedAgentsAgentsTests() {
           model: { id: 'claude-sonnet-4-6', speed: 'fast' },
           skills: [
             { type: 'anthropic', skill_id: 'triage', version: '2026-07-01' },
-            { type: 'custom', skill_id: 'reporting' }
+            { type: 'custom', skill_id: 'reporting' },
           ],
           system: 'Current system prompt',
           tools: [{ type: 'agent_toolset_20260401', configs: [{ name: 'bash' }] }],
@@ -275,10 +311,12 @@ export function registerManagedAgentsAgentsTests() {
               name: 'Historical agent',
               version: 1,
               description: 'Old description',
-              system: 'Old system prompt'
-            }
-          ]
-        }
+              system: 'Old system prompt',
+              tools: [],
+              mcp_servers: [],
+            },
+          ],
+        },
       ],
       {
         skills: [
@@ -287,24 +325,26 @@ export function registerManagedAgentsAgentsTests() {
             displayTitle: 'Customer triage',
             latestVersion: '20260708',
             source: 'anthropic',
-            updated_at: '2026-07-08T12:00:00Z'
+            updated_at: '2026-07-08T12:00:00Z',
           },
           {
             id: 'reporting',
             displayTitle: 'Weekly reporting',
             latestVersion: '20260702',
             source: 'custom',
-            updated_at: '2026-07-02T12:00:00Z'
-          }
-        ]
-      }
+            updated_at: '2026-07-02T12:00:00Z',
+          },
+        ],
+      },
     );
     render(<ManagedAgentsPage section="agents" />);
 
     expect(await screen.findByRole('heading', { name: 'Current agent', hidden: true })).toBeTruthy();
     const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(breadcrumb.dataset.slot).toBe('breadcrumb');
-    expect(within(breadcrumb).getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe('/workspaces/default/agents');
+    expect(within(breadcrumb).getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe(
+      '/workspaces/default/agents',
+    );
     expect(breadcrumb.querySelector('[data-slot="breadcrumb-page"]')?.textContent).toBe('Current agent');
     expect(screen.getByText('Current system prompt')).toBeTruthy();
     expect(screen.getByText('Built-in tools')).toBeTruthy();
@@ -328,7 +368,9 @@ export function registerManagedAgentsAgentsTests() {
     expect(within(skillsCard).queryByText('Update available (v20260708)')).toBeNull();
     expect(within(skillsCard).getAllByText('Anthropic').length).toBeGreaterThan(0);
     expect(within(skillsCard).getAllByText('Custom').length).toBeGreaterThan(0);
-    const triageHoverTarget = screen.getByText('Customer triage').closest('[aria-label$="skill summary"]') as HTMLElement;
+    const triageHoverTarget = screen
+      .getByText('Customer triage')
+      .closest('[aria-label$="skill summary"]') as HTMLElement;
     expect(triageHoverTarget).toBeTruthy();
     fireEvent.click(triageHoverTarget);
     await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
@@ -348,24 +390,415 @@ export function registerManagedAgentsAgentsTests() {
     expect(permissionsButton).toBeTruthy();
     expect(permissionsButton.querySelector('[data-slot="badge"]')?.getAttribute('data-slot')).toBe('badge');
     fireEvent.click(permissionsButton);
-    expect(screen.getByText('Bash')).toBeTruthy();
+    expect(screen.getByText('bash')).toBeTruthy();
     expect(screen.getByText('web_search')).toBeTruthy();
-    expect(screen.getByText('Search the web for information')).toBeTruthy();
+    expect(screen.getByText('Search the web')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit' }).hasAttribute('disabled')).toBe(false);
     const versionButton = screen.getByRole('button', { name: 'Version: v2' });
     expect(versionButton.className.includes('bg-secondary')).toBe(false);
 
     fireEvent.click(versionButton);
-    const versionMenu = screen.getByRole('menuitemradio', { name: 'v1' }).closest('[data-slot="dropdown-menu-content"]');
+    const versionMenu = screen
+      .getByRole('menuitemradio', { name: 'v1' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(versionMenu?.className).toContain('bg-popover');
     expect(versionMenu?.className.includes('bg-secondary')).toBe(false);
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'v1' }));
 
     await waitFor(() => expect(screen.getByText('Old system prompt')).toBeTruthy());
     expect(screen.getByText('No skills configured.')).toBeTruthy();
+    expect(screen.getByText('No MCPs or tools configured.')).toBeTruthy();
+    expect(screen.queryByText('Built-in tools')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Current agent' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit' }).hasAttribute('disabled')).toBe(false);
-    expect(api.requests.some((request) => request.url === '/v1/agents/agent_detail123456?beta=true&version=1')).toBe(true);
+    expect(api.requests.some((request) => request.url === '/v1/agents/agent_detail123456?beta=true&version=1')).toBe(
+      true,
+    );
+  });
+
+  test('shows the agent detail tools empty state without rendering a placeholder card', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_emptytools123456');
+    mockAgentsApi([
+      {
+        id: 'agent_emptytools123456',
+        name: 'No tools agent',
+        tools: [],
+        mcp_servers: [],
+      },
+    ]);
+    render(<ManagedAgentsPage section="agents" />);
+
+    expect(await screen.findByText('No MCPs or tools configured.')).toBeTruthy();
+    expect(screen.queryByText('No tools configured')).toBeNull();
+    const toolsHeading = screen.getByRole('heading', { name: 'MCPs and tools' });
+    const toolsSection = toolsHeading.closest('section') as HTMLElement;
+    expect(toolsSection.querySelector('[data-slot="card"]')).toBeNull();
+  });
+
+  test('renders coexisting built-in, custom, and directory-backed MCP tool permissions as read-only cards', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_mixedtools123456');
+    const api = mockAgentsApi(
+      [
+        {
+          id: 'agent_mixedtools123456',
+          name: 'Mixed tools agent',
+          mcp_servers: [{ name: 'notion', url: 'https://agent.example.com/notion' }],
+          tools: [
+            {
+              type: 'agent_toolset_20260401',
+              configs: [{ name: 'bash', enabled: false }],
+            },
+            {
+              type: 'custom',
+              name: 'lookup_customer',
+              description: 'Find a customer by email',
+              enabled: false,
+              permission_policy: { type: 'always_ask' },
+            },
+            {
+              type: 'mcp_toolset',
+              mcp_server_name: 'notion',
+              default_config: { permission_policy: { type: 'always_ask' } },
+              configs: [{ name: 'search', enabled: false }],
+            },
+          ],
+        },
+      ],
+      {
+        mcpDirectoryServers: [
+          {
+            type: 'remote',
+            slug: 'notion',
+            name: 'Notion',
+            display_name: 'Notion',
+            icon_url: 'https://example.com/notion.png',
+            tool_names: ['search', 'create_page'],
+            remote: { url: 'https://directory.example.com/notion' },
+          },
+        ],
+      },
+    );
+    render(<ManagedAgentsPage section="agents" />);
+
+    expect(await screen.findByRole('heading', { name: 'Mixed tools agent', hidden: true })).toBeTruthy();
+    const section = screen.getByRole('heading', { name: 'MCPs and tools' }).closest('section') as HTMLElement;
+    await waitFor(() => expect(within(section).getByRole('button', { name: /Tool permissions\s+2/ })).toBeTruthy());
+    const directoryStatus = within(section).getByRole('status');
+    expect(directoryStatus.textContent).toBe('MCP tool metadata loaded.');
+    expect(directoryStatus.parentElement?.getAttribute('aria-busy')).toBe('false');
+    const cards = Array.from(section.querySelectorAll<HTMLElement>('[data-slot="card"]'));
+    expect(cards).toHaveLength(3);
+    expect(cards.map((card) => card.textContent?.match(/Built-in tools|Custom tools|Notion/)?.[0])).toEqual([
+      'Built-in tools',
+      'Custom tools',
+      'Notion',
+    ]);
+
+    const builtInCard = cards[0];
+    expect(within(builtInCard).getByText('Custom')).toBeTruthy();
+    fireEvent.click(within(builtInCard).getByRole('button', { name: /Tool permissions\s+8/ }));
+    expect(within(builtInCard).getByText('bash')).toBeTruthy();
+    expect(within(builtInCard).getByText('Always deny')).toBeTruthy();
+    expect(within(builtInCard).getAllByText('Always allow').length).toBeGreaterThan(0);
+
+    const customCard = cards[1];
+    fireEvent.click(within(customCard).getByRole('button', { name: /Tools\s+1/ }));
+    expect(within(customCard).getByText('lookup_customer')).toBeTruthy();
+    expect(within(customCard).getByText('Find a customer by email')).toBeTruthy();
+    expect(within(customCard).queryByText(/Always (allow|ask|deny)/)).toBeNull();
+
+    const mcpCard = cards[2];
+    expect(within(mcpCard).getByText('https://agent.example.com/notion')).toBeTruthy();
+    expect(within(mcpCard).getByText('Custom')).toBeTruthy();
+    const mcpPermissionsButton = within(mcpCard).getByRole('button', { name: /Tool permissions\s+2/ });
+    expect(mcpPermissionsButton.getAttribute('aria-label')).toContain('Custom');
+    fireEvent.click(mcpPermissionsButton);
+    expect(within(mcpCard).getByText('search')).toBeTruthy();
+    expect(within(mcpCard).getByText('create_page')).toBeTruthy();
+    expect(within(mcpCard).getByText('Always deny')).toBeTruthy();
+    expect(within(mcpCard).getByText('Always ask')).toBeTruthy();
+    const directoryIcon = mcpCard.querySelector('img') as HTMLImageElement;
+    expect(directoryIcon).toBeTruthy();
+    fireEvent.error(directoryIcon);
+    expect(mcpCard.querySelector('img')).toBeNull();
+    expect(mcpCard.querySelector('.lucide-server')).toBeTruthy();
+    expect(api.requests.some((request) => request.url.startsWith('/api/directory/servers?'))).toBe(true);
+  });
+
+  test('keeps an unknown MCP usable when the directory request fails', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_directoryfailure123456');
+    mockAgentsApi(
+      [
+        {
+          id: 'agent_directoryfailure123456',
+          name: 'Private MCP agent',
+          mcp_servers: [{ name: 'private_docs', url: 'https://docs.example.com/mcp' }],
+          tools: [],
+        },
+      ],
+      { mcpDirectoryErrorOnce: true },
+    );
+    render(<ManagedAgentsPage section="agents" />);
+
+    expect(await screen.findByRole('heading', { name: 'Private MCP agent', hidden: true })).toBeTruthy();
+    const section = screen.getByRole('heading', { name: 'MCPs and tools' }).closest('section') as HTMLElement;
+    await waitFor(() =>
+      expect(within(section).getByRole('status').textContent).toBe('MCP tool metadata is unavailable.'),
+    );
+    const permissionsButton = within(section).getByRole('button', {
+      name: /Private Docs Tool permissions — Always ask/,
+    });
+    expect(permissionsButton).toBeTruthy();
+    expect(within(section).getByRole('status').parentElement?.getAttribute('aria-busy')).toBe('false');
+
+    fireEvent.click(permissionsButton);
+    expect(within(section).getByText('No tool list available.')).toBeTruthy();
+  });
+
+  test('replaces a saved MCP catalog immediately after a synchronous scoped refresh', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_livecatalog123456');
+    const api = mockAgentsApi(
+      [
+        {
+          id: 'agent_livecatalog123456',
+          name: 'Saved catalog agent',
+          mcp_servers: [{ name: 'weather', url: 'http://weather.local:39090/mcp' }],
+          tools: [
+            {
+              type: 'mcp_toolset',
+              mcp_server_name: 'weather',
+              default_config: { permission_policy: { type: 'always_ask' } },
+              configs: [{ name: 'get_forecast', enabled: false }],
+            },
+          ],
+        },
+      ],
+      {
+        mcpDirectoryServers: [
+          {
+            type: 'remote',
+            slug: 'weather',
+            display_name: 'Weather Service',
+            tool_names: ['stale_directory_tool'],
+          },
+        ],
+        mcpToolCatalogs: [
+          {
+            server_name: 'weather',
+            status: 'ready',
+            tools: [{ name: 'get_forecast', title: 'Forecast', description: 'Returns a weather forecast.' }],
+          },
+        ],
+        mcpToolCatalogRefreshResult: {
+          server_name: 'weather',
+          status: 'ready',
+          tools: [{ name: 'get_observation', title: 'Observation', description: 'Returns current conditions.' }],
+        },
+      },
+    );
+    render(
+      <WorkspaceContext.Provider value={workspaceContextValue('default')}>
+        <ManagedAgentsPage section="agents" />
+      </WorkspaceContext.Provider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Saved catalog agent', hidden: true })).toBeTruthy();
+    const section = screen.getByRole('heading', { name: 'MCPs and tools' }).closest('section') as HTMLElement;
+    const permissionsButton = await within(section).findByRole('button', {
+      name: /Weather Service Tool permissions 1 Always deny Saved tool list/,
+    });
+    fireEvent.click(permissionsButton);
+    expect(within(section).getByText('get_forecast')).toBeTruthy();
+    expect(within(section).getByText('Returns a weather forecast.')).toBeTruthy();
+    expect(within(section).queryByText('stale_directory_tool')).toBeNull();
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Refresh MCP tools for Weather Service' }));
+    expect(await within(section).findByText('get_observation')).toBeTruthy();
+    expect(within(section).getByText('Returns current conditions.')).toBeTruthy();
+    expect(within(section).queryByText('get_forecast')).toBeNull();
+    expect(within(section).getByRole('status').textContent).toContain('MCP tools refreshed and saved.');
+    const refresh = api.requests.find(
+      (request) => request.method === 'POST' && request.url.includes('/mcp_tool_catalogs/refresh'),
+    );
+    expect(refresh?.url).toContain('/agent_livecatalog123456/mcp_tool_catalogs/refresh?version=1');
+    expect(refresh?.body).toEqual({ server_name: 'weather' });
+  });
+
+  test('shows an error and retains the saved tools when an MCP catalog refresh fails', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_catalogrefreshfailure123456');
+    mockAgentsApi(
+      [
+        {
+          id: 'agent_catalogrefreshfailure123456',
+          name: 'Catalog refresh failure agent',
+          mcp_servers: [{ name: 'weather', url: 'http://weather.local:39090/mcp' }],
+          tools: [
+            {
+              type: 'mcp_toolset',
+              mcp_server_name: 'weather',
+              default_config: { permission_policy: { type: 'always_ask' } },
+            },
+          ],
+        },
+      ],
+      {
+        mcpToolCatalogs: [
+          {
+            server_name: 'weather',
+            status: 'ready',
+            tools: [{ name: 'saved_forecast', description: 'The last successful snapshot.' }],
+          },
+        ],
+        mcpToolCatalogRefreshErrorOnce: true,
+      },
+    );
+    render(
+      <WorkspaceContext.Provider value={workspaceContextValue('default')}>
+        <ManagedAgentsPage section="agents" />
+      </WorkspaceContext.Provider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Catalog refresh failure agent', hidden: true })).toBeTruthy();
+    const section = screen.getByRole('heading', { name: 'MCPs and tools' }).closest('section') as HTMLElement;
+    fireEvent.click(
+      await within(section).findByRole('button', { name: /Tool permissions 1 Always ask Saved tool list/ }),
+    );
+    expect(within(section).getByText('saved_forecast')).toBeTruthy();
+    fireEvent.click(await within(section).findByRole('button', { name: 'Refresh MCP tools for Weather' }));
+
+    const toastTitle = await screen.findByText('Could not refresh MCP tools.');
+    expect(toastTitle.closest('[data-sonner-toast]')?.getAttribute('data-type')).toBe('error');
+    expect(screen.getByText('MCP catalog refresh unavailable')).toBeTruthy();
+    expect(within(section).getByText('saved_forecast')).toBeTruthy();
+    expect(within(section).getByText('The last successful snapshot.')).toBeTruthy();
+  });
+
+  test('keeps the old snapshot visible and disables every MCP refresh button while refreshing', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_refreshpending123456');
+    let finishRefresh!: () => void;
+    const refreshWait = new Promise<void>((resolve) => {
+      finishRefresh = resolve;
+    });
+    mockAgentsApi(
+      [
+        {
+          id: 'agent_refreshpending123456',
+          name: 'Refresh pending agent',
+          mcp_servers: [
+            { name: 'weather', url: 'http://weather.local:39090/mcp' },
+            { name: 'maps', url: 'http://maps.local:39091/mcp' },
+          ],
+          tools: [
+            { type: 'mcp_toolset', mcp_server_name: 'weather' },
+            { type: 'mcp_toolset', mcp_server_name: 'maps' },
+          ],
+        },
+      ],
+      {
+        mcpToolCatalogs: [
+          { server_name: 'weather', status: 'ready', tools: [{ name: 'saved_weather' }] },
+          { server_name: 'maps', status: 'ready', tools: [{ name: 'saved_maps' }] },
+        ],
+        mcpToolCatalogRefreshResult: {
+          server_name: 'weather',
+          status: 'ready',
+          tools: [{ name: 'new_weather' }],
+        },
+        mcpToolCatalogRefreshWait: refreshWait,
+      },
+    );
+    render(
+      <WorkspaceContext.Provider value={workspaceContextValue('default')}>
+        <ManagedAgentsPage section="agents" />
+      </WorkspaceContext.Provider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Refresh pending agent', hidden: true })).toBeTruthy();
+    const section = screen.getByRole('heading', { name: 'MCPs and tools' }).closest('section') as HTMLElement;
+    fireEvent.click(
+      await within(section).findByRole('button', { name: /Weather Tool permissions 1 Always ask Saved tool list/ }),
+    );
+    expect(within(section).getByText('saved_weather')).toBeTruthy();
+    fireEvent.click(within(section).getByRole('button', { name: 'Refresh MCP tools for Weather' }));
+
+    await waitFor(() => {
+      const buttons = within(section).getAllByRole('button', {
+        name: /^Refresh MCP tools for /,
+      }) as HTMLButtonElement[];
+      expect(buttons).toHaveLength(2);
+      expect(buttons.every((button) => button.disabled)).toBe(true);
+    });
+    expect(within(section).getByText('saved_weather')).toBeTruthy();
+
+    act(() => finishRefresh());
+    expect(await within(section).findByText('new_weather')).toBeTruthy();
+    expect(within(section).queryByText('saved_weather')).toBeNull();
+    await waitFor(() =>
+      expect(
+        (within(section).getAllByRole('button', { name: /^Refresh MCP tools for / }) as HTMLButtonElement[]).every(
+          (button) => !button.disabled,
+        ),
+      ).toBe(true),
+    );
+  });
+
+  test('treats a successful empty refresh as authoritative over Directory tools', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_emptycatalog123456');
+    mockAgentsApi(
+      [
+        {
+          id: 'agent_emptycatalog123456',
+          name: 'Empty catalog agent',
+          mcp_servers: [{ name: 'weather', url: 'http://weather.local:39090/mcp' }],
+          tools: [
+            {
+              type: 'mcp_toolset',
+              mcp_server_name: 'weather',
+              default_config: { permission_policy: { type: 'always_ask' } },
+            },
+          ],
+        },
+      ],
+      {
+        mcpDirectoryServers: [
+          {
+            type: 'remote',
+            slug: 'weather',
+            display_name: 'Weather Service',
+            tool_names: ['directory_forecast'],
+          },
+        ],
+        mcpToolCatalogRefreshResult: {
+          server_name: 'weather',
+          status: 'ready',
+          tools: [],
+        },
+      },
+    );
+    render(
+      <WorkspaceContext.Provider value={workspaceContextValue('default')}>
+        <ManagedAgentsPage section="agents" />
+      </WorkspaceContext.Provider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Empty catalog agent', hidden: true })).toBeTruthy();
+    const section = screen.getByRole('heading', { name: 'MCPs and tools' }).closest('section') as HTMLElement;
+    fireEvent.click(
+      await within(section).findByRole('button', {
+        name: /Weather Service Tool permissions 1 Always ask Tool list not refreshed/,
+      }),
+    );
+    expect(within(section).getByText('directory_forecast')).toBeTruthy();
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Refresh MCP tools for Weather Service' }));
+
+    expect(await within(section).findByText('This server reported no tools.')).toBeTruthy();
+    expect(within(section).queryByText('directory_forecast')).toBeNull();
+    expect(
+      within(section).getByRole('button', {
+        name: /Weather Service Tool permissions 0 Always ask Saved tool list/,
+      }),
+    ).toBeTruthy();
   });
 
   test('renders agent sessions tab and refetches with version, deployment, and status filters', async () => {
@@ -376,8 +809,8 @@ export function registerManagedAgentsAgentsTests() {
           id: 'agent_detail123456',
           name: 'Current agent',
           version: 2,
-          versions: [{ id: 'agent_detail123456', name: 'Current agent v1', version: 1 }]
-        }
+          versions: [{ id: 'agent_detail123456', name: 'Current agent v1', version: 1 }],
+        },
       ],
       {
         deployments: [
@@ -385,8 +818,8 @@ export function registerManagedAgentsAgentsTests() {
             id: 'dep_detail123456',
             agentId: 'agent_detail123456',
             version: 2,
-            name: 'Nightly run'
-          }
+            name: 'Nightly run',
+          },
         ],
         sessions: [
           {
@@ -397,7 +830,7 @@ export function registerManagedAgentsAgentsTests() {
             inputTokens: 1234,
             outputTokens: 56,
             title: null,
-            status: 'running'
+            status: 'running',
           },
           {
             id: 'sesn_old123456',
@@ -405,10 +838,10 @@ export function registerManagedAgentsAgentsTests() {
             version: 1,
             title: 'Old session',
             status: 'idle',
-            archived_at: new Date().toISOString()
-          }
-        ]
-      }
+            archived_at: new Date().toISOString(),
+          },
+        ],
+      },
     );
     render(<ManagedAgentsPage section="agents" />);
 
@@ -425,18 +858,29 @@ export function registerManagedAgentsAgentsTests() {
     const viewSessionLink = within(sessionRow as HTMLElement).getByRole('link', { name: 'View session' });
     expect(viewSessionLink.dataset.slot).toBe('button');
     expect(viewSessionLink.getAttribute('href')).toBe('/workspaces/default/sessions/sesn_detail123456');
-    const initialSessionRequest = api.requests.find((request) =>
-      request.url.includes('/v1/sessions?') &&
-      request.url.includes('agent_id=agent_detail123456') &&
-      !request.url.includes('agent_version=') &&
-      !request.url.includes('deployment_id=')
+    const initialSessionRequest = api.requests.find(
+      (request) =>
+        request.url.includes('/v1/sessions?') &&
+        request.url.includes('agent_id=agent_detail123456') &&
+        !request.url.includes('agent_version=') &&
+        !request.url.includes('deployment_id='),
     );
     expect(initialSessionRequest).toBeTruthy();
     const initialSessionParams = new URL(initialSessionRequest?.url ?? '', 'https://oma.duck.ai').searchParams;
     expect(initialSessionParams.get('limit')).toBe('8');
     expect(initialSessionParams.get('include_archived')).toBe('true');
-    expect(sessionStatusValuesFromUrl(initialSessionRequest?.url ?? '')).toEqual(['idle', 'rescheduling', 'running', 'terminated']);
-    expect(api.requests.some((request) => request.url === '/v1/deployments?beta=true&limit=20&agent_id=agent_detail123456&include_archived=true')).toBe(true);
+    expect(sessionStatusValuesFromUrl(initialSessionRequest?.url ?? '')).toEqual([
+      'idle',
+      'rescheduling',
+      'running',
+      'terminated',
+    ]);
+    expect(
+      api.requests.some(
+        (request) =>
+          request.url === '/v1/deployments?beta=true&limit=20&agent_id=agent_detail123456&include_archived=true',
+      ),
+    ).toBe(true);
     expect(screen.getByRole('button', { name: 'Previous page' }).className.includes('bg-secondary')).toBe(false);
     expect(screen.getByRole('button', { name: 'Next page' }).className.includes('bg-secondary')).toBe(false);
 
@@ -447,12 +891,13 @@ export function registerManagedAgentsAgentsTests() {
 
     await waitFor(() =>
       expect(
-        api.requests.some((request) =>
-          request.url.includes('/v1/sessions?') &&
-          request.url.includes('agent_id=agent_detail123456') &&
-          request.url.includes('agent_version=2')
-        )
-      ).toBe(true)
+        api.requests.some(
+          (request) =>
+            request.url.includes('/v1/sessions?') &&
+            request.url.includes('agent_id=agent_detail123456') &&
+            request.url.includes('agent_version=2'),
+        ),
+      ).toBe(true),
     );
 
     const deploymentButton = screen.getByRole('button', { name: /deployment\s+All/i });
@@ -462,12 +907,13 @@ export function registerManagedAgentsAgentsTests() {
 
     await waitFor(() =>
       expect(
-        api.requests.some((request) =>
-          request.url.includes('/v1/sessions?') &&
-          request.url.includes('agent_version=2') &&
-          request.url.includes('deployment_id=dep_detail123456')
-        )
-      ).toBe(true)
+        api.requests.some(
+          (request) =>
+            request.url.includes('/v1/sessions?') &&
+            request.url.includes('agent_version=2') &&
+            request.url.includes('deployment_id=dep_detail123456'),
+        ),
+      ).toBe(true),
     );
 
     const statusButton = screen.getByRole('button', { name: /Status\s+All/ });
@@ -477,23 +923,26 @@ export function registerManagedAgentsAgentsTests() {
 
     await waitFor(() =>
       expect(
-        api.requests.some((request) =>
-          request.url.includes('/v1/sessions?') &&
-          request.url.includes('deployment_id=dep_detail123456') &&
-          sessionStatusValuesFromUrl(request.url).join(',') === 'running'
-        )
-      ).toBe(true)
+        api.requests.some(
+          (request) =>
+            request.url.includes('/v1/sessions?') &&
+            request.url.includes('deployment_id=dep_detail123456') &&
+            sessionStatusValuesFromUrl(request.url).join(',') === 'running',
+        ),
+      ).toBe(true),
     );
   });
 
   test('opens agent deployment creation from the detail query and locks the current agent', async () => {
-    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_detail123456?tab=deployments&create_deployment=1');
+    resetTestDom(
+      'https://oma.duck.ai/workspaces/default/agents/agent_detail123456?tab=deployments&create_deployment=1',
+    );
     const api = mockAgentsApi([
       {
         id: 'agent_detail123456',
         name: 'Current agent',
-        version: 2
-      }
+        version: 2,
+      },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -505,21 +954,31 @@ export function registerManagedAgentsAgentsTests() {
 
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Agent detail deployment' } });
     fireEvent.change(within(dialog).getByLabelText('Initial message'), { target: { value: 'Run the detail flow.' } });
-    await waitFor(() => expect(within(dialog).getByRole('combobox', { name: 'Environment' }).textContent).toContain('Select an environment'));
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Environment' }).textContent).toContain(
+        'Select an environment',
+      ),
+    );
     await selectManagedComboboxOption(dialog, 'Environment', 'Option environment');
     await selectManagedComboboxOption(dialog, 'Trigger', 'Manual');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST')).toBe(true));
-    const createRequest = api.requests.find((request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST');
+    await waitFor(() =>
+      expect(
+        api.requests.some((request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST'),
+      ).toBe(true),
+    );
+    const createRequest = api.requests.find(
+      (request) => request.url === '/v1/deployments?beta=true' && request.method === 'POST',
+    );
     expect(createRequest?.body?.name).toBe('Agent detail deployment');
     expect(createRequest?.body?.agent).toEqual({ type: 'agent', id: 'agent_detail123456', version: 2 });
     expect(createRequest?.body?.environment_id).toBe('env_option123456');
     expect(createRequest?.body?.initial_events).toEqual([
       {
         type: 'user.message',
-        content: [{ type: 'text', text: 'Run the detail flow.' }]
-      }
+        content: [{ type: 'text', text: 'Run the detail flow.' }],
+      },
     ]);
   });
 
@@ -530,8 +989,8 @@ export function registerManagedAgentsAgentsTests() {
         {
           id: 'agent_detail123456',
           name: 'Current agent',
-          version: 2
-        }
+          version: 2,
+        },
       ],
       {
         analyticsOverview: {
@@ -544,10 +1003,10 @@ export function registerManagedAgentsAgentsTests() {
           turns_per_session: { p50: 2, p90: 3, p95: 4 },
           tool_call_counts: { bash: 2 },
           stop_reason_counts: { end_turn: 3 },
-          data_as_of: '2026-07-03T00:00:00Z'
+          data_as_of: '2026-07-03T00:00:00Z',
         },
-        analyticsTimeseries: [{ outcome_category: 'success', sessions_count: 3 }]
-      }
+        analyticsTimeseries: [{ outcome_category: 'success', sessions_count: 3 }],
+      },
     );
     renderManagedAgentsPage('agents');
 
@@ -565,18 +1024,33 @@ export function registerManagedAgentsAgentsTests() {
     const turnsCard = screen.getByText('Turns').closest('[data-slot="card"]');
     expect(turnsCard).toBeTruthy();
     expect(turnsCard?.querySelector('[data-slot="tabs-list"]')?.getAttribute('data-slot')).toBe('tabs-list');
-    expect(within(turnsCard as HTMLElement).getByRole('tab', { name: 'p50' }).getAttribute('aria-selected')).toBe('true');
+    expect(
+      within(turnsCard as HTMLElement)
+        .getByRole('tab', { name: 'p50' })
+        .getAttribute('aria-selected'),
+    ).toBe('true');
     expect(within(turnsCard as HTMLElement).getByRole('tabpanel').textContent).toContain('2');
 
     fireEvent.click(within(turnsCard as HTMLElement).getByRole('tab', { name: 'p95' }));
 
-    expect(within(turnsCard as HTMLElement).getByRole('tab', { name: 'p95' }).getAttribute('aria-selected')).toBe('true');
-    expect(within(turnsCard as HTMLElement).getByRole('tabpanel').textContent).toContain('4');
-    expect(api.requests.some((request) => request.url === '/api/organizations/org_test/analytics/sessions/overview?agent_id=agent_detail123456')).toBe(true);
     expect(
-      api.requests.some((request) =>
-        request.url === '/api/organizations/org_test/analytics/sessions/timeseries?agent_id=agent_detail123456&group_by=agent_version'
-      )
+      within(turnsCard as HTMLElement)
+        .getByRole('tab', { name: 'p95' })
+        .getAttribute('aria-selected'),
+    ).toBe('true');
+    expect(within(turnsCard as HTMLElement).getByRole('tabpanel').textContent).toContain('4');
+    expect(
+      api.requests.some(
+        (request) =>
+          request.url === '/api/organizations/org_test/analytics/sessions/overview?agent_id=agent_detail123456',
+      ),
+    ).toBe(true);
+    expect(
+      api.requests.some(
+        (request) =>
+          request.url ===
+          '/api/organizations/org_test/analytics/sessions/timeseries?agent_id=agent_detail123456&group_by=agent_version',
+      ),
     ).toBe(true);
   });
 
@@ -587,7 +1061,9 @@ export function registerManagedAgentsAgentsTests() {
 
     const missingAgentBreadcrumb = await screen.findByRole('navigation', { name: 'Breadcrumb' });
     expect(missingAgentBreadcrumb.dataset.slot).toBe('breadcrumb');
-    expect(within(missingAgentBreadcrumb).getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe('/workspaces/default/agents');
+    expect(within(missingAgentBreadcrumb).getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe(
+      '/workspaces/default/agents',
+    );
     expect(missingAgentBreadcrumb.querySelector('[data-slot="breadcrumb-page"]')?.textContent).toBe('Error');
     const missingAgentAlert = await screen.findByRole('alert');
     expect(missingAgentAlert.dataset.slot).toBe('alert');
@@ -599,8 +1075,8 @@ export function registerManagedAgentsAgentsTests() {
       {
         id: 'agent_detail123456',
         name: 'Current agent',
-        version: 2
-      }
+        version: 2,
+      },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -617,8 +1093,8 @@ export function registerManagedAgentsAgentsTests() {
         {
           id: 'agent_detail123456',
           name: 'Current agent',
-          version: 2
-        }
+          version: 2,
+        },
       ],
       {
         deployments: [
@@ -626,10 +1102,10 @@ export function registerManagedAgentsAgentsTests() {
             id: 'dep_detail123456',
             agentId: 'agent_detail123456',
             version: 2,
-            name: 'Nightly run'
-          }
-        ]
-      }
+            name: 'Nightly run',
+          },
+        ],
+      },
     );
     render(<ManagedAgentsPage section="agents" />);
 
@@ -666,8 +1142,8 @@ export function registerManagedAgentsAgentsTests() {
         name: 'Editable agent',
         version: 2,
         description: 'Before',
-        system: 'Original prompt'
-      }
+        system: 'Original prompt',
+      },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -699,8 +1175,8 @@ export function registerManagedAgentsAgentsTests() {
       {
         id: 'agent_edit_close',
         name: 'Closable agent',
-        version: 2
-      }
+        version: 2,
+      },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -728,8 +1204,8 @@ export function registerManagedAgentsAgentsTests() {
         model: { id: 'claude-sonnet-4-6', speed: 'standard' },
         system: 'Original prompt',
         metadata: { team: 'ops' },
-        tools: [{ type: 'agent_toolset_20250301', configs: [{ type: 'always_allow', tool_name: 'bash' }] }]
-      }
+        tools: [{ type: 'agent_toolset_20250301', configs: [{ type: 'always_allow', tool_name: 'bash' }] }],
+      },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -738,7 +1214,9 @@ export function registerManagedAgentsAgentsTests() {
 
     const dialog = screen.getByRole('dialog', { name: 'Edit agent' });
     await selectManagedComboboxOption(dialog, 'Code format', 'JSON');
-    await waitFor(() => expect(within(dialog).getByRole('combobox', { name: 'Code format' }).textContent).toContain('JSON'));
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Code format' }).textContent).toContain('JSON'),
+    );
 
     setAgentConfigEditorValue(dialog, '{', 'Agent configuration');
 
@@ -757,19 +1235,27 @@ export function registerManagedAgentsAgentsTests() {
           tools: [{ type: 'agent_toolset_20250301', configs: [{ type: 'always_allow', tool_name: 'bash' }] }],
           skills: [],
           metadata: { team: 'support' },
-          multiagent: null
+          multiagent: null,
         },
         null,
-        2
+        2,
       ),
-      'Agent configuration'
+      'Agent configuration',
     );
     expect(within(dialog).queryByText(/JSON is not valid/i)).toBeNull();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit123456?beta=true')).toBe(true));
-    const updateRequest = api.requests.find((request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit123456?beta=true');
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit123456?beta=true',
+        ),
+      ).toBe(true),
+    );
+    const updateRequest = api.requests.find(
+      (request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit123456?beta=true',
+    );
     expect(updateRequest?.body?.version).toBe(2);
     expect(updateRequest?.body?.name).toBe('Updated agent');
     expect(updateRequest?.body?.description).toBe('After');
@@ -777,14 +1263,20 @@ export function registerManagedAgentsAgentsTests() {
     expect((updateRequest?.body?.metadata as Record<string, string>).team).toBe('support');
     const updatedToolset = (updateRequest?.body?.tools as Array<Record<string, unknown>>)[0];
     expect(updatedToolset.type).toBe('agent_toolset_20260401');
-    expect((updatedToolset.configs as Array<Record<string, unknown>>)[0]).toEqual({ type: 'always_allow', name: 'bash' });
+    expect((updatedToolset.configs as Array<Record<string, unknown>>)[0]).toEqual({
+      type: 'always_allow',
+      name: 'bash',
+    });
     expect(await screen.findByRole('heading', { name: 'Updated agent' })).toBeTruthy();
   });
 
   test('shows friendly edit save errors for conflict and invalid configuration responses', async () => {
     for (const [status, message] of [
-      [409, 'This agent was updated elsewhere while you were editing. Close and reopen the editor to start from the latest version.'],
-      [400, 'Invalid agent configuration. Check your editor for errors.']
+      [
+        409,
+        'This agent was updated elsewhere while you were editing. Close and reopen the editor to start from the latest version.',
+      ],
+      [400, 'Invalid agent configuration. Check your editor for errors.'],
     ] as const) {
       resetTestDom(`https://oma.duck.ai/workspaces/default/agents/agent_edit_error${status}`);
       mockAgentsApi(
@@ -792,10 +1284,10 @@ export function registerManagedAgentsAgentsTests() {
           {
             id: `agent_edit_error${status}`,
             name: `Editable agent ${status}`,
-            version: 2
-          }
+            version: 2,
+          },
         ],
-        { agentUpdateErrorStatus: status }
+        { agentUpdateErrorStatus: status },
       );
       render(<ManagedAgentsPage section="agents" />);
 
@@ -815,8 +1307,8 @@ export function registerManagedAgentsAgentsTests() {
       {
         id: 'agent_edit_shortcut',
         name: 'Shortcut agent',
-        version: 3
-      }
+        version: 3,
+      },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -826,8 +1318,16 @@ export function registerManagedAgentsAgentsTests() {
 
     fireEvent.keyDown(document, { key: 's', metaKey: true });
 
-    await waitFor(() => expect(api.requests.some((request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit_shortcut?beta=true')).toBe(true));
-    const updateRequest = api.requests.find((request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit_shortcut?beta=true');
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit_shortcut?beta=true',
+        ),
+      ).toBe(true),
+    );
+    const updateRequest = api.requests.find(
+      (request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit_shortcut?beta=true',
+    );
     expect(updateRequest?.body?.version).toBe(3);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit agent' })).toBeNull());
   });
@@ -838,7 +1338,7 @@ export function registerManagedAgentsAgentsTests() {
     const { rerender } = render(
       <WorkspaceContext.Provider value={workspaceContextValue('default')}>
         <ManagedAgentsPage section="agents" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     await waitFor(() =>
@@ -847,15 +1347,15 @@ export function registerManagedAgentsAgentsTests() {
           (request) =>
             request.method === 'GET' &&
             request.url === '/v1/agents?beta=true&limit=20&include_archived=false' &&
-            request.headers['x-workspace-id'] === 'default'
-        )
-      ).toBe(true)
+            request.headers['x-workspace-id'] === 'default',
+        ),
+      ).toBe(true),
     );
 
     rerender(
       <WorkspaceContext.Provider value={workspaceContextValue('wrkspc_foo')}>
         <ManagedAgentsPage section="agents" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     await waitFor(() =>
@@ -864,9 +1364,9 @@ export function registerManagedAgentsAgentsTests() {
           (request) =>
             request.method === 'GET' &&
             request.url === '/v1/agents?beta=true&limit=20&include_archived=false' &&
-            request.headers['x-workspace-id'] === 'wrkspc_foo'
-        )
-      ).toBe(true)
+            request.headers['x-workspace-id'] === 'wrkspc_foo',
+        ),
+      ).toBe(true),
     );
   });
 
@@ -878,11 +1378,11 @@ export function registerManagedAgentsAgentsTests() {
       <WorkspaceContext.Provider
         value={{
           ...workspaceContextValue('default'),
-          selectWorkspace: (workspaceId) => selectedWorkspaceIds.push(workspaceId)
+          selectWorkspace: (workspaceId) => selectedWorkspaceIds.push(workspaceId),
         }}
       >
         <ManagedAgentsPage section="agents" />
-      </WorkspaceContext.Provider>
+      </WorkspaceContext.Provider>,
     );
 
     await waitFor(() =>
@@ -891,9 +1391,9 @@ export function registerManagedAgentsAgentsTests() {
           (request) =>
             request.method === 'GET' &&
             request.url === '/v1/agents?beta=true&limit=20&include_archived=false' &&
-            request.headers['x-workspace-id'] === 'wrkspc_foo'
-        )
-      ).toBe(true)
+            request.headers['x-workspace-id'] === 'wrkspc_foo',
+        ),
+      ).toBe(true),
     );
     await waitFor(() => expect(selectedWorkspaceIds).toContain('wrkspc_foo'));
   });
@@ -903,8 +1403,8 @@ export function registerManagedAgentsAgentsTests() {
     const api = mockAgentsApi(
       Array.from({ length: 21 }, (_, index) => ({
         id: `agent_page${String(index + 1).padStart(2, '0')}123456`,
-        name: index === 0 ? 'First agent' : index === 20 ? 'Twenty first agent' : `Agent ${index + 1}`
-      }))
+        name: index === 0 ? 'First agent' : index === 20 ? 'Twenty first agent' : `Agent ${index + 1}`,
+      })),
     );
     render(<ManagedAgentsPage section="agents" />);
 
@@ -915,7 +1415,9 @@ export function registerManagedAgentsAgentsTests() {
 
     expect(await screen.findByText('Twenty first agent')).toBeTruthy();
     expect(screen.queryByText('First agent')).toBeNull();
-    expect(api.requests.some((request) => request.method === 'GET' && request.url.includes('page=next_cursor'))).toBe(true);
+    expect(api.requests.some((request) => request.method === 'GET' && request.url.includes('page=next_cursor'))).toBe(
+      true,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
 
@@ -926,7 +1428,7 @@ export function registerManagedAgentsAgentsTests() {
     resetTestDom('https://oma.duck.ai/workspaces/default/agents');
     const api = mockAgentsApi([
       { id: 'agent_one123456', name: 'First agent' },
-      { id: 'agent_two123456', name: 'Second agent' }
+      { id: 'agent_two123456', name: 'Second agent' },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -935,7 +1437,9 @@ export function registerManagedAgentsAgentsTests() {
     const searchInput = screen.getByPlaceholderText('Search by name or exact ID') as HTMLInputElement;
     fireEvent.change(searchInput, { target: { value: 'second' } });
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/agents:search?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/agents:search?beta=true')).toBe(true),
+    );
     const searchRequest = api.requests.find((request) => request.url === '/v1/agents:search?beta=true');
     expect(searchRequest?.method).toBe('POST');
     expect(searchRequest?.body?.name).toBe('second');
@@ -960,18 +1464,22 @@ export function registerManagedAgentsAgentsTests() {
     resetTestDom('https://oma.duck.ai/workspaces/default/agents');
     const api = mockAgentsApi([
       { id: 'agent_exact123456789012345', name: 'Exact match agent' },
-      { id: 'agent_other123456789012345', name: 'Other agent' }
+      { id: 'agent_other123456789012345', name: 'Other agent' },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
     expect(await screen.findByText('Exact match agent')).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText('Search by name or exact ID'), {
-      target: { value: 'agent_exact123456789012345' }
+      target: { value: 'agent_exact123456789012345' },
     });
 
     await waitFor(() =>
-      expect(api.requests.some((request) => request.url === '/v1/agents/agent_exact123456789012345?beta=true' && request.method === 'GET')).toBe(true)
+      expect(
+        api.requests.some(
+          (request) => request.url === '/v1/agents/agent_exact123456789012345?beta=true' && request.method === 'GET',
+        ),
+      ).toBe(true),
     );
     expect(api.requests.some((request) => request.url === '/v1/agents:search?beta=true')).toBe(false);
     expect(await screen.findByText('Exact match agent')).toBeTruthy();
@@ -985,10 +1493,12 @@ export function registerManagedAgentsAgentsTests() {
 
     expect(await screen.findByText('agent_short123456 lookup')).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText('Search by name or exact ID'), {
-      target: { value: 'agent_short123456' }
+      target: { value: 'agent_short123456' },
     });
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/agents:search?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/agents:search?beta=true')).toBe(true),
+    );
     expect(api.requests.some((request) => request.url === '/v1/agents/agent_short123456?beta=true')).toBe(false);
     expect(await screen.findByText('agent_short123456 lookup')).toBeTruthy();
   });
@@ -998,9 +1508,9 @@ export function registerManagedAgentsAgentsTests() {
     const api = mockAgentsApi(
       Array.from({ length: 101 }, (_, index) => ({
         id: `agent_aggregate${String(index + 1).padStart(2, '0')}123456`,
-        name: `Aggregate agent ${index + 1}`
+        name: `Aggregate agent ${index + 1}`,
       })),
-      { agentsSearchPageSize: 40 }
+      { agentsSearchPageSize: 40 },
     );
     render(<ManagedAgentsPage section="agents" />);
 
@@ -1018,7 +1528,9 @@ export function registerManagedAgentsAgentsTests() {
     expect(searchRequests[2]?.body?.page).toBe('search_80');
     const truncatedAlert = await screen.findByRole('alert');
     expect(truncatedAlert.getAttribute('data-slot')).toBe('alert');
-    expect(truncatedAlert.textContent).toContain("Couldn't search every agent. Narrow the search or paste an exact ID.");
+    expect(truncatedAlert.textContent).toContain(
+      "Couldn't search every agent. Narrow the search or paste an exact ID.",
+    );
     expect(screen.getByText('Aggregate agent 20')).toBeTruthy();
     expect(screen.queryByText('Aggregate agent 21')).toBeNull();
 
@@ -1036,8 +1548,8 @@ export function registerManagedAgentsAgentsTests() {
         id: `agent_ancient${String(index + 1).padStart(3, '0')}123456`,
         name: `Ancient agent ${index + 1}`,
         created_at: '2020-01-01T00:00:00.000Z',
-        updated_at: '2020-01-01T00:00:00.000Z'
-      }))
+        updated_at: '2020-01-01T00:00:00.000Z',
+      })),
     );
     render(<ManagedAgentsPage section="agents" />);
 
@@ -1048,7 +1560,9 @@ export function registerManagedAgentsAgentsTests() {
 
     fireEvent.change(screen.getByPlaceholderText('Search by name or exact ID'), { target: { value: 'ancient' } });
 
-    expect(await screen.findByText("Couldn't search every agent. Narrow the search or paste an exact ID.")).toBeTruthy();
+    expect(
+      await screen.findByText("Couldn't search every agent. Narrow the search or paste an exact ID."),
+    ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Reset filters' })).toBeNull();
   });
 
@@ -1084,11 +1598,15 @@ export function registerManagedAgentsAgentsTests() {
     expect(screen.getByText('agents list failed')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('Retry agent')).toBeTruthy();
-    expect(listApi.requests.filter((request) => request.url.startsWith('/v1/agents?')).length).toBeGreaterThanOrEqual(2);
+    expect(listApi.requests.filter((request) => request.url.startsWith('/v1/agents?')).length).toBeGreaterThanOrEqual(
+      2,
+    );
 
     cleanup();
     resetTestDom('https://oma.duck.ai/workspaces/default/agents');
-    const searchApi = mockAgentsApi([{ id: 'agent_searchretry123456', name: 'Search retry agent' }], { agentsSearchErrorOnce: true });
+    const searchApi = mockAgentsApi([{ id: 'agent_searchretry123456', name: 'Search retry agent' }], {
+      agentsSearchErrorOnce: true,
+    });
     render(<ManagedAgentsPage section="agents" />);
 
     expect(await screen.findByText('Search retry agent')).toBeTruthy();
@@ -1097,7 +1615,9 @@ export function registerManagedAgentsAgentsTests() {
     expect(screen.getByText('agents search failed')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('Search retry agent')).toBeTruthy();
-    expect(searchApi.requests.filter((request) => request.url === '/v1/agents:search?beta=true').length).toBeGreaterThanOrEqual(2);
+    expect(
+      searchApi.requests.filter((request) => request.url === '/v1/agents:search?beta=true').length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   test('opens created and status filters and refetches agents with selected values', async () => {
@@ -1109,9 +1629,9 @@ export function registerManagedAgentsAgentsTests() {
         id: 'agent_archived123456',
         name: 'Archived agent',
         archived_at: recentCreatedAt,
-        created_at: recentCreatedAt
+        created_at: recentCreatedAt,
       },
-      { id: 'agent_old123456', name: 'Old active agent', created_at: '2020-01-01T00:00:00.000Z' }
+      { id: 'agent_old123456', name: 'Old active agent', created_at: '2020-01-01T00:00:00.000Z' },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -1120,7 +1640,9 @@ export function registerManagedAgentsAgentsTests() {
     expect(screen.queryByText('Archived agent')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Status Active' }));
-    const statusMenu = screen.getByRole('menuitemradio', { name: 'Active' }).closest('[data-slot="dropdown-menu-content"]');
+    const statusMenu = screen
+      .getByRole('menuitemradio', { name: 'Active' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(statusMenu?.className).toContain('bg-popover');
     expect(statusMenu?.className.includes('bg-secondary')).toBe(false);
     expect(screen.getByRole('menuitemradio', { name: 'Active' }).getAttribute('aria-checked')).toBe('true');
@@ -1130,7 +1652,9 @@ export function registerManagedAgentsAgentsTests() {
     expect(api.requests.some((request) => request.url.includes('include_archived=true'))).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Created All time' }));
-    const createdMenu = screen.getByRole('menuitemradio', { name: 'All time' }).closest('[data-slot="dropdown-menu-content"]');
+    const createdMenu = screen
+      .getByRole('menuitemradio', { name: 'All time' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(createdMenu?.className).toContain('bg-popover');
     expect(createdMenu?.className.includes('bg-secondary')).toBe(false);
     expect(screen.getByRole('menuitemradio', { name: 'All time' }).getAttribute('aria-checked')).toBe('true');
@@ -1148,7 +1672,7 @@ export function registerManagedAgentsAgentsTests() {
     mockAgentsApi([
       { id: 'agent_one123456', name: 'First agent' },
       { id: 'agent_two123456', name: 'Second agent' },
-      { id: 'agent_three123456', name: 'Third agent' }
+      { id: 'agent_three123456', name: 'Third agent' },
     ]);
     render(<ManagedAgentsPage section="agents" />);
 
@@ -1166,37 +1690,48 @@ export function registerManagedAgentsAgentsTests() {
     expect(await screen.findByText('Menu agent')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    const actionMenu = screen.getByRole('menuitem', { name: 'Archive agent' }).closest('[data-slot="dropdown-menu-content"]');
+    const actionMenu = screen
+      .getByRole('menuitem', { name: 'Archive agent' })
+      .closest('[data-slot="dropdown-menu-content"]');
     expect(actionMenu?.className).toContain('bg-popover');
     expect(actionMenu?.className.includes('bg-secondary')).toBe(false);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Archive agent' }));
 
     const dialog = screen.getByRole('alertdialog', { name: 'Archive agent' });
     expect(dialog).toBeTruthy();
-    expect(screen.getByText('This agent will be hidden from the default view. Sessions that reference it keep working.')).toBeTruthy();
+    expect(
+      screen.getByText('This agent will be hidden from the default view. Sessions that reference it keep working.'),
+    ).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
 
-    await waitFor(() => expect(api.requests.some((request) => request.url === '/v1/agents/agent_menu123456/archive?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(api.requests.some((request) => request.url === '/v1/agents/agent_menu123456/archive?beta=true')).toBe(
+        true,
+      ),
+    );
     await waitFor(() => expect(screen.queryByText('Menu agent')).toBeNull());
   });
 
   test('shows a shared alert when archiving an agent fails', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/agents');
     const api = mockAgentsApi([{ id: 'agent_archiveerror123456', name: 'Archive error agent' }], {
-      agentArchiveErrorOnce: true
+      agentArchiveErrorOnce: true,
     });
     render(<ManagedAgentsPage section="agents" />);
 
     expect(await screen.findByText('Archive error agent')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Archive agent' }));
-    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Archive agent' })).getByRole('button', { name: 'Archive' }));
+    fireEvent.click(
+      within(screen.getByRole('alertdialog', { name: 'Archive agent' })).getByRole('button', { name: 'Archive' }),
+    );
 
     const alert = await screen.findByRole('alert');
     expect(alert.getAttribute('data-slot')).toBe('alert');
     expect(alert.textContent).toContain('agent archive failed');
     expect(screen.getByText('Archive error agent')).toBeTruthy();
-    expect(api.requests.some((request) => request.url === '/v1/agents/agent_archiveerror123456/archive?beta=true')).toBe(true);
+    expect(
+      api.requests.some((request) => request.url === '/v1/agents/agent_archiveerror123456/archive?beta=true'),
+    ).toBe(true);
   });
-
 }

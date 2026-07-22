@@ -5,7 +5,7 @@ import {
   createIntl,
   createIntlCache,
   type IntlConfig,
-  type MessageDescriptor
+  type MessageDescriptor,
 } from 'react-intl';
 import {
   I18nContext,
@@ -13,7 +13,7 @@ import {
   supportedLocales,
   type I18nContextValue,
   type Locale,
-  type MessageValues
+  type MessageValues,
 } from './context';
 import enMessages from './messages/en.json';
 import zhCnMessages from './messages/zh-CN.json';
@@ -23,7 +23,7 @@ const intlCache = createIntlCache();
 
 const messageCatalogs: Record<Locale, Record<string, string>> = {
   en: enMessages,
-  'zh-CN': zhCnMessages
+  'zh-CN': zhCnMessages,
 };
 
 export function initializeLocale() {
@@ -43,11 +43,11 @@ export function I18nProvider({ children, initialLocale }: { children: ReactNode;
           locale,
           defaultLocale,
           messages,
-          onError: handleIntlError
+          onError: handleIntlError,
         },
-        intlCache
+        intlCache,
       ),
-    [locale, messages]
+    [locale, messages],
   );
 
   useEffect(() => {
@@ -66,16 +66,16 @@ export function I18nProvider({ children, initialLocale }: { children: ReactNode;
   const msg = useCallback(
     (id: string, defaultMessage: string, values?: MessageValues) =>
       intl.formatMessage({ id, defaultMessage } as MessageDescriptor, values),
-    [intl]
+    [intl],
   );
 
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,
       setLocale,
-      msg
+      msg,
     }),
-    [locale, msg, setLocale]
+    [locale, msg, setLocale],
   );
 
   return (

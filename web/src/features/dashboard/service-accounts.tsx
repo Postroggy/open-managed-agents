@@ -1,10 +1,4 @@
-import {
-  Archive,
-  LockKeyhole,
-  Plus,
-  RotateCcw,
-  Trash2
-} from 'lucide-react';
+import { Archive, LockKeyhole, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -16,7 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
@@ -27,40 +21,20 @@ import {
   MoreActionsButton,
   dataTableClassName,
   dataTableHeaderCellClassName,
-  dataTableHeaderRowClassName
+  dataTableHeaderRowClassName,
 } from '@/shared/ui/data-table-interactions';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/shared/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle
-} from '@/shared/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Field, FieldDescription, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/shared/ui/table';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { Textarea } from '@/shared/ui/textarea';
 import { useI18n } from '../../shared/i18n';
@@ -77,9 +51,7 @@ type ServiceAccountRecord = {
 };
 
 type ServiceAccountConfirmation =
-  | { kind: 'archive'; record: ServiceAccountRecord }
-  | { kind: 'delete'; record: ServiceAccountRecord }
-  | null;
+  { kind: 'archive'; record: ServiceAccountRecord } | { kind: 'delete'; record: ServiceAccountRecord } | null;
 
 export function ServiceAccountsPage() {
   const { locale, msg } = useI18n();
@@ -91,10 +63,7 @@ export function ServiceAccountsPage() {
   const [records, setRecords] = useState<ServiceAccountRecord[]>([]);
   const [confirmation, setConfirmation] = useState<ServiceAccountConfirmation>(null);
 
-  const visibleRecords = useMemo(
-    () => records.filter((record) => record.status === activeTab),
-    [activeTab, records]
-  );
+  const visibleRecords = useMemo(() => records.filter((record) => record.status === activeTab), [activeTab, records]);
 
   const resetDraft = () => {
     setDraftName('');
@@ -120,7 +89,7 @@ export function ServiceAccountsPage() {
       name: trimmedName,
       description: draftDescription.trim(),
       createdAt: Date.now(),
-      status: 'active'
+      status: 'active',
     };
     setRecords((current) => [nextRecord, ...current]);
     setActiveTab('active');
@@ -133,10 +102,10 @@ export function ServiceAccountsPage() {
         item.id === record.id
           ? {
               ...item,
-              status: 'archived'
+              status: 'archived',
             }
-          : item
-      )
+          : item,
+      ),
     );
     setConfirmation(null);
   };
@@ -147,10 +116,10 @@ export function ServiceAccountsPage() {
         item.id === record.id
           ? {
               ...item,
-              status: 'active'
+              status: 'active',
             }
-          : item
-      )
+          : item,
+      ),
     );
   };
 
@@ -165,24 +134,18 @@ export function ServiceAccountsPage() {
       : msg('serviceAccounts.confirmDelete.title', 'Delete service account?');
   const confirmBody =
     confirmation?.kind === 'archive'
-      ? msg(
-          'serviceAccounts.confirmArchive.body',
-          'Archive {name}? You can restore it later from the archived tab.',
-          {
-            name: confirmation?.record.name ?? ''
-          }
-        )
+      ? msg('serviceAccounts.confirmArchive.body', 'Archive {name}? You can restore it later from the archived tab.', {
+          name: confirmation?.record.name ?? '',
+        })
       : msg(
           'serviceAccounts.confirmDelete.body',
           'Delete {name}? This removes the local preview record from the list.',
           {
-            name: confirmation?.record.name ?? ''
-          }
+            name: confirmation?.record.name ?? '',
+          },
         );
   const confirmActionLabel =
-    confirmation?.kind === 'archive'
-      ? msg('common.archive', 'Archive')
-      : msg('common.delete', 'Delete');
+    confirmation?.kind === 'archive' ? msg('common.archive', 'Archive') : msg('common.delete', 'Delete');
 
   return (
     <ConsolePageFrame
@@ -207,21 +170,33 @@ export function ServiceAccountsPage() {
         </TabsList>
         <TabsContent value="active">
           {visibleRecords.length ? (
-            <ServiceAccountsTable locale={locale} records={visibleRecords} onArchive={(record) => setConfirmation({ kind: 'archive', record })} onRestore={handleRestore} onDelete={(record) => setConfirmation({ kind: 'delete', record })} />
+            <ServiceAccountsTable
+              locale={locale}
+              records={visibleRecords}
+              onArchive={(record) => setConfirmation({ kind: 'archive', record })}
+              onRestore={handleRestore}
+              onDelete={(record) => setConfirmation({ kind: 'delete', record })}
+            />
           ) : (
             <ServiceAccountsEmptyState
               icon={LockKeyhole}
               title={msg('serviceAccounts.empty.activeTitle', 'No service accounts yet')}
               body={msg(
                 'serviceAccounts.empty.activeBody',
-                'Create a service account for CI, workload identity, and other automation flows.'
+                'Create a service account for CI, workload identity, and other automation flows.',
               )}
             />
           )}
         </TabsContent>
         <TabsContent value="archived">
           {visibleRecords.length ? (
-            <ServiceAccountsTable locale={locale} records={visibleRecords} onArchive={(record) => setConfirmation({ kind: 'archive', record })} onRestore={handleRestore} onDelete={(record) => setConfirmation({ kind: 'delete', record })} />
+            <ServiceAccountsTable
+              locale={locale}
+              records={visibleRecords}
+              onArchive={(record) => setConfirmation({ kind: 'archive', record })}
+              onRestore={handleRestore}
+              onDelete={(record) => setConfirmation({ kind: 'delete', record })}
+            />
           ) : (
             <ServiceAccountsEmptyState
               icon={Archive}
@@ -244,7 +219,7 @@ export function ServiceAccountsPage() {
             <DialogDescription>
               {msg(
                 'serviceAccounts.createDialog.description',
-                'Create a named non-human identity for CI, workload federation, and other automation flows.'
+                'Create a named non-human identity for CI, workload federation, and other automation flows.',
               )}
             </DialogDescription>
           </DialogHeader>
@@ -260,7 +235,7 @@ export function ServiceAccountsPage() {
               <FieldDescription>
                 {msg(
                   'serviceAccounts.createDialog.nameHelp',
-                  'Use a short, descriptive name so automation owners can identify this account quickly.'
+                  'Use a short, descriptive name so automation owners can identify this account quickly.',
                 )}
               </FieldDescription>
             </Field>
@@ -272,7 +247,7 @@ export function ServiceAccountsPage() {
                 onChange={(event) => setDraftDescription(event.target.value)}
                 placeholder={msg(
                   'serviceAccounts.createDialog.descriptionPlaceholder',
-                  'Used by deployment pipelines to publish production builds.'
+                  'Used by deployment pipelines to publish production builds.',
                 )}
                 className="min-h-[112px] resize-y"
               />
@@ -329,7 +304,7 @@ function ServiceAccountsTable({
   records,
   onArchive,
   onRestore,
-  onDelete
+  onDelete,
 }: {
   locale: string;
   records: ServiceAccountRecord[];
@@ -341,14 +316,23 @@ function ServiceAccountsTable({
 
   return (
     <section className="overflow-x-auto">
-      <Table aria-label={msg('serviceAccounts.table.ariaLabel', 'Service accounts')} className={cn('min-w-[920px]', dataTableClassName)}>
+      <Table
+        aria-label={msg('serviceAccounts.table.ariaLabel', 'Service accounts')}
+        className={cn('min-w-[920px]', dataTableClassName)}
+      >
         <TableHeader className="text-muted-foreground">
           <TableRow className={dataTableHeaderRowClassName}>
             <TableHead className={dataTableHeaderCellClassName}>{msg('common.name', 'Name')}</TableHead>
             <TableHead className={dataTableHeaderCellClassName}>{msg('serviceAccounts.table.id', 'ID')}</TableHead>
-            <TableHead className={dataTableHeaderCellClassName}>{msg('serviceAccounts.table.created', 'Created')}</TableHead>
-            <TableHead className={dataTableHeaderCellClassName}>{msg('serviceAccounts.table.lastUsed', 'Last used')}</TableHead>
-            <TableHead className={dataTableHeaderCellClassName}>{msg('serviceAccounts.table.status', 'Status')}</TableHead>
+            <TableHead className={dataTableHeaderCellClassName}>
+              {msg('serviceAccounts.table.created', 'Created')}
+            </TableHead>
+            <TableHead className={dataTableHeaderCellClassName}>
+              {msg('serviceAccounts.table.lastUsed', 'Last used')}
+            </TableHead>
+            <TableHead className={dataTableHeaderCellClassName}>
+              {msg('serviceAccounts.table.status', 'Status')}
+            </TableHead>
             <TableHead className={cn(dataTableHeaderCellClassName, 'w-14')} />
           </TableRow>
         </TableHeader>
@@ -359,9 +343,7 @@ function ServiceAccountsTable({
                 <div className="min-w-0">
                   <div className="font-medium text-foreground">{record.name}</div>
                   {record.description ? (
-                    <p className="mt-1 max-w-[360px] text-sm leading-6 text-muted-foreground">
-                      {record.description}
-                    </p>
+                    <p className="mt-1 max-w-[360px] text-sm leading-6 text-muted-foreground">{record.description}</p>
                   ) : null}
                 </div>
               </DataTableCell>
@@ -381,9 +363,7 @@ function ServiceAccountsTable({
               </DataTableCell>
               <DataTableCell className="h-auto py-3 align-top">
                 <Badge variant={record.status === 'active' ? 'secondary' : 'outline'}>
-                  {record.status === 'active'
-                    ? msg('common.active', 'Active')
-                    : msg('common.archived', 'Archived')}
+                  {record.status === 'active' ? msg('common.active', 'Active') : msg('common.archived', 'Archived')}
                 </Badge>
               </DataTableCell>
               <DataTableCell edge="end" className="h-auto py-3 text-right align-top">
@@ -406,7 +386,7 @@ function ServiceAccountActionsMenu({
   record,
   onArchive,
   onRestore,
-  onDelete
+  onDelete,
 }: {
   record: ServiceAccountRecord;
   onArchive: (record: ServiceAccountRecord) => void;
@@ -418,9 +398,7 @@ function ServiceAccountActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={
-          <MoreActionsButton label={msg('managedAgents.common.moreActions', 'More actions')} />
-        }
+        render={<MoreActionsButton label={msg('managedAgents.common.moreActions', 'More actions')} />}
       />
       <DropdownMenuContent align="end" className="w-44">
         {record.status === 'active' ? (
@@ -450,7 +428,7 @@ function ServiceAccountsEmptyState({
   icon: Icon,
   title,
   body,
-  action
+  action,
 }: {
   icon: typeof LockKeyhole;
   title: string;
@@ -460,7 +438,10 @@ function ServiceAccountsEmptyState({
   return (
     <Empty className="min-h-[280px] rounded-lg border-border bg-card">
       <EmptyHeader>
-        <EmptyMedia variant="icon" className="size-10 rounded-full border border-border bg-secondary text-muted-foreground">
+        <EmptyMedia
+          variant="icon"
+          className="size-10 rounded-full border border-border bg-secondary text-muted-foreground"
+        >
           <Icon className="size-5" aria-hidden />
         </EmptyMedia>
         <EmptyTitle>
@@ -476,6 +457,6 @@ function ServiceAccountsEmptyState({
 function formatDateTime(value: number, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
   }).format(value);
 }

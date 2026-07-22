@@ -1,6 +1,8 @@
 import { expect, mock } from 'bun:test';
 import type { EditorView } from '@codemirror/view';
+import type { ReactNode } from 'react';
 import { resetTestDom } from '../../test/setup';
+import type { AuthContextValue } from '../../shared/auth/context';
 
 export { resetTestDom };
 export { mock };
@@ -10,16 +12,70 @@ export const { ManagedAgentsPage } = await import('./ManagedAgentsPage');
 export const { WorkspaceContext } = await import('../../shared/workspaces/context');
 const { defaultWorkspace } = await import('../../shared/workspaces/api');
 const { setConsoleRequestContext } = await import('../../shared/api/client');
+const { resetMcpDirectoryCacheForTests } = await import('./agents/tools/api');
 const { I18nProvider } = await import('../../shared/i18n');
+const { AuthContext } = await import('../../shared/auth/context');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+const { RouterContextProvider, createBrowserHistory, createRootRoute, createRoute, createRouter } =
+  await import('@tanstack/react-router');
+const { useEffect } = await import('react');
 
-export const { act, cleanup, fireEvent, render, screen, waitFor, within } = testingLibrary;
+const managedAgentsTestRootRoute = createRootRoute();
+const managedAgentsTestEnvironmentListRoute = createRoute({
+  getParentRoute: () => managedAgentsTestRootRoute,
+  path: 'workspaces/$workspaceId/environments',
+});
+const managedAgentsTestEnvironmentDetailRoute = createRoute({
+  getParentRoute: () => managedAgentsTestRootRoute,
+  path: 'workspaces/$workspaceId/environments/$environmentId',
+});
+const managedAgentsTestFallbackRoute = createRoute({
+  getParentRoute: () => managedAgentsTestRootRoute,
+  path: '$',
+});
+const managedAgentsTestRouteTree = managedAgentsTestRootRoute.addChildren([
+  managedAgentsTestEnvironmentListRoute,
+  managedAgentsTestEnvironmentDetailRoute,
+  managedAgentsTestFallbackRoute,
+]);
+
+export const { act, cleanup, fireEvent, screen, waitFor, within } = testingLibrary;
 const originalFetch = globalThis.fetch;
+const managedAgentsAuthContextValue: AuthContextValue = {
+  account: {
+    uuid: 'acct_managed_agents_test',
+    email_address: 'managed-agents-test@example.com',
+    display_name: 'Managed Agents Test User',
+  },
+  status: 'authenticated',
+  csrfToken: 'csrf_managed_agents_test',
+  refresh: async () => undefined,
+  logout: async () => undefined,
+};
+
+export function render(
+  ui: Parameters<typeof testingLibrary.render>[0],
+  options?: Parameters<typeof testingLibrary.render>[1],
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return testingLibrary.render(
+    <AuthContext.Provider value={managedAgentsAuthContextValue}>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </AuthContext.Provider>,
+    options,
+  );
+}
 
 export function resetManagedAgentsTestState() {
   cleanup();
   globalThis.fetch = originalFetch;
   setConsoleRequestContext({});
+  resetMcpDirectoryCacheForTests();
 }
 
 export function expectPageTextToContain(value: string) {
@@ -30,7 +86,11 @@ export function codeBlockContaining(value: string) {
   return Array.from(document.querySelectorAll('pre')).find((element) => element.textContent?.includes(value));
 }
 
-export async function selectManagedComboboxOption(container: HTMLElement, name: string | RegExp, optionName: string | RegExp) {
+export async function selectManagedComboboxOption(
+  container: HTMLElement,
+  name: string | RegExp,
+  optionName: string | RegExp,
+) {
   const trigger = within(container).getByRole('combobox', { name });
   fireEvent.pointerDown(trigger);
   fireEvent.pointerUp(trigger);
@@ -48,7 +108,9 @@ export type CodeMirrorTestElement = HTMLElement & {
 
 export function setAgentConfigEditorValue(container: HTMLElement, value: string, name: string | RegExp) {
   const editor = within(container).getByRole('textbox', { name }) as CodeMirrorTestElement;
-  const view = editor.__agentConfigCodeMirrorView ?? (editor.closest('.cm-editor') as CodeMirrorTestElement | null)?.__agentConfigCodeMirrorView;
+  const view =
+    editor.__agentConfigCodeMirrorView ??
+    (editor.closest('.cm-editor') as CodeMirrorTestElement | null)?.__agentConfigCodeMirrorView;
   if (!view) {
     throw new Error('CodeMirror test view was not attached.');
   }
@@ -57,29 +119,48 @@ export function setAgentConfigEditorValue(container: HTMLElement, value: string,
       changes: {
         from: 0,
         to: view.state.doc.length,
-        insert: value
-      }
+        insert: value,
+      },
     });
   });
 }
 
-export function renderManagedAgentsPage(section: Parameters<typeof ManagedAgentsPage>[0]['section'], locale: 'en' | 'zh-CN' = 'en') {
+export function renderManagedAgentsPage(
+  section: Parameters<typeof ManagedAgentsPage>[0]['section'],
+  locale: 'en' | 'zh-CN' = 'en',
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        retry: false
-      }
-    }
+        retry: false,
+      },
+    },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <I18nProvider initialLocale={locale}>
-        <WorkspaceContext.Provider value={workspaceContextValue('default')}>
-          <ManagedAgentsPage section={section} />
-        </WorkspaceContext.Provider>
-      </I18nProvider>
-    </QueryClientProvider>
+  const history = createBrowserHistory({ window });
+  const router = createRouter({ history, routeTree: managedAgentsTestRouteTree });
+  const result = render(
+    <ManagedAgentsTestRouterProvider router={router}>
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider initialLocale={locale}>
+          <WorkspaceContext.Provider value={workspaceContextValue('default')}>
+            <ManagedAgentsPage section={section} />
+          </WorkspaceContext.Provider>
+        </I18nProvider>
+      </QueryClientProvider>
+    </ManagedAgentsTestRouterProvider>,
   );
+  return Object.assign(result, { router });
+}
+
+function ManagedAgentsTestRouterProvider({
+  router,
+  children,
+}: {
+  router: ReturnType<typeof createRouter<typeof managedAgentsTestRouteTree>>;
+  children: ReactNode;
+}) {
+  useEffect(() => () => router.history.destroy(), [router]);
+  return <RouterContextProvider router={router}>{children}</RouterContextProvider>;
 }
 
 export type AgentFixture = {
@@ -138,9 +219,16 @@ export type MockAgentsApiOptions = {
   sessions?: SessionFixture[];
   deployments?: DeploymentFixture[];
   skills?: SkillFixture[];
+  mcpDirectoryServers?: Array<Record<string, unknown>>;
+  mcpDirectoryErrorOnce?: boolean;
+  mcpToolCatalogs?: Array<Record<string, unknown>>;
+  mcpToolCatalogRefreshResult?: Record<string, unknown>;
+  mcpToolCatalogRefreshErrorOnce?: boolean;
+  mcpToolCatalogRefreshWait?: Promise<void>;
   analyticsOverview?: Record<string, unknown>;
   analyticsTimeseries?: Array<Record<string, unknown>>;
   quickstartStream?: string | ((body: Record<string, unknown>) => string);
+  quickstartStreamErrorOnce?: boolean;
   agentUpdateErrorStatus?: number;
   agentsListErrorOnce?: boolean;
   agentsSearchErrorOnce?: boolean;
@@ -160,6 +248,10 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
   let agentsListErrorsRemaining = options.agentsListErrorOnce ? 1 : 0;
   let agentsSearchErrorsRemaining = options.agentsSearchErrorOnce ? 1 : 0;
   let agentArchiveErrorsRemaining = options.agentArchiveErrorOnce ? 1 : 0;
+  let mcpDirectoryErrorsRemaining = options.mcpDirectoryErrorOnce ? 1 : 0;
+  let mcpToolCatalogRefreshErrorsRemaining = options.mcpToolCatalogRefreshErrorOnce ? 1 : 0;
+  let quickstartStreamErrorsRemaining = options.quickstartStreamErrorOnce ? 1 : 0;
+  let mcpToolCatalogs = options.mcpToolCatalogs?.map((catalog) => ({ ...catalog }));
   const now = new Date().toISOString();
   const skillDetails = new Map((options.skills ?? []).map((skill) => [skill.id, skillResponse(skill)]));
   let environments = [
@@ -173,8 +265,8 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
       scope: 'workspace',
       state: 'active',
       type: 'environment',
-      updated_at: now
-    }
+      updated_at: now,
+    },
   ];
   let vaults = [
     {
@@ -183,8 +275,8 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
       created_at: now,
       display_name: 'Option vault',
       type: 'vault',
-      updated_at: now
-    }
+      updated_at: now,
+    },
   ];
   const deployments: Record<string, unknown>[] = (options.deployments ?? []).map(deploymentResponse);
   const sessionEvents = new Map<string, Record<string, unknown>[]>();
@@ -194,8 +286,8 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
     const historical = (fixture.versions ?? []).map((versionFixture) =>
       agentResponse({
         ...versionFixture,
-        id: fixture.id
-      })
+        id: fixture.id,
+      }),
     );
     versionsById.set(fixture.id, sortTestAgentVersions([current, ...historical]));
   });
@@ -207,6 +299,55 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
     const headers = Object.fromEntries(new Headers(init?.headers).entries());
     const body = parseBody(init?.body);
     requests.push({ url, method, headers, body });
+
+    const mcpCatalogMatch = url.match(
+      /^\/api\/console\/organizations\/[^/]+\/workspaces\/[^/]+\/agents\/([^/]+)\/mcp_tool_catalogs(?:\/refresh)?(?:\?|$)/,
+    );
+    if (mcpCatalogMatch && method === 'GET') {
+      const agentId = decodeURIComponent(mcpCatalogMatch[1]);
+      const agent = agents.find((candidate) => candidate.id === agentId);
+      const servers = Array.isArray(agent?.mcp_servers) ? agent.mcp_servers : [];
+      const data =
+        mcpToolCatalogs ??
+        servers.map((server) => ({
+          server_name: typeof server === 'object' && server && 'name' in server ? String(server.name) : 'mcp',
+          status: 'unknown',
+          tools: null,
+        }));
+      return jsonResponse({ data, version: agent?.version ?? 1 });
+    }
+    if (mcpCatalogMatch && method === 'POST') {
+      if (mcpToolCatalogRefreshErrorsRemaining > 0) {
+        mcpToolCatalogRefreshErrorsRemaining -= 1;
+        return jsonResponse({ error: { message: 'MCP catalog refresh unavailable' } }, 503);
+      }
+      await options.mcpToolCatalogRefreshWait;
+      const serverName = typeof body?.server_name === 'string' ? body.server_name : '';
+      if (!serverName) {
+        return jsonResponse({ error: { message: 'server_name is required' } }, 400);
+      }
+      const refreshedCatalog = {
+        server_name: serverName,
+        status: 'ready',
+        tools: [],
+        ...options.mcpToolCatalogRefreshResult,
+      };
+      mcpToolCatalogs = [
+        ...(mcpToolCatalogs ?? []).filter((catalog) => catalog.server_name !== serverName),
+        refreshedCatalog,
+      ];
+      const agentId = decodeURIComponent(mcpCatalogMatch[1]);
+      const agent = agents.find((candidate) => candidate.id === agentId);
+      return jsonResponse({ data: refreshedCatalog, version: agent?.version ?? 1 });
+    }
+
+    if (url.startsWith('/api/directory/servers?') && method === 'GET') {
+      if (mcpDirectoryErrorsRemaining > 0) {
+        mcpDirectoryErrorsRemaining -= 1;
+        return jsonResponse({ error: { message: 'MCP directory unavailable' } }, 503);
+      }
+      return jsonResponse({ servers: options.mcpDirectoryServers ?? [] });
+    }
 
     if (url.startsWith('/v1/agents?') && method === 'GET') {
       if (agentsListErrorsRemaining > 0) {
@@ -263,9 +404,10 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
       const params = new URL(url, 'https://oma.duck.ai').searchParams;
       const requestedVersion = Number(params.get('version'));
       const versionedAgents = versionsById.get(agentId) ?? [];
-      const agent = Number.isFinite(requestedVersion) && requestedVersion > 0
-        ? versionedAgents.find((candidate) => candidate.version === requestedVersion)
-        : agents.find((candidate) => candidate.id === agentId);
+      const agent =
+        Number.isFinite(requestedVersion) && requestedVersion > 0
+          ? versionedAgents.find((candidate) => candidate.version === requestedVersion)
+          : agents.find((candidate) => candidate.id === agentId);
       return agent ? jsonResponse(agent) : jsonResponse({ error: { message: 'not found' } }, 404);
     }
 
@@ -327,7 +469,7 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         scope: typeof body?.scope === 'string' ? body.scope : 'organization',
         state: 'active',
         type: 'environment',
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       environments = [created, ...environments];
       return jsonResponse(created);
@@ -345,7 +487,7 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         display_name: typeof body?.display_name === 'string' ? body.display_name : 'Quickstart vault',
         metadata: body?.metadata ?? {},
         type: 'vault',
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       vaults = [created, ...vaults];
       return jsonResponse(created);
@@ -360,7 +502,7 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         display_name: typeof body?.display_name === 'string' ? body.display_name : 'Quickstart credential',
         type: 'vault_credential',
         updated_at: new Date().toISOString(),
-        vault_id: decodeURIComponent(credentialCreateMatch[1])
+        vault_id: decodeURIComponent(credentialCreateMatch[1]),
       });
     }
 
@@ -384,7 +526,7 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         title: null,
         type: 'session',
         updated_at: createdAt,
-        vault_ids: []
+        vault_ids: [],
       };
       sessionEvents.set(created.id, []);
       return jsonResponse(created);
@@ -408,7 +550,10 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         return true;
       });
       const limit = Number(params.get('limit') ?? filteredDeployments.length) || filteredDeployments.length;
-      return jsonResponse({ data: filteredDeployments.slice(0, limit), next_page: filteredDeployments.length > limit ? 'next_cursor' : null });
+      return jsonResponse({
+        data: filteredDeployments.slice(0, limit),
+        next_page: filteredDeployments.length > limit ? 'next_cursor' : null,
+      });
     }
 
     if (url === '/v1/deployments?beta=true' && method === 'POST') {
@@ -425,7 +570,7 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         status: 'active',
         type: 'deployment',
         updated_at: new Date().toISOString(),
-        vault_ids: Array.isArray(body?.vault_ids) ? body.vault_ids : []
+        vault_ids: Array.isArray(body?.vault_ids) ? body.vault_ids : [],
       };
       deployments.unshift(created);
       return jsonResponse(created);
@@ -436,20 +581,22 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
     }
 
     if (url.startsWith('/api/organizations/org_test/analytics/sessions/overview') && method === 'GET') {
-      return jsonResponse(options.analyticsOverview ?? {
-        sessions_count: 0,
-        error_rate: 0,
-        input_tokens: { total: 0, p50: 0, p95: 0 },
-        output_tokens: { total: 0, p50: 0, p95: 0 },
-        duration: { p50: 0, p95: 0 },
-        active_time: { p50: 0, p95: 0 },
-        input_tokens_per_session: { p50: 0, p95: 0 },
-        output_tokens_per_session: { p50: 0, p95: 0 },
-        turns_per_session: { p50: 0, p95: 0 },
-        tool_call_counts: {},
-        stop_reason_counts: {},
-        data_as_of: null
-      });
+      return jsonResponse(
+        options.analyticsOverview ?? {
+          sessions_count: 0,
+          error_rate: 0,
+          input_tokens: { total: 0, p50: 0, p95: 0 },
+          output_tokens: { total: 0, p50: 0, p95: 0 },
+          duration: { p50: 0, p95: 0 },
+          active_time: { p50: 0, p95: 0 },
+          input_tokens_per_session: { p50: 0, p95: 0 },
+          output_tokens_per_session: { p50: 0, p95: 0 },
+          turns_per_session: { p50: 0, p95: 0 },
+          tool_call_counts: {},
+          stop_reason_counts: {},
+          data_as_of: null,
+        },
+      );
     }
 
     if (url.startsWith('/api/organizations/org_test/analytics/sessions/timeseries') && method === 'GET') {
@@ -466,22 +613,28 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
       const sessionId = decodeURIComponent(sessionEventsMatch[1]);
       const incoming = Array.isArray(body?.events) ? (body.events as Record<string, unknown>[]) : [];
       const existingEvents = sessionEvents.get(sessionId) ?? [];
-      const lastEventAt = existingEvents.map((event) => Date.parse(String(event.created_at))).filter(Number.isFinite).at(-1) ?? Date.now();
+      const lastEventAt =
+        existingEvents
+          .map((event) => Date.parse(String(event.created_at)))
+          .filter(Number.isFinite)
+          .at(-1) ?? Date.now();
       const now = Math.max(Date.now(), lastEventAt + 999);
       const created = incoming.map((event, index) => ({
         id: `evt_${sessionId}_${index + 1}`,
         created_at: new Date(now + index).toISOString(),
-        ...event
+        ...event,
       }));
       const transientEchoes = created.flatMap((event, index) => {
         if (event.type !== 'user.message') {
           return [];
         }
-        return [{
-          ...event,
-          id: `evt_${sessionId}_echo_${String(event.id ?? index + 1)}`,
-          created_at: new Date(now + index + 4000).toISOString()
-        }];
+        return [
+          {
+            ...event,
+            id: `evt_${sessionId}_echo_${String(event.id ?? index + 1)}`,
+            created_at: new Date(now + index + 4000).toISOString(),
+          },
+        ];
       });
       const derived = created.flatMap((event, index) => {
         if (event.type !== 'user.message') {
@@ -492,32 +645,36 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
             id: `evt_${sessionId}_system_${index + 1}`,
             created_at: new Date(now + index + 5000).toISOString(),
             type: 'system.message',
-            message: 'System message'
+            message: 'System message',
           },
           {
             id: `evt_${sessionId}_agent_thinking_${index + 1}`,
             created_at: new Date(now + index + 9000).toISOString(),
             type: 'agent.message',
-            content: [{ type: 'thinking', thinking: 'Extract the requested schema fields and return JSON.' }]
+            content: [{ type: 'thinking', thinking: 'Extract the requested schema fields and return JSON.' }],
           },
           {
             id: `evt_${sessionId}_agent_${index + 1}`,
             created_at: new Date(now + index + 10000).toISOString(),
             type: 'agent.message',
-            content: [{
-              type: 'text',
-              text: '```json\n{\n  "order_id": "ORD-7742",\n  "carrier": "FedEx",\n  "ship_date": "2025-03-03",\n  "delivery_date": "2025-03-07",\n  "total_amount": 142.50,\n  "currency": "USD"\n}\n```'
-            }]
+            content: [
+              {
+                type: 'text',
+                text: '```json\n{\n  "order_id": "ORD-7742",\n  "carrier": "FedEx",\n  "ship_date": "2025-03-03",\n  "delivery_date": "2025-03-07",\n  "total_amount": 142.50,\n  "currency": "USD"\n}\n```',
+              },
+            ],
           },
           {
             id: `evt_${sessionId}_idle_${index + 1}`,
             created_at: new Date(now + index + 10001).toISOString(),
             type: 'session.status_idle',
-            content: [{
-              type: 'text',
-              text: '```json\n{\n  "order_id": "ORD-7742",\n  "carrier": "FedEx",\n  "ship_date": "2025-03-03",\n  "delivery_date": "2025-03-07",\n  "total_amount": 142.50,\n  "currency": "USD"\n}\n```'
-            }]
-          }
+            content: [
+              {
+                type: 'text',
+                text: '```json\n{\n  "order_id": "ORD-7742",\n  "carrier": "FedEx",\n  "ship_date": "2025-03-03",\n  "delivery_date": "2025-03-07",\n  "total_amount": 142.50,\n  "currency": "USD"\n}\n```',
+              },
+            ],
+          },
         ];
       });
       sessionEvents.set(sessionId, [...existingEvents, ...created, ...transientEchoes, ...derived]);
@@ -540,7 +697,7 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         id: 'agent_created123456',
         name,
         description: typeof body?.description === 'string' ? body.description : null,
-        model: typeof body?.model === 'string' ? { id: body.model, speed: 'standard' } : { id: 'claude-sonnet-4-6' }
+        model: typeof body?.model === 'string' ? { id: body.model, speed: 'standard' } : { id: 'claude-sonnet-4-6' },
       });
       agents = [created, ...agents];
       versionsById.set(created.id, [created]);
@@ -548,9 +705,14 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
     }
 
     if (url.match(/^\/api\/organizations\/[^/]+\/proxy\/v1\/messages$/) && method === 'POST') {
-      const stream = typeof options.quickstartStream === 'function'
-        ? options.quickstartStream(body ?? {})
-        : options.quickstartStream ?? quickstartTextStream("Let's configure the environment.");
+      if (quickstartStreamErrorsRemaining > 0) {
+        quickstartStreamErrorsRemaining -= 1;
+        return jsonResponse({ error: { message: 'forced quickstart failure' } }, 500);
+      }
+      const stream =
+        typeof options.quickstartStream === 'function'
+          ? options.quickstartStream(body ?? {})
+          : (options.quickstartStream ?? quickstartTextStream("Let's configure the environment."));
       return streamResponse(stream);
     }
 
@@ -577,17 +739,24 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
         id: agentId,
         name: typeof body.name === 'string' ? body.name : current.name,
         archived_at: current.archived_at,
-        description: typeof body.description === 'string' || body.description === null ? (body.description as string | null) : current.description,
+        description:
+          typeof body.description === 'string' || body.description === null
+            ? (body.description as string | null)
+            : current.description,
         mcp_servers: Array.isArray(body.mcp_servers) ? body.mcp_servers : current.mcp_servers,
-        metadata: body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata) ? (body.metadata as Record<string, unknown>) : current.metadata,
+        metadata:
+          body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+            ? (body.metadata as Record<string, unknown>)
+            : current.metadata,
         model,
         multiagent: body.multiagent === undefined ? current.multiagent : body.multiagent,
         skills: Array.isArray(body.skills) ? body.skills : current.skills,
-        system: typeof body.system === 'string' || body.system === null ? (body.system as string | null) : current.system,
+        system:
+          typeof body.system === 'string' || body.system === null ? (body.system as string | null) : current.system,
         tools: Array.isArray(body.tools) ? (body.tools as Array<Record<string, unknown>>) : current.tools,
         version: current.version + 1,
         created_at: current.created_at,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
       agents = agents.map((agent) => (agent.id === agentId ? updated : agent));
       versionsById.set(agentId, sortTestAgentVersions([updated, ...(versionsById.get(agentId) ?? [])]));
@@ -605,7 +774,7 @@ export function mockAgentsApi(initialAgents: AgentFixture[], options: MockAgents
       agents = agents.filter((agent) => agent.id !== agentId);
       return jsonResponse({
         ...(existing ?? agentResponse({ id: agentId, name: 'Archived agent' })),
-        archived_at: new Date().toISOString()
+        archived_at: new Date().toISOString(),
       });
     }
 
@@ -623,8 +792,8 @@ export function mockManagedResourceApi() {
     agents: [
       agentResponse({
         id: 'agent_option123456',
-        name: 'Option agent'
-      })
+        name: 'Option agent',
+      }),
     ],
     sessions: [
       {
@@ -637,16 +806,16 @@ export function mockManagedResourceApi() {
         title: 'Session one',
         type: 'session',
         updated_at: now,
-        vault_ids: ['vlt_one123456']
-      }
+        vault_ids: ['vlt_one123456'],
+      },
     ],
     sessionResources: [
       {
         id: 'file_orders123456',
         type: 'file',
         created_at: new Date(Date.now() - 80_000).toISOString(),
-        filename: 'orders.zip'
-      }
+        filename: 'orders.zip',
+      },
     ],
     sessionThreads: [
       {
@@ -656,7 +825,7 @@ export function mockManagedResourceApi() {
         parent_thread_id: 'sthr_orchestrator123456',
         archived_at: null,
         created_at: new Date(Date.now() - 45_000).toISOString(),
-        updated_at: now
+        updated_at: now,
       },
       {
         id: 'sthr_analyst123456',
@@ -665,7 +834,7 @@ export function mockManagedResourceApi() {
         parent_thread_id: 'sthr_orchestrator123456',
         archived_at: null,
         created_at: new Date(Date.now() - 45_000).toISOString(),
-        updated_at: now
+        updated_at: now,
       },
       {
         id: 'sthr_forecaster123456',
@@ -674,7 +843,7 @@ export function mockManagedResourceApi() {
         parent_thread_id: 'sthr_orchestrator123456',
         archived_at: null,
         created_at: new Date(Date.now() - 45_000).toISOString(),
-        updated_at: now
+        updated_at: now,
       },
       {
         id: 'sthr_archived123456',
@@ -683,75 +852,75 @@ export function mockManagedResourceApi() {
         parent_thread_id: 'sthr_orchestrator123456',
         archived_at: new Date(Date.now() - 10_000).toISOString(),
         created_at: new Date(Date.now() - 44_000).toISOString(),
-        updated_at: now
-      }
+        updated_at: now,
+      },
     ],
     sessionEvents: [
       {
         id: 'evt_status_start',
         type: 'session.status_running',
-        created_at: new Date(Date.now() - 88_000).toISOString()
+        created_at: new Date(Date.now() - 88_000).toISOString(),
       },
       {
         id: 'evt_user_queued',
         type: 'user.message',
         created_at: new Date(Date.now() - 84_000).toISOString(),
         is_queued: true,
-        content: [{ type: 'text', text: 'Queued warmup request' }]
+        content: [{ type: 'text', text: 'Queued warmup request' }],
       },
-        {
-          id: 'evt_user_orders',
-          type: 'user.message',
-          created_at: new Date(Date.now() - 80_000).toISOString(),
-          content: [{ type: 'text', text: 'Data Analysis Task - orders' }]
-        },
-        {
-          id: 'evt_internal_system',
-          type: 'system.message',
-          created_at: new Date(Date.now() - 78_000).toISOString(),
-          message: 'Starting Claude Code'
-        },
-        {
-          id: 'evt_model_start',
-          type: 'span.model_request_start',
-          created_at: new Date(Date.now() - 77_000).toISOString()
-        },
-	        {
-	          id: 'evt_agent_prepare',
-	          type: 'agent.message',
-	          created_at: new Date(Date.now() - 72_000).toISOString(),
-	          content: [{ type: 'text', text: "I'll start by unzipping the dataset, then prepare the unified CSV files." }]
-	      },
-	      {
-	        id: 'evt_tool_unzip',
-	        type: 'agent.tool_use',
+      {
+        id: 'evt_user_orders',
+        type: 'user.message',
+        created_at: new Date(Date.now() - 80_000).toISOString(),
+        content: [{ type: 'text', text: 'Data Analysis Task - orders' }],
+      },
+      {
+        id: 'evt_internal_system',
+        type: 'system.message',
+        created_at: new Date(Date.now() - 78_000).toISOString(),
+        message: 'Starting Claude Code',
+      },
+      {
+        id: 'evt_model_start',
+        type: 'span.model_request_start',
+        created_at: new Date(Date.now() - 77_000).toISOString(),
+      },
+      {
+        id: 'evt_agent_prepare',
+        type: 'agent.message',
+        created_at: new Date(Date.now() - 72_000).toISOString(),
+        content: [{ type: 'text', text: "I'll start by unzipping the dataset, then prepare the unified CSV files." }],
+      },
+      {
+        id: 'evt_tool_unzip',
+        type: 'agent.tool_use',
         created_at: new Date(Date.now() - 68_000).toISOString(),
         name: 'Bash',
         input: { command: 'unzip /mnt/session/uploads/orders.zip -d /workspace/data/' },
         usage: { input_tokens: 780, cache_read_input_tokens: 20, cache_creation_input_tokens: 5, output_tokens: 0 },
-        duration_ms: 4000
+        duration_ms: 4000,
       },
       {
         id: 'evt_tool_unzip_result',
         type: 'agent.tool_result',
         created_at: new Date(Date.now() - 67_000).toISOString(),
-	        tool_use_id: 'evt_tool_unzip',
-	        content: [{ type: 'text', text: 'Archive extracted.' }]
-	      },
-	      {
-	        id: 'evt_model_end',
-	        type: 'span.model_request_end',
-	        model_request_start_id: 'evt_model_start',
-	        created_at: new Date(Date.now() - 66_500).toISOString(),
-	        model_usage: { input_tokens: 18200, output_tokens: 425 }
-	      },
-	      {
-	        id: 'evt_tool_write_prepare',
-	        type: 'agent.tool_use',
+        tool_use_id: 'evt_tool_unzip',
+        content: [{ type: 'text', text: 'Archive extracted.' }],
+      },
+      {
+        id: 'evt_model_end',
+        type: 'span.model_request_end',
+        model_request_start_id: 'evt_model_start',
+        created_at: new Date(Date.now() - 66_500).toISOString(),
+        model_usage: { input_tokens: 18200, output_tokens: 425 },
+      },
+      {
+        id: 'evt_tool_write_prepare',
+        type: 'agent.tool_use',
         created_at: new Date(Date.now() - 64_000).toISOString(),
         name: 'Write',
         input: { file_path: '/workspace/prepare.py', content: 'print("prepare")' },
-        duration_ms: 3000
+        duration_ms: 3000,
       },
       {
         id: 'evt_tool_run_prepare',
@@ -759,34 +928,34 @@ export function mockManagedResourceApi() {
         created_at: new Date(Date.now() - 60_000).toISOString(),
         name: 'Bash',
         input: { command: 'cd /workspace && python3 prepare.py' },
-        duration_ms: 18_000
+        duration_ms: 18_000,
       },
-        {
-          id: 'evt_agent_delegate',
-          type: 'agent.message',
-          created_at: new Date(Date.now() - 40_000).toISOString(),
-          content: [{ type: 'text', text: "Data is ready. Now I'll delegate to all three agents in parallel." }],
-          usage: { input_tokens: 6823, output_tokens: 68 },
-          duration_ms: 2000
+      {
+        id: 'evt_agent_delegate',
+        type: 'agent.message',
+        created_at: new Date(Date.now() - 40_000).toISOString(),
+        content: [{ type: 'text', text: "Data is ready. Now I'll delegate to all three agents in parallel." }],
+        usage: { input_tokens: 6823, output_tokens: 68 },
+        duration_ms: 2000,
+      },
+      {
+        id: 'evt_agent_tool_subagent',
+        type: 'agent.tool_use',
+        created_at: new Date(Date.now() - 39_900).toISOString(),
+        name: 'Agent',
+        input: {
+          description: 'Ask reporter to summarize order cohorts.',
+          prompt: 'Summarize order cohorts.',
+          subagent_type: 'reporter',
         },
-        {
-          id: 'evt_agent_tool_subagent',
-          type: 'agent.tool_use',
-          created_at: new Date(Date.now() - 39_900).toISOString(),
-          name: 'Agent',
-          input: {
-            description: 'Ask reporter to summarize order cohorts.',
-            prompt: 'Summarize order cohorts.',
-            subagent_type: 'reporter'
-          }
-        },
-        {
-          id: 'evt_tool_batch_read',
-          type: 'agent.tool_use',
-          created_at: new Date(Date.now() - 39_800).toISOString(),
-          name: 'Read',
+      },
+      {
+        id: 'evt_tool_batch_read',
+        type: 'agent.tool_use',
+        created_at: new Date(Date.now() - 39_800).toISOString(),
+        name: 'Read',
         input: { file_path: '/workspace/data/orders.csv' },
-        bracket_id: 'span_prepare_batch'
+        bracket_id: 'span_prepare_batch',
       },
       {
         id: 'evt_tool_batch_glob',
@@ -794,7 +963,7 @@ export function mockManagedResourceApi() {
         created_at: new Date(Date.now() - 39_700).toISOString(),
         name: 'Glob',
         input: { pattern: '*.csv' },
-        bracket_id: 'span_prepare_batch'
+        bracket_id: 'span_prepare_batch',
       },
       {
         id: 'evt_subagent_reporter',
@@ -803,7 +972,7 @@ export function mockManagedResourceApi() {
         agent_name: 'reporter',
         created_at: new Date(Date.now() - 39_000).toISOString(),
         usage: { input_tokens: 7223, output_tokens: 168 },
-        duration_ms: 28000
+        duration_ms: 28000,
       },
       {
         id: 'evt_subagent_analyst',
@@ -812,7 +981,7 @@ export function mockManagedResourceApi() {
         agent_name: 'analyst',
         created_at: new Date(Date.now() - 38_000).toISOString(),
         usage: { input_tokens: 7257, output_tokens: 247 },
-        duration_ms: 31000
+        duration_ms: 31000,
       },
       {
         id: 'evt_subagent_forecaster',
@@ -821,7 +990,7 @@ export function mockManagedResourceApi() {
         agent_name: 'forecaster',
         created_at: new Date(Date.now() - 37_000).toISOString(),
         usage: { input_tokens: 7317, output_tokens: 253 },
-        duration_ms: 35000
+        duration_ms: 35000,
       },
       {
         id: 'evt_thread_message_sent',
@@ -832,7 +1001,7 @@ export function mockManagedResourceApi() {
         created_at: new Date(Date.now() - 36_500).toISOString(),
         content: [{ type: 'text', text: 'Summarize order cohorts.' }],
         usage: { input_tokens: 7223, output_tokens: 168 },
-        duration_ms: 28000
+        duration_ms: 28000,
       },
       {
         id: 'evt_thread_message_received',
@@ -845,12 +1014,12 @@ export function mockManagedResourceApi() {
         raw_tool_result: {
           type: 'tool_result',
           tool_use_id: 'tool_reporter123456',
-          content: [{ type: 'text', text: 'Reporter sent the first cohort summary.' }]
+          content: [{ type: 'text', text: 'Reporter sent the first cohort summary.' }],
         },
         tool_use_result: {
           status: 'completed',
-          content: [{ type: 'text', text: 'Reporter sent the first cohort summary.' }]
-        }
+          content: [{ type: 'text', text: 'Reporter sent the first cohort summary.' }],
+        },
       },
       {
         id: 'evt_orphan_tool_result_as_thread_message',
@@ -863,109 +1032,116 @@ export function mockManagedResourceApi() {
           type: 'tool_result',
           tool_use_id: 'tool_orphan_bash123456',
           content: '(Bash completed with no output)',
-          is_error: false
-        }
+          is_error: false,
+        },
       },
       {
         id: 'evt_markdown_result',
         type: 'session.status_idle',
         created_at: new Date(Date.now() - 29_000).toISOString(),
         result:
-          'Verification with `Glob("*")` shows only:\n\n- `.bash_logout`\n- `.bashrc`\n- `.profile`\n\n| Language | Translation | Directory listing |\n|---|---|---|\n| Chinese Simplified (zh-CN) | **你好，世界** | reported empty |\n| Japanese (ja) | こんにちは、世界 | inaccurate mixed list |\n\nNote: The translations look correct.'
-      }
+          'Verification with `Glob("*")` shows only:\n\n- `.bash_logout`\n- `.bashrc`\n- `.profile`\n\n| Language | Translation | Directory listing |\n|---|---|---|\n| Chinese Simplified (zh-CN) | **你好，世界** | reported empty |\n| Japanese (ja) | こんにちは、世界 | inaccurate mixed list |\n\nNote: The translations look correct.',
+      },
     ],
     sessionThreadEvents: {
       sthr_reporter123456: [
-	      {
-	        id: 'evt_reporter_span_start',
-	        type: 'span.model_request_start',
-	        session_thread_id: 'sthr_reporter123456',
-	        created_at: new Date(Date.now() - 36_000).toISOString()
-	      },
-	      {
-	        id: 'evt_reporter',
-	        type: 'agent.message',
-	        session_thread_id: 'sthr_reporter123456',
-	        thread_name: 'reporter',
-	        created_at: new Date(Date.now() - 35_000).toISOString(),
-	        content: [{ type: 'text', text: 'Reporter is summarizing order cohorts.' }]
-	      },
-	      {
-	        id: 'evt_reporter_content_tool',
-	        type: 'agent.message',
-	        session_thread_id: 'sthr_reporter123456',
-	        thread_name: 'reporter',
-	        created_at: new Date(Date.now() - 34_500).toISOString(),
-	        content: [{ type: 'tool_use', id: 'tool_reporter_weather', name: 'mcp__weather_service__get_weather', input: { location: 'Beijing' } }]
-	      },
-	      {
-	        id: 'evt_reporter_span',
-	        type: 'span.model_request_end',
-	        session_thread_id: 'sthr_reporter123456',
-	        model_request_start_id: 'evt_reporter_span_start',
-	        created_at: new Date(Date.now() - 34_000).toISOString(),
-	        model_usage: { input_tokens: 7223, output_tokens: 168 }
-	      }
+        {
+          id: 'evt_reporter_span_start',
+          type: 'span.model_request_start',
+          session_thread_id: 'sthr_reporter123456',
+          created_at: new Date(Date.now() - 36_000).toISOString(),
+        },
+        {
+          id: 'evt_reporter',
+          type: 'agent.message',
+          session_thread_id: 'sthr_reporter123456',
+          thread_name: 'reporter',
+          created_at: new Date(Date.now() - 35_000).toISOString(),
+          content: [{ type: 'text', text: 'Reporter is summarizing order cohorts.' }],
+        },
+        {
+          id: 'evt_reporter_content_tool',
+          type: 'agent.message',
+          session_thread_id: 'sthr_reporter123456',
+          thread_name: 'reporter',
+          created_at: new Date(Date.now() - 34_500).toISOString(),
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool_reporter_weather',
+              name: 'mcp__weather_service__get_weather',
+              input: { location: 'Beijing' },
+            },
+          ],
+        },
+        {
+          id: 'evt_reporter_span',
+          type: 'span.model_request_end',
+          session_thread_id: 'sthr_reporter123456',
+          model_request_start_id: 'evt_reporter_span_start',
+          created_at: new Date(Date.now() - 34_000).toISOString(),
+          model_usage: { input_tokens: 7223, output_tokens: 168 },
+        },
       ],
       sthr_analyst123456: [
-      {
-        id: 'evt_analyst',
-        type: 'agent.message',
-        session_thread_id: 'sthr_analyst123456',
-        thread_name: 'analyst',
-        created_at: new Date(Date.now() - 32_000).toISOString(),
-        content: [{ type: 'text', text: 'Analyst is calculating basket lift.' }],
-        usage: { input_tokens: 7257, output_tokens: 247 },
-        duration_ms: 31000
-      },
-      {
-        id: 'evt_analyst_thinking',
-        type: 'agent.thinking',
-        session_thread_id: 'sthr_analyst123456',
-        created_at: new Date(Date.now() - 31_000).toISOString(),
-        content: [{ type: 'thinking', thinking: 'Reviewing basket pair frequencies.' }]
-      },
-      {
-        id: 'evt_analyst_wrapped_thread_status',
-        type: 'agent.tool_result',
-        session_thread_id: 'sthr_analyst123456',
-        created_at: new Date(Date.now() - 30_500).toISOString(),
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: 'sevt_thread_running',
-              type: 'session.thread_status_running',
-              session_thread_id: 'sthr_analyst123456',
-              agent_name: 'analyst',
-              created_at: new Date(Date.now() - 30_500).toISOString()
-            })
-          }
-        ]
-      }
+        {
+          id: 'evt_analyst',
+          type: 'agent.message',
+          session_thread_id: 'sthr_analyst123456',
+          thread_name: 'analyst',
+          created_at: new Date(Date.now() - 32_000).toISOString(),
+          content: [{ type: 'text', text: 'Analyst is calculating basket lift.' }],
+          usage: { input_tokens: 7257, output_tokens: 247 },
+          duration_ms: 31000,
+        },
+        {
+          id: 'evt_analyst_thinking',
+          type: 'agent.thinking',
+          session_thread_id: 'sthr_analyst123456',
+          created_at: new Date(Date.now() - 31_000).toISOString(),
+          content: [{ type: 'thinking', thinking: 'Reviewing basket pair frequencies.' }],
+        },
+        {
+          id: 'evt_analyst_wrapped_thread_status',
+          type: 'agent.tool_result',
+          session_thread_id: 'sthr_analyst123456',
+          created_at: new Date(Date.now() - 30_500).toISOString(),
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: 'sevt_thread_running',
+                type: 'session.thread_status_running',
+                session_thread_id: 'sthr_analyst123456',
+                agent_name: 'analyst',
+                created_at: new Date(Date.now() - 30_500).toISOString(),
+              }),
+            },
+          ],
+        },
       ],
       sthr_forecaster123456: [
-      {
-        id: 'evt_forecaster',
-        type: 'agent.message',
-        session_thread_id: 'sthr_forecaster123456',
-        thread_name: 'forecaster',
-        created_at: new Date(Date.now() - 30_000).toISOString(),
-        content: [{ type: 'text', text: 'Forecaster is projecting reorder risk.' }],
-        usage: { input_tokens: 7317, output_tokens: 253 },
-        duration_ms: 35000
-      }
+        {
+          id: 'evt_forecaster',
+          type: 'agent.message',
+          session_thread_id: 'sthr_forecaster123456',
+          thread_name: 'forecaster',
+          created_at: new Date(Date.now() - 30_000).toISOString(),
+          content: [{ type: 'text', text: 'Forecaster is projecting reorder risk.' }],
+          usage: { input_tokens: 7317, output_tokens: 253 },
+          duration_ms: 35000,
+        },
       ],
       sthr_archived123456: [
-      {
-        id: 'evt_archived',
-        type: 'agent.message',
-        session_thread_id: 'sthr_archived123456',
-        thread_name: 'archived',
-        created_at: new Date(Date.now() - 25_000).toISOString(),
-        content: [{ type: 'text', text: 'Archived thread details.' }]
-      }
-      ]
+        {
+          id: 'evt_archived',
+          type: 'agent.message',
+          session_thread_id: 'sthr_archived123456',
+          thread_name: 'archived',
+          created_at: new Date(Date.now() - 25_000).toISOString(),
+          content: [{ type: 'text', text: 'Archived thread details.' }],
+        },
+      ],
     },
     deployments: [
       {
@@ -981,35 +1157,51 @@ export function mockManagedResourceApi() {
         status: 'active',
         type: 'deployment',
         updated_at: now,
-        vault_ids: []
-      }
+        vault_ids: [],
+      },
     ],
     environments: [
       {
         id: 'env_one123456',
         archived_at: null,
-        config: { type: 'cloud' },
+        config: {
+          type: 'cloud',
+          networking: { type: 'unrestricted' },
+          packages: { type: 'packages', apt: [], cargo: [], gem: [], go: [], npm: [], pip: ['httpx==1.0.0'] },
+        },
         created_at: now,
         description: 'Primary environment',
+        metadata: { Owner: 'Platform' },
         name: 'Environment one',
         scope: 'workspace',
         state: 'active',
         type: 'environment',
-        updated_at: now
+        updated_at: now,
       },
       {
         id: 'env_option123456',
         archived_at: null,
-        config: { type: 'cloud' },
+        config: { type: 'cloud', networking: { type: 'limited' }, packages: { type: 'packages' } },
         created_at: now,
         description: 'Option environment',
+        metadata: {},
         name: 'Option environment',
         scope: 'workspace',
         state: 'active',
         type: 'environment',
-        updated_at: now
-      }
+        updated_at: now,
+      },
     ],
+    environmentWork: ['queued', 'starting', 'active', 'stopping', 'stopped', 'failed', 'awaiting_review'].map(
+      (state, index) => ({
+        id: `work_${state}123456`,
+        created_at: new Date(Date.now() - (index + 2) * 60_000).toISOString(),
+        environment_id: 'env_one123456',
+        state,
+        type: 'environment_work',
+        updated_at: new Date(Date.now() - (index + 1) * 60_000).toISOString(),
+      }),
+    ),
     vaults: [
       {
         id: 'vlt_one123456',
@@ -1017,8 +1209,8 @@ export function mockManagedResourceApi() {
         created_at: now,
         display_name: 'Vault one',
         type: 'vault',
-        updated_at: now
-      }
+        updated_at: now,
+      },
     ],
     vaultCredentials: {
       vlt_one123456: [
@@ -1030,9 +1222,9 @@ export function mockManagedResourceApi() {
           display_name: 'Vault credential one',
           type: 'vault_credential',
           updated_at: now,
-          vault_id: 'vlt_one123456'
-        }
-      ]
+          vault_id: 'vlt_one123456',
+        },
+      ],
     },
     memoryStores: [
       {
@@ -1042,8 +1234,8 @@ export function mockManagedResourceApi() {
         description: 'A memory store',
         name: 'Memory one',
         type: 'memory_store',
-        updated_at: now
-      }
+        updated_at: now,
+      },
     ],
     memories: [
       {
@@ -1056,7 +1248,7 @@ export function mockManagedResourceApi() {
         memory_version_id: 'memver_one123456',
         path: '/project/brief.md',
         type: 'memory',
-        updated_at: now
+        updated_at: now,
       },
       {
         id: 'mem_nested123456',
@@ -1068,7 +1260,7 @@ export function mockManagedResourceApi() {
         memory_version_id: 'memver_nested123456',
         path: '/aaa/bbbb',
         type: 'memory',
-        updated_at: now
+        updated_at: now,
       },
       {
         id: 'mem_deep123456',
@@ -1080,9 +1272,9 @@ export function mockManagedResourceApi() {
         memory_version_id: 'memver_deep123456',
         path: '/cccc/dddd/ccc/xxxx',
         type: 'memory',
-        updated_at: now
-      }
-    ]
+        updated_at: now,
+      },
+    ],
   };
 
   const fetchMock = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1137,8 +1329,10 @@ export function mockManagedResourceApi() {
     if (sessionThreadEventsMatch && method === 'GET') {
       const threadId = decodeURIComponent(sessionThreadEventsMatch[2]);
       return jsonResponse({
-        data: persistedSessionEvents(resources.sessionThreadEvents[threadId as keyof typeof resources.sessionThreadEvents] ?? []),
-        next_page: null
+        data: persistedSessionEvents(
+          resources.sessionThreadEvents[threadId as keyof typeof resources.sessionThreadEvents] ?? [],
+        ),
+        next_page: null,
       });
     }
     const sessionEventsMatch = url.match(/^\/v1\/sessions\/([^/?]+)\/events\?/);
@@ -1181,9 +1375,30 @@ export function mockManagedResourceApi() {
       const environment = resources.environments.find((item) => item.id === environmentId);
       return environment ? jsonResponse(environment) : jsonResponse({ error: { message: 'not found' } }, 404);
     }
+    if (retrieveEnvironmentMatch && method === 'POST') {
+      const environmentId = decodeURIComponent(retrieveEnvironmentMatch[1]);
+      const existing = resources.environments.find((item) => item.id === environmentId);
+      if (!existing) {
+        return jsonResponse({ error: { message: 'not found' } }, 404);
+      }
+      const updated = {
+        ...existing,
+        config: body?.config ?? existing.config,
+        description: typeof body?.description === 'string' ? body.description : existing.description,
+        metadata: applyMetadataPatch(existing.metadata, body?.metadata),
+        name: typeof body?.name === 'string' ? body.name : existing.name,
+        updated_at: new Date().toISOString(),
+      };
+      resources.environments = [updated, ...resources.environments.filter((item) => item.id !== environmentId)];
+      return jsonResponse(updated);
+    }
     const environmentWorkMatch = url.match(/^\/v1\/environments\/([^/?]+)\/work\?/);
     if (environmentWorkMatch && method === 'GET') {
-      return jsonResponse({ data: [], next_page: null });
+      const environmentId = decodeURIComponent(environmentWorkMatch[1]);
+      return jsonResponse({
+        data: resources.environmentWork.filter((work) => work.environment_id === environmentId),
+        next_page: null,
+      });
     }
     if (url.startsWith('/v1/vaults?') && method === 'GET') {
       const params = new URL(url, 'https://oma.duck.ai').searchParams;
@@ -1202,7 +1417,9 @@ export function mockManagedResourceApi() {
       const vault = resources.vaults.find((item) => item.id === vaultId);
       return vault ? jsonResponse(vault) : jsonResponse({ error: { message: 'not found' } }, 404);
     }
-    const listVaultCredentialsMatch = url.match(/^\/v1\/vaults\/([^/?]+)\/credentials\?beta=true&limit=50&include_archived=false$/);
+    const listVaultCredentialsMatch = url.match(
+      /^\/v1\/vaults\/([^/?]+)\/credentials\?beta=true&limit=50&include_archived=false$/,
+    );
     if (listVaultCredentialsMatch && method === 'GET') {
       const vaultId = decodeURIComponent(listVaultCredentialsMatch[1]);
       const credentials = (resources.vaultCredentials[vaultId] ?? []).filter((credential) => !credential.archived_at);
@@ -1219,7 +1436,7 @@ export function mockManagedResourceApi() {
         display_name: typeof body?.display_name === 'string' ? body.display_name : 'Created credential',
         type: 'vault_credential' as const,
         updated_at: new Date().toISOString(),
-        vault_id: vaultId
+        vault_id: vaultId,
       };
       resources.vaultCredentials[vaultId] = [created, ...(resources.vaultCredentials[vaultId] ?? [])];
       return jsonResponse(created);
@@ -1228,7 +1445,9 @@ export function mockManagedResourceApi() {
     if (updateVaultCredentialMatch && method === 'POST') {
       const vaultId = decodeURIComponent(updateVaultCredentialMatch[1]);
       const credentialId = decodeURIComponent(updateVaultCredentialMatch[2]);
-      const existing = (resources.vaultCredentials[vaultId] ?? []).find((credential) => credential.id === credentialId) ?? resources.vaultCredentials[vaultId]?.[0];
+      const existing =
+        (resources.vaultCredentials[vaultId] ?? []).find((credential) => credential.id === credentialId) ??
+        resources.vaultCredentials[vaultId]?.[0];
       if (!existing) {
         return jsonResponse({ error: { message: 'not found' } }, 404);
       }
@@ -1236,12 +1455,17 @@ export function mockManagedResourceApi() {
         ...existing,
         auth: body?.auth ?? existing.auth,
         display_name: typeof body?.display_name === 'string' ? body.display_name : existing.display_name,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
-      resources.vaultCredentials[vaultId] = [updated, ...(resources.vaultCredentials[vaultId] ?? []).filter((credential) => credential.id !== credentialId)];
+      resources.vaultCredentials[vaultId] = [
+        updated,
+        ...(resources.vaultCredentials[vaultId] ?? []).filter((credential) => credential.id !== credentialId),
+      ];
       return jsonResponse(updated);
     }
-    const archiveVaultCredentialMatch = url.match(/^\/v1\/vaults\/([^/?]+)\/credentials\/([^/?]+)\/archive\?beta=true$/);
+    const archiveVaultCredentialMatch = url.match(
+      /^\/v1\/vaults\/([^/?]+)\/credentials\/([^/?]+)\/archive\?beta=true$/,
+    );
     if (archiveVaultCredentialMatch && method === 'POST') {
       const vaultId = decodeURIComponent(archiveVaultCredentialMatch[1]);
       const credentialId = decodeURIComponent(archiveVaultCredentialMatch[2]);
@@ -1250,14 +1474,19 @@ export function mockManagedResourceApi() {
         return jsonResponse({ error: { message: 'not found' } }, 404);
       }
       const archived = { ...existing, archived_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-      resources.vaultCredentials[vaultId] = [archived, ...(resources.vaultCredentials[vaultId] ?? []).filter((credential) => credential.id !== credentialId)];
+      resources.vaultCredentials[vaultId] = [
+        archived,
+        ...(resources.vaultCredentials[vaultId] ?? []).filter((credential) => credential.id !== credentialId),
+      ];
       return jsonResponse(archived);
     }
     const deleteVaultCredentialMatch = url.match(/^\/v1\/vaults\/([^/?]+)\/credentials\/([^/?]+)\?beta=true$/);
     if (deleteVaultCredentialMatch && method === 'DELETE') {
       const vaultId = decodeURIComponent(deleteVaultCredentialMatch[1]);
       const credentialId = decodeURIComponent(deleteVaultCredentialMatch[2]);
-      resources.vaultCredentials[vaultId] = (resources.vaultCredentials[vaultId] ?? []).filter((credential) => credential.id !== credentialId);
+      resources.vaultCredentials[vaultId] = (resources.vaultCredentials[vaultId] ?? []).filter(
+        (credential) => credential.id !== credentialId,
+      );
       return jsonResponse({ id: credentialId, type: 'vault_credential_deleted' });
     }
     if (url.startsWith('/v1/memory_stores?') && method === 'GET') {
@@ -1274,16 +1503,23 @@ export function mockManagedResourceApi() {
     if (url === '/v1/memory_stores/memstore_one123456?beta=true' && method === 'GET') {
       return jsonResponse(resources.memoryStores[0]);
     }
-    const listMemoriesMatch = url.match(/^\/v1\/memory_stores\/memstore_one123456\/memories\?beta=true&path_prefix=([^&]+)&depth=1&limit=100&order_by=path$/);
+    const listMemoriesMatch = url.match(
+      /^\/v1\/memory_stores\/memstore_one123456\/memories\?beta=true&path_prefix=([^&]+)&depth=1&limit=100&order_by=path$/,
+    );
     if (listMemoriesMatch && method === 'GET') {
       const page = memoryDepthPage(resources.memories, decodeURIComponent(listMemoriesMatch[1]));
       return jsonResponse({
-        data: [...page.data, { ...resources.memories[0], id: 'mem_invalid123456', path: { nested: '/invalid.md' } as unknown as string }],
+        data: [
+          ...page.data,
+          { ...resources.memories[0], id: 'mem_invalid123456', path: { nested: '/invalid.md' } as unknown as string },
+        ],
         prefixes: [...page.prefixes, { nested: '/invalid-prefix/' } as unknown as string],
-        next_page: null
+        next_page: null,
       });
     }
-    const retrieveMemoryMatch = url.match(/^\/v1\/memory_stores\/memstore_one123456\/memories\/([^/]+)\?beta=true&view=full$/);
+    const retrieveMemoryMatch = url.match(
+      /^\/v1\/memory_stores\/memstore_one123456\/memories\/([^/]+)\?beta=true&view=full$/,
+    );
     if (retrieveMemoryMatch && method === 'GET') {
       const memoryId = decodeURIComponent(retrieveMemoryMatch[1]);
       return jsonResponse(resources.memories.find((memory) => memory.id === memoryId) ?? resources.memories[0]);
@@ -1297,12 +1533,14 @@ export function mockManagedResourceApi() {
         content_size_bytes: content.length,
         path: typeof body?.path === 'string' ? body.path : '/new-memory.md',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       resources.memories = [created, ...resources.memories];
       return jsonResponse(created);
     }
-    const updateMemoryMatch = url.match(/^\/v1\/memory_stores\/memstore_one123456\/memories\/([^/]+)\?beta=true&view=full$/);
+    const updateMemoryMatch = url.match(
+      /^\/v1\/memory_stores\/memstore_one123456\/memories\/([^/]+)\?beta=true&view=full$/,
+    );
     if (updateMemoryMatch && method === 'POST') {
       const memoryId = decodeURIComponent(updateMemoryMatch[1]);
       const existing = resources.memories.find((memory) => memory.id === memoryId) ?? resources.memories[0];
@@ -1310,7 +1548,7 @@ export function mockManagedResourceApi() {
         ...existing,
         content: typeof body?.content === 'string' ? body.content : existing.content,
         path: typeof body?.path === 'string' ? body.path : existing.path,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       resources.memories = [updated, ...resources.memories.filter((memory) => memory.id !== memoryId)];
       return jsonResponse(updated);
@@ -1328,7 +1566,7 @@ export function mockManagedResourceApi() {
         id: 'sesn_created123456',
         title: typeof body?.title === 'string' ? body.title : 'Created session',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       resources.sessions = [created, ...resources.sessions];
       return jsonResponse(created);
@@ -1340,7 +1578,7 @@ export function mockManagedResourceApi() {
         id: 'dep_created123456',
         name: typeof body?.name === 'string' ? body.name : 'Created deployment',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       resources.deployments = [created, ...resources.deployments];
       return jsonResponse(created);
@@ -1352,7 +1590,7 @@ export function mockManagedResourceApi() {
         id: 'env_created123456',
         name: typeof body?.name === 'string' ? body.name : 'Created environment',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
       resources.environments = [created, ...resources.environments];
       return jsonResponse(created);
@@ -1362,7 +1600,8 @@ export function mockManagedResourceApi() {
     if (deploymentAction && method === 'POST') {
       const deploymentId = decodeURIComponent(deploymentAction[1]);
       const action = deploymentAction[2];
-      const existing = resources.deployments.find((deployment) => deployment.id === deploymentId) ?? resources.deployments[0];
+      const existing =
+        resources.deployments.find((deployment) => deployment.id === deploymentId) ?? resources.deployments[0];
       if (action === 'pause') {
         existing.status = 'paused';
       }
@@ -1372,7 +1611,9 @@ export function mockManagedResourceApi() {
       return jsonResponse(action === 'run' ? { id: 'drun_created123456', type: 'deployment_run' } : existing);
     }
 
-    const archiveMatch = url.match(/^\/v1\/(sessions|deployments|environments|vaults|memory_stores)\/([^/]+)\/archive\?beta=true$/);
+    const archiveMatch = url.match(
+      /^\/v1\/(sessions|deployments|environments|vaults|memory_stores)\/([^/]+)\/archive\?beta=true$/,
+    );
     if (archiveMatch && method === 'POST') {
       const collection = collectionForTestEndpoint(resources, archiveMatch[1]);
       const resourceId = decodeURIComponent(archiveMatch[2]);
@@ -1445,7 +1686,7 @@ export function agentResponse(agent: AgentFixture) {
     tools: agent.tools ?? [{ type: 'agent_toolset_20260401' }],
     type: 'agent',
     updated_at: agent.updated_at ?? now,
-    version: agent.version ?? 1
+    version: agent.version ?? 1,
   };
 }
 
@@ -1458,7 +1699,7 @@ export function skillResponse(skill: SkillFixture) {
     latest_version: skill.latestVersion ?? '20260701',
     source: skill.source ?? 'custom',
     created_at: skill.created_at ?? now,
-    updated_at: skill.updated_at ?? now
+    updated_at: skill.updated_at ?? now,
   };
 }
 
@@ -1479,13 +1720,13 @@ export function sessionResponse(session: SessionFixture) {
     environment_id: 'env_option123456',
     stats: {
       input_tokens: session.inputTokens ?? 0,
-      output_tokens: session.outputTokens ?? 0
+      output_tokens: session.outputTokens ?? 0,
     },
     status: session.status ?? 'idle',
     title: session.title ?? null,
     type: 'session',
     updated_at: session.updated_at ?? now,
-    vault_ids: []
+    vault_ids: [],
   };
 }
 
@@ -1504,7 +1745,7 @@ export function deploymentResponse(deployment: DeploymentFixture) {
     status: deployment.status ?? 'active',
     type: 'deployment',
     updated_at: deployment.updated_at ?? now,
-    vault_ids: []
+    vault_ids: [],
   };
 }
 
@@ -1533,10 +1774,7 @@ export function sessionStatusValuesFromUrl(url: string) {
 }
 
 export function sessionStatusValuesFromSearchParams(params: URLSearchParams) {
-  const rawValues = [
-    ...params.getAll('statuses'),
-    ...params.getAll('statuses[]')
-  ];
+  const rawValues = [...params.getAll('statuses'), ...params.getAll('statuses[]')];
   if (!rawValues.length) {
     const fallback = params.get('statuses');
     if (fallback) {
@@ -1578,7 +1816,10 @@ export function matchesCreatedAtParams(resource: { created_at?: string | null },
   return true;
 }
 
-export function memoryDepthPage(memories: Array<{ path: string; content?: string | null; [key: string]: unknown }>, pathPrefix: string) {
+export function memoryDepthPage(
+  memories: Array<{ path: string; content?: string | null; [key: string]: unknown }>,
+  pathPrefix: string,
+) {
   const normalizedPrefix = normalizeTestFolderPath(pathPrefix);
   const prefixes = new Map<string, { path: string; type: 'memory_prefix' }>();
   const directMemories: unknown[] = [];
@@ -1598,7 +1839,9 @@ export function memoryDepthPage(memories: Array<{ path: string; content?: string
     }
     directMemories.push({ ...memory, content: null });
   }
-  const data = [...prefixes.values(), ...directMemories].sort((left, right) => String((left as { path?: unknown }).path ?? '').localeCompare(String((right as { path?: unknown }).path ?? '')));
+  const data = [...prefixes.values(), ...directMemories].sort((left, right) =>
+    String((left as { path?: unknown }).path ?? '').localeCompare(String((right as { path?: unknown }).path ?? '')),
+  );
   return { data, prefixes: [...prefixes.values()] };
 }
 
@@ -1615,34 +1858,58 @@ export function parseBody(body: BodyInit | null | undefined) {
   return JSON.parse(body) as Record<string, unknown>;
 }
 
+function applyMetadataPatch(current: unknown, patch: unknown) {
+  const metadata: Record<string, string> =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? Object.fromEntries(
+          Object.entries(current).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+        )
+      : {};
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    return metadata;
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null || value === '') {
+      delete metadata[key];
+    } else if (typeof value === 'string') {
+      metadata[key] = value;
+    }
+  }
+  return metadata;
+}
+
 export function persistedSessionEvents<T extends Record<string, unknown>>(events: T[]) {
   return events.map((event) => ({
     ...event,
-    processed_at: typeof event.processed_at === 'string' ? event.processed_at : event.created_at
+    processed_at: typeof event.processed_at === 'string' ? event.processed_at : event.created_at,
   }));
 }
 
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 export function streamResponse(body: string) {
   return new Response(body, {
     status: 200,
-    headers: { 'Content-Type': 'text/event-stream' }
+    headers: { 'Content-Type': 'text/event-stream' },
   });
 }
 
 export function quickstartTextStream(text: string) {
   return [
     sseFrame('message_start', { type: 'message_start', message: { id: 'msg_test', type: 'message' } }),
-    sseFrame('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'text', text: '' },
+    }),
     sseFrame('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }),
     sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
-    sseFrame('message_stop', { type: 'message_stop' })
+    sseFrame('message_stop', { type: 'message_stop' }),
   ].join('');
 }
 
@@ -1652,36 +1919,40 @@ export function quickstartToolStream(name: string, input: Record<string, unknown
     sseFrame('content_block_start', {
       type: 'content_block_start',
       index: 0,
-      content_block: { type: 'tool_use', id: `toolu_${name}`, name, input: {} }
+      content_block: { type: 'tool_use', id: `toolu_${name}`, name, input: {} },
     }),
     sseFrame('content_block_delta', {
       type: 'content_block_delta',
       index: 0,
-      delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) }
+      delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) },
     }),
     sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
-    sseFrame('message_stop', { type: 'message_stop' })
+    sseFrame('message_stop', { type: 'message_stop' }),
   ].join('');
 }
 
 export function quickstartTextAndToolStream(text: string, name: string, input: Record<string, unknown>) {
   return [
     sseFrame('message_start', { type: 'message_start', message: { id: 'msg_text_tool', type: 'message' } }),
-    sseFrame('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'text', text: '' },
+    }),
     sseFrame('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }),
     sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
     sseFrame('content_block_start', {
       type: 'content_block_start',
       index: 1,
-      content_block: { type: 'tool_use', id: `toolu_${name}`, name, input: {} }
+      content_block: { type: 'tool_use', id: `toolu_${name}`, name, input: {} },
     }),
     sseFrame('content_block_delta', {
       type: 'content_block_delta',
       index: 1,
-      delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) }
+      delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) },
     }),
     sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
-    sseFrame('message_stop', { type: 'message_stop' })
+    sseFrame('message_stop', { type: 'message_stop' }),
   ].join('');
 }
 
@@ -1689,31 +1960,35 @@ export function quickstartTextServerToolAndToolStream(
   text: string,
   serverToolQuery: string,
   name: string,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
 ) {
   const frames = [
     sseFrame('message_start', { type: 'message_start', message: { id: 'msg_text_server_tool', type: 'message' } }),
-    sseFrame('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'text', text: '' },
+    }),
     sseFrame('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }),
     sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
     sseFrame('content_block_start', {
       type: 'content_block_start',
       index: 1,
-      content_block: { type: 'server_tool_use', id: 'srvtoolu_web_search', name: 'web_search', input: {} }
+      content_block: { type: 'server_tool_use', id: 'srvtoolu_web_search', name: 'web_search', input: {} },
     }),
     sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
     sseFrame('content_block_start', {
       type: 'content_block_start',
       index: 2,
-      content_block: { type: 'tool_use', id: `toolu_${name}`, name, input: {} }
+      content_block: { type: 'tool_use', id: `toolu_${name}`, name, input: {} },
     }),
     sseFrame('content_block_delta', {
       type: 'content_block_delta',
       index: 2,
-      delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) }
+      delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) },
     }),
     sseFrame('content_block_stop', { type: 'content_block_stop', index: 2 }),
-    sseFrame('message_stop', { type: 'message_stop' })
+    sseFrame('message_stop', { type: 'message_stop' }),
   ];
   if (serverToolQuery) {
     frames.splice(
@@ -1722,8 +1997,8 @@ export function quickstartTextServerToolAndToolStream(
       sseFrame('content_block_delta', {
         type: 'content_block_delta',
         index: 1,
-        delta: { type: 'input_json_delta', partial_json: JSON.stringify({ query: serverToolQuery }) }
-      })
+        delta: { type: 'input_json_delta', partial_json: JSON.stringify({ query: serverToolQuery }) },
+      }),
     );
   }
   return frames.join('');
@@ -1736,7 +2011,7 @@ export function sseFrame(event: string, data: Record<string, unknown>) {
 export const serverAgent: AgentFixture = {
   id: 'agent_server123456',
   name: 'Server agent',
-  model: { id: 'claude-sonnet-4-6', speed: 'standard' }
+  model: { id: 'claude-sonnet-4-6', speed: 'standard' },
 };
 
 export function createAgentRequestFixture(name: string) {
@@ -1748,7 +2023,7 @@ export function createAgentRequestFixture(name: string) {
     mcp_servers: [],
     tools: [{ type: 'agent_toolset_20260401' }],
     skills: [],
-    metadata: { template: 'blank-agent' }
+    metadata: { template: 'blank-agent' },
   };
 }
 
@@ -1756,7 +2031,7 @@ export function workspaceContextValue(workspaceId: string) {
   const workspace = {
     ...defaultWorkspace,
     id: workspaceId,
-    name: workspaceId === 'default' ? 'Default' : 'foo'
+    name: workspaceId === 'default' ? 'Default' : 'foo',
   };
   return {
     orgUuid: 'org_test',
@@ -1767,6 +2042,6 @@ export function workspaceContextValue(workspaceId: string) {
     error: null,
     selectWorkspace: () => undefined,
     createWorkspace: async () => workspace,
-    refreshWorkspaces: async () => undefined
+    refreshWorkspaces: async () => undefined,
   };
 }

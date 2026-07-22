@@ -21,7 +21,7 @@ export const deploymentRows: Array<Record<string, ReactNode>> = [
     Status: <StatusPill>Archived</StatusPill>,
     Agent: <CompactChip icon={Bot}>agent_FKb8Gkiy3...</CompactChip>,
     Trigger: 'Manual',
-    Created: '2 hours ago'
+    Created: '2 hours ago',
   },
   {
     ID: 'dep_zcT...rRpT1v',
@@ -29,7 +29,7 @@ export const deploymentRows: Array<Record<string, ReactNode>> = [
     Status: <StatusPill>Archived</StatusPill>,
     Agent: <CompactChip icon={Bot}>agent_PIXRdYnbh...</CompactChip>,
     Trigger: 'Manual',
-    Created: '2 hours ago'
+    Created: '2 hours ago',
   },
   {
     ID: 'dep_yeM...swefHi',
@@ -37,7 +37,7 @@ export const deploymentRows: Array<Record<string, ReactNode>> = [
     Status: <StatusPill>Archived</StatusPill>,
     Agent: <CompactChip icon={Bot}>agent_3Ss9giOjp...</CompactChip>,
     Trigger: 'Manual',
-    Created: '2 hours ago'
+    Created: '2 hours ago',
   },
   {
     ID: 'dep_9Bw...19F73P',
@@ -45,7 +45,7 @@ export const deploymentRows: Array<Record<string, ReactNode>> = [
     Status: <StatusPill>Archived</StatusPill>,
     Agent: <CompactChip icon={Bot}>agent_UiozOnkBS...</CompactChip>,
     Trigger: 'Manual',
-    Created: '2 hours ago'
+    Created: '2 hours ago',
   },
   {
     ID: 'dep_u2f...wxMWqs',
@@ -53,8 +53,8 @@ export const deploymentRows: Array<Record<string, ReactNode>> = [
     Status: <StatusPill>Archived</StatusPill>,
     Agent: <CompactChip icon={Bot}>agent_TqIatVd2cE...</CompactChip>,
     Trigger: 'Manual',
-    Created: '2 hours ago'
-  }
+    Created: '2 hours ago',
+  },
 ];
 
 export const agentRows: Array<Record<string, ReactNode>> = [
@@ -64,7 +64,7 @@ export const agentRows: Array<Record<string, ReactNode>> = [
     Model: 'claude-sonnet-4-6',
     Status: <StatusPill>Active</StatusPill>,
     Created: '7 minutes ago',
-    'Last updated': '7 minutes ago'
+    'Last updated': '7 minutes ago',
   },
   {
     ID: 'agent_p5M3v...1Mcu0R',
@@ -72,7 +72,7 @@ export const agentRows: Array<Record<string, ReactNode>> = [
     Model: 'claude-sonnet-4-6',
     Status: <StatusPill>Active</StatusPill>,
     Created: '15 minutes ago',
-    'Last updated': '15 minutes ago'
+    'Last updated': '15 minutes ago',
   },
   {
     ID: 'agent_jR13P...BHjtj8',
@@ -80,8 +80,8 @@ export const agentRows: Array<Record<string, ReactNode>> = [
     Model: 'claude-sonnet-4-6',
     Status: <StatusPill>Active</StatusPill>,
     Created: '34 minutes ago',
-    'Last updated': '33 minutes ago'
-  }
+    'Last updated': '33 minutes ago',
+  },
 ];
 
 export const resourceConfigs: Record<Exclude<ManagedAgentSection, 'quickstart' | 'dreams'>, ResourceConfig> = {
@@ -96,7 +96,7 @@ export const resourceConfigs: Record<Exclude<ManagedAgentSection, 'quickstart' |
     emptyTitle: 'No agents yet',
     emptyAction: 'Get started with agents',
     emptyIcon: Bot,
-    rows: agentRows
+    rows: agentRows,
   },
   sessions: {
     section: 'sessions',
@@ -109,7 +109,7 @@ export const resourceConfigs: Record<Exclude<ManagedAgentSection, 'quickstart' |
     columns: ['', 'ID', 'Name', 'Status', 'Agent', 'Created'],
     emptyTitle: 'No sessions yet',
     emptyBody: 'Sessions will appear here once created through the API.',
-    emptyIcon: MessageCircle
+    emptyIcon: MessageCircle,
   },
   deployments: {
     section: 'deployments',
@@ -122,7 +122,7 @@ export const resourceConfigs: Record<Exclude<ManagedAgentSection, 'quickstart' |
     emptyTitle: 'No deployments yet',
     emptyBody: 'Deployments will appear after an agent is deployed.',
     emptyIcon: BriefcaseBusiness,
-    rows: deploymentRows
+    rows: deploymentRows,
   },
   environments: {
     section: 'environments',
@@ -134,7 +134,7 @@ export const resourceConfigs: Record<Exclude<ManagedAgentSection, 'quickstart' |
     columns: ['ID', 'Name', 'Status', 'Type', 'Updated at'],
     emptyTitle: 'No environments yet',
     emptyBody: 'Create your first environment to get started.',
-    emptyIcon: Cloud
+    emptyIcon: Cloud,
   },
   'credential-vaults': {
     section: 'credential-vaults',
@@ -146,7 +146,7 @@ export const resourceConfigs: Record<Exclude<ManagedAgentSection, 'quickstart' |
     columns: ['ID', 'Name', 'Status', 'Created'],
     emptyTitle: 'No vaults yet',
     emptyBody: 'Create your first vault to get started.',
-    emptyIcon: LockKeyhole
+    emptyIcon: LockKeyhole,
   },
   'memory-stores': {
     section: 'memory-stores',
@@ -158,11 +158,17 @@ export const resourceConfigs: Record<Exclude<ManagedAgentSection, 'quickstart' |
     columns: ['', 'ID', 'Name', 'Status', 'Created'],
     emptyTitle: 'No memory stores yet',
     emptyBody: 'Memory stores give agents persistent, cross-session memory.',
-    emptyIcon: Database
-  }
+    emptyIcon: Database,
+  },
 };
 
-export function ManagedResourcePage({ config, routeWorkspaceId }: { config: ResourceConfig; routeWorkspaceId?: string }) {
+export function ManagedResourcePage({
+  config,
+  routeWorkspaceId,
+}: {
+  config: ResourceConfig;
+  routeWorkspaceId?: string;
+}) {
   if (config.section !== 'agents') {
     const entityConfig = config as ResourceConfig & { section: ManagedEntitySection };
     const detailId = managedEntityIdFromPath(entityConfig.section);
@@ -199,4 +205,3 @@ export function DreamingPage() {
     </section>
   );
 }
-

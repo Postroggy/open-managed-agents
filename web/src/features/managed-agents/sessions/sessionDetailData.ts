@@ -1,4 +1,19 @@
-import { cleanupIncompleteSessionStreamEvents, mergeSessionStreamFrame, SESSION_DETAIL_CHILD_REFETCH_INTERVAL_MS, SESSION_DETAIL_STREAM_FALLBACK_LIMIT, sessionDetailDeltaFrames, sessionDetailScopeEvents, sessionEventHistoryShouldSkipStream, sessionPrimaryHistoryShouldSkipStream, sessionStreamBackoff, sessionStreamShouldStop, sessionThreadShouldFetchEvents, sleepWithAbort, streamSessionEvents, syncSessionEventHistory } from '../api';
+import {
+  cleanupIncompleteSessionStreamEvents,
+  mergeSessionStreamFrame,
+  SESSION_DETAIL_CHILD_REFETCH_INTERVAL_MS,
+  SESSION_DETAIL_STREAM_FALLBACK_LIMIT,
+  sessionDetailDeltaFrames,
+  sessionDetailScopeEvents,
+  sessionEventHistoryShouldSkipStream,
+  sessionPrimaryHistoryShouldSkipStream,
+  sessionStreamBackoff,
+  sessionStreamShouldStop,
+  sessionThreadShouldFetchEvents,
+  sleepWithAbort,
+  streamSessionEvents,
+  syncSessionEventHistory,
+} from '../api';
 import { type QuickstartSessionEvent, type SessionDetailDeltaFrames, type SessionThreadApiResponse } from '../types';
 import { errorMessage } from '../utils';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
@@ -13,7 +28,7 @@ export function useSessionDetailEventData({
   includeArchivedThreads,
   live,
   onPrimaryEvent,
-  refreshKey
+  refreshKey,
 }: {
   sessionId: string | null;
   workspaceId: string;
@@ -30,8 +45,11 @@ export function useSessionDetailEventData({
   const [error, setError] = useState<string | null>(null);
   const previousRefreshKeyRef = useRef(refreshKey);
   const childThreadIds = useMemo(
-    () => threads.filter((thread) => sessionThreadShouldFetchEvents(thread, includeArchivedThreads)).map((thread) => thread.id),
-    [includeArchivedThreads, threads]
+    () =>
+      threads
+        .filter((thread) => sessionThreadShouldFetchEvents(thread, includeArchivedThreads))
+        .map((thread) => thread.id),
+    [includeArchivedThreads, threads],
   );
   const scopeThreadIds = useMemo(() => ['', ...childThreadIds], [childThreadIds]);
   const scopeKey = scopeThreadIds.join('\0');
@@ -52,7 +70,7 @@ export function useSessionDetailEventData({
         workspaceId,
         threadId,
         signal: controller.signal,
-        fromStart
+        fromStart,
       });
       if (active) {
         bump();
@@ -103,9 +121,18 @@ export function useSessionDetailEventData({
         return;
       }
       const controller = new AbortController();
-      void Promise.all(scopeThreadIds.map((threadId) =>
-        syncSessionEventHistory({ queryClient, sessionId, workspaceId, threadId, signal: controller.signal, force: true })
-      ))
+      void Promise.all(
+        scopeThreadIds.map((threadId) =>
+          syncSessionEventHistory({
+            queryClient,
+            sessionId,
+            workspaceId,
+            threadId,
+            signal: controller.signal,
+            force: true,
+          }),
+        ),
+      )
         .then(bump)
         .catch(() => undefined);
     };
@@ -129,7 +156,7 @@ export function useSessionDetailEventData({
       threadId: '',
       signal: controller.signal,
       onCacheChange: bump,
-      onPrimaryEvent
+      onPrimaryEvent,
     }).catch(() => undefined);
     return () => {
       controller.abort();
@@ -147,9 +174,18 @@ export function useSessionDetailEventData({
       if (controller.signal.aborted || (document.visibilityState && document.visibilityState !== 'visible')) {
         return;
       }
-      void Promise.all(childThreadIds.map((threadId) =>
-        syncSessionEventHistory({ queryClient, sessionId, workspaceId, threadId, signal: controller.signal, force: true })
-      ))
+      void Promise.all(
+        childThreadIds.map((threadId) =>
+          syncSessionEventHistory({
+            queryClient,
+            sessionId,
+            workspaceId,
+            threadId,
+            signal: controller.signal,
+            force: true,
+          }),
+        ),
+      )
         .then(bump)
         .catch(() => undefined);
     };
@@ -162,11 +198,11 @@ export function useSessionDetailEventData({
 
   const events = useMemo(
     () => (sessionId ? sessionDetailScopeEvents(queryClient, workspaceId, sessionId, scopeThreadIds) : []),
-    [queryClient, scopeKey, sessionId, version, workspaceId]
+    [queryClient, scopeKey, sessionId, version, workspaceId],
   );
   const deltaFrames = useMemo(
     () => (sessionId ? sessionDetailDeltaFrames(queryClient, workspaceId, sessionId, scopeThreadIds) : {}),
-    [queryClient, scopeKey, sessionId, version, workspaceId]
+    [queryClient, scopeKey, sessionId, version, workspaceId],
   );
 
   return { events, deltaFrames, loading, childLoading, error };
@@ -179,7 +215,7 @@ export async function runSessionEventStreamLoop({
   threadId,
   signal,
   onCacheChange,
-  onPrimaryEvent
+  onPrimaryEvent,
 }: {
   queryClient: QueryClient;
   sessionId: string;
@@ -195,7 +231,8 @@ export async function runSessionEventStreamLoop({
   let backoff = 0;
   let historySynced = false;
   while (!signal.aborted) {
-    const isFallback = !everConnected && fallbackCount < SESSION_DETAIL_STREAM_FALLBACK_LIMIT && consecutiveFailures >= 3;
+    const isFallback =
+      !everConnected && fallbackCount < SESSION_DETAIL_STREAM_FALLBACK_LIMIT && consecutiveFailures >= 3;
     if (isFallback) {
       fallbackCount += 1;
       await sleepWithAbort(Math.max(3000, backoff), signal);
@@ -209,8 +246,8 @@ export async function runSessionEventStreamLoop({
         onCacheChange();
         historySynced = true;
         if (
-          sessionEventHistoryShouldSkipStream(historyCache.events, threadId)
-          || (threadId && sessionPrimaryHistoryShouldSkipStream(queryClient, workspaceId, sessionId))
+          sessionEventHistoryShouldSkipStream(historyCache.events, threadId) ||
+          (threadId && sessionPrimaryHistoryShouldSkipStream(queryClient, workspaceId, sessionId))
         ) {
           return;
         }
@@ -231,7 +268,7 @@ export async function runSessionEventStreamLoop({
             onPrimaryEvent?.(event);
           }
           onCacheChange();
-        }
+        },
       });
       everConnected = true;
       consecutiveFailures = 0;

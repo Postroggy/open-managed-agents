@@ -8,7 +8,7 @@ describe('roleOptions', () => {
       'claude_code_user',
       'developer',
       'billing',
-      'admin'
+      'admin',
     ]);
   });
 });

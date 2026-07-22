@@ -1,9 +1,4 @@
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable
-} from '@tanstack/react-table';
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, MoreVertical, Plus, Send, Trash2 } from 'lucide-react';
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -15,40 +10,22 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from '../../shared/ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from '../../shared/ui/alert';
 import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader } from '../../shared/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle
-} from '../../shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../shared/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '../../shared/ui/dropdown-menu';
 import { Label } from '../../shared/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '../../shared/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '../../shared/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/ui/table';
 import { Textarea } from '../../shared/ui/textarea';
 import { Skeleton } from '../../shared/ui/skeleton';
 import { toast, Toaster } from '../../shared/ui/sonner';
@@ -64,7 +41,7 @@ import {
   resendOrganizationInvite,
   updateOrganizationMemberRole,
   type OrganizationInvite,
-  type OrganizationMember
+  type OrganizationMember,
 } from './membersApi';
 
 type OrganizationMemberRow = OrganizationMember | OrganizationInvite;
@@ -74,15 +51,13 @@ type SelectOption<T extends string> = {
   description?: ReactNode;
   disabled?: boolean;
 };
-type InviteValidationError =
-  | { type: 'invalid-email'; emails: string[] }
-  | { type: 'too-many' };
+type InviteValidationError = { type: 'invalid-email'; emails: string[] } | { type: 'too-many' };
 
 const memberColumnHelper = createColumnHelper<OrganizationMemberRow>();
 const roleSelectOptions = roleOptions.map<SelectOption<PlatformRole>>((role) => ({
   value: role.value,
   label: role.label,
-  description: role.description
+  description: role.description,
 }));
 
 export function OrganizationMembersPage() {
@@ -103,14 +78,14 @@ export function OrganizationMembersPage() {
     queryKey: membersQueryKey,
     queryFn: () => listOrganizationMembers(activeOrgUuid ?? ''),
     enabled: Boolean(activeOrgUuid),
-    retry: false
+    retry: false,
   });
 
   const invitesQuery = useQuery({
     queryKey: invitesQueryKey,
     queryFn: () => listOrganizationInvites(activeOrgUuid ?? '', 'pending'),
     enabled: Boolean(activeOrgUuid) && canManage,
-    retry: false
+    retry: false,
   });
 
   const updateRoleMutation = useMutation({
@@ -120,27 +95,31 @@ export function OrganizationMembersPage() {
       setPendingRoleMemberId(member.id);
     },
     onSuccess: (updatedMember) => {
-      queryClient.setQueryData<OrganizationMember[]>(membersQueryKey, (current) =>
-        current?.map((member) => (member.id === updatedMember.id ? updatedMember : member)) ?? [updatedMember]
+      queryClient.setQueryData<OrganizationMember[]>(
+        membersQueryKey,
+        (current) =>
+          current?.map((member) => (member.id === updatedMember.id ? updatedMember : member)) ?? [updatedMember],
       );
     },
     onSettled: () => {
       setPendingRoleMemberId(null);
-    }
+    },
   });
 
   const resendInviteMutation = useMutation({
     mutationFn: (invite: OrganizationInvite) => resendOrganizationInvite(activeOrgUuid ?? '', invite.id, csrfToken),
     onSuccess: (updatedInvite) => {
-      queryClient.setQueryData<OrganizationInvite[]>(invitesQueryKey, (current) =>
-        current?.map((invite) => (invite.id === updatedInvite.id ? updatedInvite : invite)) ?? [updatedInvite]
+      queryClient.setQueryData<OrganizationInvite[]>(
+        invitesQueryKey,
+        (current) =>
+          current?.map((invite) => (invite.id === updatedInvite.id ? updatedInvite : invite)) ?? [updatedInvite],
       );
       setInviteActionError(null);
       toast.success('Invite reminder sent.');
     },
     onError: (error) => {
       setInviteActionError(errorMessage(error));
-    }
+    },
   });
 
   const deleteInviteMutation = useMutation({
@@ -148,7 +127,7 @@ export function OrganizationMembersPage() {
     onSuccess: (_deletedInvite, invite) => {
       queryClient.setQueryData<OrganizationInvite[]>(
         invitesQueryKey,
-        (current) => current?.filter((existingInvite) => existingInvite.id !== invite.id) ?? []
+        (current) => current?.filter((existingInvite) => existingInvite.id !== invite.id) ?? [],
       );
       setInviteToRevoke(null);
       setInviteActionError(null);
@@ -156,12 +135,12 @@ export function OrganizationMembersPage() {
     },
     onError: (error) => {
       setInviteActionError(errorMessage(error));
-    }
+    },
   });
 
   const tableRows = useMemo<OrganizationMemberRow[]>(
     () => [...(canManage ? (invitesQuery.data ?? []) : []), ...(membersQuery.data ?? [])],
-    [canManage, invitesQuery.data, membersQuery.data]
+    [canManage, invitesQuery.data, membersQuery.data],
   );
   const isInitialLoading =
     (membersQuery.isLoading && !membersQuery.data) || (canManage && invitesQuery.isLoading && !invitesQuery.data);
@@ -198,12 +177,12 @@ export function OrganizationMembersPage() {
               <span className="truncate text-foreground">{name || row.original.email}</span>
             </div>
           );
-        }
+        },
       }),
       memberColumnHelper.display({
         id: 'email',
         header: 'Email',
-        cell: ({ row }) => <span className="truncate text-muted-foreground">{row.original.email}</span>
+        cell: ({ row }) => <span className="truncate text-muted-foreground">{row.original.email}</span>,
       }),
       memberColumnHelper.display({
         id: 'role',
@@ -235,7 +214,7 @@ export function OrganizationMembersPage() {
               }}
             />
           );
-        }
+        },
       }),
       memberColumnHelper.display({
         id: 'actions',
@@ -256,10 +235,10 @@ export function OrganizationMembersPage() {
             />
           ) : (
             <span aria-hidden className="block h-8 w-8" />
-          )
-      })
+          ),
+      }),
     ],
-    [account, canManage, deleteInviteMutation, pendingRoleMemberId, resendInviteMutation, updateRoleMutation]
+    [account, canManage, deleteInviteMutation, pendingRoleMemberId, resendInviteMutation, updateRoleMutation],
   );
 
   // TanStack Table returns callback-heavy instance methods; this table instance stays local to the page.
@@ -267,7 +246,7 @@ export function OrganizationMembersPage() {
   const table = useReactTable({
     data: tableRows,
     columns,
-    getCoreRowModel: getCoreRowModel()
+    getCoreRowModel: getCoreRowModel(),
   });
 
   if (!activeOrgUuid) {
@@ -287,12 +266,7 @@ export function OrganizationMembersPage() {
 
   return (
     <section className="mx-auto w-full max-w-[1180px]" data-testid="organization-members-page">
-      <Toaster
-        position="top-right"
-        duration={2200}
-        closeButton
-        toastOptions={{ closeButtonAriaLabel: 'Close' }}
-      />
+      <Toaster position="top-right" duration={2200} closeButton toastOptions={{ closeButtonAriaLabel: 'Close' }} />
       <div className="mb-6 flex min-h-9 items-center justify-between gap-4">
         <h1 className="flex min-w-0 items-center gap-2 text-xl font-semibold tracking-normal text-foreground">
           <span>Members</span>
@@ -314,9 +288,7 @@ export function OrganizationMembersPage() {
         ) : null}
       </div>
 
-      {updateRoleMutation.isError ? (
-        <InlineNotice>{errorMessage(updateRoleMutation.error)}</InlineNotice>
-      ) : null}
+      {updateRoleMutation.isError ? <InlineNotice>{errorMessage(updateRoleMutation.error)}</InlineNotice> : null}
       {inviteActionError ? <InlineNotice>{inviteActionError}</InlineNotice> : null}
 
       <div className="overflow-hidden border-y border-border">
@@ -380,7 +352,7 @@ export function OrganizationMembersPage() {
         onInvited={(createdInvites) => {
           queryClient.setQueryData<OrganizationInvite[]>(invitesQueryKey, (current) => [
             ...createdInvites,
-            ...(current ?? [])
+            ...(current ?? []),
           ]);
           toast.success(createdInvites.length === 1 ? 'Invite sent.' : `${createdInvites.length} invites sent.`);
         }}
@@ -408,7 +380,7 @@ function InviteMembersDialog({
   activeOrgUuid,
   csrfToken,
   onOpenChange,
-  onInvited
+  onInvited,
 }: {
   open: boolean;
   activeOrgUuid: string;
@@ -436,7 +408,7 @@ function InviteMembersDialog({
       setSubmitValidationError(null);
       onOpenChange(false);
       onInvited(createdInvites);
-    }
+    },
   });
 
   const canSubmit = parsedEmails.length > 0 && !inviteMutation.isPending;
@@ -537,7 +509,7 @@ function RoleSelect({
   disabled,
   className,
   contentClassName,
-  onChange
+  onChange,
 }: {
   ariaLabel: string;
   value: PlatformRole;
@@ -601,7 +573,7 @@ function InviteActionsMenu({
   invite,
   disabled,
   onResend,
-  onRevoke
+  onRevoke,
 }: {
   invite: OrganizationInvite;
   disabled: boolean;
@@ -636,7 +608,7 @@ function InviteRevokeDialog({
   invite,
   isSubmitting,
   onCancel,
-  onConfirm
+  onConfirm,
 }: {
   invite: OrganizationInvite | null;
   isSubmitting: boolean;

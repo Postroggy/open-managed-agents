@@ -9,25 +9,58 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from '../../../shared/ui/alert-dialog';
 import { Badge } from '../../../shared/ui/badge';
 import { Button } from '../../../shared/ui/button';
 import { Checkbox } from '../../../shared/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../shared/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '../../../shared/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../../shared/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '../../../shared/ui/dropdown-menu';
 import { Input } from '../../../shared/ui/input';
 import { Label } from '../../../shared/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/ui/table';
 import { Textarea } from '../../../shared/ui/textarea';
 import clsx from 'clsx';
-import { AlertCircle, Archive, ArrowUpRight, Bot, ChevronDown, Plus, Search, Trash2, TriangleAlert, X } from 'lucide-react';
-import { type FormEvent, type KeyboardEventHandler, type ReactNode, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  Archive,
+  ArrowUpRight,
+  Bot,
+  ChevronDown,
+  Plus,
+  Search,
+  Trash2,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
+import { type FormEvent, type KeyboardEventHandler, type ReactNode, useId, useRef, useState } from 'react';
 import { compactAgentId } from '../agents/AgentsResourcePage';
 import { entityKindLabel, resourceEmptyAction, resourceEmptyBody, resourceEmptyTitle } from '../labels';
 import { entityDisplayName } from '../resources/ManagedResources';
-import { type AgentApiResponse, type EntityOption, type IconComponent, type ManagedEntityApiResponse, type ManagedEntitySection, type MemoryApiResponse, type ResourceConfig, type VaultCredentialApiResponse } from '../types';
+import {
+  type AgentApiResponse,
+  type EntityOption,
+  type IconComponent,
+  type ManagedEntityApiResponse,
+  type ManagedEntitySection,
+  type MemoryApiResponse,
+  type ResourceConfig,
+  type VaultCredentialApiResponse,
+} from '../types';
 
 export function ManagedSearchField({
   id,
@@ -35,7 +68,7 @@ export function ManagedSearchField({
   placeholder,
   prefix,
   onChange,
-  onKeyDown
+  onKeyDown,
 }: {
   id: string;
   value: string;
@@ -63,7 +96,10 @@ export function ManagedSearchField({
       <Label className="sr-only" htmlFor={id}>
         {placeholder}
       </Label>
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70" aria-hidden />
+      <Search
+        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70"
+        aria-hidden
+      />
       {prefix ? (
         <span className="pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/70">
           {prefix}
@@ -77,7 +113,7 @@ export function ManagedSearchField({
         className={clsx(
           'h-9 border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-border focus-visible:ring-0',
           prefix ? 'pl-[64px]' : 'pl-9',
-          value ? 'pr-9' : 'pr-3'
+          value ? 'pr-9' : 'pr-3',
         )}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
@@ -107,7 +143,7 @@ export function AgentFilterDropdown<TValue extends string, TMenu extends string>
   open,
   menuWidthClass,
   onOpenChange,
-  onSelect
+  onSelect,
 }: {
   label: string;
   valueLabel: string;
@@ -157,13 +193,25 @@ export function DetailKV({ label, value }: { label: string; value: ReactNode }) 
   );
 }
 
-export function DetailCard({ title, description, action, children }: { title: string; description?: string; action?: ReactNode; children: ReactNode }) {
+export function DetailCard({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="mb-6">
       <div className="mb-3 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[20px] font-semibold leading-6 text-foreground">{title}</h2>
-          {description ? <p className="mt-1 max-w-[760px] text-sm leading-5 text-muted-foreground">{description}</p> : null}
+          {description ? (
+            <p className="mt-1 max-w-[760px] text-sm leading-5 text-muted-foreground">{description}</p>
+          ) : null}
         </div>
         {action}
       </div>
@@ -179,7 +227,7 @@ export function DetailTableCard({
   error,
   emptyTitle,
   columns,
-  rows
+  rows,
 }: {
   title: string;
   description?: string;
@@ -214,15 +262,35 @@ export function ManagedWarningAlert({ children, className }: { children: ReactNo
   );
 }
 
-export function NestedRows({ loading, error, emptyTitle, columns, rows }: { loading: boolean; error: string | null; emptyTitle: string; columns: string[]; rows: ReactNode[][] }) {
+export function NestedRows({
+  loading,
+  error,
+  emptyTitle,
+  columns,
+  rows,
+}: {
+  loading: boolean;
+  error: string | null;
+  emptyTitle: string;
+  columns: string[];
+  rows: ReactNode[][];
+}) {
   if (error) {
     return <ManagedErrorAlert>{error}</ManagedErrorAlert>;
   }
   if (loading) {
-    return <div className="rounded-lg border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <div className="rounded-lg border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
   }
   if (!rows.length) {
-    return <div className="rounded-lg border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">{emptyTitle}</div>;
+    return (
+      <div className="rounded-lg border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
+        {emptyTitle}
+      </div>
+    );
   }
   return (
     <div className="overflow-hidden rounded-lg border border-border">
@@ -257,7 +325,7 @@ export function MenuAction({
   label,
   disabled = false,
   danger = false,
-  onClick
+  onClick,
 }: {
   icon: IconComponent;
   label: string;
@@ -273,7 +341,7 @@ export function MenuAction({
       variant="ghost"
       className={clsx(
         'h-9 w-full justify-start px-2 text-left hover:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground/70',
-        danger ? 'text-destructive' : 'text-foreground'
+        danger ? 'text-destructive' : 'text-foreground',
       )}
       onClick={onClick}
     >
@@ -283,13 +351,21 @@ export function MenuAction({
   );
 }
 
-export function LockedAgentReferenceField({ agent, variant }: { agent: AgentApiResponse; variant: 'deployment' | 'managed' }) {
+export function LockedAgentReferenceField({
+  agent,
+  variant,
+}: {
+  agent: AgentApiResponse;
+  variant: 'deployment' | 'managed';
+}) {
   const { msg } = useI18n();
   const label = msg('managedAgents.common.agent', 'Agent');
   const body = (
     <div className="flex min-h-10 items-center justify-between gap-3 rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground">
       <span className="min-w-0 truncate font-medium">{agent.name || agent.id}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">v{agent.version} · {compactAgentId(agent.id)}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        v{agent.version} · {compactAgentId(agent.id)}
+      </span>
     </div>
   );
 
@@ -315,7 +391,7 @@ export function DeploymentFieldHeader({
   label,
   optional = false,
   manageHref,
-  manageLabel
+  manageLabel,
 }: {
   id: string;
   label: string;
@@ -328,7 +404,12 @@ export function DeploymentFieldHeader({
   return (
     <div className="mb-2 flex items-center justify-between gap-4">
       <Label htmlFor={id} className="text-sm font-medium leading-5 text-foreground">
-        {label} {optional ? <span className="font-normal text-muted-foreground">{msg('managedAgents.common.optionalParen', '(optional)')}</span> : null}
+        {label}{' '}
+        {optional ? (
+          <span className="font-normal text-muted-foreground">
+            {msg('managedAgents.common.optionalParen', '(optional)')}
+          </span>
+        ) : null}
       </Label>
       {manageHref && manageLabel ? (
         <a
@@ -351,7 +432,7 @@ export function DeploymentTextField({
   value,
   placeholder,
   autoFocus = false,
-  onChange
+  onChange,
 }: {
   label: string;
   value: string;
@@ -380,7 +461,7 @@ export function DeploymentTextArea({
   value,
   placeholder,
   helpText,
-  onChange
+  onChange,
 }: {
   label: string;
   value: string;
@@ -413,7 +494,7 @@ export function DeploymentSelectField({
   optional = false,
   manageHref,
   manageLabel,
-  onChange
+  onChange,
 }: {
   label: string;
   value: string;
@@ -426,10 +507,19 @@ export function DeploymentSelectField({
 }) {
   const id = `deployment-select-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   const selected = options.find((option) => option.id === value);
-  const items = [{ value: '', label: placeholder }, ...options.map((option) => ({ value: option.id, label: option.label }))];
+  const items = [
+    { value: '', label: placeholder },
+    ...options.map((option) => ({ value: option.id, label: option.label })),
+  ];
   return (
     <div>
-      <DeploymentFieldHeader id={id} label={label} optional={optional} manageHref={manageHref} manageLabel={manageLabel} />
+      <DeploymentFieldHeader
+        id={id}
+        label={label}
+        optional={optional}
+        manageHref={manageHref}
+        manageLabel={manageLabel}
+      />
       <Select<string>
         value={value}
         items={items}
@@ -443,7 +533,9 @@ export function DeploymentSelectField({
           id={id}
           className="h-8 w-full border-0 bg-white/10 px-3 text-sm ring-1 ring-white/10 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <SelectValue className={value ? 'text-foreground' : 'text-muted-foreground'}>{selected?.label ?? placeholder}</SelectValue>
+          <SelectValue className={value ? 'text-foreground' : 'text-muted-foreground'}>
+            {selected?.label ?? placeholder}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
           <SelectItem value="" label={placeholder}>
@@ -468,7 +560,7 @@ export function DeploymentAddSelectField({
   options,
   manageHref,
   manageLabel,
-  onChange
+  onChange,
 }: {
   label: string;
   optional?: boolean;
@@ -488,12 +580,18 @@ export function DeploymentAddSelectField({
     : msg('managedAgents.common.noValuesAvailable', 'No {label}s available', { label: valueLabel });
   const items = [
     { value: '', label: placeholder },
-    ...availableOptions.map((option) => ({ value: option.id, label: option.label }))
+    ...availableOptions.map((option) => ({ value: option.id, label: option.label })),
   ];
 
   return (
     <div>
-      <DeploymentFieldHeader id={id} label={label} optional={optional} manageHref={manageHref} manageLabel={manageLabel} />
+      <DeploymentFieldHeader
+        id={id}
+        label={label}
+        optional={optional}
+        manageHref={manageHref}
+        manageLabel={manageLabel}
+      />
       <Select<string>
         value=""
         items={items}
@@ -549,7 +647,7 @@ export function ManagedTextField({
   placeholder,
   disabled = false,
   autoFocus = false,
-  onChange
+  onChange,
 }: {
   label: string;
   value: string;
@@ -558,7 +656,7 @@ export function ManagedTextField({
   autoFocus?: boolean;
   onChange: (value: string) => void;
 }) {
-  const id = `managed-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const id = `managed-field-${useId()}`;
   return (
     <div>
       <Label htmlFor={id} className="text-sm font-medium text-foreground">
@@ -581,17 +679,19 @@ export function ManagedTextArea({
   label,
   value,
   placeholder,
-  onChange
+  onChange,
 }: {
   label: string;
   value: string;
   placeholder?: string;
   onChange: (value: string) => void;
 }) {
-  const id = `managed-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const id = `managed-field-${useId()}`;
   return (
     <div>
-      <Label htmlFor={id} className="text-sm font-medium text-foreground">{label}</Label>
+      <Label htmlFor={id} className="text-sm font-medium text-foreground">
+        {label}
+      </Label>
       <Textarea
         id={id}
         value={value}
@@ -609,7 +709,7 @@ export function ManagedSelectField({
   value,
   placeholder,
   options,
-  onChange
+  onChange,
 }: {
   label: string;
   value: string;
@@ -617,12 +717,17 @@ export function ManagedSelectField({
   options: EntityOption[];
   onChange: (value: string) => void;
 }) {
-  const id = `managed-select-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const id = `managed-select-${useId()}`;
   const selected = options.find((option) => option.id === value);
-  const items = [{ value: '', label: placeholder }, ...options.map((option) => ({ value: option.id, label: option.label }))];
+  const items = [
+    { value: '', label: placeholder },
+    ...options.map((option) => ({ value: option.id, label: option.label })),
+  ];
   return (
     <div>
-      <Label htmlFor={id} className="text-sm font-medium text-foreground">{label}</Label>
+      <Label htmlFor={id} className="text-sm font-medium text-foreground">
+        {label}
+      </Label>
       <Select<string>
         value={value}
         items={items}
@@ -636,7 +741,9 @@ export function ManagedSelectField({
           id={id}
           className="managed-resource-field mt-2 h-10 w-full border-border bg-secondary px-3 text-sm text-foreground focus-visible:border-ring focus-visible:ring-0"
         >
-          <SelectValue className={value ? 'text-foreground' : 'text-muted-foreground'}>{selected?.label ?? placeholder}</SelectValue>
+          <SelectValue className={value ? 'text-foreground' : 'text-muted-foreground'}>
+            {selected?.label ?? placeholder}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
           <SelectItem value="" label={placeholder}>
@@ -656,7 +763,7 @@ export function ManagedSelectField({
 export function VaultMultiSelect({
   vaults,
   selectedIds,
-  onChange
+  onChange,
 }: {
   vaults: EntityOption[];
   selectedIds: string[];
@@ -673,7 +780,9 @@ export function VaultMultiSelect({
 
   return (
     <div>
-      <div className="text-sm font-medium text-foreground">{msg('managedAgents.credentialVaults.title', 'Credential vaults')}</div>
+      <div className="text-sm font-medium text-foreground">
+        {msg('managedAgents.credentialVaults.title', 'Credential vaults')}
+      </div>
       <div className="mt-2 rounded-lg border border-border bg-secondary p-2">
         {vaults.length ? (
           vaults.map((vault) => {
@@ -712,7 +821,7 @@ export function ConfirmEntityDialog({
   labelOverride,
   busy,
   onCancel,
-  onConfirm
+  onConfirm,
 }: {
   action: 'archive' | 'delete';
   section: ManagedEntitySection;
@@ -738,7 +847,9 @@ export function ConfirmEntityDialog({
     <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogMedia className={destructive ? 'bg-destructive/10 text-destructive dark:bg-destructive/20' : undefined}>
+          <AlertDialogMedia
+            className={destructive ? 'bg-destructive/10 text-destructive dark:bg-destructive/20' : undefined}
+          >
             {icon}
           </AlertDialogMedia>
           <AlertDialogTitle className="text-[20px] font-semibold text-foreground">
@@ -746,14 +857,18 @@ export function ConfirmEntityDialog({
           </AlertDialogTitle>
           <AlertDialogDescription className="text-sm leading-5 text-muted-foreground">
             {action === 'archive'
-              ? msg('managedAgents.common.confirmArchiveBody', '{name} will be hidden from active lists.', { name: entityName })
-              : msg('managedAgents.common.confirmDeleteBody', '{name} will be permanently removed from this workspace.', { name: entityName })}
+              ? msg('managedAgents.common.confirmArchiveBody', '{name} will be hidden from active lists.', {
+                  name: entityName,
+                })
+              : msg(
+                  'managedAgents.common.confirmDeleteBody',
+                  '{name} will be permanently removed from this workspace.',
+                  { name: entityName },
+                )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>
-            {msg('common.cancel', 'Cancel')}
-          </AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{msg('common.cancel', 'Cancel')}</AlertDialogCancel>
           <AlertDialogAction
             type="button"
             disabled={busy}
@@ -773,7 +888,7 @@ export function ConfirmAgentsArchiveDialog({
   count,
   busy,
   onCancel,
-  onConfirm
+  onConfirm,
 }: {
   count: number;
   busy: boolean;
@@ -782,10 +897,19 @@ export function ConfirmAgentsArchiveDialog({
 }) {
   const { msg } = useI18n();
   const single = count === 1;
-  const title = single ? msg('managedAgents.agents.confirmArchive.title', 'Archive agent') : msg('managedAgents.agents.confirmArchive.titlePlural', 'Archive agents');
+  const title = single
+    ? msg('managedAgents.agents.confirmArchive.title', 'Archive agent')
+    : msg('managedAgents.agents.confirmArchive.titlePlural', 'Archive agents');
   const body = single
-    ? msg('managedAgents.agents.confirmArchive.body', 'This agent will be hidden from the default view. Sessions that reference it keep working.')
-    : msg('managedAgents.agents.confirmArchive.bodyPlural', '{count} agents will be hidden from the default view. Sessions that reference them keep working.', { count });
+    ? msg(
+        'managedAgents.agents.confirmArchive.body',
+        'This agent will be hidden from the default view. Sessions that reference it keep working.',
+      )
+    : msg(
+        'managedAgents.agents.confirmArchive.bodyPlural',
+        '{count} agents will be hidden from the default view. Sessions that reference them keep working.',
+        { count },
+      );
   return (
     <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
       <AlertDialogContent size="sm">
@@ -793,17 +917,11 @@ export function ConfirmAgentsArchiveDialog({
           <AlertDialogMedia>
             <Archive className="size-5" aria-hidden />
           </AlertDialogMedia>
-          <AlertDialogTitle className="text-[20px] font-semibold text-foreground">
-            {title}
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-sm leading-5 text-muted-foreground">
-            {body}
-          </AlertDialogDescription>
+          <AlertDialogTitle className="text-[20px] font-semibold text-foreground">{title}</AlertDialogTitle>
+          <AlertDialogDescription className="text-sm leading-5 text-muted-foreground">{body}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>
-            {msg('common.cancel', 'Cancel')}
-          </AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{msg('common.cancel', 'Cancel')}</AlertDialogCancel>
           <AlertDialogAction
             type="button"
             disabled={busy}
@@ -824,7 +942,7 @@ export function AgentSelectionCheckbox({
   indeterminate = false,
   disabled = false,
   label,
-  onClick
+  onClick,
 }: {
   checked: boolean;
   indeterminate?: boolean;
@@ -842,7 +960,7 @@ export function AgentSelectionCheckbox({
         'size-5 rounded-[5px] border-border bg-transparent hover:border-border',
         'data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground',
         'data-indeterminate:border-primary data-indeterminate:bg-primary data-indeterminate:text-primary-foreground',
-        disabled && 'cursor-not-allowed opacity-40'
+        disabled && 'cursor-not-allowed opacity-40',
       )}
       onCheckedChange={() => onClick()}
     />
@@ -854,7 +972,7 @@ export function AgentsListState({
   title,
   body,
   actionLabel,
-  onAction
+  onAction,
 }: {
   icon: IconComponent;
   title: string;
@@ -869,12 +987,7 @@ export function AgentsListState({
         <div className="text-sm font-semibold text-foreground">{title}</div>
         <p className="mt-3 text-sm leading-5 text-muted-foreground">{body}</p>
         {actionLabel && onAction ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4"
-            onClick={onAction}
-          >
+          <Button type="button" variant="outline" className="mt-4" onClick={onAction}>
             {actionLabel}
           </Button>
         ) : null}
@@ -888,7 +1001,7 @@ export function AgentsEmptyState({
   truncated,
   trueEmptyActionLabel,
   onCreate,
-  onReset
+  onReset,
 }: {
   trueEmpty: boolean;
   truncated?: boolean;
@@ -907,12 +1020,21 @@ export function AgentsEmptyState({
       }
       body={
         truncated
-          ? msg('managedAgents.agents.searchTruncatedEmptyBody', "Couldn't search every agent. Narrow the search or paste an exact ID.")
+          ? msg(
+              'managedAgents.agents.searchTruncatedEmptyBody',
+              "Couldn't search every agent. Narrow the search or paste an exact ID.",
+            )
           : trueEmpty
-          ? msg('managedAgents.agents.emptyBody', 'Create an agent to start building managed workflows.')
-          : msg('managedAgents.agents.noFilteredResultsBody', 'Try a different search or reset the filters.')
+            ? msg('managedAgents.agents.emptyBody', 'Create an agent to start building managed workflows.')
+            : msg('managedAgents.agents.noFilteredResultsBody', 'Try a different search or reset the filters.')
       }
-      actionLabel={truncated ? undefined : trueEmpty ? trueEmptyActionLabel : msg('managedAgents.filters.resetFilters', 'Reset filters')}
+      actionLabel={
+        truncated
+          ? undefined
+          : trueEmpty
+            ? trueEmptyActionLabel
+            : msg('managedAgents.filters.resetFilters', 'Reset filters')
+      }
       onAction={truncated ? undefined : trueEmpty ? onCreate : onReset}
     />
   );
@@ -931,11 +1053,7 @@ export function EmptyState({ config }: { config: ResourceConfig }) {
         <div className="text-sm font-medium text-foreground">{title}</div>
         {body ? <p className="mt-3 text-sm text-muted-foreground">{body}</p> : null}
         {action ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4"
-          >
+          <Button type="button" variant="outline" className="mt-4">
             {action}
           </Button>
         ) : null}
@@ -962,7 +1080,10 @@ export function CreateResourceDialog({ title, onClose }: { title: string; onClos
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
             <DialogDescription>
-              {msg('managedAgents.common.localMockNotice', 'This local console mock keeps creation client-side for now.')}
+              {msg(
+                'managedAgents.common.localMockNotice',
+                'This local console mock keeps creation client-side for now.',
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -999,7 +1120,9 @@ export function AgentStatusBadge({ archived }: { archived: boolean }) {
       variant="secondary"
       className={clsx(
         'h-6 rounded-md px-2 text-xs font-medium',
-        archived ? 'bg-secondary text-secondary-foreground' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+        archived
+          ? 'bg-secondary text-secondary-foreground'
+          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
       )}
     >
       {archived ? msg('common.archived', 'Archived') : msg('common.active', 'Active')}
@@ -1017,7 +1140,10 @@ export function StatusPill({ children }: { children: ReactNode }) {
 
 export function CompactChip({ icon: Icon, children }: { icon: IconComponent; children: ReactNode }) {
   return (
-    <Badge variant="outline" className="h-auto max-w-full items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs font-medium text-foreground">
+    <Badge
+      variant="outline"
+      className="h-auto max-w-full items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs font-medium text-foreground"
+    >
       <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <span className="truncate">{children}</span>
     </Badge>

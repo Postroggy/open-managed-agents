@@ -24,6 +24,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/api"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/cleanup"
+	"github.com/superduck-ai/open-managed-agents/internal/codesessions"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
@@ -37,13 +38,14 @@ const defaultTestKey = config.DefaultAPIKey
 const onePixelGIFBase64 = "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
 
 type testApp struct {
-	cfg      config.Config
-	db       *db.DB
-	store    storage.ObjectStore
-	sessions *platformsession.MemoryStore
-	server   *httptest.Server
-	baseURL  string
-	client   *http.Client
+	cfg         config.Config
+	db          *db.DB
+	store       storage.ObjectStore
+	sessions    *platformsession.MemoryStore
+	credentials *codesessions.SessionCredentials
+	server      *httptest.Server
+	baseURL     string
+	client      *http.Client
 }
 
 type errorResponse struct {
@@ -380,7 +382,7 @@ func TestFilesAPI(t *testing.T) {
 
 	t.Run("failure file too large", func(t *testing.T) {
 		smallLimit := app.cfg
-		smallLimit.MaxFileBytes = 4
+		smallLimit.Storage.MaxFileBytes = 4
 		limited := newTestApp(t, &smallLimit)
 		defer limited.close()
 
@@ -391,11 +393,11 @@ func TestFilesAPI(t *testing.T) {
 
 	t.Run("failure request body exceeds max bytes reader", func(t *testing.T) {
 		smallLimit := app.cfg
-		smallLimit.MaxFileBytes = 1
+		smallLimit.Storage.MaxFileBytes = 1
 		limited := newTestApp(t, &smallLimit)
 		defer limited.close()
 
-		content := bytes.Repeat([]byte("x"), int(smallLimit.MaxFileBytes+1024*1024+1))
+		content := bytes.Repeat([]byte("x"), int(smallLimit.Storage.MaxFileBytes+1024*1024+1))
 		body, contentType := multipartBody(t, "huge.txt", "text/plain", content, false)
 		resp := limited.do(t, http.MethodPost, "/v1/files?beta=true", body, defaultTestKey, true, contentType)
 		assertError(t, resp, http.StatusRequestEntityTooLarge, "invalid_request_error")
@@ -469,7 +471,7 @@ func TestFilesAPI(t *testing.T) {
 
 	t.Run("failure delete object queues cleanup job", func(t *testing.T) {
 		store := newFakeStore("fake-bucket")
-		store.deleteErr = errors.New("minio unavailable")
+		store.deleteErr = errors.New("object storage unavailable")
 		fakeApp := newTestAppWithStore(t, nil, store)
 		defer fakeApp.close()
 
@@ -498,10 +500,10 @@ func TestFilesAPI(t *testing.T) {
 
 	t.Run("failure upload metadata rejection queues cleanup job when object delete fails", func(t *testing.T) {
 		store := newFakeStore("fake-bucket")
-		store.deleteErr = errors.New("minio unavailable")
+		store.deleteErr = errors.New("object storage unavailable")
 		limitedConfig := app.cfg
-		limitedConfig.MaxFileBytes = 1024
-		limitedConfig.WorkspaceStorageLimitBytes = 1
+		limitedConfig.Storage.MaxFileBytes = 1024
+		limitedConfig.Storage.WorkspaceLimitBytes = 1
 		fakeApp := newTestAppWithStore(t, &limitedConfig, store)
 		defer fakeApp.close()
 
@@ -900,23 +902,23 @@ func TestObjectCleanupWorkerContinuesAfterJobFailure(t *testing.T) {
 
 func newTestApp(t *testing.T, override *config.Config) *testApp {
 	t.Helper()
-	store, cfg := newMinIOStore(t, override)
+	store, cfg := newS3Store(t, override)
 	return newTestAppWithStore(t, &cfg, store)
 }
 
-func newMinIOStore(t *testing.T, override *config.Config) (storage.ObjectStore, config.Config) {
+func newS3Store(t *testing.T, override *config.Config) (storage.ObjectStore, config.Config) {
 	t.Helper()
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	cfg.CodeSessionOTLPFileLogEnabled = false
+	cfg.CodeSession.OTLPFileLogEnabled = false
 	if override != nil {
 		cfg = *override
 	}
-	store, err := storage.NewMinIO(cfg)
+	store, err := storage.New(cfg.Storage)
 	if err != nil {
-		t.Fatalf("create minio store: %v", err)
+		t.Fatalf("create S3 store: %v", err)
 	}
 	return store, cfg
 }
@@ -928,7 +930,7 @@ func newTestAppWithStore(t *testing.T, override *config.Config, store storage.Ob
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	cfg.CodeSessionOTLPFileLogEnabled = false
+	cfg.CodeSession.OTLPFileLogEnabled = false
 	if override != nil {
 		cfg = *override
 	}
@@ -940,17 +942,22 @@ func newTestAppWithStore(t *testing.T, override *config.Config, store storage.Ob
 		database.Close()
 		t.Fatalf("migrate database: %v", err)
 	}
-	if err := database.Seed(ctx, cfg.SeedAPIKeys); err != nil {
+	if err := database.Seed(ctx, cfg.Bootstrap.SeedAPIKeys); err != nil {
 		database.Close()
 		t.Fatalf("seed database: %v", err)
 	}
 	platformSessions := platformsession.NewMemoryStore()
+	credentials, err := codesessions.NewSessionCredentials(cfg)
+	if err != nil {
+		database.Close()
+		t.Fatalf("create code session credentials: %v", err)
+	}
 	if err := store.EnsureBucket(ctx); err != nil {
 		database.Close()
 		t.Fatalf("ensure object store bucket: %v", err)
 	}
-	server := httptest.NewServer(api.NewServerWithPlatformSessions(cfg, database, store, nil, platformSessions))
-	return &testApp{cfg: cfg, db: database, store: store, sessions: platformSessions, server: server, baseURL: server.URL, client: server.Client()}
+	server := httptest.NewServer(api.NewServerWithPlatformSessionsAndCredentials(cfg, database, store, nil, platformSessions, credentials))
+	return &testApp{cfg: cfg, db: database, store: store, sessions: platformSessions, credentials: credentials, server: server, baseURL: server.URL, client: server.Client()}
 }
 
 func (a *testApp) close() {
@@ -962,8 +969,8 @@ func (a *testApp) seedPlatformSession(t *testing.T, sessionKey string) {
 	t.Helper()
 	session, err := a.db.ResolvePlatformSessionIdentity(context.Background(), platformsession.CreateInput{
 		SessionKey: sessionKey,
-		UserUUID:   a.cfg.DefaultUserExternalID,
-		OrgUUID:    a.cfg.DefaultOrganizationExternalID,
+		UserUUID:   a.cfg.Bootstrap.UserExternalID,
+		OrgUUID:    a.cfg.Bootstrap.OrganizationExternalID,
 	})
 	if err != nil {
 		t.Fatalf("resolve platform session identity: %v", err)

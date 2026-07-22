@@ -48,7 +48,7 @@ export function fetchBootstrap() {
 export function sendMagicLink(emailAddress: string) {
   return consoleApi<SendMagicLinkResponse>('/api/auth/send_magic_link', {
     method: 'POST',
-    body: JSON.stringify({ email_address: emailAddress })
+    body: JSON.stringify({ email_address: emailAddress }),
   });
 }
 
@@ -59,14 +59,14 @@ export function verifyMagicLink(emailAddress: string, code: string) {
       credentials: {
         method: 'code',
         code,
-        email_address: emailAddress
-      }
-    })
+        email_address: emailAddress,
+      },
+    }),
   });
 }
 
 export function logout() {
   return consoleApi<{ ok: boolean }>('/api/auth/logout', {
-    method: 'POST'
+    method: 'POST',
   });
 }

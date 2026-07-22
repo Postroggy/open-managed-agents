@@ -136,7 +136,7 @@ export function getWorkbenchModels(orgUuid: string) {
 
 export function listWorkspacePrompts(orgUuid: string, workspaceId: string) {
   return consoleApi<WorkbenchPromptSummary[]>(
-    orgPath(orgUuid, `/workspaces/${encodeURIComponent(workspaceId)}/prompts`)
+    orgPath(orgUuid, `/workspaces/${encodeURIComponent(workspaceId)}/prompts`),
   );
 }
 
@@ -147,15 +147,12 @@ export function listWorkbenchPrompts(orgUuid: string) {
 export function createWorkspacePrompt(
   orgUuid: string,
   workspaceId: string,
-  input: { name?: string; latest_revision?: Partial<WorkbenchRevision> } = {}
+  input: { name?: string; latest_revision?: Partial<WorkbenchRevision> } = {},
 ) {
-  return consoleApi<WorkbenchPromptDetail>(
-    orgPath(orgUuid, `/workspaces/${encodeURIComponent(workspaceId)}/prompts`),
-    {
-      method: 'POST',
-      body: JSON.stringify(input)
-    }
-  );
+  return consoleApi<WorkbenchPromptDetail>(orgPath(orgUuid, `/workspaces/${encodeURIComponent(workspaceId)}/prompts`), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export function uploadWorkbenchFile(file: File) {
@@ -169,13 +166,13 @@ export function getWorkbenchPrompt(orgUuid: string, promptId: string) {
 export function updateWorkbenchPrompt(orgUuid: string, promptId: string, input: { name?: string }) {
   return consoleApi<WorkbenchPromptDetail>(orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}`), {
     method: 'PUT',
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
   });
 }
 
 export function deleteWorkbenchPrompt(orgUuid: string, promptId: string) {
   return consoleApi<Record<string, unknown>>(orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}`), {
-    method: 'DELETE'
+    method: 'DELETE',
   });
 }
 
@@ -184,37 +181,37 @@ export function shareWorkbenchPrompt(orgUuid: string, promptId: string) {
     orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/sharing`),
     {
       method: 'POST',
-      body: JSON.stringify({})
-    }
+      body: JSON.stringify({}),
+    },
   );
 }
 
 export function listWorkbenchRevisions(orgUuid: string, promptId: string, compact = false) {
   const suffix = compact ? '?compact=true' : '';
   return consoleApi<WorkbenchRevision[]>(
-    orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/revisions${suffix}`)
+    orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/revisions${suffix}`),
   );
 }
 
 export function getWorkbenchRevision(orgUuid: string, promptId: string, revisionId: string) {
   return consoleApi<WorkbenchRevision>(
-    orgPath(
-      orgUuid,
-      `/workbench/prompts/${encodeURIComponent(promptId)}/revisions/${encodeURIComponent(revisionId)}`
-    )
+    orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/revisions/${encodeURIComponent(revisionId)}`),
   );
 }
 
 export function createWorkbenchRevision(orgUuid: string, promptId: string, revision: WorkbenchRevision) {
-  return consoleApi<WorkbenchRevision>(orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/revisions`), {
-    method: 'POST',
-    body: JSON.stringify(revision)
-  });
+  return consoleApi<WorkbenchRevision>(
+    orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/revisions`),
+    {
+      method: 'POST',
+      body: JSON.stringify(revision),
+    },
+  );
 }
 
 export function getWorkbenchKV(orgUuid: string, promptId: string, key: string) {
   return consoleApi<WorkbenchKVResponse>(
-    orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/kv_store/get/${encodeURIComponent(key)}`)
+    orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/kv_store/get/${encodeURIComponent(key)}`),
   );
 }
 
@@ -223,70 +220,58 @@ export function setWorkbenchKV(orgUuid: string, promptId: string, key: string, v
     orgPath(orgUuid, `/workbench/prompts/${encodeURIComponent(promptId)}/kv_store/set/${encodeURIComponent(key)}`),
     {
       method: 'POST',
-      body: JSON.stringify({ value, version })
-    }
+      body: JSON.stringify({ value, version }),
+    },
   );
 }
 
 export function listWorkbenchEvaluations(orgUuid: string, revisionId: string) {
   return consoleApi<WorkbenchEvaluation[]>(
-    orgPath(orgUuid, `/workbench/revisions/${encodeURIComponent(revisionId)}/evaluations/list`)
+    orgPath(orgUuid, `/workbench/revisions/${encodeURIComponent(revisionId)}/evaluations/list`),
   );
 }
 
-export function createWorkbenchEvaluation(
-  orgUuid: string,
-  revisionId: string,
-  body: Partial<WorkbenchEvaluation>
-) {
+export function createWorkbenchEvaluation(orgUuid: string, revisionId: string, body: Partial<WorkbenchEvaluation>) {
   return consoleApi<WorkbenchEvaluation>(
     orgPath(orgUuid, `/workbench/revisions/${encodeURIComponent(revisionId)}/evaluations/create`),
     {
       method: 'POST',
-      body: JSON.stringify(body)
-    }
+      body: JSON.stringify(body),
+    },
   );
 }
 
 export function updateWorkbenchEvaluationVariables(
   orgUuid: string,
   evaluationId: string,
-  variableValues: Record<string, string>
+  variableValues: Record<string, string>,
 ) {
   return consoleApi<WorkbenchEvaluation>(
     orgPath(orgUuid, `/workbench/evaluations/${encodeURIComponent(evaluationId)}/update_variables`),
     {
       method: 'POST',
-      body: JSON.stringify({ variable_values: variableValues })
-    }
+      body: JSON.stringify({ variable_values: variableValues }),
+    },
   );
 }
 
-export function updateWorkbenchEvaluationGoldenAnswer(
-  orgUuid: string,
-  evaluationId: string,
-  goldenAnswer: string
-) {
+export function updateWorkbenchEvaluationGoldenAnswer(orgUuid: string, evaluationId: string, goldenAnswer: string) {
   return consoleApi<WorkbenchEvaluation>(
     orgPath(orgUuid, `/workbench/evaluations/${encodeURIComponent(evaluationId)}/update_golden_answer`),
     {
       method: 'POST',
-      body: JSON.stringify({ golden_answer: goldenAnswer })
-    }
+      body: JSON.stringify({ golden_answer: goldenAnswer }),
+    },
   );
 }
 
-export function saveWorkbenchEvaluationCompletion(
-  orgUuid: string,
-  evaluationId: string,
-  completionText: string
-) {
+export function saveWorkbenchEvaluationCompletion(orgUuid: string, evaluationId: string, completionText: string) {
   return consoleApi<WorkbenchEvaluation>(
     orgPath(orgUuid, `/workbench/evaluations/${encodeURIComponent(evaluationId)}/save_completion`),
     {
       method: 'POST',
-      body: JSON.stringify({ completion_text: completionText })
-    }
+      body: JSON.stringify({ completion_text: completionText }),
+    },
   );
 }
 
@@ -295,8 +280,8 @@ export function deleteWorkbenchEvaluation(orgUuid: string, evaluationId: string)
     orgPath(orgUuid, `/workbench/evaluations/${encodeURIComponent(evaluationId)}/delete`),
     {
       method: 'POST',
-      body: JSON.stringify({})
-    }
+      body: JSON.stringify({}),
+    },
   );
 }
 
@@ -317,7 +302,7 @@ export function streamWorkbenchCompletion(input: {
     path: '/workbench/completions',
     body: input.body,
     signal: input.signal,
-    onEvent: input.onEvent
+    onEvent: input.onEvent,
   });
 }
 
@@ -331,7 +316,7 @@ export function generateWorkbenchTitle(input: {
     method: 'POST',
     headers: input.workspaceId ? { 'X-Workspace-ID': input.workspaceId } : undefined,
     body: JSON.stringify(input.body),
-    signal: input.signal
+    signal: input.signal,
   });
 }
 
@@ -348,7 +333,7 @@ export function streamGenerateTestCase(input: {
     path: '/workbench/evaluations/generate_test_case',
     body: input.body,
     signal: input.signal,
-    onEvent: input.onEvent
+    onEvent: input.onEvent,
   });
 }
 
@@ -365,7 +350,7 @@ export function streamGenerateTestCases(input: {
     path: '/workbench/metaprompt/generate_test_cases',
     body: input.body,
     signal: input.signal,
-    onEvent: input.onEvent
+    onEvent: input.onEvent,
   });
 }
 
@@ -382,7 +367,7 @@ export function streamGeneratePrompt(input: {
     path: '/workbench/generate_prompt',
     body: input.body,
     signal: input.signal,
-    onEvent: input.onEvent
+    onEvent: input.onEvent,
   });
 }
 
@@ -392,7 +377,7 @@ async function postWorkbenchStream({
   path,
   body,
   signal,
-  onEvent
+  onEvent,
 }: {
   orgUuid: string;
   workspaceId: string;
@@ -404,7 +389,7 @@ async function postWorkbenchStream({
   const headers = new Headers({
     Accept: 'text/event-stream',
     'Content-Type': 'application/json',
-    'X-Organization-UUID': orgUuid
+    'X-Organization-UUID': orgUuid,
   });
   if (workspaceId) {
     headers.set('X-Workspace-ID', workspaceId);
@@ -415,7 +400,7 @@ async function postWorkbenchStream({
     body,
     signal,
     onEvent,
-    errorFromResponse: workbenchStreamError
+    errorFromResponse: workbenchStreamError,
   });
 }
 

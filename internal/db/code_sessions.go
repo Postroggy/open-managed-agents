@@ -47,6 +47,54 @@ type CodeSession struct {
 	DeletedAt                   *time.Time
 }
 
+// CreateCodeSessionInput 同时写入 code session 与仅保存 hash 的 OAuth-compatible token。
+type CreateCodeSessionInput struct {
+	ExternalID            string
+	OrganizationID        int64
+	WorkspaceID           int64
+	SessionID             int64
+	SessionExternalID     string
+	EnvironmentID         int64
+	EnvironmentExternalID string
+	WorkDir               string
+	PermissionMode        string
+	Model                 string
+	Status                string
+	Metadata              json.RawMessage
+	OAuthAccessTokenHash  string
+	CreatedAt             time.Time
+}
+
+// CodeSessionCredentialContext 是凭证校验所需的数据库投影，同时绑定 code session、
+// public session、agent、organization 与 workspace，避免只按 external ID 做全局授权。
+type CodeSessionCredentialContext struct {
+	CodeSessionID           int64
+	CodeSessionExternalID   string
+	OrganizationID          int64
+	OrganizationUUID        string
+	OrganizationExternalID  string
+	WorkspaceID             int64
+	WorkspaceUUID           string
+	WorkspaceExternalID     string
+	PublicSessionID         int64
+	PublicSessionExternalID string
+	AgentID                 int64
+	AgentExternalID         string
+	AgentVersion            int
+	AccountEmail            string
+}
+
+// CodeSessionNetworkPolicyContext 是 upstream proxy 每次 CONNECT 授权所需的
+// 数据库投影。查询必须同时绑定已验签 JWT 中的 organization/workspace UUID，
+// 并校验 Code Session 与 Environment、Session 的内部租户关系。
+type CodeSessionNetworkPolicyContext struct {
+	OrganizationID        int64
+	WorkspaceID           int64
+	EnvironmentExternalID string
+	EnvironmentConfig     json.RawMessage
+	AgentSnapshot         json.RawMessage
+}
+
 type CodeSessionWorkerBinding struct {
 	TokenSessionID string          `json:"token_session_id,omitempty"`
 	AuthMode       string          `json:"auth_mode,omitempty"`
@@ -115,22 +163,6 @@ type CodeSessionInternalEvent struct {
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
-}
-
-type CreateCodeSessionInput struct {
-	ExternalID            string
-	OrganizationID        int64
-	WorkspaceID           int64
-	SessionID             int64
-	SessionExternalID     string
-	EnvironmentID         int64
-	EnvironmentExternalID string
-	WorkDir               string
-	PermissionMode        string
-	Model                 string
-	Status                string
-	Metadata              json.RawMessage
-	CreatedAt             time.Time
 }
 
 type AppendCodeSessionEventInput struct {
@@ -210,6 +242,7 @@ func (e *CodeSessionWorkerHeartbeatError) Unwrap() error {
 	return e.Err
 }
 
+// CreateCodeSession 在同一次 INSERT 中保存 code session 与 OAuth token hash。
 func (d *DB) CreateCodeSession(ctx context.Context, input CreateCodeSessionInput) (CodeSession, error) {
 	now := input.CreatedAt
 	if now.IsZero() {
@@ -219,17 +252,149 @@ func (d *DB) CreateCodeSession(ctx context.Context, input CreateCodeSessionInput
 	if status == "" {
 		status = "active"
 	}
+	oauthAccessTokenHash := nullableString(strings.TrimSpace(input.OAuthAccessTokenHash))
 	return scanCodeSession(d.Pool.QueryRow(ctx, `
 		insert into code_sessions (
 			external_id, organization_id, workspace_id, session_id, session_external_id,
 			environment_id, environment_external_id, work_dir, permission_mode, model,
-			status, metadata, created_at, updated_at
+			status, metadata, oauth_access_token_hash, created_at, updated_at
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $13)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $14)
 		returning `+codeSessionColumns()+`
 	`, input.ExternalID, input.OrganizationID, input.WorkspaceID, input.SessionID, input.SessionExternalID,
 		input.EnvironmentID, input.EnvironmentExternalID, input.WorkDir, input.PermissionMode, input.Model,
-		status, jsonArg(input.Metadata), now))
+		status, jsonArg(input.Metadata), oauthAccessTokenHash, now))
+}
+
+// codeSessionCredentialContextSelect 查询 code session 的鉴权身份信息。
+// OAuth token 鉴权和 session-ingress JWT 签发都会使用这些信息。
+// JOIN 中同时校验 organization、workspace 和 session 的归属，防止跨租户查询。
+// worker lease 不在这里校验：OAuth 鉴权要求有效 lease，首次签发 JWT 时还没有 lease。
+const codeSessionCredentialContextSelect = `
+	select cs.id, cs.external_id,
+		cs.organization_id, o.uuid::text, o.external_id,
+		cs.workspace_id, w.uuid::text, w.external_id,
+		s.id, s.external_id, s.agent_id, s.agent_external_id, s.agent_version,
+		coalesce(u.email, '')
+	from code_sessions cs
+	join organizations o on o.id = cs.organization_id
+	join workspaces w on w.id = cs.workspace_id and w.organization_id = cs.organization_id
+	join sessions s on s.id = cs.session_id
+		and s.workspace_id = cs.workspace_id
+		and s.organization_id = cs.organization_id
+		and s.deleted_at is null
+	left join api_keys ak on ak.id = s.created_by_api_key_id and ak.workspace_id = s.workspace_id
+	left join users u on u.id = ak.created_by_user_id
+		and u.organization_id = cs.organization_id
+		and u.deleted_at is null
+`
+
+// activeCodeSessionCredentialConditions 保证凭证只关联仍可运行的 code session 和 public session。
+const activeCodeSessionCredentialConditions = `
+	and cs.status = 'active'
+	and cs.deleted_at is null
+	and s.status <> 'terminated'
+`
+
+// GetCodeSessionByOAuthAccessTokenHash 只返回 session 与 CCR worker lease 仍存活的凭证上下文。
+func (d *DB) GetCodeSessionByOAuthAccessTokenHash(ctx context.Context, tokenHash string) (CodeSessionCredentialContext, error) {
+	// 调用方只传 SHA-256 hash，明文 OAuth-compatible token 不进入数据库边界。
+	row := d.Pool.QueryRow(ctx, codeSessionCredentialContextSelect+`
+		where cs.oauth_access_token_hash = $1
+	`+activeCodeSessionCredentialConditions+`
+		and cs.worker_lease_expires_at > now()
+	`, strings.TrimSpace(tokenHash))
+	return scanCodeSessionCredentialContext(row)
+}
+
+// GetCodeSessionCredentialContextForIssue 用于初始 session-ingress JWT 签发，并将查询绑定到预期租户。
+func (d *DB) GetCodeSessionCredentialContextForIssue(ctx context.Context, organizationID, workspaceID int64, codeSessionExternalID string) (CodeSessionCredentialContext, error) {
+	row := d.Pool.QueryRow(ctx, codeSessionCredentialContextSelect+`
+		where cs.external_id = $1
+			and cs.organization_id = $2
+			and cs.workspace_id = $3
+	`+activeCodeSessionCredentialConditions, strings.TrimSpace(codeSessionExternalID), organizationID, workspaceID)
+	return scanCodeSessionCredentialContext(row)
+}
+
+// GetCodeSessionNetworkPolicyContext 从已验签的租户身份出发，一次性加载并校验
+// Code Session、Environment 与 Session 的策略关系。项目不使用数据库外键，因此
+// 每个 join 都显式约束 organization/workspace 与内部 ID；任一关系缺失都 fail closed。
+func (d *DB) GetCodeSessionNetworkPolicyContext(
+	ctx context.Context,
+	codeSessionExternalID string,
+	organizationUUID string,
+	workspaceUUID string,
+) (CodeSessionNetworkPolicyContext, error) {
+	row := d.Pool.QueryRow(ctx, `
+		select cs.organization_id, cs.workspace_id, e.external_id, e.config, s.agent_snapshot
+		from code_sessions cs
+		join organizations o
+			on o.id = cs.organization_id
+		join workspaces w
+			on w.id = cs.workspace_id
+			and w.organization_id = cs.organization_id
+		join environments e
+			on e.id = cs.environment_id
+			and e.external_id = cs.environment_external_id
+			and e.organization_id = cs.organization_id
+			and e.workspace_id = cs.workspace_id
+			and e.deleted_at is null
+		join sessions s
+			on s.id = cs.session_id
+			and s.external_id = cs.session_external_id
+			and s.organization_id = cs.organization_id
+			and s.workspace_id = cs.workspace_id
+			and s.environment_id = cs.environment_id
+			and s.environment_external_id = cs.environment_external_id
+			and s.deleted_at is null
+		where cs.external_id = $1
+			and o.uuid::text = $2
+			and w.uuid::text = $3
+	`+activeCodeSessionCredentialConditions,
+		strings.TrimSpace(codeSessionExternalID),
+		strings.TrimSpace(organizationUUID),
+		strings.TrimSpace(workspaceUUID),
+	)
+	var value CodeSessionNetworkPolicyContext
+	var environmentConfig []byte
+	var agentSnapshot []byte
+	err := row.Scan(
+		&value.OrganizationID,
+		&value.WorkspaceID,
+		&value.EnvironmentExternalID,
+		&environmentConfig,
+		&agentSnapshot,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CodeSessionNetworkPolicyContext{}, ErrNotFound
+	}
+	if err != nil {
+		return CodeSessionNetworkPolicyContext{}, err
+	}
+	value.EnvironmentConfig = copyRaw(environmentConfig)
+	value.AgentSnapshot = copyRaw(agentSnapshot)
+	return value, nil
+}
+
+func scanCodeSessionCredentialContext(row rowScanner) (CodeSessionCredentialContext, error) {
+	// 所有鉴权查询共用同一列顺序，避免 hash 查询与 session 查询产生身份字段漂移。
+	var value CodeSessionCredentialContext
+	err := row.Scan(
+		&value.CodeSessionID, &value.CodeSessionExternalID,
+		&value.OrganizationID, &value.OrganizationUUID, &value.OrganizationExternalID,
+		&value.WorkspaceID, &value.WorkspaceUUID, &value.WorkspaceExternalID,
+		&value.PublicSessionID, &value.PublicSessionExternalID,
+		&value.AgentID, &value.AgentExternalID, &value.AgentVersion,
+		&value.AccountEmail,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CodeSessionCredentialContext{}, ErrNotFound
+	}
+	if err != nil {
+		return CodeSessionCredentialContext{}, err
+	}
+	return value, nil
 }
 
 func (d *DB) GetCodeSession(ctx context.Context, externalID string) (CodeSession, error) {
@@ -697,15 +862,6 @@ func (d *DB) getCodeSessionEventTx(ctx context.Context, tx pgx.Tx, direction str
 	`, workspaceID, idempotencyKey))
 }
 
-func (d *DB) getCodeSessionInternalEventTx(ctx context.Context, tx pgx.Tx, workspaceID int64, idempotencyKey string) (CodeSessionInternalEvent, error) {
-	return scanCodeSessionInternalEvent(tx.QueryRow(ctx, `
-		select `+codeSessionInternalEventColumns()+`
-		from code_session_internal_events
-		where workspace_id = $1 and idempotency_key = $2 and deleted_at is null
-		limit 1
-	`, workspaceID, idempotencyKey))
-}
-
 func (d *DB) ListCodeSessionInternalEventsPage(ctx context.Context, params ListCodeSessionInternalEventsPageParams) ([]CodeSessionInternalEvent, bool, error) {
 	limit := params.Limit
 	if limit <= 0 {
@@ -1106,6 +1262,38 @@ func (d *DB) TouchCodeSessionWorkerActivity(ctx context.Context, codeSessionExte
 
 func (d *DB) TouchCodeSessionWorkerActivityForEpoch(ctx context.Context, codeSessionExternalID string, epoch int64) error {
 	return d.touchCodeSessionWorkerActivity(ctx, codeSessionExternalID, &epoch)
+}
+
+// TouchCodeSessionWorkerActivityForActiveLease 只允许 OTLP 刷新当前 epoch 且 lease 尚未过期的 worker，
+// 不能借遥测请求复活已经被接管或租约过期的 worker。
+func (d *DB) TouchCodeSessionWorkerActivityForActiveLease(ctx context.Context, codeSessionExternalID string, epoch int64) error {
+	if epoch <= 0 {
+		return ErrWorkerEpochMismatch
+	}
+	now := time.Now().UTC()
+	tag, err := d.Pool.Exec(ctx, `
+		update code_sessions
+		set last_worker_activity_at = $1, updated_at = $1
+		where external_id = $2
+			and current_worker_epoch = $3
+			and worker_lease_expires_at > $1
+			and deleted_at is null
+	`, now, codeSessionExternalID, epoch)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() > 0 {
+		return nil
+	}
+	// 条件更新未命中后再读取当前状态，以便把 takeover 与 lease 过期映射为不同 HTTP 错误。
+	record, err := d.GetCodeSession(ctx, codeSessionExternalID)
+	if err != nil {
+		return err
+	}
+	if record.CurrentWorkerEpoch != epoch {
+		return ErrWorkerEpochMismatch
+	}
+	return ErrWorkerLeaseExpired
 }
 
 func (d *DB) touchCodeSessionWorkerActivity(ctx context.Context, codeSessionExternalID string, requiredEpoch *int64) error {

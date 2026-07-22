@@ -21,21 +21,30 @@ describe('anthropicBetaApi', () => {
       capturedInit = init;
       return new Response(
         JSON.stringify({
-          data: [{ id: 'file_123', type: 'file', filename: 'notes.txt', mime_type: 'text/plain', size_bytes: 5, created_at: '2026-01-01T00:00:00Z' }],
+          data: [
+            {
+              id: 'file_123',
+              type: 'file',
+              filename: 'notes.txt',
+              mime_type: 'text/plain',
+              size_bytes: 5,
+              created_at: '2026-01-01T00:00:00Z',
+            },
+          ],
           has_more: true,
           first_id: 'file_123',
-          last_id: 'file_123'
+          last_id: 'file_123',
         }),
         {
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          headers: { 'Content-Type': 'application/json' },
+        },
       );
     }) as unknown as typeof fetch;
 
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: 'wrkspc_test_uuid'
+      workspaceId: 'wrkspc_test_uuid',
     });
 
     const page = await anthropicBetaApi.files.list<{ id: string }>({ limit: 20 });
@@ -49,10 +58,19 @@ describe('anthropicBetaApi', () => {
     expect(headers.get('x-api-key')).toBeNull();
     expect(headers.get('authorization')).toBeNull();
     expect(page).toEqual({
-      data: [{ id: 'file_123', type: 'file', filename: 'notes.txt', mime_type: 'text/plain', size_bytes: 5, created_at: '2026-01-01T00:00:00Z' }],
+      data: [
+        {
+          id: 'file_123',
+          type: 'file',
+          filename: 'notes.txt',
+          mime_type: 'text/plain',
+          size_bytes: 5,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ],
       has_more: true,
       first_id: 'file_123',
-      last_id: 'file_123'
+      last_id: 'file_123',
     });
     expect(Object.getPrototypeOf(page)).toBe(Object.prototype);
   });
@@ -68,18 +86,18 @@ describe('anthropicBetaApi', () => {
           skill_id: 'skill_123',
           version: '1783557867000000',
           name: 'emoji-translator',
-          description: 'Translate text to emoji.'
+          description: 'Translate text to emoji.',
         }),
         {
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          headers: { 'Content-Type': 'application/json' },
+        },
       );
     }) as unknown as typeof fetch;
 
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: 'wrkspc_test_uuid'
+      workspaceId: 'wrkspc_test_uuid',
     });
 
     const file = new File(['skill archive'], 'emoji-translator.zip', { type: 'application/zip' });
@@ -107,20 +125,20 @@ describe('anthropicBetaApi', () => {
         JSON.stringify({
           error: {
             type: 'invalid_request_error',
-            message: 'Workspace is required.'
-          }
+            message: 'Workspace is required.',
+          },
         }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          headers: { 'Content-Type': 'application/json' },
+        },
       );
     }) as unknown as typeof fetch;
 
     await expect(anthropicBetaApi.files.list({ limit: 20 }, 'missing_workspace')).rejects.toEqual({
       status: 400,
       code: 'invalid_request_error',
-      message: 'Workspace is required.'
+      message: 'Workspace is required.',
     });
   });
 });

@@ -3,7 +3,6 @@ package environments
 import (
 	"encoding/base64"
 	"encoding/json"
-	"net"
 	urlpkg "net/url"
 	"path"
 	"strings"
@@ -19,12 +18,6 @@ const (
 	defaultEnvironmentWorkDir     = "/home/user"
 	managedAgentMCPConfigPath     = "/tmp/managed-agent-mcp-config.json"
 )
-
-type environmentManagerCommand struct {
-	StdinPath    string
-	Payload      []byte
-	ShellCommand string
-}
 
 func managedAgentSessionConfig(session db.Session, resources []db.SessionResource) json.RawMessage {
 	agentSnapshot := rawJSONObject(session.AgentSnapshot)
@@ -167,31 +160,6 @@ func mcpServerTransportType(serverType string, rawURL string) string {
 	return "http"
 }
 
-func managedAgentMCPAllowedHosts(raw json.RawMessage) []string {
-	snapshot := rawJSONObject(raw)
-	servers := arrayValue(snapshot["mcp_servers"])
-	hosts := make([]string, 0, len(servers))
-	for _, value := range servers {
-		server, ok := value.(map[string]any)
-		if !ok {
-			continue
-		}
-		host := hostnameFromURL(stringFromMap(server, "url"))
-		if host != "" {
-			hosts = append(hosts, host)
-		}
-	}
-	return uniqueStrings(hosts)
-}
-
-func hostnameFromURL(raw string) string {
-	parsed, err := urlpkg.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(strings.ToLower(parsed.Hostname()))
-}
-
 func rawJSONObject(raw json.RawMessage) map[string]any {
 	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
 		return map[string]any{}
@@ -233,23 +201,6 @@ func mapStringAnyValue(value any) map[string]any {
 func arrayValue(value any) []any {
 	values, _ := value.([]any)
 	return values
-}
-
-func uniqueStrings(values []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
 }
 
 func managedAgentWorkDir(resources []db.SessionResource) string {
@@ -299,7 +250,8 @@ func modelIDFromAgentSnapshot(raw json.RawMessage) string {
 	return strings.TrimSpace(stringFromMap(model, "id"))
 }
 
-func buildEnvironmentManagerV0Payload(codeSessionID string, workDir string, sessionConfig json.RawMessage, cfg config.Config) ([]byte, error) {
+// buildEnvironmentManagerV0Payload 把 code session 映射为 environment-manager v0 合同；relay、runtime API 与 ingress 绑定同一 external ID，真实上游凭证不进入 sandbox。
+func buildEnvironmentManagerV0Payload(codeSessionID string, sessionIngressToken string, oauthAccessToken string, workDir string, sessionConfig json.RawMessage, cfg config.Config) ([]byte, error) {
 	startupContext := map[string]any{}
 	if len(sessionConfig) > 0 && string(sessionConfig) != "null" {
 		if err := json.Unmarshal(sessionConfig, &startupContext); err != nil {
@@ -310,11 +262,13 @@ func buildEnvironmentManagerV0Payload(codeSessionID string, workDir string, sess
 	startupContext["use_code_sessions"] = true
 	startupContext["session_id"] = codeSessionID
 	environmentVariables := mapStringAnyValue(startupContext["environment_variables"])
+	environmentVariables["CLAUDE_CODE_REMOTE"] = "true" // 进入 remote-session 路径并初始化 CCR relay。
 	environmentVariables["CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2"] = "1"
-	environmentVariables["CLAUDE_CODE_SESSION_ACCESS_TOKEN"] = codeSessionID
+	delete(environmentVariables, "CLAUDE_CODE_SESSION_ACCESS_TOKEN") // 避免遮蔽 environment-manager 注入的 WebSocket auth FD。
 	environmentVariables["CLAUDE_CODE_USE_CCR_V2"] = "1"
 	environmentVariables["CLAUDE_CODE_WORKER_EPOCH"] = "1"
-	applyCodeSessionOTLPEnvironment(environmentVariables, stringFromMap(startupContext, "api_base_url"), codeSessionID, "1")
+	environmentVariables["CCR_UPSTREAM_PROXY_ENABLED"] = "1" // 还需 REMOTE_SESSION_ID 和 /run/ccr/session_token 才会注入 HTTPS_PROXY。
+	applyCodeSessionOTLPEnvironment(environmentVariables, stringFromMap(startupContext, "api_base_url"), codeSessionID, sessionIngressToken, "1")
 	startupContext["environment_variables"] = environmentVariables
 	if _, ok := startupContext["sources"]; !ok {
 		startupContext["sources"] = []any{}
@@ -322,28 +276,22 @@ func buildEnvironmentManagerV0Payload(codeSessionID string, workDir string, sess
 	if _, ok := startupContext["outcomes"]; !ok {
 		startupContext["outcomes"] = []any{}
 	}
-
-	environment := map[string]any{
+	environment := map[string]any{ // 上游地址和 API key 不进入 environment；Claude 回连 startup_context.api_base_url。
 		"environment_type": "anthropic",
 		"cwd":              firstNonEmpty(strings.TrimSpace(workDir), defaultEnvironmentWorkDir),
 	}
-	if claudeEnv := claudeRuntimeEnvironment(cfg); len(claudeEnv) > 0 {
-		environment["environment"] = claudeEnv
-	}
-
-	auth := []any{
-		map[string]any{
-			"type":  "session_ingress",
-			"token": codeSessionID,
+	// 两种 auth 用途独立：session_ingress 供 worker/relay；anthropic_oauth 通过 OAuth FD 鉴权 /v1/messages。
+	auth := []AuthConfig{
+		{
+			Type:  "session_ingress",
+			Token: sessionIngressToken,
+		},
+		{
+			Type:  "anthropic_oauth",
+			Token: oauthAccessToken,
 		},
 	}
-	if strings.TrimSpace(cfg.AnthropicUpstreamAPIKey) != "" {
-		auth = append(auth, map[string]any{
-			"type":  "anthropic_api",
-			"token": strings.TrimSpace(cfg.AnthropicUpstreamAPIKey),
-		})
-	}
-
+	// environment-manager 将两个 token 分别接入 WebSocket auth FD 与 OAuth auth FD，不能合并语义。
 	return json.Marshal(map[string]any{
 		"startup_context": startupContext,
 		"environment":     environment,
@@ -351,23 +299,12 @@ func buildEnvironmentManagerV0Payload(codeSessionID string, workDir string, sess
 	})
 }
 
-func claudeRuntimeEnvironment(cfg config.Config) map[string]string {
-	env := map[string]string{}
-	if baseURL := strings.TrimRight(strings.TrimSpace(cfg.AnthropicUpstreamBaseURL), "/"); baseURL != "" {
-		env["ANTHROPIC_BASE_URL"] = baseURL
-	}
-	if apiKey := strings.TrimSpace(cfg.AnthropicUpstreamAPIKey); apiKey != "" {
-		env["ANTHROPIC_API_KEY"] = apiKey
-	}
-	return env
-}
-
-func applyCodeSessionOTLPEnvironment(environmentVariables map[string]any, apiBaseURL string, codeSessionID string, workerEpoch string) {
+func applyCodeSessionOTLPEnvironment(environmentVariables map[string]any, apiBaseURL string, codeSessionID string, sessionIngressToken string, workerEpoch string) {
 	if environmentVariables == nil {
 		return
 	}
 	requiredHeaders := []string{
-		"Authorization=Bearer " + codeSessionID,
+		"Authorization=Bearer " + sessionIngressToken,
 		"x-worker-epoch=" + workerEpoch,
 	}
 	metricsInjected := false
@@ -458,29 +395,16 @@ func commaListContains(raw string, want string) bool {
 }
 
 func codeSessionSandboxAPIBaseURL(cfg config.Config) string {
-	if baseURL := strings.TrimRight(firstNonEmpty(cfg.CodeSessionSandboxAPIBaseURL, cfg.CodeSessionAPIBaseURL, cfg.PublicBaseURL), "/"); baseURL != "" {
-		return baseURL
-	}
-	port := "8080"
-	addr := strings.TrimSpace(cfg.Addr)
-	if addr != "" {
-		if _, parsedPort, err := net.SplitHostPort(addr); err == nil && parsedPort != "" {
-			port = parsedPort
-		} else if strings.HasPrefix(addr, ":") && strings.TrimPrefix(addr, ":") != "" {
-			port = strings.TrimPrefix(addr, ":")
-		}
-	}
-	return "http://host.docker.internal:" + port
+	return strings.TrimRight(strings.TrimSpace(cfg.CodeSession.SandboxAPIBaseURL), "/")
 }
 
 func buildEnvironmentManagerCommand(codeSessionID string, cfg config.Config, payload []byte) environmentManagerCommand {
 	safeSessionID := strings.NewReplacer("/", "_", "\\", "_", " ", "_").Replace(codeSessionID)
 	baseDir := path.Join("/tmp/claude-code-sessions", safeSessionID)
-	stdinPath := path.Join(baseDir, "environment-manager.v0.json")
 	logPath := path.Join(baseDir, "environment-manager.log")
-	managerPath := firstNonEmpty(strings.TrimSpace(cfg.EnvironmentManagerPath), defaultEnvironmentManagerPath)
-	agentVersion := firstNonEmpty(strings.TrimSpace(cfg.ClaudeAgentVersion), defaultClaudeAgentVersion)
-	claudePath := firstNonEmpty(strings.TrimSpace(cfg.ClaudePath), defaultClaudePath)
+	managerPath := firstNonEmpty(strings.TrimSpace(cfg.EnvironmentRunner.ManagerPath), defaultEnvironmentManagerPath)
+	agentVersion := firstNonEmpty(strings.TrimSpace(cfg.EnvironmentRunner.ClaudeAgentVersion), defaultClaudeAgentVersion)
+	claudePath := firstNonEmpty(strings.TrimSpace(cfg.EnvironmentRunner.ClaudePath), defaultClaudePath)
 	versionPattern := `s/.*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p`
 	command := strings.Join([]string{
 		"set -eu",
@@ -493,19 +417,17 @@ func buildEnvironmentManagerCommand(codeSessionID string, cfg config.Config, pay
 		"export CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL=${CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL:-1}",
 		"export CLAUDE_CODE_ENABLE_BACKGROUND_PLUGIN_REFRESH=${CLAUDE_CODE_ENABLE_BACKGROUND_PLUGIN_REFRESH:-0}",
 		"export SKIP_PLUGIN_MARKETPLACE=${SKIP_PLUGIN_MARKETPLACE:-true}",
-		"nohup " + shellQuote(managerPath) +
+		// E2B 负责把该命令作为后台进程启动；payload 通过进程 stdin 发送，不进入命令行或沙箱文件系统。
+		"exec " + shellQuote(managerPath) +
 			" task-run" +
 			" --stdin" +
 			" --session " + shellQuote(codeSessionID) +
 			" --session-mode resume-cached" +
 			" --claude-agent-version " + shellQuote("current") +
 			" --claude-path " + shellQuote(claudePath) +
-			" < " + shellQuote(stdinPath) +
-			" > " + shellQuote(logPath) + " 2>&1 &",
-		"printf '%s\\n' " + shellQuote("started environment-manager for "+codeSessionID),
+			" > " + shellQuote(logPath) + " 2>&1",
 	}, "\n")
 	return environmentManagerCommand{
-		StdinPath:    stdinPath,
 		Payload:      append([]byte(nil), payload...),
 		ShellCommand: command,
 	}

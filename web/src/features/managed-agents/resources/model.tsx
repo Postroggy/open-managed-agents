@@ -3,7 +3,24 @@ import { type ReactNode } from 'react';
 import { relativeTime } from '../agents/AgentsResourcePage';
 import { localTimezone } from '../api';
 import { CompactChip, StatusPill } from '../components/common';
-import { type CredentialFormValues, type DeploymentApiResponse, type DeploymentRunApiResponse, type EnvironmentApiResponse, type EnvironmentEditValues, type EnvironmentPackageRow, type ManagedEntityApiResponse, type ManagedEntityFormValues, type ManagedEntitySection, type MemoryApiResponse, type MemoryBranchState, type MemoryTreeNode, type PageResponse, type SessionApiResponse, type VaultApiResponse, type VaultCredentialApiResponse } from '../types';
+import {
+  type CredentialFormValues,
+  type DeploymentApiResponse,
+  type DeploymentRunApiResponse,
+  type EnvironmentApiResponse,
+  type EnvironmentEditValues,
+  type EnvironmentPackageRow,
+  type ManagedEntityApiResponse,
+  type ManagedEntityFormValues,
+  type ManagedEntitySection,
+  type MemoryApiResponse,
+  type MemoryBranchState,
+  type MemoryTreeNode,
+  type PageResponse,
+  type SessionApiResponse,
+  type VaultApiResponse,
+  type VaultCredentialApiResponse,
+} from '../types';
 import { formatBytes, objectRecord, sectionPathSegment, titleCase } from '../utils';
 
 export { sectionPathSegment };
@@ -29,12 +46,21 @@ export function updateMemoryQueryParam(memoryId: string | null) {
 }
 
 export function memoryBranchFromPage(page: PageResponse<MemoryApiResponse>): MemoryBranchState {
-  return { loading: false, error: null, data: memoryRowsFromPage(page), prefixes: memoryPrefixPathsFromValues(page.prefixes ?? []) };
+  return {
+    loading: false,
+    error: null,
+    data: memoryRowsFromPage(page),
+    prefixes: memoryPrefixPathsFromValues(page.prefixes ?? []),
+  };
 }
 
 export function memoryRowsFromPage(page: PageResponse<MemoryApiResponse>) {
-  const rows = (page.data ?? []).map(normalizeMemoryRow).filter((memory): memory is MemoryApiResponse => Boolean(memory));
-  const existingPaths = new Set(rows.map((memory) => (memory.type === 'memory_prefix' ? normalizeMemoryFolderPath(memory.path) : memory.path)));
+  const rows = (page.data ?? [])
+    .map(normalizeMemoryRow)
+    .filter((memory): memory is MemoryApiResponse => Boolean(memory));
+  const existingPaths = new Set(
+    rows.map((memory) => (memory.type === 'memory_prefix' ? normalizeMemoryFolderPath(memory.path) : memory.path)),
+  );
   const prefixRows = memoryPrefixPathsFromValues(page.prefixes ?? [])
     .filter((prefix) => !existingPaths.has(prefix))
     .map((prefix) => ({
@@ -44,7 +70,7 @@ export function memoryRowsFromPage(page: PageResponse<MemoryApiResponse>) {
       created_at: '',
       memory_store_id: '',
       path: prefix,
-      type: 'memory_prefix' as const
+      type: 'memory_prefix' as const,
     }));
   return sortMemoryRows([...rows, ...prefixRows]);
 }
@@ -62,7 +88,7 @@ export function normalizeMemoryRow(memory: MemoryApiResponse) {
       created_at: memory.created_at || '',
       memory_store_id: memory.memory_store_id || '',
       path,
-      type: 'memory_prefix' as const
+      type: 'memory_prefix' as const,
     };
   }
   return memory;
@@ -118,7 +144,10 @@ export function memoryFolderPathsFromRows(rows: MemoryApiResponse[]) {
   return [...paths].sort((left, right) => left.localeCompare(right));
 }
 
-export function loadedMemoryRowsFromBranches(rootRows: MemoryApiResponse[], branches: Record<string, MemoryBranchState>) {
+export function loadedMemoryRowsFromBranches(
+  rootRows: MemoryApiResponse[],
+  branches: Record<string, MemoryBranchState>,
+) {
   const rows = [...rootRows.filter((memory) => memory.type === 'memory')];
   for (const branch of Object.values(branches)) {
     rows.push(...branch.data.filter((memory) => memory.type === 'memory'));
@@ -126,7 +155,10 @@ export function loadedMemoryRowsFromBranches(rootRows: MemoryApiResponse[], bran
   return sortMemoryRows(rows);
 }
 
-export function memoryFolderPathsFromBranches(rootRows: MemoryApiResponse[], branches: Record<string, MemoryBranchState>) {
+export function memoryFolderPathsFromBranches(
+  rootRows: MemoryApiResponse[],
+  branches: Record<string, MemoryBranchState>,
+) {
   const paths = new Set(memoryFolderPathsFromRows(rootRows));
   for (const branch of Object.values(branches)) {
     for (const path of memoryFolderPathsFromRows(branch.data)) {
@@ -136,7 +168,11 @@ export function memoryFolderPathsFromBranches(rootRows: MemoryApiResponse[], bra
   return [...paths].sort((left, right) => left.localeCompare(right));
 }
 
-export function buildMemoryTreeNodes(rootRows: MemoryApiResponse[], expandedFolders: Set<string>, branches: Record<string, MemoryBranchState>) {
+export function buildMemoryTreeNodes(
+  rootRows: MemoryApiResponse[],
+  expandedFolders: Set<string>,
+  branches: Record<string, MemoryBranchState>,
+) {
   const nodes: MemoryTreeNode[] = [];
   const appendRows = (rows: MemoryApiResponse[], depth: number) => {
     const seenFolders = new Set<string>();
@@ -149,7 +185,15 @@ export function buildMemoryTreeNodes(rootRows: MemoryApiResponse[], expandedFold
         seenFolders.add(path);
         const branch = branches[path];
         const expanded = expandedFolders.has(path);
-        nodes.push({ type: 'folder', path, label: memoryFolderLabel(path), depth, expanded, loading: Boolean(branch?.loading), error: branch?.error ?? null });
+        nodes.push({
+          type: 'folder',
+          path,
+          label: memoryFolderLabel(path),
+          depth,
+          expanded,
+          loading: Boolean(branch?.loading),
+          error: branch?.error ?? null,
+        });
         if (expanded && branch?.data.length) {
           appendRows(branch.data, depth + 1);
         }
@@ -212,7 +256,10 @@ export function memoryFileName(path: string) {
   return name || 'memory.txt';
 }
 
-export function cellsForEntity(section: ManagedEntitySection, entity: ManagedEntityApiResponse): Record<string, ReactNode> {
+export function cellsForEntity(
+  section: ManagedEntitySection,
+  entity: ManagedEntityApiResponse,
+): Record<string, ReactNode> {
   const status = <StatusPill>{entityStatusLabel(entity)}</StatusPill>;
 
   switch (section) {
@@ -221,7 +268,7 @@ export function cellsForEntity(section: ManagedEntitySection, entity: ManagedEnt
         Name: entityDisplayName(section, entity),
         Status: status,
         Agent: <CompactChip icon={Bot}>{entityAgentLabel(entity)}</CompactChip>,
-        Created: relativeTime(entity.created_at)
+        Created: relativeTime(entity.created_at),
       };
     case 'deployments':
       return {
@@ -229,31 +276,34 @@ export function cellsForEntity(section: ManagedEntitySection, entity: ManagedEnt
         Status: status,
         Agent: <CompactChip icon={Bot}>{entityAgentLabel(entity)}</CompactChip>,
         Trigger: deploymentTrigger(entity as DeploymentApiResponse),
-        Created: relativeTime(entity.created_at)
+        Created: relativeTime(entity.created_at),
       };
     case 'environments':
       return {
         Name: entityDisplayName(section, entity),
         Status: status,
         Type: 'Cloud',
-        'Updated at': relativeTime(entity.updated_at)
+        'Updated at': relativeTime(entity.updated_at),
       };
     case 'credential-vaults':
       return {
         Name: entityDisplayName(section, entity),
         Status: status,
-        Created: relativeTime(entity.created_at)
+        Created: relativeTime(entity.created_at),
       };
     case 'memory-stores':
       return {
         Name: entityDisplayName(section, entity),
         Status: status,
-        Created: relativeTime(entity.created_at)
+        Created: relativeTime(entity.created_at),
       };
   }
 }
 
-export function initialFormValues(section: ManagedEntitySection, entity?: ManagedEntityApiResponse): ManagedEntityFormValues {
+export function initialFormValues(
+  section: ManagedEntitySection,
+  entity?: ManagedEntityApiResponse,
+): ManagedEntityFormValues {
   return {
     name: entity ? entityDisplayName(section, entity) : '',
     description: entityDescription(entity),
@@ -264,7 +314,7 @@ export function initialFormValues(section: ManagedEntitySection, entity?: Manage
     cronExpression: entity ? entityCronExpression(entity) : '0 9 * * 1',
     timezone: entity ? entityTimezone(entity) : localTimezone(),
     vaultIds: entity ? entityVaultIds(entity) : [],
-    memoryStoreIds: entity ? entityMemoryStoreIds(entity) : []
+    memoryStoreIds: entity ? entityMemoryStoreIds(entity) : [],
   };
 }
 
@@ -346,7 +396,11 @@ export function entityInitialMessage(entity: ManagedEntityApiResponse) {
       continue;
     }
     const text = content
-      .map((item) => (item && typeof item === 'object' && typeof (item as { text?: unknown }).text === 'string' ? (item as { text: string }).text : ''))
+      .map((item) =>
+        item && typeof item === 'object' && typeof (item as { text?: unknown }).text === 'string'
+          ? (item as { text: string }).text
+          : '',
+      )
       .join('')
       .trim();
     if (text) {
@@ -362,9 +416,11 @@ export function entityMemoryStoreIds(entity: ManagedEntityApiResponse) {
   }
   return entity.resources
     .map((resource) =>
-      resource && typeof resource === 'object' && typeof (resource as { memory_store_id?: unknown }).memory_store_id === 'string'
+      resource &&
+      typeof resource === 'object' &&
+      typeof (resource as { memory_store_id?: unknown }).memory_store_id === 'string'
         ? (resource as { memory_store_id: string }).memory_store_id
-        : null
+        : null,
     )
     .filter((item): item is string => Boolean(item));
 }
@@ -399,35 +455,35 @@ export function detailRowsForEntity(section: ManagedEntitySection, entity: Manag
         { label: 'Status', value: entityStatusLabel(entity) },
         { label: 'Agent', value: entityAgentLabel(entity) },
         { label: 'Environment', value: (entity as SessionApiResponse).environment_id || '—' },
-        { label: 'Deployment', value: (entity as SessionApiResponse).deployment_id || '—' }
+        { label: 'Deployment', value: (entity as SessionApiResponse).deployment_id || '—' },
       ];
     case 'deployments':
       return [
         { label: 'Status', value: entityStatusLabel(entity) },
         { label: 'Agent', value: entityAgentLabel(entity) },
         { label: 'Environment', value: (entity as DeploymentApiResponse).environment_id || '—' },
-        { label: 'Trigger', value: deploymentTrigger(entity as DeploymentApiResponse) }
+        { label: 'Trigger', value: deploymentTrigger(entity as DeploymentApiResponse) },
       ];
     case 'environments':
       return [
         { label: 'Status', value: entityStatusLabel(entity) },
         { label: 'Type', value: 'Cloud' },
         { label: 'Scope', value: (entity as EnvironmentApiResponse).scope || 'workspace' },
-        { label: 'Created', value: relativeTime(entity.created_at) }
+        { label: 'Created', value: relativeTime(entity.created_at) },
       ];
     case 'credential-vaults':
       return [
         { label: 'Status', value: entityStatusLabel(entity) },
         { label: 'Created', value: relativeTime(entity.created_at) },
         { label: 'Last updated', value: relativeTime(entity.updated_at) },
-        { label: 'Type', value: 'Credential vault' }
+        { label: 'Type', value: 'Credential vault' },
       ];
     case 'memory-stores':
       return [
         { label: 'Status', value: entityStatusLabel(entity) },
         { label: 'Created', value: relativeTime(entity.created_at) },
         { label: 'Last updated', value: relativeTime(entity.updated_at) },
-        { label: 'Type', value: 'Memory store' }
+        { label: 'Type', value: 'Memory store' },
       ];
   }
 }
@@ -479,9 +535,36 @@ export function environmentEditValues(entity: EnvironmentApiResponse): Environme
     name: entity.name,
     description: entity.description || '',
     networkType: networking.type === 'limited' ? 'limited' : 'unrestricted',
+    allowMcpServers: networking.allow_mcp_servers === true,
+    allowPackageManagers: networking.allow_package_managers === true,
+    allowedHostsText: stringArrayValue(networking.allowed_hosts).join('\n'),
     packages: packages.length ? packages : [{ manager: 'pip', value: '' }],
-    metadataRows: Object.entries(metadata).length ? Object.entries(metadata).map(([key, value]) => ({ key, value: String(value) })) : [{ key: '', value: '' }]
+    metadataRows: Object.entries(metadata).length
+      ? Object.entries(metadata).map(([key, value]) => ({ key, value: String(value) }))
+      : [{ key: '', value: '' }],
   };
+}
+
+function stringArrayValue(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '');
+}
+
+// parseAllowedHostsText 把逗号/换行分隔的输入归一化为去重、保序的 host 数组。
+function parseAllowedHostsText(text: string): string[] {
+  const seen = new Set<string>();
+  const hosts: string[] = [];
+  for (const entry of text.split(/[\s,]+/)) {
+    const host = entry.trim();
+    if (!host || seen.has(host)) {
+      continue;
+    }
+    seen.add(host);
+    hosts.push(host);
+  }
+  return hosts;
 }
 
 export function environmentPackageRows(packages: unknown): EnvironmentPackageRow[] {
@@ -499,7 +582,15 @@ export function environmentPackageRows(packages: unknown): EnvironmentPackageRow
 }
 
 export function environmentConfigBody(values: EnvironmentEditValues) {
-  const packages: Record<string, string[] | string> = { type: 'packages', apt: [], cargo: [], gem: [], go: [], npm: [], pip: [] };
+  const packages: Record<string, string[] | string> = {
+    type: 'packages',
+    apt: [],
+    cargo: [],
+    gem: [],
+    go: [],
+    npm: [],
+    pip: [],
+  };
   for (const row of values.packages) {
     const manager = row.manager;
     if (!['apt', 'cargo', 'gem', 'go', 'npm', 'pip'].includes(manager)) {
@@ -507,23 +598,33 @@ export function environmentConfigBody(values: EnvironmentEditValues) {
     }
     const list = packages[manager];
     if (Array.isArray(list)) {
-      const entries = row.value.split(/\s+/).map((value) => value.trim()).filter(Boolean);
+      const entries = row.value
+        .split(/\s+/)
+        .map((value) => value.trim())
+        .filter(Boolean);
       list.push(...entries);
     }
   }
   return {
     type: 'cloud',
     packages,
-    networking: values.networkType === 'limited' ? { type: 'limited', allowed_hosts: [], allow_mcp_servers: false, allow_package_managers: false } : { type: 'unrestricted' }
+    networking:
+      values.networkType === 'limited'
+        ? {
+            type: 'limited',
+            allowed_hosts: parseAllowedHostsText(values.allowedHostsText),
+            allow_mcp_servers: values.allowMcpServers,
+            allow_package_managers: values.allowPackageManagers,
+          }
+        : { type: 'unrestricted' },
   };
 }
 
 export function environmentMetadataBody(values: EnvironmentEditValues) {
   const metadata: Record<string, string> = {};
   for (const row of values.metadataRows) {
-    const key = row.key.trim();
-    if (key) {
-      metadata[key] = row.value;
+    if (row.key.trim()) {
+      metadata[row.key] = row.value;
     }
   }
   return metadata;
@@ -538,7 +639,7 @@ export function credentialFormValues(credential?: VaultCredentialApiResponse): C
     mcpServerUrl: typeof auth.mcp_server_url === 'string' ? auth.mcp_server_url : '',
     token: '',
     secretName: typeof auth.secret_name === 'string' ? auth.secret_name : '',
-    secretValue: ''
+    secretValue: '',
   };
 }
 
@@ -548,13 +649,13 @@ export function credentialAuthBody(values: CredentialFormValues, includeImmutabl
       type: 'environment_variable',
       ...(includeImmutable ? { secret_name: values.secretName.trim() } : {}),
       secret_value: values.secretValue,
-      networking: { type: 'unrestricted' }
+      networking: { type: 'unrestricted' },
     };
   }
   return {
     type: 'static_bearer',
     ...(includeImmutable ? { mcp_server_url: values.mcpServerUrl.trim() } : {}),
-    token: values.token
+    token: values.token,
   };
 }
 

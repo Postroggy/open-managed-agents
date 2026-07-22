@@ -18,11 +18,12 @@ Sentinels: `internal` | `gated:<reason>`
 /healthz -> internal
 /memory_stores -> gated:needs-design-doc
 /messages/batches -> gated:needs-design-doc
+/messages -> docs/design/be/messages-proxy.md
 /models -> internal
 /organizations -> internal
 /sessions -> gated:needs-design-doc
 /skills -> gated:needs-design-doc
-/v1/code/sessions -> docs/design/be/ccrv2/ccr-v2-api-worker-state.md
+/mcp/vault-auth/start -> gated:needs-design-doc
 /vaults -> gated:needs-design-doc
 /webhooks -> gated:needs-design-doc
 
@@ -44,8 +45,11 @@ files -> gated:needs-design-doc
 httpapi -> internal
 ids -> internal
 managedagentsevents -> gated:needs-design-doc
+mcpcatalogs -> docs/design/mcp-tool-catalog-discovery.md
+messages -> docs/design/be/messages-proxy.md
 memory -> gated:needs-design-doc
 models -> internal
+networkpolicy -> docs/design/be/ccrv2/upstream-proxy-and-model-runtime.md
 observability -> internal
 platform -> internal
 platformapi -> internal
@@ -73,6 +77,10 @@ workbench -> docs/design/be/http-platform-workbench-boundaries.md
 00010_builtin_skills.sql -> gated:needs-design-doc
 00011_unique_skill_display_title.sql -> internal
 00012_require_skill_display_title.sql -> internal
+00014_globalize_mcp_tool_catalogs.sql -> docs/design/mcp-tool-catalog-discovery.md
+00015_add_code_session_model_access_tokens.sql -> docs/design/be/messages-proxy.md
+00016_rename_code_session_oauth_tokens.sql -> docs/design/be/messages-proxy.md
+00017_remove_code_session_credential_expiry.sql -> docs/design/be/messages-proxy.md
 
 ## FE routes -> design docs
 
@@ -150,8 +158,10 @@ workspaces/$workspaceId/vaults/$vaultId -> gated:needs-design-doc
 # Each Register*Routes entry point = one HTTP resource contributed by a package.
 # Most map to the platform/workbench boundary doc; domain-specific ones map to
 # their area design doc; unmapped resources that need their own doc use gated:.
-codesessions.RegisterRoutes -> docs/design/be/ccrv2/ccr-v2-api-worker-state.md
+codesessions.RegisterV1Routes -> docs/design/be/ccrv2/upstream-proxy-and-model-runtime.md
+codesessions.RegisterV2Routes -> docs/design/be/ccrv2/upstream-proxy-and-model-runtime.md
 files.RegisterPlatformRoutes -> gated:needs-design-doc
+mcpcatalogs.RegisterRoutes -> docs/design/mcp-tool-catalog-discovery.md
 platformapi.RegisterConsoleOrganizationAPIKeyRoutes -> docs/design/be/http-platform-workbench-boundaries.md
 platformapi.RegisterConsoleOrganizationAdminRequestRoutes -> docs/design/be/http-platform-workbench-boundaries.md
 platformapi.RegisterConsoleOrganizationInviteRoutes -> docs/design/be/http-platform-workbench-boundaries.md
@@ -231,6 +241,7 @@ platformAuthMiddleware -> docs/design/be/db-platform-auth-boundaries.md
 recoverMiddleware -> internal
 requestIDMiddleware -> internal
 serviceAuthMiddleware -> docs/design/be/permission-policies.md
+v1AuthMiddleware -> docs/design/be/auth-credential-routing.md
 
 ## Unlisted design docs
 

@@ -3,15 +3,7 @@ import { ArrowLeft, CircleAlert, Loader2, MailCheck } from 'lucide-react';
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button, ButtonLink } from '@/shared/ui/button';
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from '@/shared/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { sendMagicLink, verifyMagicLink } from '../../shared/auth/api';
@@ -32,7 +24,7 @@ const topNavItems = [
   { id: 'auth.login.topNav.developerDocs', label: 'Developer Docs', href: 'https://docs.anthropic.com/' },
   { id: 'auth.login.topNav.apiReference', label: 'API Reference', href: 'https://docs.anthropic.com/' },
   { id: 'auth.login.topNav.cookbooks', label: 'Cookbooks', href: 'https://docs.anthropic.com/' },
-  { id: 'auth.login.topNav.quickstarts', label: 'Quickstarts', href: 'https://docs.anthropic.com/' }
+  { id: 'auth.login.topNav.quickstarts', label: 'Quickstarts', href: 'https://docs.anthropic.com/' },
 ] as const;
 
 export function LoginPage() {
@@ -75,7 +67,7 @@ export function LoginFlow({
   initialEmail = '',
   onSendMagicLink = sendMagicLink,
   onVerifyMagicLink = verifyMagicLink,
-  onAuthenticated
+  onAuthenticated,
 }: LoginFlowProps) {
   const { msg } = useI18n();
   const [step, setStep] = useState<LoginStep>('email');
@@ -156,7 +148,7 @@ export function LoginFlow({
           <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
             {msg(
               'auth.login.valueProp',
-              'Create agents and applications with frontier models, durable sessions, and managed agent infrastructure.'
+              'Create agents and applications with frontier models, durable sessions, and managed agent infrastructure.',
             )}
           </p>
         </div>
@@ -169,7 +161,7 @@ export function LoginFlow({
                 <CardDescription>
                   {msg(
                     'auth.login.emailStepDescription',
-                    'Enter the email address associated with your Open Managed Agents account.'
+                    'Enter the email address associated with your Open Managed Agents account.',
                   )}
                 </CardDescription>
               </CardHeader>
@@ -227,7 +219,7 @@ export function LoginFlow({
                 <CardDescription>
                   {msg(
                     'auth.login.codeStepDescription',
-                    'Use the verification code from your inbox to finish signing in.'
+                    'Use the verification code from your inbox to finish signing in.',
                   )}
                 </CardDescription>
               </CardHeader>
@@ -238,7 +230,7 @@ export function LoginFlow({
                   </FieldLabel>
                   <FieldDescription>
                     {msg('auth.login.codeSentTo', 'We sent a 6-digit code to {email}.', {
-                      email: submittedEmail
+                      email: submittedEmail,
                     })}
                   </FieldDescription>
                   <Input
@@ -260,7 +252,14 @@ export function LoginFlow({
                   {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" /> : null}
                   {msg('auth.login.verifyEmail', 'Verify email')}
                 </Button>
-                <Button className="w-full" disabled={isResending} onClick={handleResend} size="lg" type="button" variant="ghost">
+                <Button
+                  className="w-full"
+                  disabled={isResending}
+                  onClick={handleResend}
+                  size="lg"
+                  type="button"
+                  variant="ghost"
+                >
                   {isResending ? msg('auth.login.sending', 'Sending...') : msg('auth.login.resendCode', 'Resend code')}
                 </Button>
               </CardFooter>
@@ -284,14 +283,7 @@ function LoginShell({ children }: { children: ReactNode }) {
           </a>
           <nav className="hidden items-center gap-1 md:flex">
             {topNavItems.map((item) => (
-              <ButtonLink
-                key={item.id}
-                href={item.href}
-                rel="noreferrer"
-                size="sm"
-                target="_blank"
-                variant="ghost"
-              >
+              <ButtonLink key={item.id} href={item.href} rel="noreferrer" size="sm" target="_blank" variant="ghost">
                 {msg(item.id, item.label)}
               </ButtonLink>
             ))}

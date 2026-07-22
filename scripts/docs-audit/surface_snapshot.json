@@ -9,19 +9,22 @@
       "/environments",
       "/files",
       "/healthz",
+      "/mcp/vault-auth/start",
       "/memory_stores",
+      "/messages",
       "/messages/batches",
       "/models",
       "/organizations",
       "/sessions",
       "/skills",
-      "/v1/code/sessions",
       "/vaults",
       "/webhooks"
     ],
     "api_subroutes": [
-      "codesessions.RegisterRoutes",
+      "codesessions.RegisterV1Routes",
+      "codesessions.RegisterV2Routes",
       "files.RegisterPlatformRoutes",
+      "mcpcatalogs.RegisterRoutes",
       "platformapi.RegisterConsoleOrganizationAPIKeyRoutes",
       "platformapi.RegisterConsoleOrganizationAdminRequestRoutes",
       "platformapi.RegisterConsoleOrganizationInviteRoutes",
@@ -48,7 +51,8 @@
       "platformAuthMiddleware",
       "recoverMiddleware",
       "requestIDMiddleware",
-      "serviceAuthMiddleware"
+      "serviceAuthMiddleware",
+      "v1AuthMiddleware"
     ],
     "event_contracts": [
       "agent.custom_tool_use",
@@ -175,7 +179,11 @@
       "00009_add_code_session_internal_events.sql",
       "00010_builtin_skills.sql",
       "00011_unique_skill_display_title.sql",
-      "00012_require_skill_display_title.sql"
+      "00012_require_skill_display_title.sql",
+      "00014_globalize_mcp_tool_catalogs.sql",
+      "00015_add_code_session_model_access_tokens.sql",
+      "00016_rename_code_session_oauth_tokens.sql",
+      "00017_remove_code_session_credential_expiry.sql"
     ],
     "packages": [
       "admin",
@@ -194,8 +202,11 @@
       "httpapi",
       "ids",
       "managedagentsevents",
+      "mcpcatalogs",
       "memory",
+      "messages",
       "models",
+      "networkpolicy",
       "observability",
       "platform",
       "platformapi",

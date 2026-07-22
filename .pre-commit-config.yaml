@@ -1,0 +1,80 @@
+minimum_pre_commit_version: "4.6.0"
+fail_fast: false
+exclude: ^web/src/features/managed-agents/quickstart/platformQuickstartOfficialRequest\.generated\.ts$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1024, --enforce-all]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: Format staged Go files
+        entry: gofmt -w
+        language: system
+        types: [go]
+
+      - id: golangci-lint
+        name: Lint packages containing staged Go files
+        entry: scripts/pre-commit-go-lint.sh
+        language: script
+        types: [go]
+        require_serial: true
+
+      - id: go-dead-code
+        name: Detect unreachable Go declarations
+        entry: scripts/go-dead-code.sh
+        language: script
+        files: ^(?:.*\.go|\.golangci-dead-code\.yml|go\.(?:mod|sum)|scripts/go-dead-code\.sh)$
+        pass_filenames: false
+        require_serial: true
+
+      - id: go-complexity
+        name: Enforce Go cyclomatic complexity
+        entry: scripts/go-complexity.sh
+        language: script
+        files: ^(?:.*\.go|\.golangci-complexity\.yml|go\.(?:mod|sum)|scripts/go-complexity\.sh)$
+        pass_filenames: false
+        require_serial: true
+
+      - id: duplicate-code
+        name: Enforce Go and TypeScript duplicate-code budgets
+        entry: scripts/check-duplicates.sh
+        language: script
+        files: ^(?:.*\.go|web/src/.*\.tsx?|\.jscpd\.json|web/\.jscpd\.json|web/(?:package\.json|bun\.lock)|scripts/check-duplicates\.sh)$
+        pass_filenames: false
+        require_serial: true
+
+      - id: prettier
+        name: Format staged frontend files
+        entry: scripts/pre-commit-web-format.sh
+        language: script
+        files: ^web/.*\.(?:[cm]?[jt]sx?|json|css|md|ya?ml)$
+        require_serial: true
+
+      - id: typescript-naming
+        name: Enforce TypeScript naming conventions
+        entry: bash -c 'cd web && bun run lint:naming'
+        language: system
+        files: ^web/(?:src/.*\.tsx?|eslint\.naming\.config\.js|package\.json)$
+        pass_filenames: false
+        require_serial: true
+
+      - id: typescript-complexity
+        name: Enforce TypeScript size and complexity budgets
+        entry: bash -c 'cd web && bun run lint:complexity'
+        language: system
+        files: ^web/(?:src/.*\.tsx?|eslint\.complexity\.config\.js|package\.json)$
+        pass_filenames: false
+        require_serial: true

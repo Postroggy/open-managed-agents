@@ -33,7 +33,7 @@ hljs.registerLanguage('yaml', yamlLanguage);
 export function SyntaxCodeBlock({
   value,
   language,
-  maxHeightClassName
+  maxHeightClassName,
 }: {
   value: string;
   language?: string;
@@ -46,7 +46,7 @@ export function SyntaxCodeBlock({
       className={clsx(
         'rounded-lg border border-border bg-muted p-3 font-mono text-[13px] leading-[19px] text-foreground whitespace-pre-wrap break-words overflow-x-hidden',
         maxHeightClassName ? 'subtle-scrollbar overflow-y-auto' : 'overflow-visible',
-        maxHeightClassName
+        maxHeightClassName,
       )}
     >
       <HighlightedCode code={value} language={highlightLanguage} />
@@ -66,7 +66,14 @@ export function normalizeHighlightLanguage(language: string | undefined, value: 
   if (normalized === 'json') {
     return 'json';
   }
-  if (normalized === 'bash' || normalized === 'shell' || normalized === 'sh' || normalized === 'zsh' || normalized === 'cli' || normalized === 'curl') {
+  if (
+    normalized === 'bash' ||
+    normalized === 'shell' ||
+    normalized === 'sh' ||
+    normalized === 'zsh' ||
+    normalized === 'cli' ||
+    normalized === 'curl'
+  ) {
     return 'bash';
   }
   if (normalized === 'py' || normalized === 'python') {
@@ -81,11 +88,23 @@ export function normalizeHighlightLanguage(language: string | undefined, value: 
   return looksLikeJson(value) ? 'json' : 'plaintext';
 }
 
-export function HighlightedCode({ code, language, className }: { code: string; language: HighlightLanguage; className?: string }) {
+export function HighlightedCode({
+  code,
+  language,
+  className,
+}: {
+  code: string;
+  language: HighlightLanguage;
+  className?: string;
+}) {
   const codeLanguage = language === 'bash-yaml' ? 'bash' : language;
   return (
     <code
-      className={clsx('whitespace-pre-wrap break-words', className, codeLanguage !== 'plaintext' && `language-${codeLanguage}`)}
+      className={clsx(
+        'whitespace-pre-wrap break-words',
+        className,
+        codeLanguage !== 'plaintext' && `language-${codeLanguage}`,
+      )}
       dangerouslySetInnerHTML={{ __html: highlightCodeHtml(code, language) }}
     />
   );
@@ -111,17 +130,20 @@ export function highlightBashYamlCommand(code: string): string {
   const beforeYaml = code.slice(0, bodyStart);
   const rest = code.slice(bodyStart);
   const closingMatch = rest.match(/([\s\S]*?)(\nYAML)$/);
-  const yamlBody = closingMatch ? closingMatch[1] ?? '' : rest;
+  const yamlBody = closingMatch ? (closingMatch[1] ?? '') : rest;
   const closingYaml = closingMatch?.[2] ?? '';
 
   return [
     highlightRegisteredLanguage(beforeYaml, 'bash'),
     highlightRegisteredLanguage(yamlBody, 'yaml'),
-    closingYaml ? highlightRegisteredLanguage(closingYaml, 'bash') : ''
+    closingYaml ? highlightRegisteredLanguage(closingYaml, 'bash') : '',
   ].join('');
 }
 
-export function highlightRegisteredLanguage(code: string, language: Exclude<HighlightLanguage, 'bash-yaml' | 'plaintext'>): string {
+export function highlightRegisteredLanguage(
+  code: string,
+  language: Exclude<HighlightLanguage, 'bash-yaml' | 'plaintext'>,
+): string {
   if (!hljs.getLanguage(language)) {
     return escapeHtml(code);
   }
@@ -147,7 +169,7 @@ export function FormatSelect({
   compact = false,
   align = 'right',
   buttonClassName,
-  menuClassName
+  menuClassName,
 }: {
   value: CodeFormat;
   onChange: (value: CodeFormat) => void;
@@ -159,7 +181,7 @@ export function FormatSelect({
   const { msg } = useI18n();
   const items: Array<{ value: CodeFormat; label: CodeFormat }> = [
     { value: 'YAML', label: 'YAML' },
-    { value: 'JSON', label: 'JSON' }
+    { value: 'JSON', label: 'JSON' },
   ];
 
   return (
@@ -178,7 +200,7 @@ export function FormatSelect({
         className={clsx(
           'h-7 w-auto min-w-[4.5rem] border-transparent bg-transparent px-2 text-sm text-foreground shadow-none hover:bg-accent',
           compact ? 'rounded-md px-2' : 'px-2.5',
-          buttonClassName
+          buttonClassName,
         )}
       >
         <SelectValue>{value}</SelectValue>
@@ -254,13 +276,7 @@ export function ScrollableCodeBlock({ code, language }: { code: string; language
 
 const maxVisibleTemplateTags = 4;
 
-export function TemplateCard({
-  template,
-  onClick
-}: {
-  template: AgentTemplate;
-  onClick: () => void;
-}) {
+export function TemplateCard({ template, onClick }: { template: AgentTemplate; onClick: () => void }) {
   const { msg } = useI18n();
   const title = templateTitle(template, msg);
   const body = templateBody(template, msg);
@@ -274,7 +290,7 @@ export function TemplateCard({
       type="button"
       variant="ghost"
       aria-label={label}
-      className="h-full min-h-0 w-full flex-col items-start justify-start gap-0 overflow-hidden whitespace-normal rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:border-border hover:bg-card"
+      className="h-[136px] min-h-[136px] w-full self-start flex-col items-start justify-start gap-0 overflow-hidden whitespace-normal rounded-lg border border-border bg-card p-3 text-left shadow-xs transition-[border-color,background-color,box-shadow] hover:border-ring/40 hover:bg-accent/40 hover:shadow-sm"
       onClick={onClick}
     >
       <div className="line-clamp-2 w-full min-w-0 text-[15px] font-medium leading-5 text-foreground">{title}</div>

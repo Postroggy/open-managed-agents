@@ -16,6 +16,11 @@
   - `bun run dev`
   - `bun run build`
   - `bun test`
+  - `bun run lint:complexity`
+  - `bun run lint:duplicates`
+  - `bun run lint:naming`
+  - `bun run format`
+  - `bun run format:check`
 - 修改 `web/` 下的前端代码后，在使用浏览器或 SuperDuck 验证前，需要先在仓库根目录运行 `./restart-web.sh` 重启前端开发服务器。
 - 生产环境产物应为 `web/dist` 下的静态文件，由 Nginx 或其他静态服务器提供服务。
 - 除非用户明确调整架构，否则不要引入 Next.js、Remix、Node 服务或 Bun HTTP 服务。
@@ -90,13 +95,13 @@
 
 使用以下角色标签和值：
 
-| 标签 | 值 | 说明 |
-| --- | --- | --- |
-| User | `user` | Use Workbench |
-| Claude Code | `claude_code_user` | Use Workbench and Claude Code |
-| Developer | `developer` | Use Workbench, Claude Code and manage API keys |
-| Billing | `billing` | Use Workbench and manage billing details |
-| Admin | `admin` | Do all of the above, plus manage users |
+| 标签        | 值                 | 说明                                           |
+| ----------- | ------------------ | ---------------------------------------------- |
+| User        | `user`             | Use Workbench                                  |
+| Claude Code | `claude_code_user` | Use Workbench and Claude Code                  |
+| Developer   | `developer`        | Use Workbench, Claude Code and manage API keys |
+| Billing     | `billing`          | Use Workbench and manage billing details       |
+| Admin       | `admin`            | Do all of the above, plus manage users         |
 
 - 前端中的权限检查只用于 UX。
 - 后端 RBAC 才是权威来源。
@@ -176,9 +181,28 @@
 - 在可行情况下，工具函数、API client、权限和组件逻辑使用 Bun test。
 - 应用外壳可用后，浏览器流程使用 Playwright。
 - 完成前端修改前，运行：
+  - `bun run format:check`
   - `bun test`
   - `bun run build`
 - 如果 UI 变更涉及层级、响应式行为或交互保真度，需要打开浏览器验证。
+
+## 标识符命名
+
+- React 组件、类型、接口和类使用 PascalCase；普通函数、变量和参数使用 camelCase；模块级常量允许 UPPER_CASE；泛型类型参数使用 PascalCase。
+- 组件或构造器引用作为参数传递时允许 PascalCase（例如 `Icon`）；普通值参数仍使用 camelCase。
+- API/数据库 payload 的 `snake_case` 仅保留在边界属性和解构位置，内部标识符应转换为 camelCase。
+- 修改 TypeScript/TSX 标识符或命名配置后运行 `bun run lint:naming`。
+
+## 代码复杂度
+
+- 修改生产 TypeScript/TSX 后运行 `bun run lint:complexity`，采用 modified cyclomatic complexity，新代码上限为 20。
+- `eslint.complexity.config.js` 中的历史复杂度预算是只能下降的 ratchet，不是目标值；不得为了通过检查提高预算或扩大匹配范围。
+- 复杂函数优先拆成领域判断、数据归一化、事件处理和展示组件。保持 API 请求、状态流、路由语义、文案与样式不变，并用对应功能测试和 `bun run build` 验证机械拆分。
+
+## 重复代码预算
+
+- 修改生产 TypeScript/TSX 后运行 `bun run lint:duplicates`，或从仓库根目录运行 `just duplicates` 同时检查 Go 和前端。jscpd 以 strict token 模式检测至少 12 行且至少 70 token 的复制代码，前端生产代码重复率上限为 1.1%。
+- 测试、suite 和生成文件不计入生产重复率。不要通过扩大 ignore、提高阈值或机械改名绕过检查；只有共享业务语义与演进方向一致时才抽取共享实现。
 
 ## 本地开发
 

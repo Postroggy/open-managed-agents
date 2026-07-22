@@ -47,7 +47,7 @@ export async function listWebhookEndpoints() {
 export function createWebhookEndpoint(input: CreateWebhookEndpointInput) {
   return webhooksApi<WebhookEndpoint>('/v1/webhooks?beta=true', {
     method: 'POST',
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
   });
 }
 
@@ -58,7 +58,7 @@ export function updateWebhookEndpointStatus(id: string, status: WebhookEndpointS
 export function updateWebhookEndpoint(id: string, input: UpdateWebhookEndpointInput) {
   return webhooksApi<WebhookEndpoint>(`/v1/webhooks/${encodeURIComponent(id)}?beta=true`, {
     method: 'POST',
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
   });
 }
 
@@ -67,13 +67,13 @@ export function regenerateWebhookSigningSecret(id: string) {
     `/v1/webhooks/${encodeURIComponent(id)}/regenerate_signing_secret?beta=true`,
     {
       method: 'POST',
-      body: JSON.stringify({})
-    }
+      body: JSON.stringify({}),
+    },
   );
 }
 
 export function deleteWebhookEndpoint(id: string) {
   return webhooksApi<{ id: string; type: 'webhook_deleted' }>(`/v1/webhooks/${encodeURIComponent(id)}?beta=true`, {
-    method: 'DELETE'
+    method: 'DELETE',
   });
 }

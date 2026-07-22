@@ -7,11 +7,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
+	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 
 	"github.com/go-chi/chi/v5"
@@ -64,8 +64,8 @@ type workbenchAccount struct {
 	DisplayName  *string
 }
 
-func RegisterOrgWorkbenchRoutes(r chi.Router, store OrganizationStore) {
-	registerOrgWorkbenchRoutes(r, store)
+func RegisterOrgWorkbenchRoutes(r chi.Router, store OrganizationStore, upstream config.AnthropicUpstreamConfig) {
+	registerOrgWorkbenchRoutes(r, store, upstream)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
@@ -166,46 +166,16 @@ func platformClaudeOptionalStringValue(value *string) string {
 	return strings.TrimSpace(*value)
 }
 
-func optionalStringValue(value *string) any {
-	if value == nil {
-		return nil
-	}
-	return *value
-}
-
-func optionalTimeString(value *time.Time) any {
-	if value == nil {
-		return nil
-	}
-	return isoTime(*value)
-}
-
-func isoTime(value time.Time) string {
-	if value.IsZero() {
-		return time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	return value.UTC().Format(time.RFC3339Nano)
-}
-
 func formatJSISOString(value time.Time) string {
 	return value.UTC().Format("2006-01-02T15:04:05.000Z")
 }
 
-func internalError(w http.ResponseWriter, message string) {
-	writeJSON(w, http.StatusInternalServerError, map[string]any{"error": message})
+func proxyMessagesAnthropicToken(upstream config.AnthropicUpstreamConfig) string {
+	return strings.TrimSpace(upstream.APIKey)
 }
 
-func proxyMessagesAnthropicToken() string {
-	for _, key := range []string{"ANTHROPIC_UPSTREAM_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"} {
-		if token := strings.TrimSpace(os.Getenv(key)); token != "" {
-			return token
-		}
-	}
-	return ""
-}
-
-func anthropicMessagesEndpoint() (string, error) {
-	baseURL := firstNonEmpty(os.Getenv("ANTHROPIC_UPSTREAM_BASE_URL"), os.Getenv("ANTHROPIC_BASE_URL"), "https://api.anthropic.com")
+func anthropicMessagesEndpoint(upstream config.AnthropicUpstreamConfig) (string, error) {
+	baseURL := firstNonEmpty(strings.TrimSpace(upstream.BaseURL), "https://api.anthropic.com")
 	parsed, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {
 		return "", err

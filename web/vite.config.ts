@@ -10,32 +10,32 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
   },
   server: {
     allowedHosts: ['oma.duck.ai'],
     proxy: {
       '/api': {
         target: backendTarget,
-        changeOrigin: true
+        changeOrigin: true,
       },
       '/v1': {
         target: backendTarget,
-        changeOrigin: false
+        changeOrigin: false,
       },
       '/auth': {
         target: backendTarget,
-        changeOrigin: true
+        changeOrigin: true,
       },
       '/oauth': {
         target: backendTarget,
-        changeOrigin: true
+        changeOrigin: true,
       },
       '/web-api': {
         target: backendTarget,
-        changeOrigin: true
-      }
-    }
-  }
+        changeOrigin: true,
+      },
+    },
+  },
 });

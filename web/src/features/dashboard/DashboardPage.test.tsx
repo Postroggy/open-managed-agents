@@ -1,6 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  RouterContextProvider,
+  createBrowserHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { AuthContext, type AuthContextValue } from '../../shared/auth/context';
 import { I18nProvider, type Locale } from '../../shared/i18n';
 import { setConsoleRequestContext } from '../../shared/api/client';
@@ -75,7 +82,7 @@ describe('Dashboard i18n', () => {
       data: [],
       has_more: false,
       first_id: null,
-      last_id: null
+      last_id: null,
     }));
     const files = renderFilesPage(undefined, 'zh-CN');
 
@@ -94,7 +101,7 @@ describe('Dashboard i18n', () => {
       return {
         data: [],
         has_more: false,
-        next_page: null
+        next_page: null,
       };
     });
     const skills = renderSkillsPage(undefined, 'zh-CN');
@@ -110,7 +117,7 @@ describe('Dashboard i18n', () => {
       data: [],
       has_more: false,
       first_id: null,
-      last_id: null
+      last_id: null,
     }));
     renderBatchesPage(undefined, 'zh-CN');
 
@@ -206,8 +213,8 @@ describe('Dashboard i18n', () => {
       undefined,
       'en',
       makeAuthContextValue({
-        memberships: [{ role: 'admin' }]
-      })
+        memberships: [{ role: 'admin' }],
+      }),
     );
 
     expect(await screen.findByRole('heading', { name: 'Members 2' })).toBeTruthy();
@@ -224,7 +231,7 @@ describe('Dashboard i18n', () => {
     resetTestDom('https://oma.duck.ai/webhooks');
     setConsoleRequestContext({
       organizationUuid: 'org_test_uuid',
-      workspaceId: defaultWorkspace.id
+      workspaceId: defaultWorkspace.id,
     });
     const api = mockWebhooksList();
 
@@ -233,7 +240,9 @@ describe('Dashboard i18n', () => {
     expect(await screen.findByRole('heading', { name: 'Webhooks' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add webhook endpoint' })).toBeTruthy();
     expect(await screen.findByText('No webhook endpoints have been created for Default.')).toBeTruthy();
-    expect(screen.queryByText('Create an endpoint to receive event notifications from Open Managed Agents.')).toBeNull();
+    expect(
+      screen.queryByText('Create an endpoint to receive event notifications from Open Managed Agents.'),
+    ).toBeNull();
     expect(api.requests[0]?.url).toBe('/v1/webhooks?beta=true');
     expect(api.requests[0]?.headers.get('anthropic-beta')).toBe('webhooks-2026-03-01');
     expect(api.requests[0]?.headers.get('x-workspace-id')).toBe(defaultWorkspace.id);
@@ -254,7 +263,7 @@ describe('Dashboard i18n', () => {
     expect(screen.getByRole('dialog')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'CI deploy bot' } });
     fireEvent.change(screen.getByLabelText('Description'), {
-      target: { value: 'Publishes production builds' }
+      target: { value: 'Publishes production builds' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
@@ -304,8 +313,8 @@ describe('Dashboard i18n', () => {
 
     expect(
       screen.getByRole('button', {
-        name: 'Applies to new prompts, attachments, and outputs created after this default changes.'
-      })
+        name: 'Applies to new prompts, attachments, and outputs created after this default changes.',
+      }),
     ).toBeTruthy();
 
     const configureButtons = () => screen.getAllByRole('button', { name: 'Configure' });
@@ -404,7 +413,9 @@ describe('Dashboard i18n', () => {
     expect(seatsCard).toBeTruthy();
     expect(seatsCard?.className.includes('surface-card')).toBe(false);
 
-    const emptyState = screen.getByText('No Claude Code usage yet').closest('[data-slot="empty"]') as HTMLElement | null;
+    const emptyState = screen
+      .getByText('No Claude Code usage yet')
+      .closest('[data-slot="empty"]') as HTMLElement | null;
     expect(emptyState).toBeTruthy();
     expect(emptyState?.className.includes('surface-card')).toBe(false);
     expect(emptyState?.className.includes('border-dashed')).toBe(true);
@@ -417,7 +428,7 @@ describe('Files page', () => {
     const clipboardWrite = mock(async (_value: string) => undefined);
     Object.defineProperty(globalThis.navigator, 'clipboard', {
       value: { writeText: clipboardWrite },
-      configurable: true
+      configurable: true,
     });
     const requests = mockFilesList(() => ({
       data: [
@@ -428,12 +439,12 @@ describe('Files page', () => {
           mime_type: 'application/json',
           size_bytes: 321,
           created_at: new Date(Date.now() - 120_000).toISOString(),
-          downloadable: false
-        }
+          downloadable: false,
+        },
       ],
       has_more: false,
       first_id: 'file_abc123456789',
-      last_id: 'file_abc123456789'
+      last_id: 'file_abc123456789',
     }));
 
     renderFilesPage();
@@ -470,12 +481,12 @@ describe('Files page', () => {
             mime_type: 'text/plain',
             size_bytes: 12,
             created_at: new Date(Date.now() - 120_000).toISOString(),
-            downloadable: false
-          }
+            downloadable: false,
+          },
         ],
         has_more: false,
         first_id: workspaceId === 'wrkspc_alt' ? 'file_alt' : 'file_default',
-        last_id: workspaceId === 'wrkspc_alt' ? 'file_alt' : 'file_default'
+        last_id: workspaceId === 'wrkspc_alt' ? 'file_alt' : 'file_default',
       };
     });
 
@@ -503,12 +514,12 @@ describe('Files page', () => {
           mime_type: 'text/plain',
           size_bytes: 12,
           created_at: new Date(Date.now() - 120_000).toISOString(),
-          downloadable: false
-        }
+          downloadable: false,
+        },
       ],
       has_more: false,
       first_id: 'file_route',
-      last_id: 'file_route'
+      last_id: 'file_route',
     }));
 
     renderFilesPage();
@@ -530,12 +541,12 @@ describe('Files page', () => {
               mime_type: 'text/markdown',
               size_bytes: 22,
               created_at: new Date(Date.now() - 240_000).toISOString(),
-              downloadable: false
-            }
+              downloadable: false,
+            },
           ],
           has_more: false,
           first_id: 'file_page_two',
-          last_id: 'file_page_two'
+          last_id: 'file_page_two',
         };
       }
       return {
@@ -547,12 +558,12 @@ describe('Files page', () => {
             mime_type: 'text/markdown',
             size_bytes: 11,
             created_at: new Date(Date.now() - 120_000).toISOString(),
-            downloadable: false
-          }
+            downloadable: false,
+          },
         ],
         has_more: true,
         first_id: 'file_page_one',
-        last_id: 'file_page_one'
+        last_id: 'file_page_one',
       };
     });
 
@@ -562,7 +573,9 @@ describe('Files page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
 
     expect(await screen.findByText('second.md')).toBeTruthy();
-    expect(requests.some((request) => request.url === '/v1/files?beta=true&limit=20&after_id=file_page_one')).toBe(true);
+    expect(requests.some((request) => request.url === '/v1/files?beta=true&limit=20&after_id=file_page_one')).toBe(
+      true,
+    );
     expect((screen.getByRole('button', { name: 'Previous page' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -572,7 +585,7 @@ describe('Files page', () => {
       data: [],
       has_more: false,
       first_id: null,
-      last_id: null
+      last_id: null,
     }));
 
     renderFilesPage();
@@ -583,16 +596,42 @@ describe('Files page', () => {
     expect((screen.getByRole('button', { name: 'Next page' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  test('refreshes the workspace name in the empty state when only the route changes', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/asdf/files');
+    mockFilesList(() => ({
+      data: [],
+      has_more: false,
+      first_id: null,
+      last_id: null,
+    }));
+
+    renderFilesPage();
+
+    // `asdf` is not a known workspace, so the name falls back to the route id.
+    expect(await screen.findByText('No files have been uploaded to the asdf workspace.')).toBeTruthy();
+
+    // Navigating to the default workspace must update the name even though the
+    // active workspace context is unchanged — this is the regression for the
+    // useLocation-driven scope.
+    window.history.pushState(null, '', 'https://oma.duck.ai/workspaces/default/files');
+
+    expect(await screen.findByText('No files have been uploaded to the Default workspace.')).toBeTruthy();
+    expect(screen.queryByText('No files have been uploaded to the asdf workspace.')).toBeNull();
+  });
+
   test('renders the standardized files error row and retries successfully', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/files');
     let attempt = 0;
     const requests = mockFilesList(() => {
       attempt += 1;
       if (attempt === 1) {
-        return new Response(JSON.stringify({ error: { type: 'api_error', message: 'Files service is unavailable.' } }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return new Response(
+          JSON.stringify({ error: { type: 'api_error', message: 'Files service is unavailable.' } }),
+          {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
       }
       return {
         data: [
@@ -603,12 +642,12 @@ describe('Files page', () => {
             mime_type: 'text/plain',
             size_bytes: 42,
             created_at: new Date(Date.now() - 120_000).toISOString(),
-            downloadable: false
-          }
+            downloadable: false,
+          },
         ],
         has_more: false,
         first_id: 'file_retry_success',
-        last_id: 'file_retry_success'
+        last_id: 'file_retry_success',
       };
     });
 
@@ -632,7 +671,7 @@ describe('Skills page', () => {
     const clipboardWrite = mock(async (_value: string) => undefined);
     Object.defineProperty(globalThis.navigator, 'clipboard', {
       value: { writeText: clipboardWrite },
-      configurable: true
+      configurable: true,
     });
     const requests = mockSkillsApi((url) => {
       if (url === '/v1/skills/skill_emoji?beta=true') {
@@ -643,7 +682,7 @@ describe('Skills page', () => {
           latest_version: '20260708',
           source: 'custom',
           created_at: new Date(Date.now() - 120_000).toISOString(),
-          updated_at: new Date(Date.now() - 60_000).toISOString()
+          updated_at: new Date(Date.now() - 60_000).toISOString(),
         };
       }
       if (url === '/v1/skills/skill_emoji/versions?beta=true&limit=50') {
@@ -657,11 +696,11 @@ describe('Skills page', () => {
               name: 'emoji-translator',
               skill_id: 'skill_emoji',
               version: '20260708',
-              created_at: new Date(Date.now() - 60_000).toISOString()
-            }
+              created_at: new Date(Date.now() - 60_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       if (url === '/v1/skills?beta=true&limit=100') {
@@ -674,7 +713,7 @@ describe('Skills page', () => {
               latest_version: '20260708',
               source: 'custom',
               created_at: new Date(Date.now() - 120_000).toISOString(),
-              updated_at: new Date(Date.now() - 60_000).toISOString()
+              updated_at: new Date(Date.now() - 60_000).toISOString(),
             },
             {
               id: 'xlsx',
@@ -683,11 +722,11 @@ describe('Skills page', () => {
               latest_version: '20260203',
               source: 'anthropic',
               created_at: new Date(Date.now() - 240_000).toISOString(),
-              updated_at: new Date(Date.now() - 240_000).toISOString()
-            }
+              updated_at: new Date(Date.now() - 240_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -722,11 +761,17 @@ describe('Skills page', () => {
 
     fireEvent.click(screen.getByText('emoji-translator'));
 
-    expect(await screen.findByText('This skill should be used when the user asks to turn this into emojis.')).toBeTruthy();
-    expect(new URL(window.location.href).searchParams.get('skill')).toBe('skill_emoji');
-    expect(requests.find((request) => request.url === '/v1/skills/skill_emoji?beta=true')?.headers.get('x-workspace-id')).toBe('default');
     expect(
-      requests.find((request) => request.url === '/v1/skills/skill_emoji/versions?beta=true&limit=50')?.headers.get('x-workspace-id')
+      await screen.findByText('This skill should be used when the user asks to turn this into emojis.'),
+    ).toBeTruthy();
+    expect(new URL(window.location.href).searchParams.get('skill')).toBe('skill_emoji');
+    expect(
+      requests.find((request) => request.url === '/v1/skills/skill_emoji?beta=true')?.headers.get('x-workspace-id'),
+    ).toBe('default');
+    expect(
+      requests
+        .find((request) => request.url === '/v1/skills/skill_emoji/versions?beta=true&limit=50')
+        ?.headers.get('x-workspace-id'),
     ).toBe('default');
   });
 
@@ -744,11 +789,11 @@ describe('Skills page', () => {
             latest_version: '20260708',
             source: 'custom',
             created_at: new Date(Date.now() - 120_000).toISOString(),
-            updated_at: new Date(Date.now() - 120_000).toISOString()
-          }
+            updated_at: new Date(Date.now() - 120_000).toISOString(),
+          },
         ],
         has_more: false,
-        next_page: null
+        next_page: null,
       };
     });
 
@@ -778,11 +823,11 @@ describe('Skills page', () => {
               latest_version: '20260622',
               source: 'anthropic',
               created_at: new Date(Date.now() - 240_000).toISOString(),
-              updated_at: new Date(Date.now() - 240_000).toISOString()
-            }
+              updated_at: new Date(Date.now() - 240_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       return {
@@ -794,11 +839,11 @@ describe('Skills page', () => {
             latest_version: '20260203',
             source: 'anthropic',
             created_at: new Date(Date.now() - 120_000).toISOString(),
-            updated_at: new Date(Date.now() - 120_000).toISOString()
-          }
+            updated_at: new Date(Date.now() - 120_000).toISOString(),
+          },
         ],
         has_more: true,
-        next_page: 'cursor_two'
+        next_page: 'cursor_two',
       };
     });
 
@@ -829,11 +874,11 @@ describe('Skills page', () => {
           latest_version: '20260203',
           source: 'anthropic',
           created_at: new Date(Date.now() - 120_000).toISOString(),
-          updated_at: new Date(Date.now() - 120_000).toISOString()
-        }
+          updated_at: new Date(Date.now() - 120_000).toISOString(),
+        },
       ],
       has_more: true,
-      next_page: null
+      next_page: null,
     }));
 
     renderSkillsPage();
@@ -859,7 +904,7 @@ describe('Skills page', () => {
           latest_version: '20260708',
           source: 'custom',
           created_at: new Date(Date.now() - 10_000).toISOString(),
-          updated_at: new Date(Date.now() - 10_000).toISOString()
+          updated_at: new Date(Date.now() - 10_000).toISOString(),
         };
       }
       if (url === '/v1/skills/skill_created?beta=true') {
@@ -869,7 +914,7 @@ describe('Skills page', () => {
           display_title: 'emoji-translator',
           latest_version: '20260708',
           source: 'custom',
-          created_at: new Date(Date.now() - 120_000).toISOString()
+          created_at: new Date(Date.now() - 120_000).toISOString(),
         };
       }
       if (url === '/v1/skills/skill_created/versions?beta=true&limit=50') {
@@ -883,11 +928,11 @@ describe('Skills page', () => {
               name: 'emoji-translator',
               skill_id: 'skill_created',
               version: '20260708',
-              created_at: new Date(Date.now() - 10_000).toISOString()
-            }
+              created_at: new Date(Date.now() - 10_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -904,7 +949,11 @@ describe('Skills page', () => {
     expect(await screen.findByText('emoji-translator.zip')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await waitFor(() => expect(requests.some((request) => request.method === 'POST' && request.url === '/v1/skills?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(requests.some((request) => request.method === 'POST' && request.url === '/v1/skills?beta=true')).toBe(
+        true,
+      ),
+    );
     const post = requests.find((request) => request.method === 'POST' && request.url === '/v1/skills?beta=true');
     expect(post?.headers.get('x-workspace-id')).toBe('default');
     const body = post?.body as FormData;
@@ -927,26 +976,27 @@ describe('Skills page', () => {
               latest_version: '20260708',
               source: 'custom',
               created_at: new Date(Date.now() - 120_000).toISOString(),
-              updated_at: new Date(Date.now() - 120_000).toISOString()
-            }
+              updated_at: new Date(Date.now() - 120_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       if (url === '/v1/skills?beta=true') {
         return new Response(
           JSON.stringify({
             error: {
-              message: 'A custom skill named "emoji-translator" already exists. Use Update from that skill\'s actions menu to upload a new version.',
-              type: 'invalid_request_error'
+              message:
+                'A custom skill named "emoji-translator" already exists. Use Update from that skill\'s actions menu to upload a new version.',
+              type: 'invalid_request_error',
             },
-            type: 'error'
+            type: 'error',
           }),
           {
             status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          }
+            headers: { 'Content-Type': 'application/json' },
+          },
         );
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -963,8 +1013,16 @@ describe('Skills page', () => {
     expect(screen.queryByText(/already exists/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await waitFor(() => expect(requests.some((request) => request.method === 'POST' && request.url === '/v1/skills?beta=true')).toBe(true));
-    expect(requests.some((request) => request.method === 'POST' && request.url === '/v1/skills/skill_emoji/versions?beta=true')).toBe(false);
+    await waitFor(() =>
+      expect(requests.some((request) => request.method === 'POST' && request.url === '/v1/skills?beta=true')).toBe(
+        true,
+      ),
+    );
+    expect(
+      requests.some(
+        (request) => request.method === 'POST' && request.url === '/v1/skills/skill_emoji/versions?beta=true',
+      ),
+    ).toBe(false);
     const post = requests.find((request) => request.method === 'POST' && request.url === '/v1/skills?beta=true');
     const body = post?.body as FormData;
     expect(body.get('display_title')).toBe('emoji-translator');
@@ -981,7 +1039,7 @@ describe('Skills page', () => {
         return {
           data: [],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -1013,11 +1071,11 @@ describe('Skills page', () => {
               latest_version: '20260708',
               source: 'custom',
               created_at: new Date(Date.now() - 120_000).toISOString(),
-              updated_at: new Date(Date.now() - 120_000).toISOString()
-            }
+              updated_at: new Date(Date.now() - 120_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       if (url === '/v1/skills/skill_emoji/versions?beta=true') {
@@ -1029,7 +1087,7 @@ describe('Skills page', () => {
           name: 'emoji-translator',
           skill_id: 'skill_emoji',
           version: '20260709',
-          created_at: new Date(Date.now() - 10_000).toISOString()
+          created_at: new Date(Date.now() - 10_000).toISOString(),
         };
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -1045,7 +1103,13 @@ describe('Skills page', () => {
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await waitFor(() => expect(requests.some((request) => request.method === 'POST' && request.url === '/v1/skills/skill_emoji/versions?beta=true')).toBe(true));
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (request) => request.method === 'POST' && request.url === '/v1/skills/skill_emoji/versions?beta=true',
+        ),
+      ).toBe(true),
+    );
     await waitFor(() => expect(screen.queryByText('Update Skill')).toBeNull());
     expect(screen.queryByText('emoji-translator.zip')).toBeNull();
   });
@@ -1063,11 +1127,11 @@ describe('Skills page', () => {
               latest_version: '20260708',
               source: 'custom',
               created_at: new Date(Date.now() - 120_000).toISOString(),
-              updated_at: new Date(Date.now() - 120_000).toISOString()
-            }
+              updated_at: new Date(Date.now() - 120_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       if (url === '/v1/skills/skill_emoji?beta=true') {
@@ -1085,11 +1149,11 @@ describe('Skills page', () => {
     fireEvent.click(deleteButtons[deleteButtons.length - 1]);
 
     await waitFor(() =>
-      expect(requests.some((request) => request.method === 'DELETE' && request.url === '/v1/skills/skill_emoji?beta=true')).toBe(true)
+      expect(
+        requests.some((request) => request.method === 'DELETE' && request.url === '/v1/skills/skill_emoji?beta=true'),
+      ).toBe(true),
     );
-    const deleteOrder = requests
-      .map((request) => request.method === 'DELETE' ? request.url : '')
-      .filter(Boolean);
+    const deleteOrder = requests.map((request) => (request.method === 'DELETE' ? request.url : '')).filter(Boolean);
     expect(deleteOrder).toEqual(['/v1/skills/skill_emoji?beta=true']);
   });
 });
@@ -1108,11 +1172,11 @@ describe('Skill detail page', () => {
               latest_version: '20260708',
               source: 'anthropic',
               created_at: new Date(Date.now() - 360_000).toISOString(),
-              updated_at: new Date(Date.now() - 120_000).toISOString()
-            }
+              updated_at: new Date(Date.now() - 120_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       if (url === '/v1/skills/frontend-design?beta=true') {
@@ -1123,7 +1187,7 @@ describe('Skill detail page', () => {
           latest_version: '20260708',
           source: 'anthropic',
           created_at: new Date(Date.now() - 360_000).toISOString(),
-          updated_at: new Date(Date.now() - 120_000).toISOString()
+          updated_at: new Date(Date.now() - 120_000).toISOString(),
         };
       }
       if (url === '/v1/skills/frontend-design/versions?beta=true&limit=50') {
@@ -1137,7 +1201,7 @@ describe('Skill detail page', () => {
               name: 'frontend-design',
               skill_id: 'frontend-design',
               version: '20260707',
-              created_at: new Date(Date.now() - 360_000).toISOString()
+              created_at: new Date(Date.now() - 360_000).toISOString(),
             },
             {
               id: 'skillver_frontend-design-2',
@@ -1147,11 +1211,11 @@ describe('Skill detail page', () => {
               name: 'frontend-design v2',
               skill_id: 'frontend-design',
               version: '20260708',
-              created_at: new Date(Date.now() - 120_000).toISOString()
-            }
+              created_at: new Date(Date.now() - 120_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -1162,9 +1226,13 @@ describe('Skill detail page', () => {
     expect(await screen.findByText('v2 description')).toBeTruthy();
     expect(screen.getByText('Latest')).toBeTruthy();
     expect(new URL(window.location.href).searchParams.get('skill')).toBe('frontend-design');
-    expect(requests.find((request) => request.url === '/v1/skills/frontend-design?beta=true')?.headers.get('x-workspace-id')).toBe('default');
     expect(
-      requests.find((request) => request.url === '/v1/skills/frontend-design/versions?beta=true&limit=50')?.headers.get('x-workspace-id')
+      requests.find((request) => request.url === '/v1/skills/frontend-design?beta=true')?.headers.get('x-workspace-id'),
+    ).toBe('default');
+    expect(
+      requests
+        .find((request) => request.url === '/v1/skills/frontend-design/versions?beta=true&limit=50')
+        ?.headers.get('x-workspace-id'),
     ).toBe('default');
   });
 
@@ -1182,20 +1250,23 @@ describe('Skill detail page', () => {
               latest_version: '2',
               source: 'anthropic',
               created_at: new Date(Date.now() - 360_000).toISOString(),
-              updated_at: new Date(Date.now() - 120_000).toISOString()
-            }
+              updated_at: new Date(Date.now() - 120_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       if (url === '/v1/skills/frontend-design?beta=true') {
         attempt += 1;
         if (attempt === 1) {
-          return new Response(JSON.stringify({ error: { type: 'api_error', message: 'Skill metadata is unavailable.' } }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: { type: 'api_error', message: 'Skill metadata is unavailable.' } }),
+            {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          );
         }
         return {
           id: 'frontend-design',
@@ -1204,7 +1275,7 @@ describe('Skill detail page', () => {
           latest_version: '2',
           source: 'anthropic',
           created_at: new Date(Date.now() - 360_000).toISOString(),
-          updated_at: new Date(Date.now() - 120_000).toISOString()
+          updated_at: new Date(Date.now() - 120_000).toISOString(),
         };
       }
       if (url === '/v1/skills/frontend-design/versions?beta=true&limit=50') {
@@ -1218,11 +1289,11 @@ describe('Skill detail page', () => {
               name: 'frontend-design v2',
               skill_id: 'frontend-design',
               version: '2',
-              created_at: new Date(Date.now() - 120_000).toISOString()
-            }
+              created_at: new Date(Date.now() - 120_000).toISOString(),
+            },
           ],
           has_more: false,
-          next_page: null
+          next_page: null,
         };
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -1249,7 +1320,7 @@ describe('Batches page', () => {
     const batch = makeBatch({
       id: 'msgbatch_detail',
       processing_status: 'ended',
-      results_url: 'https://oma.duck.ai/v1/messages/batches/msgbatch_detail/results'
+      results_url: 'https://oma.duck.ai/v1/messages/batches/msgbatch_detail/results',
     });
     const requests = mockMessageBatchesApi((url) => {
       if (url === '/v1/messages/batches?beta=true&limit=20') {
@@ -1257,16 +1328,19 @@ describe('Batches page', () => {
           data: [batch],
           has_more: false,
           first_id: 'msgbatch_detail',
-          last_id: 'msgbatch_detail'
+          last_id: 'msgbatch_detail',
         };
       }
       if (url === '/v1/messages/batches/msgbatch_detail?beta=true') {
         attempt += 1;
         if (attempt === 1) {
-          return new Response(JSON.stringify({ error: { type: 'api_error', message: 'Batch details are unavailable.' } }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' }
-          });
+          return new Response(
+            JSON.stringify({ error: { type: 'api_error', message: 'Batch details are unavailable.' } }),
+            {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          );
         }
         return batch;
       }
@@ -1284,7 +1358,9 @@ describe('Batches page', () => {
 
     expect(await screen.findByRole('button', { name: 'Download Results' })).toBeTruthy();
     expect(screen.queryByText('Batch details are unavailable.')).toBeNull();
-    expect(requests.filter((request) => request.url === '/v1/messages/batches/msgbatch_detail?beta=true')).toHaveLength(2);
+    expect(requests.filter((request) => request.url === '/v1/messages/batches/msgbatch_detail?beta=true')).toHaveLength(
+      2,
+    );
   });
 
   test('renders batches in the platform table shape with query-selected details and result downloads', async () => {
@@ -1297,7 +1373,7 @@ describe('Batches page', () => {
       id: 'msgbatch_done',
       processing_status: 'ended',
       request_counts: { processing: 0, succeeded: 2, errored: 1, canceled: 0, expired: 0 },
-      results_url: 'https://oma.duck.ai/v1/messages/batches/msgbatch_done/results'
+      results_url: 'https://oma.duck.ai/v1/messages/batches/msgbatch_done/results',
     });
     const requests = mockMessageBatchesApi((url) => {
       if (url === '/v1/messages/batches?beta=true&limit=20') {
@@ -1305,7 +1381,7 @@ describe('Batches page', () => {
           data: [endedBatch],
           has_more: false,
           first_id: 'msgbatch_done',
-          last_id: 'msgbatch_done'
+          last_id: 'msgbatch_done',
         };
       }
       if (url === '/v1/messages/batches/msgbatch_done?beta=true') {
@@ -1314,7 +1390,7 @@ describe('Batches page', () => {
       if (url === '/v1/messages/batches/msgbatch_done/results?beta=true') {
         return new Response(new Blob(['{"custom_id":"one"}\n']), {
           status: 200,
-          headers: { 'Content-Type': 'application/x-jsonl' }
+          headers: { 'Content-Type': 'application/x-jsonl' },
         });
       }
       throw new Error(`Unexpected request: ${url}`);
@@ -1340,14 +1416,22 @@ describe('Batches page', () => {
     expect(requests[0]?.headers.get('anthropic-beta')).toBe('message-batches-2024-09-24');
     expect(requests[0]?.headers.get('anthropic-version')).toBe('2023-06-01');
     expect(requests[0]?.headers.get('x-workspace-id')).toBe('default');
-    expect(requests.find((request) => request.url === '/v1/messages/batches/msgbatch_done?beta=true')?.headers.get('x-workspace-id')).toBe('default');
+    expect(
+      requests
+        .find((request) => request.url === '/v1/messages/batches/msgbatch_done?beta=true')
+        ?.headers.get('x-workspace-id'),
+    ).toBe('default');
 
     fireEvent.click(screen.getByRole('button', { name: 'Download Results' }));
 
     await waitFor(() =>
-      expect(requests.some((request) => request.url === '/v1/messages/batches/msgbatch_done/results?beta=true')).toBe(true)
+      expect(requests.some((request) => request.url === '/v1/messages/batches/msgbatch_done/results?beta=true')).toBe(
+        true,
+      ),
     );
-    const downloadRequest = requests.find((request) => request.url === '/v1/messages/batches/msgbatch_done/results?beta=true');
+    const downloadRequest = requests.find(
+      (request) => request.url === '/v1/messages/batches/msgbatch_done/results?beta=true',
+    );
     expect(downloadRequest?.headers.get('anthropic-beta')).toBe('message-batches-2024-09-24');
     expect(downloadRequest?.headers.get('x-workspace-id')).toBe('default');
     expect(createObjectURL).toHaveBeenCalled();
@@ -1363,7 +1447,7 @@ describe('Batches page', () => {
         data: [makeBatch({ id: batchId, processing_status: 'ended' })],
         has_more: false,
         first_id: batchId,
-        last_id: batchId
+        last_id: batchId,
       };
     });
 
@@ -1390,14 +1474,14 @@ describe('Batches page', () => {
           data: [makeBatch({ id: 'msgbatch_page_two', processing_status: 'in_progress' })],
           has_more: false,
           first_id: 'msgbatch_page_two',
-          last_id: 'msgbatch_page_two'
+          last_id: 'msgbatch_page_two',
         };
       }
       return {
         data: [makeBatch({ id: 'msgbatch_page_one', processing_status: 'in_progress' })],
         has_more: true,
         first_id: 'msgbatch_page_one',
-        last_id: 'msgbatch_page_one'
+        last_id: 'msgbatch_page_one',
       };
     });
 
@@ -1407,7 +1491,9 @@ describe('Batches page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
 
     expect(await screen.findByRole('button', { name: 'msgbatch_page_two' })).toBeTruthy();
-    expect(requests.some((request) => request.url === '/v1/messages/batches?beta=true&limit=20&after_id=msgbatch_page_one')).toBe(true);
+    expect(
+      requests.some((request) => request.url === '/v1/messages/batches?beta=true&limit=20&after_id=msgbatch_page_one'),
+    ).toBe(true);
     expect((screen.getByRole('button', { name: 'Previous page' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -1421,7 +1507,7 @@ describe('Batches page', () => {
           data: [inProgressBatch, endedBatch],
           has_more: false,
           first_id: 'msgbatch_progress',
-          last_id: 'msgbatch_done'
+          last_id: 'msgbatch_done',
         };
       }
       if (url === '/v1/messages/batches/msgbatch_progress?beta=true') {
@@ -1448,12 +1534,15 @@ describe('Batches page', () => {
     await waitFor(() =>
       expect(
         requests.some(
-          (request) => request.url === '/v1/messages/batches/msgbatch_progress/cancel?beta=true' && request.method === 'POST'
-        )
-      ).toBe(true)
+          (request) =>
+            request.url === '/v1/messages/batches/msgbatch_progress/cancel?beta=true' && request.method === 'POST',
+        ),
+      ).toBe(true),
     );
     expect(
-      requests.find((request) => request.url === '/v1/messages/batches/msgbatch_progress/cancel?beta=true')?.headers.get('x-workspace-id')
+      requests
+        .find((request) => request.url === '/v1/messages/batches/msgbatch_progress/cancel?beta=true')
+        ?.headers.get('x-workspace-id'),
     ).toBe('default');
   });
 });
@@ -1484,52 +1573,82 @@ function mockWebhooksList() {
     if (url === '/v1/webhooks?beta=true') {
       return new Response(JSON.stringify({ data: [] }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
     return new Response(JSON.stringify({ error: { message: 'not found' } }), {
       status: 404,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   }) as unknown as typeof fetch;
 
   return { requests };
 }
 
+const dashboardTestRootRoute = createRootRoute();
+const dashboardTestFallbackRoute = createRoute({
+  getParentRoute: () => dashboardTestRootRoute,
+  path: '$',
+});
+const dashboardTestRouteTree = dashboardTestRootRoute.addChildren([dashboardTestFallbackRoute]);
+
+function DashboardTestRouterProvider({
+  router,
+  children,
+}: {
+  router: ReturnType<typeof createRouter<typeof dashboardTestRouteTree>>;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    // Mirror the subscription that <RouterProvider>'s Transitioner sets up, so
+    // useLocation() reflects window.history.pushState calls in tests.
+    const unsubscribe = router.history.subscribe(router.load);
+    return () => {
+      unsubscribe();
+      router.history.destroy();
+    };
+  }, [router]);
+  return <RouterContextProvider router={router}>{children}</RouterContextProvider>;
+}
+
 function renderDashboardPage(
   children: ReactNode,
   workspace?: Partial<Workspace>,
   locale: Locale = 'en',
-  authValue: AuthContextValue = makeAuthContextValue()
+  authValue: AuthContextValue = makeAuthContextValue(),
 ) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
-        gcTime: 0
-      }
-    }
+        gcTime: 0,
+      },
+    },
+  });
+  const router = createRouter({
+    history: createBrowserHistory({ window }),
+    routeTree: dashboardTestRouteTree,
   });
   const renderWithWorkspace = (nextWorkspace?: Partial<Workspace>) => {
     const value = makeWorkspaceContextValue(nextWorkspace);
     return (
-      <I18nProvider initialLocale={locale}>
-        <AuthContext.Provider value={authValue}>
-          <WorkspaceContext.Provider value={value}>
-            <QueryClientProvider client={queryClient}>
-              {children}
-            </QueryClientProvider>
-          </WorkspaceContext.Provider>
-        </AuthContext.Provider>
-      </I18nProvider>
+      <DashboardTestRouterProvider router={router}>
+        <I18nProvider initialLocale={locale}>
+          <AuthContext.Provider value={authValue}>
+            <WorkspaceContext.Provider value={value}>
+              <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+            </WorkspaceContext.Provider>
+          </AuthContext.Provider>
+        </I18nProvider>
+      </DashboardTestRouterProvider>
     );
   };
 
   const rendered = render(renderWithWorkspace(workspace));
   return {
     ...rendered,
-    rerenderWorkspace: (nextWorkspace?: Partial<Workspace>) => rendered.rerender(renderWithWorkspace(nextWorkspace))
+    rerenderWorkspace: (nextWorkspace?: Partial<Workspace>) => rendered.rerender(renderWithWorkspace(nextWorkspace)),
   };
 }
 
@@ -1542,12 +1661,12 @@ function makeAuthContextValue(accountOverrides?: Partial<NonNullable<AuthContext
       full_name: 'Local Admin',
       display_name: 'Local Admin',
       memberships: [{ role: 'member' }],
-      ...accountOverrides
+      ...accountOverrides,
     },
     status: 'authenticated',
     csrfToken: 'csrf_test',
     refresh: async () => ({ account: null }),
-    logout: async () => undefined
+    logout: async () => undefined,
   };
 }
 
@@ -1555,9 +1674,10 @@ function makeWorkspaceContextValue(workspace?: Partial<Workspace>): WorkspaceCon
   const activeWorkspace = {
     ...defaultWorkspace,
     ...workspace,
-    type: 'workspace' as const
+    type: 'workspace' as const,
   };
-  const workspaces = activeWorkspace.id === defaultWorkspace.id ? [activeWorkspace] : [defaultWorkspace, activeWorkspace];
+  const workspaces =
+    activeWorkspace.id === defaultWorkspace.id ? [activeWorkspace] : [defaultWorkspace, activeWorkspace];
   return {
     orgUuid: 'org_test_uuid',
     workspaces,
@@ -1572,9 +1692,9 @@ function makeWorkspaceContextValue(workspace?: Partial<Workspace>): WorkspaceCon
       name: input.name,
       display_color: input.display_color,
       color: input.display_color,
-      data_residency: input.data_residency
+      data_residency: input.data_residency,
     }),
-    refreshWorkspaces: async () => undefined
+    refreshWorkspaces: async () => undefined,
   };
 }
 
@@ -1590,7 +1710,7 @@ function mockFilesList(handler: (url: string, headers: Headers) => unknown) {
     }
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   }) as unknown as typeof fetch;
   return requests;
@@ -1609,7 +1729,7 @@ function mockSkillsApi(handler: (url: string, headers: Headers) => unknown) {
     }
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   }) as unknown as typeof fetch;
   return requests;
@@ -1628,7 +1748,7 @@ function mockMessageBatchesApi(handler: (url: string, method: string, headers: H
     }
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   }) as unknown as typeof fetch;
   return requests;
@@ -1647,13 +1767,13 @@ function mockOrganizationMembersApi() {
             type: 'user',
             name: 'Local Admin',
             email: 'admin@example.local',
-            role: 'admin'
-          }
+            role: 'admin',
+          },
         ]),
         {
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          headers: { 'Content-Type': 'application/json' },
+        },
       );
     }
     if (url === '/api/console/organizations/org_test_uuid/invites?status=pending') {
@@ -1666,13 +1786,13 @@ function mockOrganizationMembersApi() {
             role: 'user',
             status: 'pending',
             invited_at: '2026-06-24T00:00:00Z',
-            expires_at: '2026-07-15T00:00:00Z'
-          }
+            expires_at: '2026-07-15T00:00:00Z',
+          },
         ]),
         {
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
+          headers: { 'Content-Type': 'application/json' },
+        },
       );
     }
     throw new Error(`Unexpected request: ${url}`);
@@ -1680,18 +1800,20 @@ function mockOrganizationMembersApi() {
   return { requests };
 }
 
-function makeBatch(overrides: Partial<{
-  id: string;
-  processing_status: string;
-  request_counts: {
-    processing: number;
-    succeeded: number;
-    errored: number;
-    canceled: number;
-    expired: number;
-  };
-  results_url: string | null;
-}> = {}) {
+function makeBatch(
+  overrides: Partial<{
+    id: string;
+    processing_status: string;
+    request_counts: {
+      processing: number;
+      succeeded: number;
+      errored: number;
+      canceled: number;
+      expired: number;
+    };
+    results_url: string | null;
+  }> = {},
+) {
   return {
     id: overrides.id ?? 'msgbatch_test',
     type: 'message_batch',
@@ -1701,14 +1823,18 @@ function makeBatch(overrides: Partial<{
       succeeded: overrides.processing_status === 'ended' ? 3 : 0,
       errored: 0,
       canceled: 0,
-      expired: 0
+      expired: 0,
     },
     created_at: new Date(Date.now() - 120_000).toISOString(),
     expires_at: new Date(Date.now() + 86_400_000).toISOString(),
     ended_at: overrides.processing_status === 'ended' ? new Date(Date.now() - 60_000).toISOString() : null,
     cancel_initiated_at: null,
     archived_at: null,
-    results_url: overrides.results_url ?? (overrides.processing_status === 'ended' ? 'https://oma.duck.ai/v1/messages/batches/msgbatch_test/results' : null)
+    results_url:
+      overrides.results_url ??
+      (overrides.processing_status === 'ended'
+        ? 'https://oma.duck.ai/v1/messages/batches/msgbatch_test/results'
+        : null),
   };
 }
 

@@ -17,7 +17,7 @@ describe('Identity and access settings page', () => {
     const { container } = render(
       <I18nProvider initialLocale="en">
         <IdentityAndAccessSettingsPage />
-      </I18nProvider>
+      </I18nProvider>,
     );
 
     expect(container.querySelectorAll('[data-slot="card"]').length).toBeGreaterThan(1);
@@ -36,7 +36,7 @@ describe('Identity and access settings page', () => {
     press(configureButtons()[1]);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Configure verified domain' })).toBeTruthy());
     fireEvent.change(screen.getByRole('textbox', { name: 'Verified domain' }), {
-      target: { value: 'corp.example' }
+      target: { value: 'corp.example' },
     });
     press(screen.getByRole('button', { name: 'Save' }));
 

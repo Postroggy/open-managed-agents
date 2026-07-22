@@ -11,7 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 } from '../ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
@@ -54,7 +54,11 @@ export function CreateWorkspaceDialog({ open, onOpenChange, onCreate, trigger }:
       await onCreate(name.trim(), selectedColor);
       onOpenChange(false);
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : msg('workspace.create.error', 'Failed to create workspace.'));
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : msg('workspace.create.error', 'Failed to create workspace.'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -113,7 +117,7 @@ export function CreateWorkspaceDialog({ open, onOpenChange, onCreate, trigger }:
             <FieldDescription>
               {msg(
                 'workspace.geoHelp',
-                "Control where your workspace data, including files, conversation history, and workspace artifacts, is stored. This can't be changed after creation."
+                "Control where your workspace data, including files, conversation history, and workspace artifacts, is stored. This can't be changed after creation.",
               )}
             </FieldDescription>
           </Field>

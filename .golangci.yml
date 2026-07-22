@@ -1,0 +1,33 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - durationcheck
+    - govet
+    - ineffassign
+    - loggercheck
+    - makezero
+    - musttag
+    - nilnesserr
+    - reassign
+    - revive
+    - rowserrcheck
+    - spancheck
+    - sqlclosecheck
+  settings:
+    revive:
+      rules:
+        - name: var-naming
+
+formatters:
+  enable:
+    - gofmt
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

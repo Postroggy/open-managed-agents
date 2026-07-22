@@ -6,17 +6,14 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
-  CircleHelp,
   Gauge,
   Globe2,
   KeyRound,
   ListTree,
   LockKeyhole,
   LogOut,
-  MessageSquare,
   Palette,
   Plus,
-  Scale,
   Settings,
   Shield,
   UsersRound,
@@ -30,7 +27,7 @@ import {
   useState,
   type AnchorHTMLAttributes,
   type MouseEvent,
-  type ReactNode
+  type ReactNode,
 } from 'react';
 import clsx from 'clsx';
 import { Badge } from '@/shared/ui/badge';
@@ -53,7 +50,7 @@ import {
   SidebarMenuSubItem,
   SidebarProvider,
   SidebarRail,
-  useSidebar
+  useSidebar,
 } from '@/shared/ui/sidebar';
 import {
   DropdownMenu,
@@ -68,7 +65,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { useAuth } from '../../shared/auth/context';
 import type { AuthAccount } from '../../shared/auth/api';
@@ -78,8 +75,9 @@ import { CreateWorkspaceDialog } from '../../shared/workspaces/CreateWorkspaceDi
 import {
   buildCreateWorkspaceInput,
   workspaceApiKeysPath,
+  workspaceColor,
   workspaceIdFromPath,
-  workspaceWebhooksPath
+  workspaceWebhooksPath,
 } from '../../shared/workspaces/presentation';
 import { useI18n, useLocale } from '../../shared/i18n';
 import { consoleNavigation, settingsNavigation, type NavLinkItem } from './navigation';
@@ -97,12 +95,11 @@ type ShellLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & {
   href: string;
   onNavigate?: NavigateHandler;
 };
-const interactiveMotionClass =
-  'transition-colors duration-200 ease-snappy-out motion-reduce:transition-none';
+const interactiveMotionClass = 'transition-colors duration-200 ease-snappy-out motion-reduce:transition-none';
 
 const ShellLink = forwardRef<HTMLAnchorElement, ShellLinkProps>(function ShellLink(
   { href, onNavigate, onClick, target, children, ...props },
-  ref
+  ref,
 ) {
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
@@ -139,7 +136,7 @@ export function ConsoleLayout() {
     async (href: string) => {
       await navigate({ href });
     },
-    [navigate]
+    [navigate],
   );
 
   const handleLogout = async () => {
@@ -148,12 +145,7 @@ export function ConsoleLayout() {
   };
 
   return (
-    <ConsoleShell
-      account={account}
-      currentPath={location.pathname}
-      onLogout={handleLogout}
-      onNavigate={handleNavigate}
-    >
+    <ConsoleShell account={account} currentPath={location.pathname} onLogout={handleLogout} onNavigate={handleNavigate}>
       <Outlet />
     </ConsoleShell>
   );
@@ -165,12 +157,7 @@ export function ConsoleShell({ account, currentPath = '/', children, onLogout, o
 
   return (
     <SidebarProvider defaultOpen>
-      <ConsoleSidebar
-        account={account}
-        currentPath={currentPath}
-        onLogout={onLogout}
-        onNavigate={onNavigate}
-      />
+      <ConsoleSidebar account={account} currentPath={currentPath} onLogout={onLogout} onNavigate={onNavigate} />
       <SidebarInset className="min-h-screen text-foreground">
         <ShellMobileBar
           title={msg('app.productName', 'Open Managed Agents')}
@@ -194,18 +181,13 @@ export function SettingsShell({
   currentPath = '/settings/organization',
   children,
   onLogout,
-  onNavigate
+  onNavigate,
 }: SettingsShellProps) {
   const { msg } = useI18n();
 
   return (
     <SidebarProvider defaultOpen>
-      <SettingsSidebar
-        account={account}
-        currentPath={currentPath}
-        onLogout={onLogout}
-        onNavigate={onNavigate}
-      />
+      <SettingsSidebar account={account} currentPath={currentPath} onLogout={onLogout} onNavigate={onNavigate} />
       <SidebarInset className="min-h-screen text-foreground">
         <ShellMobileBar
           title={msg('account.organizationSettings', 'Organization settings')}
@@ -220,12 +202,7 @@ export function SettingsShell({
   );
 }
 
-function ConsoleSidebar({
-  account,
-  currentPath = '/',
-  onLogout,
-  onNavigate
-}: Omit<ConsoleShellProps, 'children'>) {
+function ConsoleSidebar({ account, currentPath = '/', onLogout, onNavigate }: Omit<ConsoleShellProps, 'children'>) {
   const { msg } = useI18n();
   const { activeWorkspaceId, selectWorkspace, workspaces } = useWorkspace();
   const { setOpen, state } = useSidebar();
@@ -235,7 +212,7 @@ function ConsoleSidebar({
     'Managed Agents': true,
     Analytics: true,
     'Claude Code': true,
-    Manage: true
+    Manage: true,
   });
   const routeWorkspaceId = workspaceIdFromPath(currentPath);
 
@@ -255,10 +232,7 @@ function ConsoleSidebar({
       data-sidebar-state={collapsed ? 'collapsed' : 'expanded'}
     >
       <ShellSidebarHeader currentPath={currentPath} onNavigate={onNavigate} />
-      <AppSidebarContent
-        className="sidebar-scroll-area px-2 py-2"
-        data-sidebar-scroll-area="true"
-      >
+      <AppSidebarContent className="sidebar-scroll-area px-2 py-2" data-sidebar-scroll-area="true">
         <SidebarGroup className="p-0">
           <SidebarGroupContent>
             <nav aria-label={msg('nav.consoleNavigation', 'Console navigation')}>
@@ -326,9 +300,7 @@ function ConsoleSidebar({
                               >
                                 <span className="flex-1 truncate">{msg(child.labelId, child.label)}</span>
                                 {child.badge ? (
-                                  <Badge>
-                                    {child.badgeId ? msg(child.badgeId, child.badge) : child.badge}
-                                  </Badge>
+                                  <Badge>{child.badgeId ? msg(child.badgeId, child.badge) : child.badge}</Badge>
                                 ) : null}
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -353,7 +325,7 @@ function SettingsSidebar({
   account,
   currentPath = '/settings/organization',
   onLogout,
-  onNavigate
+  onNavigate,
 }: Omit<ConsoleShellProps, 'children'>) {
   const { msg } = useI18n();
   const { state } = useSidebar();
@@ -422,7 +394,7 @@ function ShellMobileBar({
   toggleLabel,
   activeToggleLabel,
   href,
-  onNavigate
+  onNavigate,
 }: {
   title: string;
   toggleLabel: string;
@@ -459,13 +431,7 @@ function ShellMobileBar({
   );
 }
 
-function ShellSidebarHeader({
-  currentPath,
-  onNavigate
-}: {
-  currentPath: string;
-  onNavigate?: NavigateHandler;
-}) {
+function ShellSidebarHeader({ currentPath, onNavigate }: { currentPath: string; onNavigate?: NavigateHandler }) {
   return (
     <AppSidebarHeader>
       <WorkspaceSwitcher currentPath={currentPath} onNavigate={onNavigate} />
@@ -473,13 +439,7 @@ function ShellSidebarHeader({
   );
 }
 
-function WorkspaceSwitcher({
-  currentPath,
-  onNavigate
-}: {
-  currentPath: string;
-  onNavigate?: NavigateHandler;
-}) {
+function WorkspaceSwitcher({ currentPath, onNavigate }: { currentPath: string; onNavigate?: NavigateHandler }) {
   const { msg } = useI18n();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -512,14 +472,14 @@ function WorkspaceSwitcher({
                 className={clsx(
                   'text-sidebar-foreground data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground',
                   interactiveMotionClass,
-                  collapsed ? 'justify-center' : 'justify-start'
+                  collapsed ? 'justify-center' : 'justify-start',
                 )}
                 aria-label={activeWorkspace.name}
               />
             }
           >
             <span className="grid aspect-square size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground">
-              <Box className="size-4" aria-hidden />
+              <Box className="size-4" style={{ color: workspaceColor(activeWorkspace) }} aria-hidden />
             </span>
             {collapsed ? null : (
               <>
@@ -552,7 +512,7 @@ function WorkspaceSwitcher({
                     onClick={() => handleSelect(workspace)}
                   >
                     <span className="grid size-6 shrink-0 place-items-center rounded-md border bg-background text-muted-foreground">
-                      <Box className="size-4" aria-hidden />
+                      <Box className="size-4" style={{ color: workspaceColor(workspace) }} aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
                     <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
@@ -596,7 +556,7 @@ function SidebarLink({
   collapsed,
   item,
   currentPath,
-  onNavigate
+  onNavigate,
 }: {
   collapsed?: boolean;
   item: NavLinkItem;
@@ -631,7 +591,7 @@ function SidebarFooter({
   account,
   collapsed,
   onLogout,
-  onNavigate
+  onNavigate,
 }: {
   account?: AuthAccount | null;
   collapsed?: boolean;
@@ -699,7 +659,7 @@ export function AccountMenu({
   account,
   collapsed,
   onLogout,
-  onNavigate
+  onNavigate,
 }: {
   account?: AuthAccount | null;
   collapsed?: boolean;
@@ -746,7 +706,7 @@ export function AccountMenu({
                 className={clsx(
                   interactiveMotionClass,
                   'data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground',
-                  collapsed ? 'justify-center' : ''
+                  collapsed ? 'justify-center' : '',
                 )}
                 aria-label={collapsed ? identity.name : undefined}
               />
@@ -774,126 +734,84 @@ export function AccountMenu({
             sideOffset={6}
             className="w-[288px] overflow-visible p-1"
           >
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="truncate px-3 py-2 text-xs">{identity.email}</DropdownMenuLabel>
-        </DropdownMenuGroup>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="truncate px-3 py-2 text-xs">{identity.email}</DropdownMenuLabel>
+            </DropdownMenuGroup>
 
-        <DropdownMenuRadioGroup value={activeWorkspace.id}>
-          <DropdownMenuRadioItem
-            value={activeWorkspace.id}
-            closeOnClick={false}
-            className="h-12 items-start gap-3 px-3 py-2.5 text-foreground"
-          >
-            <Building2 className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{activeWorkspace.name}</span>
-              <span className="block text-xs text-muted-foreground">{msg('account.apiPlan', 'API plan')}</span>
-            </span>
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuItem className="h-8 gap-3 px-3" onClick={() => void handleMenuNavigation('/settings/organization')}>
-          <Settings className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="min-w-0 flex-1 truncate">{msg('account.organizationSettings', 'Organization settings')}</span>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem className="h-8 gap-3 px-3" onClick={() => setOpen(false)}>
-          <MessageSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="min-w-0 flex-1 truncate">{msg('account.feedback', 'Feedback')}</span>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          className="h-8 gap-3 px-3"
-          render={<a href="https://support.anthropic.com/" target="_blank" rel="noreferrer" />}
-        >
-          <CircleHelp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="min-w-0 flex-1 truncate">{msg('account.getHelp', 'Get help')}</span>
-        </DropdownMenuItem>
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger openOnHover className="h-8 gap-3 px-3">
-            <Globe2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 flex-1 truncate">{msg('language.label', 'Language')}</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-[228px]">
-            <DropdownMenuRadioGroup value={locale}>
-              {locales.map((option) => (
-                <DropdownMenuRadioItem
-                  key={option}
-                  value={option}
-                  className="h-8 gap-2 px-3"
-                  onClick={() => {
-                    setLocale(option);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    {msg(
-                      option === 'zh-CN' ? 'language.simplifiedChinese' : 'language.english',
-                      option === 'zh-CN' ? 'Simplified Chinese' : 'English'
-                    )}
-                  </span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger openOnHover className="h-8 gap-3 px-3">
-            <Scale className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 flex-1 truncate">{msg('account.legalCenter', 'Legal center')}</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-[190px]">
-            {legalMenuItems.map((item) => (
-              <DropdownMenuItem
-                key={item.labelId}
-                className="h-8 px-3 text-foreground"
-                render={<a href={item.href} target="_blank" rel="noreferrer" />}
+            <DropdownMenuRadioGroup value={activeWorkspace.id}>
+              <DropdownMenuRadioItem
+                value={activeWorkspace.id}
+                closeOnClick={false}
+                className="h-12 items-start gap-3 px-3 py-2.5 text-foreground"
               >
-                <span className="truncate">{msg(item.labelId, item.label)}</span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+                <Building2 className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{activeWorkspace.name}</span>
+                  <span className="block text-xs text-muted-foreground">{msg('account.apiPlan', 'API plan')}</span>
+                </span>
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
 
-        <DropdownMenuSeparator />
+            <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          closeOnClick={false}
-          disabled={loggingOut}
-          className="h-8 gap-3 px-3 disabled:text-muted-foreground"
-          onClick={() => void handleLogout()}
-        >
-          <LogOut className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="min-w-0 flex-1 truncate">
-            {loggingOut ? msg('account.loggingOut', 'Logging out...') : msg('account.logout', 'Log out')}
-          </span>
-        </DropdownMenuItem>
+            <DropdownMenuItem
+              className="h-8 gap-3 px-3"
+              onClick={() => void handleMenuNavigation('/settings/organization')}
+            >
+              <Settings className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">
+                {msg('account.organizationSettings', 'Organization settings')}
+              </span>
+            </DropdownMenuItem>
+
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger openOnHover className="h-8 gap-3 px-3">
+                <Globe2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1 truncate">{msg('language.label', 'Language')}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[228px]">
+                <DropdownMenuRadioGroup value={locale}>
+                  {locales.map((option) => (
+                    <DropdownMenuRadioItem
+                      key={option}
+                      value={option}
+                      className="h-8 gap-2 px-3"
+                      onClick={() => {
+                        setLocale(option);
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        {msg(
+                          option === 'zh-CN' ? 'language.simplifiedChinese' : 'language.english',
+                          option === 'zh-CN' ? 'Simplified Chinese' : 'English',
+                        )}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              closeOnClick={false}
+              disabled={loggingOut}
+              className="h-8 gap-3 px-3 disabled:text-muted-foreground"
+              onClick={() => void handleLogout()}
+            >
+              <LogOut className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">
+                {loggingOut ? msg('account.loggingOut', 'Logging out...') : msg('account.logout', 'Log out')}
+              </span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
   );
 }
-
-const legalMenuItems = [
-  {
-    label: 'Commercial Terms',
-    labelId: 'account.commercialTerms',
-    href: 'https://www.anthropic.com/legal/commercial-terms'
-  },
-  { label: 'Usage Policy', labelId: 'account.usagePolicy', href: 'https://www.anthropic.com/legal/aup' },
-  { label: 'Privacy Policy', labelId: 'account.privacyPolicy', href: 'https://www.anthropic.com/legal/privacy' },
-  {
-    label: 'Data retention',
-    labelId: 'account.dataRetention',
-    href: 'https://support.anthropic.com/en/articles/7996866-how-long-do-you-store-personal-data'
-  },
-  { label: 'Your Privacy Choices', labelId: 'account.privacyChoices', href: 'https://www.anthropic.com/privacy' }
-];
 
 const managedAgentPathByHref: Record<string, string> = {
   '/quickstart': 'agent-quickstart',
@@ -903,14 +821,14 @@ const managedAgentPathByHref: Record<string, string> = {
   '/environments': 'environments',
   '/credential-vaults': 'vaults',
   '/memory-stores': 'memory-stores',
-  '/dreams': 'dreams'
+  '/dreams': 'dreams',
 };
 
 const workspaceBuildPathByHref: Record<string, string> = {
   '/playground': 'playground',
   '/files': 'files',
   '/skills': 'skills',
-  '/batches': 'batches'
+  '/batches': 'batches',
 };
 
 function navigationHref(href: string, workspaceId: string) {
@@ -934,11 +852,7 @@ function navigationHref(href: string, workspaceId: string) {
   return href;
 }
 
-async function navigateToMatchingWorkspacePath(
-  currentPath: string,
-  workspaceId: string,
-  onNavigate?: NavigateHandler
-) {
+async function navigateToMatchingWorkspacePath(currentPath: string, workspaceId: string, onNavigate?: NavigateHandler) {
   const encodedWorkspaceId = encodeURIComponent(workspaceId || 'default');
   let nextPath: string | undefined;
 
@@ -965,13 +879,10 @@ async function navigateToMatchingWorkspacePath(
   nextPath ??= currentPath
     .replace(/^\/settings\/workspaces\/[^/]+\/keys/, workspaceApiKeysPath(workspaceId))
     .replace(/^\/settings\/workspaces\/[^/]+\/webhooks/, workspaceWebhooksPath(workspaceId))
-    .replace(
-      /^\/workspaces\/[^/]+\/(playground|files|skills|batches)/,
-      `/workspaces/${encodedWorkspaceId}/$1`
-    )
+    .replace(/^\/workspaces\/[^/]+\/(playground|files|skills|batches)/, `/workspaces/${encodedWorkspaceId}/$1`)
     .replace(
       /^\/workspaces\/[^/]+\/(agent-quickstart|agents|sessions|deployments|environments|vaults|memory-stores|dreams)/,
-      `/workspaces/${encodedWorkspaceId}/$1`
+      `/workspaces/${encodedWorkspaceId}/$1`,
     );
 
   if (nextPath === currentPath) {
@@ -993,7 +904,7 @@ function getIdentity(account?: AuthAccount | null) {
   const emailName = email.split('@')[0] || 'test';
   return {
     email,
-    name: account?.display_name ?? account?.full_name ?? emailName
+    name: account?.display_name ?? account?.full_name ?? emailName,
   };
 }
 
@@ -1024,11 +935,19 @@ function isActivePath(currentPath: string, href: string) {
   }
   const buildPath = workspaceBuildPathByHref[href];
   if (buildPath) {
-    return currentPath === href || currentPath === `/workspaces/default/${buildPath}` || new RegExp(`^/workspaces/[^/]+/${buildPath}(/|$)`).test(currentPath);
+    return (
+      currentPath === href ||
+      currentPath === `/workspaces/default/${buildPath}` ||
+      new RegExp(`^/workspaces/[^/]+/${buildPath}(/|$)`).test(currentPath)
+    );
   }
   const managedPath = managedAgentPathByHref[href];
   if (managedPath) {
-    return currentPath === href || currentPath === `/workspaces/default/${managedPath}` || new RegExp(`^/workspaces/[^/]+/${managedPath}(/|$)`).test(currentPath);
+    return (
+      currentPath === href ||
+      currentPath === `/workspaces/default/${managedPath}` ||
+      new RegExp(`^/workspaces/[^/]+/${managedPath}(/|$)`).test(currentPath)
+    );
   }
   return currentPath === href || currentPath.startsWith(`${href}/`);
 }
@@ -1062,9 +981,18 @@ function isAnalyticsPath(currentPath: string) {
 
 function isManagedAgentsPath(currentPath: string) {
   return (
-    ['/quickstart', '/agents', '/sessions', '/deployments', '/environments', '/credential-vaults', '/memory-stores', '/dreams'].includes(currentPath) ||
+    [
+      '/quickstart',
+      '/agents',
+      '/sessions',
+      '/deployments',
+      '/environments',
+      '/credential-vaults',
+      '/memory-stores',
+      '/dreams',
+    ].includes(currentPath) ||
     /^\/workspaces\/[^/]+\/(agent-quickstart|agents|sessions|deployments|environments|vaults|memory-stores|dreams)(\/|$)/.test(
-      currentPath
+      currentPath,
     )
   );
 }

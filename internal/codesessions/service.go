@@ -1,7 +1,6 @@
 package codesessions
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,47 +11,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
 	maevents "github.com/superduck-ai/open-managed-agents/internal/managedagentsevents"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 )
 
-type PublicEventSink interface {
-	PublishCodeSessionEvents(ctx context.Context, codeSession db.CodeSession, payloads []json.RawMessage) error
-}
-
+// Service 封装会被 sessions、environment runner 与 code-session HTTP handler 共同复用的业务能力。
+// 它不持有 HTTP 鉴权、代理连接或日志状态，因而可以安全地注入非 HTTP 调用方。
 type Service struct {
-	cfg                 config.Config
-	db                  *db.DB
-	bridgeAuthenticator BridgeAuthenticator
-
-	mu      sync.Mutex
-	sink    PublicEventSink
-	workers map[string]*workerClient
-
-	otlpLogMu sync.Mutex
-}
-
-type ManagedAgentCreateInput struct {
-	Session                    db.Session
-	Environment                db.Environment
-	Model                      string
-	Title                      string
-	WorkDir                    string
-	PermissionMode             string
-	DangerouslySkipPermissions bool
-	Config                     json.RawMessage
-	InitialEvents              []json.RawMessage
-}
-
-type ManagedAgentCreateResult struct {
-	CodeSessionID   string
-	PublicSessionID string
-	SDKURLPath      string
+	db          *db.DB
+	credentials *SessionCredentials
+	sinkMu      sync.Mutex
+	sink        PublicEventSink
 }
 
 type workerOutputEvent struct {
@@ -60,78 +32,12 @@ type workerOutputEvent struct {
 	Ephemeral bool
 }
 
-type workerClient struct {
-	codeSessionID string
-	conn          *websocket.Conn
-	mu            sync.Mutex
-	closed        bool
-}
-
-func NewService(cfg config.Config, database *db.DB) *Service {
-	return &Service{
-		cfg:     cfg,
-		db:      database,
-		workers: map[string]*workerClient{},
+func NewServiceWithCredentials(database *db.DB, credentials *SessionCredentials) *Service {
+	// 显式注入避免 Service 在同一进程中各自生成临时 Ed25519 密钥。
+	if credentials == nil {
+		panic("codesessions: session credentials are required")
 	}
-}
-
-func (s *Service) SetPublicEventSink(sink PublicEventSink) {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.sink = sink
-}
-
-func (s *Service) CreateManagedAgentCodeSession(ctx context.Context, input ManagedAgentCreateInput) (ManagedAgentCreateResult, error) {
-	codeSessionID, err := ids.New("cse_")
-	if err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	now := time.Now().UTC()
-	configObject := rawObject(input.Config)
-	metadata, err := marshalRaw(map[string]any{
-		"source":                         "managed_agents_local",
-		"public_session_id":              input.Session.ExternalID,
-		"environment_id":                 input.Environment.ExternalID,
-		"title":                          input.Title,
-		"config":                         configObject,
-		"dangerously_skip_permissions":   input.DangerouslySkipPermissions,
-		"managed_agent_session_work_dir": strings.TrimSpace(input.WorkDir),
-	})
-	if err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	record, err := s.db.CreateCodeSession(ctx, db.CreateCodeSessionInput{
-		ExternalID:            codeSessionID,
-		OrganizationID:        input.Session.OrganizationID,
-		WorkspaceID:           input.Session.WorkspaceID,
-		SessionID:             input.Session.ID,
-		SessionExternalID:     input.Session.ExternalID,
-		EnvironmentID:         input.Environment.ID,
-		EnvironmentExternalID: input.Environment.ExternalID,
-		WorkDir:               strings.TrimSpace(input.WorkDir),
-		PermissionMode:        strings.TrimSpace(input.PermissionMode),
-		Model:                 strings.TrimSpace(input.Model),
-		Status:                "active",
-		Metadata:              metadata,
-		CreatedAt:             now,
-	})
-	if err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	if err := s.queueInitialize(ctx, record, input.Config, now); err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	if err := s.queueInitialPublicSessionEvents(ctx, record, input.InitialEvents, now); err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	return ManagedAgentCreateResult{
-		CodeSessionID:   record.ExternalID,
-		PublicSessionID: record.SessionExternalID,
-		SDKURLPath:      "/v1/code/sessions/" + record.ExternalID,
-	}, nil
+	return &Service{db: database, credentials: credentials}
 }
 
 func (s *Service) queueInitialPublicSessionEvents(ctx context.Context, codeSession db.CodeSession, payloads []json.RawMessage, now time.Time) error {
@@ -197,15 +103,16 @@ func (s *Service) QueueRawPublicSessionEvents(ctx context.Context, codeSession d
 	if s == nil || len(payloads) == 0 {
 		return nil
 	}
+	// 持久化队列是事件投递边界：CCR v2 SSE 和保留的 HTTP poll 都从
+	// 持久化入站队列消费事件。
 	for _, payload := range payloads {
-		event, duplicate, err := s.appendInboundPayload(ctx, codeSession.ExternalID, payload, "public-session")
+		_, duplicate, err := s.appendInboundPayload(ctx, codeSession.ExternalID, payload, "public-session")
 		if err != nil {
 			return err
 		}
 		if duplicate {
 			continue
 		}
-		s.pushInboundEvent(ctx, event)
 	}
 	return nil
 }
@@ -218,15 +125,16 @@ func (s *Service) QueueRawCodeSessionEvents(ctx context.Context, codeSession db.
 	if source == "" {
 		source = "code-session-api"
 	}
+	// 不得通过进程内 push 绕过持久化队列。CCR v2 投递必须校验 epoch，
+	// 并且在 worker 被替换后仍可重放。
 	for _, payload := range payloads {
-		event, duplicate, err := s.appendInboundPayload(ctx, codeSession.ExternalID, payload, source)
+		_, duplicate, err := s.appendInboundPayload(ctx, codeSession.ExternalID, payload, source)
 		if err != nil {
 			return err
 		}
 		if duplicate {
 			continue
 		}
-		s.pushInboundEvent(ctx, event)
 	}
 	return nil
 }
@@ -458,9 +366,9 @@ func (s *Service) publishPublicPayloadsToSink(ctx context.Context, codeSessionID
 	if err != nil {
 		return db.CodeSession{}, err
 	}
-	s.mu.Lock()
+	s.sinkMu.Lock()
 	sink := s.sink
-	s.mu.Unlock()
+	s.sinkMu.Unlock()
 	if sink == nil {
 		return codeSession, nil
 	}
@@ -547,73 +455,6 @@ func (s *Service) subagentThreadMappings(ctx context.Context, codeSession db.Cod
 		}
 	}
 	return threadByAgent, nil
-}
-
-func (s *Service) pushInboundEvent(ctx context.Context, event db.CodeSessionEvent) {
-	client := s.workerFor(event.CodeSessionExternalID)
-	if client == nil {
-		return
-	}
-	if err := client.send(event.Payload); err != nil {
-		log.Printf("send code session inbound event code_session_id=%s event_id=%s: %v", event.CodeSessionExternalID, event.ExternalID, err)
-		s.clearWorker(event.CodeSessionExternalID, client)
-		return
-	}
-	if err := s.db.MarkCodeSessionInboundEventSent(ctx, event.ExternalID); err != nil && !errors.Is(err, db.ErrNotFound) {
-		log.Printf("mark code session inbound event sent code_session_id=%s event_id=%s: %v", event.CodeSessionExternalID, event.ExternalID, err)
-	}
-}
-
-func (s *Service) workerFor(codeSessionID string) *workerClient {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.workers[codeSessionID]
-}
-
-func (s *Service) replaceWorker(codeSessionID string, next *workerClient) {
-	s.mu.Lock()
-	old := s.workers[codeSessionID]
-	s.workers[codeSessionID] = next
-	s.mu.Unlock()
-	if old != nil {
-		old.close()
-	}
-}
-
-func (s *Service) clearWorker(codeSessionID string, client *workerClient) {
-	s.mu.Lock()
-	if s.workers[codeSessionID] == client {
-		delete(s.workers, codeSessionID)
-	}
-	s.mu.Unlock()
-	if client != nil {
-		client.close()
-	}
-}
-
-func (c *workerClient) send(payload json.RawMessage) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return websocket.ErrCloseSent
-	}
-	line := bytes.TrimSpace(payload)
-	if len(line) == 0 {
-		return nil
-	}
-	line = append(append([]byte(nil), line...), '\n')
-	_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	return c.conn.WriteMessage(websocket.TextMessage, line)
-}
-
-func (c *workerClient) close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return
-	}
-	c.closed = true
-	_ = c.conn.Close()
 }
 
 func forwardPublicEventToWorker(eventType string) bool {

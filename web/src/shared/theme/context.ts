@@ -14,7 +14,7 @@ export const themeModes: ThemeMode[] = ['system', 'light', 'dark'];
 export const ThemeContext = createContext<ThemeContextValue>({
   mode: 'system',
   resolvedTheme: 'light',
-  setMode: () => undefined
+  setMode: () => undefined,
 });
 
 export function useTheme() {

@@ -18,15 +18,17 @@ export function Toaster(props: ToasterProps) {
         info: <Info className="size-4" />,
         warning: <TriangleAlert className="size-4" />,
         error: <OctagonX className="size-4" />,
-        loading: <Loader2 className="size-4 animate-spin" />
+        loading: <Loader2 className="size-4 animate-spin" />,
       }}
-      style={{
-        '--normal-bg': 'var(--popover)',
-        '--normal-text': 'var(--popover-foreground)',
-        '--normal-border': 'var(--border)',
-        '--border-radius': 'var(--radius)',
-        ...style
-      } as CSSProperties}
+      style={
+        {
+          '--normal-bg': 'var(--popover)',
+          '--normal-text': 'var(--popover-foreground)',
+          '--normal-border': 'var(--border)',
+          '--border-radius': 'var(--radius)',
+          ...style,
+        } as CSSProperties
+      }
       {...rest}
     />
   );

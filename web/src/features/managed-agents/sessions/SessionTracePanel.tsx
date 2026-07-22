@@ -1,14 +1,43 @@
 import { useFormatters, useI18n } from '../../../shared/i18n';
 import { Badge } from '../../../shared/ui/badge';
 import { Button } from '../../../shared/ui/button';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from '../../../shared/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../../shared/ui/dropdown-menu';
 import { Input } from '../../../shared/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from '../../../shared/ui/input-group';
 import { Tabs, TabsList, TabsTrigger } from '../../../shared/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../shared/ui/tooltip';
-import { quickstartComposerFrameClassName, quickstartComposerSendButtonClassName, quickstartComposerTextareaClassName } from '../components/composerStyles';
+import {
+  quickstartComposerFrameClassName,
+  quickstartComposerSendButtonClassName,
+  quickstartComposerTextareaClassName,
+} from '../components/composerStyles';
 import { CopyButton, HighlightedCode, SyntaxCodeBlock } from '../components/CodeBlocks';
-import { type DisplayEvent, type DisplayEventEntry, type DisplayEventType, type HighlightLanguage, type I18nMsg, type IdleGapEntry, type QueuedBoundaryEntry, type QuickstartSessionEvent, type SessionDebugDetailTab, type SessionEventListEntry, type SessionTraceEntry, type SessionTraceFamily, type SessionTraceFilterOption, type SessionTraceView, type ToolBatchEntry, type ToolCallEntry, type ToolLifecycle, type TranscriptMarkdownBlock } from '../types';
+import {
+  type DisplayEvent,
+  type DisplayEventEntry,
+  type DisplayEventType,
+  type HighlightLanguage,
+  type I18nMsg,
+  type IdleGapEntry,
+  type QueuedBoundaryEntry,
+  type QuickstartSessionEvent,
+  type SessionDebugDetailTab,
+  type SessionEventListEntry,
+  type SessionTraceEntry,
+  type SessionTraceFamily,
+  type SessionTraceFilterOption,
+  type SessionTraceView,
+  type ToolBatchEntry,
+  type ToolCallEntry,
+  type ToolLifecycle,
+  type TranscriptMarkdownBlock,
+} from '../types';
 import { copyText, toRecord } from '../utils';
 import clsx from 'clsx';
 import { ArrowUp, ChevronDown, Loader2, Search, Timer, X } from 'lucide-react';
@@ -16,14 +45,51 @@ import { type CSSProperties, type ReactNode, useContext, useEffect, useMemo, use
 import { SessionDetailDeltaFramesContext } from './sessionDetailData';
 import { formatSessionDuration, localizedTranscriptFilterOptions, sessionEventThreadId } from './sessionDetailModel';
 import { ApprovalChip, OutcomeStatusChip, SynchronizedShimmerText } from './sessionTimeline';
-import { buildSessionTraceEntries, compactSessionEventId, compareSessionEvents, isSafeTranscriptMarkdownHref, parseTranscriptCode, parseTranscriptMarkdownBlocks, prettyCode, sessionEventDebugJson, sessionEventErrorMessage, sessionEventIsThinking, sessionEventStructuredContentText, sessionEventTimestamp, sessionEventTranscriptText, sessionEventType, sessionIsToolResultEvent, sessionOutcomeDescription, sessionResultText, sessionStatusDescription, sessionSubagentThreadId, sessionThinkingLabel, sessionThinkingText, sessionToolLifecycle, sessionToolResultText, sessionToolUseCodeLanguage, sessionToolUseInput, sessionTraceDetailTitle, sessionTraceFilterValue, sessionTraceTextIsJson } from './sessionTraceModel';
-import { compactSubagentThreadId, sessionDebugBadge, sessionInlineRowPreview, sessionOutcomeStatus, sessionSubagentDirection, sessionSubagentThreadRef, sessionToolBatchSummary } from './sessionTraceRows';
+import {
+  buildSessionTraceEntries,
+  compactSessionEventId,
+  compareSessionEvents,
+  isSafeTranscriptMarkdownHref,
+  parseTranscriptCode,
+  parseTranscriptMarkdownBlocks,
+  prettyCode,
+  sessionEventDebugJson,
+  sessionEventErrorMessage,
+  sessionEventIsThinking,
+  sessionEventStructuredContentText,
+  sessionEventTimestamp,
+  sessionEventTranscriptText,
+  sessionEventType,
+  sessionIsToolResultEvent,
+  sessionOutcomeDescription,
+  sessionResultText,
+  sessionStatusDescription,
+  sessionSubagentThreadId,
+  sessionThinkingLabel,
+  sessionThinkingText,
+  sessionToolLifecycle,
+  sessionToolResultText,
+  sessionToolUseCodeLanguage,
+  sessionToolUseInput,
+  sessionTraceDetailTitle,
+  sessionTraceFilterValue,
+  sessionTraceTextIsJson,
+} from './sessionTraceModel';
+import {
+  compactSubagentThreadId,
+  sessionDebugBadge,
+  sessionInlineRowPreview,
+  sessionOutcomeStatus,
+  sessionSubagentDirection,
+  sessionSubagentThreadRef,
+  sessionToolBatchSummary,
+} from './sessionTraceRows';
 
 export function SessionTracePanel({
   events,
   loading,
   error,
-  sessionStartedAt
+  sessionStartedAt,
 }: {
   events: QuickstartSessionEvent[];
   loading: boolean;
@@ -45,7 +111,10 @@ export function SessionTracePanel({
     }
     return sortedEvents.map(sessionEventTimestamp).find(Boolean) ?? 0;
   }, [sessionStartedAt, sortedEvents]);
-  const entries = useMemo(() => buildSessionTraceEntries(sortedEvents, view, traceStartMs), [sortedEvents, view, traceStartMs]);
+  const entries = useMemo(
+    () => buildSessionTraceEntries(sortedEvents, view, traceStartMs),
+    [sortedEvents, view, traceStartMs],
+  );
   const filterOptions = useMemo<SessionTraceFilterOption[]>(() => {
     if (view === 'transcript') {
       return localizedTranscriptFilterOptions(msg);
@@ -140,13 +209,20 @@ export function SessionTracePanel({
             <SessionTraceEmpty
               message={
                 entries.length === 0
-                  ? msg('managedAgents.sessions.trace.noEvents', 'No events yet. Events will appear here as they occur.')
+                  ? msg(
+                      'managedAgents.sessions.trace.noEvents',
+                      'No events yet. Events will appear here as they occur.',
+                    )
                   : msg('managedAgents.sessions.trace.noMatchingEvents', 'No events match the current filters.')
               }
-              onClear={hasFilter ? () => {
-                setSelectedTypes([]);
-                setQuery('');
-              } : undefined}
+              onClear={
+                hasFilter
+                  ? () => {
+                      setSelectedTypes([]);
+                      setQuery('');
+                    }
+                  : undefined
+              }
             />
           )}
         </div>
@@ -160,7 +236,7 @@ export function SessionTracePanel({
 
 export function SessionTraceViewMode({
   value,
-  onChange
+  onChange,
 }: {
   value: SessionTraceView;
   onChange: (value: SessionTraceView) => void;
@@ -168,15 +244,8 @@ export function SessionTraceViewMode({
   const { msg } = useI18n();
   const label = msg('managedAgents.sessions.trace.viewMode', 'View mode');
   return (
-    <Tabs
-      value={value}
-      className="gap-0"
-      onValueChange={(nextValue) => onChange(nextValue as SessionTraceView)}
-    >
-      <TabsList
-        aria-label={label}
-        className="h-7 rounded-full bg-accent p-0.5"
-      >
+    <Tabs value={value} className="gap-0" onValueChange={(nextValue) => onChange(nextValue as SessionTraceView)}>
+      <TabsList aria-label={label} className="h-7 rounded-full bg-accent p-0.5">
         {(['transcript', 'debug'] as const).map((item) => (
           <TabsTrigger
             key={item}
@@ -198,7 +267,7 @@ function toggleSessionFilterOption({
   option,
   options,
   selectedTypes,
-  onChange
+  onChange,
 }: {
   checked: boolean;
   option: string;
@@ -206,9 +275,7 @@ function toggleSessionFilterOption({
   selectedTypes: string[];
   onChange: (value: string[]) => void;
 }) {
-  const nextTypes = checked
-    ? selectedTypes.filter((item) => item !== option)
-    : [...selectedTypes, option];
+  const nextTypes = checked ? selectedTypes.filter((item) => item !== option) : [...selectedTypes, option];
   onChange(nextTypes.length === 0 || nextTypes.length === options.length ? [] : nextTypes);
 }
 
@@ -216,7 +283,7 @@ export function SessionEventTypeFilter({
   options,
   selectedTypes,
   view,
-  onChange
+  onChange,
 }: {
   options: SessionTraceFilterOption[];
   selectedTypes: string[];
@@ -239,7 +306,7 @@ export function SessionEventTypeFilter({
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
-        render={(
+        render={
           <Button
             type="button"
             variant="secondary"
@@ -248,23 +315,21 @@ export function SessionEventTypeFilter({
             disabled={options.length === 0}
             className="gap-2 bg-accent text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           />
-        )}
+        }
       >
         {label}
         <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={6}
-        className="max-h-72 w-80 overflow-auto bg-popover"
-      >
+      <DropdownMenuContent align="start" sideOffset={6} className="max-h-72 w-80 overflow-auto bg-popover">
         {showAllEventsFirst ? (
           <DropdownMenuCheckboxItem
             checked={allSelected}
             className="h-8 px-2 text-left text-sm text-foreground"
             onCheckedChange={() => onChange([])}
           >
-            <span className="min-w-0 flex-1 truncate">{msg('managedAgents.sessions.trace.allEvents', 'All events')}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {msg('managedAgents.sessions.trace.allEvents', 'All events')}
+            </span>
           </DropdownMenuCheckboxItem>
         ) : null}
         {options.map((option) => {
@@ -274,13 +339,15 @@ export function SessionEventTypeFilter({
               key={option.value}
               checked={checked}
               className="h-8 px-2 text-left text-sm text-foreground"
-              onCheckedChange={() => toggleSessionFilterOption({
-                checked,
-                option: option.value,
-                options,
-                selectedTypes,
-                onChange
-              })}
+              onCheckedChange={() =>
+                toggleSessionFilterOption({
+                  checked,
+                  option: option.value,
+                  options,
+                  selectedTypes,
+                  onChange,
+                })
+              }
             >
               <span className={clsx('min-w-0 flex-1 truncate', view === 'debug' && 'font-mono text-[12px]')}>
                 {option.label}
@@ -324,7 +391,7 @@ export function SessionTraceSearch({ value, onChange }: { value: string; onChang
         'relative flex h-7 shrink-0 items-center overflow-hidden rounded-md transition-[width,background-color,box-shadow]',
         expanded
           ? 'w-56 bg-secondary ring-1 ring-border'
-          : 'w-7 cursor-pointer text-muted-foreground hover:bg-accent hover:text-foreground'
+          : 'w-7 cursor-pointer text-muted-foreground hover:bg-accent hover:text-foreground',
       )}
       onClick={expanded ? undefined : openSearch}
       onKeyDown={(event) => {
@@ -346,7 +413,7 @@ export function SessionTraceSearch({ value, onChange }: { value: string; onChang
         aria-hidden={!expanded}
         className={clsx(
           'h-7 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 pr-2 text-sm placeholder:text-muted-foreground focus-visible:ring-0',
-          !expanded && 'pointer-events-none opacity-0'
+          !expanded && 'pointer-events-none opacity-0',
         )}
         onFocus={() => setFocused(true)}
         onBlur={() => {
@@ -401,7 +468,7 @@ export function SessionTraceSkeleton() {
 export function SessionTraceEmpty({
   message,
   danger = false,
-  onClear
+  onClear,
 }: {
   message: string;
   danger?: boolean;
@@ -412,12 +479,7 @@ export function SessionTraceEmpty({
     <div className="flex h-full min-h-[220px] flex-col items-center justify-center px-8 py-24 text-center">
       <p className={clsx('text-sm', danger ? 'text-destructive' : 'text-muted-foreground')}>{message}</p>
       {onClear ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="mt-4 bg-accent hover:bg-accent"
-          onClick={onClear}
-        >
+        <Button type="button" variant="outline" className="mt-4 bg-accent hover:bg-accent" onClick={onClear}>
           {msg('managedAgents.sessions.trace.clearFilters', 'Clear filters')}
         </Button>
       ) : null}
@@ -428,7 +490,7 @@ export function SessionTraceEmpty({
 export function SessionTraceRow({
   entry,
   selected,
-  onSelect
+  onSelect,
 }: {
   entry: SessionTraceEntry;
   selected: boolean;
@@ -446,12 +508,14 @@ export function SessionTraceRow({
       className={clsx(
         '-mx-8 h-9 w-[calc(100%+4rem)] justify-start gap-2 overflow-hidden rounded-none border-0 bg-transparent px-8 text-left font-normal active:translate-y-0',
         selected ? 'bg-accent outline outline-2 -outline-offset-2 outline-ring' : 'hover:bg-accent',
-        entry.isError && 'bg-destructive/10'
+        entry.isError && 'bg-destructive/10',
       )}
       onClick={onSelect}
     >
       <SessionEventBadge family={entry.family} label={sessionEventBadgeName(entry, msg)} />
-      <span className={clsx('min-w-0 truncate text-sm leading-5', entry.isError ? 'text-destructive' : 'text-foreground')}>
+      <span
+        className={clsx('min-w-0 truncate text-sm leading-5', entry.isError ? 'text-destructive' : 'text-foreground')}
+      >
         {title}
       </span>
       {preview ? (
@@ -473,7 +537,7 @@ export function EventTypeBadge({
   label,
   variant = 'pill',
   title,
-  className
+  className,
 }: {
   type?: DisplayEventType;
   label?: string;
@@ -493,7 +557,7 @@ export function EventTypeBadge({
           ? 'rounded-full px-2 text-[11px] font-medium leading-none'
           : 'rounded-md px-1.5 text-[10px] font-normal leading-[1.4]',
         config.className,
-        className
+        className,
       )}
       style={config.style}
     >
@@ -511,7 +575,10 @@ export function EventTypeBadge({
   );
 }
 
-export function sessionEventBadgeConfig(type: DisplayEventType, msg: I18nMsg): {
+export function sessionEventBadgeConfig(
+  type: DisplayEventType,
+  msg: I18nMsg,
+): {
   label: string;
   className: string;
   style?: CSSProperties;
@@ -534,7 +601,9 @@ export function sessionEventBadgeConfig(type: DisplayEventType, msg: I18nMsg): {
   }
 }
 
-export function sessionBadgeFamily(type: DisplayEventType): 'user' | 'agent' | 'tool' | 'subagent' | 'system' | 'error' {
+export function sessionBadgeFamily(
+  type: DisplayEventType,
+): 'user' | 'agent' | 'tool' | 'subagent' | 'system' | 'error' {
   switch (type) {
     case 'user':
       return 'user';
@@ -626,7 +695,14 @@ export function sessionFamilyBadgeType(family: SessionTraceFamily): DisplayEvent
 }
 
 export function sessionDisplayEventTypeIsStatus(type: DisplayEventType) {
-  return type === 'root' || type === 'status_rescheduled' || type === 'status_running' || type === 'status_idle' || type === 'status_terminated' || type === 'interrupt';
+  return (
+    type === 'root' ||
+    type === 'status_rescheduled' ||
+    type === 'status_running' ||
+    type === 'status_idle' ||
+    type === 'status_terminated' ||
+    type === 'interrupt'
+  );
 }
 
 export function sessionEventBadgeName(entry: SessionTraceEntry, msg?: I18nMsg) {
@@ -640,7 +716,7 @@ export function SessionTraceDetail({
   entry,
   view,
   placement = 'overlay',
-  onClose
+  onClose,
 }: {
   entry: SessionTraceEntry;
   view: SessionTraceView;
@@ -656,7 +732,7 @@ export function SessionTraceDetail({
         'relative flex flex-col overflow-hidden',
         placement === 'overlay'
           ? 'absolute inset-0 z-10 bg-secondary'
-          : 'border-t border-border bg-transparent lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
+          : 'border-t border-border bg-transparent lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0',
       )}
       data-placement={placement}
       data-testid="session-trace-detail"
@@ -694,7 +770,11 @@ export function SessionTraceDetail({
         </div>
       </div>
       <div className="subtle-scrollbar min-h-0 flex-1 overflow-auto pb-8">
-        {view === 'debug' ? <DebugEventDetail event={entry.event} type={entry.type} /> : <TranscriptEventDetail entry={entry} />}
+        {view === 'debug' ? (
+          <DebugEventDetail event={entry.event} type={entry.type} />
+        ) : (
+          <TranscriptEventDetail entry={entry} />
+        )}
       </div>
     </div>
   );
@@ -706,7 +786,7 @@ export function EventDetailPanel({
   detailTab = 'content',
   placement = 'side',
   onClose,
-  onDetailTabChange
+  onDetailTabChange,
 }: {
   entry: SessionEventListEntry;
   view: SessionTraceView;
@@ -729,7 +809,7 @@ export function EventDetailPanel({
         'relative flex flex-col overflow-hidden',
         placement === 'overlay'
           ? 'absolute inset-0 z-10 bg-secondary'
-          : 'border-t border-border bg-transparent lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0'
+          : 'border-t border-border bg-transparent lg:max-h-[calc(100vh-330px)] lg:border-l lg:border-t-0',
       )}
       data-placement={placement}
       data-testid="session-trace-detail"
@@ -784,7 +864,11 @@ export function EventDetailPanel({
   );
 }
 
-export function EventDetailContent({ entry }: { entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry> }) {
+export function EventDetailContent({
+  entry,
+}: {
+  entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry>;
+}) {
   if (entry.kind === 'tool_batch') {
     return <ToolBatchEventDetail entry={entry} />;
   }
@@ -807,15 +891,27 @@ export function EventDetailContent({ entry }: { entry: Exclude<SessionEventListE
     return <ErrorEventDetail entry={entry} />;
   }
   if (entry.displayEvent.type === 'outcome') {
-    return sessionEventType(entry.event) === 'user.define_outcome' ? <DefineOutcomeEventDetail entry={entry} /> : <OutcomeEventDetail entry={entry} />;
+    return sessionEventType(entry.event) === 'user.define_outcome' ? (
+      <DefineOutcomeEventDetail entry={entry} />
+    ) : (
+      <OutcomeEventDetail entry={entry} />
+    );
   }
-  if (entry.displayEvent.type === 'user' || entry.displayEvent.type === 'agent' || entry.displayEvent.type === 'result') {
+  if (
+    entry.displayEvent.type === 'user' ||
+    entry.displayEvent.type === 'agent' ||
+    entry.displayEvent.type === 'result'
+  ) {
     return <MessageEventDetail entry={entry} />;
   }
   return <GenericEventDetail entry={entry} />;
 }
 
-export function MessageEventDetail({ entry }: { entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry> }) {
+export function MessageEventDetail({
+  entry,
+}: {
+  entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry>;
+}) {
   const { msg } = useI18n();
   if (entry.displayEvent.isStreaming) {
     return <LiveMessageContent displayEvent={entry.displayEvent} />;
@@ -824,7 +920,13 @@ export function MessageEventDetail({ entry }: { entry: Exclude<SessionEventListE
   return (
     <div className="px-5 py-4">
       <div className="mb-2 text-xs text-muted-foreground">{msg('managedAgents.sessions.trace.content', 'Content')}</div>
-      {value ? <TranscriptTypedContent entry={entry.traceEntry} value={value} /> : <div className="text-xs italic text-muted-foreground">{msg('managedAgents.sessions.trace.noContent', 'No content.')}</div>}
+      {value ? (
+        <TranscriptTypedContent entry={entry.traceEntry} value={value} />
+      ) : (
+        <div className="text-xs italic text-muted-foreground">
+          {msg('managedAgents.sessions.trace.noContent', 'No content.')}
+        </div>
+      )}
     </div>
   );
 }
@@ -846,14 +948,30 @@ export function SubagentMessageDetail({ entry }: { entry: DisplayEventEntry }) {
     <div className="space-y-5 px-5 py-4">
       <dl className="space-y-2">
         <PropertyRow
-          label={direction === 'received' ? msg('managedAgents.sessions.trace.receivedFrom', 'Received from') : msg('managedAgents.sessions.trace.sentTo', 'Sent to')}
-          value={ref.agentName || (ref.threadId ? compactSubagentThreadId(ref.threadId) : msg('managedAgents.sessions.trace.thread', 'Thread'))}
+          label={
+            direction === 'received'
+              ? msg('managedAgents.sessions.trace.receivedFrom', 'Received from')
+              : msg('managedAgents.sessions.trace.sentTo', 'Sent to')
+          }
+          value={
+            ref.agentName ||
+            (ref.threadId
+              ? compactSubagentThreadId(ref.threadId)
+              : msg('managedAgents.sessions.trace.thread', 'Thread'))
+          }
         />
-        {ref.threadId ? <PropertyRow label={msg('managedAgents.sessions.trace.threadId', 'Thread ID')} value={<span className="font-mono">{ref.threadId}</span>} /> : null}
+        {ref.threadId ? (
+          <PropertyRow
+            label={msg('managedAgents.sessions.trace.threadId', 'Thread ID')}
+            value={<span className="font-mono">{ref.threadId}</span>}
+          />
+        ) : null}
       </dl>
       {content ? (
         <div>
-          <div className="mb-2 text-xs text-muted-foreground">{msg('managedAgents.sessions.trace.content', 'Content')}</div>
+          <div className="mb-2 text-xs text-muted-foreground">
+            {msg('managedAgents.sessions.trace.content', 'Content')}
+          </div>
           <TranscriptContent value={content} />
         </div>
       ) : null}
@@ -867,8 +985,16 @@ export function ThreadEventDetail({ entry }: { entry: DisplayEventEntry }) {
   return (
     <div className="space-y-4 px-5 py-4">
       <dl className="space-y-2">
-        {threadId ? <PropertyRow label={msg('managedAgents.sessions.trace.threadId', 'Thread ID')} value={<span className="font-mono">{threadId}</span>} /> : null}
-        <PropertyRow label={msg('managedAgents.sessions.trace.transition', 'Transition')} value={sessionStatusDescription(entry.type, entry.event) ?? entry.traceEntry.preview ?? entry.type} />
+        {threadId ? (
+          <PropertyRow
+            label={msg('managedAgents.sessions.trace.threadId', 'Thread ID')}
+            value={<span className="font-mono">{threadId}</span>}
+          />
+        ) : null}
+        <PropertyRow
+          label={msg('managedAgents.sessions.trace.transition', 'Transition')}
+          value={sessionStatusDescription(entry.type, entry.event) ?? entry.traceEntry.preview ?? entry.type}
+        />
       </dl>
       <GenericEventDetail entry={entry} compact />
     </div>
@@ -905,10 +1031,19 @@ export function OutcomeEventDetail({ entry }: { entry: DisplayEventEntry }) {
   const description = sessionOutcomeDescription(entry.event, msg);
   return (
     <div className="space-y-4 px-5 py-4">
-      {status ? <PropertyRow label={msg('managedAgents.sessions.trace.verdict', 'Verdict')} value={<OutcomeStatusChip status={status} />} /> : null}
+      {status ? (
+        <PropertyRow
+          label={msg('managedAgents.sessions.trace.verdict', 'Verdict')}
+          value={<OutcomeStatusChip status={status} />}
+        />
+      ) : null}
       <div>
-        <div className="mb-2 text-xs text-muted-foreground">{msg('managedAgents.sessions.trace.explanation', 'Explanation')}</div>
-        <p className="text-sm text-foreground">{description || msg('managedAgents.sessions.trace.gradingInProgress', 'Grading in progress...')}</p>
+        <div className="mb-2 text-xs text-muted-foreground">
+          {msg('managedAgents.sessions.trace.explanation', 'Explanation')}
+        </div>
+        <p className="text-sm text-foreground">
+          {description || msg('managedAgents.sessions.trace.gradingInProgress', 'Grading in progress...')}
+        </p>
       </div>
     </div>
   );
@@ -920,8 +1055,18 @@ export function DefineOutcomeEventDetail({ entry }: { entry: DisplayEventEntry }
   return (
     <div className="space-y-3 px-5 py-4">
       <PropertyRow label={msg('managedAgents.sessions.trace.description', 'Description')} value={description} />
-      {typeof entry.event.outcome_id === 'string' ? <PropertyRow label={msg('managedAgents.sessions.trace.outcomeId', 'Outcome ID')} value={<span className="font-mono">{entry.event.outcome_id}</span>} /> : null}
-      {typeof entry.event.max_iterations === 'number' ? <PropertyRow label={msg('managedAgents.sessions.trace.maxIterations', 'Max iterations')} value={String(entry.event.max_iterations)} /> : null}
+      {typeof entry.event.outcome_id === 'string' ? (
+        <PropertyRow
+          label={msg('managedAgents.sessions.trace.outcomeId', 'Outcome ID')}
+          value={<span className="font-mono">{entry.event.outcome_id}</span>}
+        />
+      ) : null}
+      {typeof entry.event.max_iterations === 'number' ? (
+        <PropertyRow
+          label={msg('managedAgents.sessions.trace.maxIterations', 'Max iterations')}
+          value={String(entry.event.max_iterations)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -931,10 +1076,12 @@ export function BatchDetailPanel({ entry }: { entry: ToolBatchEntry }) {
   const summary = sessionToolBatchSummary(entry);
   return (
     <div className="space-y-5 px-5 py-4">
-      <SectionHeader title={msg('managedAgents.sessions.trace.toolBatchSummary', '{count} tool calls: {summary}', {
-        count: entry.calls.length,
-        summary
-      })} />
+      <SectionHeader
+        title={msg('managedAgents.sessions.trace.toolBatchSummary', '{count} tool calls: {summary}', {
+          count: entry.calls.length,
+          summary,
+        })}
+      />
       <dl className="space-y-2">
         <PropertyRow label={msg('managedAgents.sessions.trace.tool', 'Tool')} value={summary} />
       </dl>
@@ -945,7 +1092,10 @@ export function BatchDetailPanel({ entry }: { entry: ToolBatchEntry }) {
           lifecycle={call.lifecycle}
           executionMs={call.executionMs}
         >
-          <ToolUseJsonSection title={msg('managedAgents.sessions.trace.toolUse', 'Tool use')} value={sessionToolUseInput(call.event)} />
+          <ToolUseJsonSection
+            title={msg('managedAgents.sessions.trace.toolUse', 'Tool use')}
+            value={sessionToolUseInput(call.event)}
+          />
           {call.confirmationEvent ? <ToolConfirmationSection event={call.confirmationEvent} /> : null}
           {call.resultEvent ? <ToolResultSection event={call.resultEvent} /> : null}
         </CallSection>
@@ -957,7 +1107,7 @@ export function BatchDetailPanel({ entry }: { entry: ToolBatchEntry }) {
 export function DebugDetailPanel({
   entry,
   tab,
-  onTabChange
+  onTabChange,
 }: {
   entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry>;
   tab: SessionDebugDetailTab;
@@ -978,7 +1128,9 @@ export function DebugDetailPanel({
             variant="ghost"
             className={clsx(
               'h-auto rounded-md px-2 py-1 text-xs font-medium',
-              activeTab === 'content' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              activeTab === 'content'
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
             onClick={() => onTabChange?.('content')}
           >
@@ -989,7 +1141,9 @@ export function DebugDetailPanel({
             variant="ghost"
             className={clsx(
               'h-auto rounded-md px-2 py-1 text-xs font-medium',
-              activeTab === 'deltas' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              activeTab === 'deltas'
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
             onClick={() => onTabChange?.('deltas')}
           >
@@ -1042,7 +1196,9 @@ export function ThinkingEventDetail({ entry }: { entry: DisplayEventEntry }) {
       {thinkingText ? (
         <TranscriptContent value={thinkingText} />
       ) : (
-        <div className="text-xs italic text-muted-foreground">{msg('managedAgents.sessions.trace.noContent', 'No content.')}</div>
+        <div className="text-xs italic text-muted-foreground">
+          {msg('managedAgents.sessions.trace.noContent', 'No content.')}
+        </div>
       )}
     </div>
   );
@@ -1053,12 +1209,17 @@ export function ToolCallDetailContent({ entry }: { entry: ToolCallEntry }) {
   return (
     <div className="space-y-6 px-5 py-4">
       <ApprovalChip lifecycle={entry.lifecycle} />
-      <ToolUseJsonSection title={msg('managedAgents.sessions.trace.toolUse', 'Tool use')} value={sessionToolUseInput(entry.event)} />
+      <ToolUseJsonSection
+        title={msg('managedAgents.sessions.trace.toolUse', 'Tool use')}
+        value={sessionToolUseInput(entry.event)}
+      />
       {entry.confirmationEvent ? <ToolConfirmationSection event={entry.confirmationEvent} /> : null}
       {entry.resultEvent ? (
         <ToolResultSection event={entry.resultEvent} />
       ) : (
-        <p className="text-xs italic text-muted-foreground">{msg('managedAgents.sessions.trace.noResult', 'No result')}</p>
+        <p className="text-xs italic text-muted-foreground">
+          {msg('managedAgents.sessions.trace.noResult', 'No result')}
+        </p>
       )}
     </div>
   );
@@ -1066,7 +1227,7 @@ export function ToolCallDetailContent({ entry }: { entry: ToolCallEntry }) {
 
 export function GenericEventDetail({
   entry,
-  compact = false
+  compact = false,
 }: {
   entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry>;
   compact?: boolean;
@@ -1076,11 +1237,16 @@ export function GenericEventDetail({
   return (
     <div className={compact ? 'space-y-4' : 'space-y-4 px-5 py-4'}>
       <dl className="space-y-2">
-        <PropertyRow label={msg('managedAgents.sessions.trace.type', 'Type')} value={<span className="font-mono">{entry.type}</span>} />
+        <PropertyRow
+          label={msg('managedAgents.sessions.trace.type', 'Type')}
+          value={<span className="font-mono">{entry.type}</span>}
+        />
       </dl>
       {value ? (
         <div>
-          <div className="mb-2 text-xs text-muted-foreground">{msg('managedAgents.sessions.trace.content', 'Content')}</div>
+          <div className="mb-2 text-xs text-muted-foreground">
+            {msg('managedAgents.sessions.trace.content', 'Content')}
+          </div>
           <TranscriptTypedContent entry={entry.traceEntry} value={value} />
         </div>
       ) : null}
@@ -1092,7 +1258,7 @@ export function CallSection({
   title,
   lifecycle,
   executionMs,
-  children
+  children,
 }: {
   title: string;
   lifecycle?: ToolLifecycle;
@@ -1138,7 +1304,10 @@ export function PropertyRow({ label, value }: { label: string; value: ReactNode 
   );
 }
 
-export function eventDetailBadge(entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry>, msg: I18nMsg) {
+export function eventDetailBadge(
+  entry: Exclude<SessionEventListEntry, IdleGapEntry | QueuedBoundaryEntry>,
+  msg: I18nMsg,
+) {
   if (entry.kind === 'tool_batch') {
     return msg('managedAgents.sessions.trace.toolBatch', 'Tools');
   }
@@ -1151,11 +1320,15 @@ export function TranscriptEventDetail({ entry }: { entry: SessionTraceEntry }) {
     const thinkingText = sessionThinkingText(entry.event);
     return (
       <div className="px-5 py-4">
-        <div className="mb-2 text-xs text-muted-foreground">{msg('managedAgents.sessions.trace.content', 'Content')}</div>
+        <div className="mb-2 text-xs text-muted-foreground">
+          {msg('managedAgents.sessions.trace.content', 'Content')}
+        </div>
         {thinkingText ? (
           <TranscriptContent value={thinkingText} />
         ) : (
-          <div className="text-xs italic text-muted-foreground">{msg('managedAgents.sessions.trace.noContent', 'No content.')}</div>
+          <div className="text-xs italic text-muted-foreground">
+            {msg('managedAgents.sessions.trace.noContent', 'No content.')}
+          </div>
         )}
       </div>
     );
@@ -1165,12 +1338,17 @@ export function TranscriptEventDetail({ entry }: { entry: SessionTraceEntry }) {
     return (
       <div className="space-y-6 px-5 py-4">
         <ApprovalChip lifecycle={sessionToolLifecycle(entry.event, entry.resultEvent, entry.confirmationEvent)} />
-        <ToolUseJsonSection title={msg('managedAgents.sessions.trace.toolUse', 'Tool use')} value={sessionToolUseInput(entry.event)} />
+        <ToolUseJsonSection
+          title={msg('managedAgents.sessions.trace.toolUse', 'Tool use')}
+          value={sessionToolUseInput(entry.event)}
+        />
         {entry.confirmationEvent ? <ToolConfirmationSection event={entry.confirmationEvent} /> : null}
         {entry.resultEvent ? (
           <ToolResultSection event={entry.resultEvent} />
         ) : (
-          <p className="text-xs italic text-muted-foreground">{msg('managedAgents.sessions.trace.noResult', 'No result')}</p>
+          <p className="text-xs italic text-muted-foreground">
+            {msg('managedAgents.sessions.trace.noResult', 'No result')}
+          </p>
         )}
       </div>
     );
@@ -1185,7 +1363,11 @@ export function TranscriptEventDetail({ entry }: { entry: SessionTraceEntry }) {
   }
 
   if (entry.family === 'status') {
-    return <p className="px-5 py-4 text-sm text-muted-foreground">{sessionStatusDescription(entry.type, entry.event) ?? entry.preview}</p>;
+    return (
+      <p className="px-5 py-4 text-sm text-muted-foreground">
+        {sessionStatusDescription(entry.type, entry.event) ?? entry.preview}
+      </p>
+    );
   }
 
   if (entry.family === 'error') {
@@ -1204,7 +1386,9 @@ export function TranscriptEventDetail({ entry }: { entry: SessionTraceEntry }) {
       {entry.displayText || entry.preview ? (
         <TranscriptTypedContent entry={entry} value={entry.displayText || entry.preview} />
       ) : (
-        <div className="text-xs italic text-muted-foreground">{msg('managedAgents.sessions.trace.noContent', 'No content.')}</div>
+        <div className="text-xs italic text-muted-foreground">
+          {msg('managedAgents.sessions.trace.noContent', 'No content.')}
+        </div>
       )}
     </div>
   );
@@ -1231,14 +1415,20 @@ export function DebugDeltasDetail({ frames }: { frames: QuickstartSessionEvent[]
     <div className="px-5 pb-6 pt-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="font-mono text-xs text-muted-foreground">
-          {msg('managedAgents.sessions.trace.deltaFrameCount', '{count, plural, one {# delta frame} other {# delta frames}}', { count: frames.length })}
+          {msg(
+            'managedAgents.sessions.trace.deltaFrameCount',
+            '{count, plural, one {# delta frame} other {# delta frames}}',
+            { count: frames.length },
+          )}
         </div>
         <CopyButton value={debugJson} label={msg('managedAgents.quickstart.copyCode', 'Copy code')} />
       </div>
       {frames.length ? (
         <SyntaxCodeBlock value={debugJson} language="json" />
       ) : (
-        <div className="text-xs italic text-muted-foreground">{msg('managedAgents.sessions.trace.noDeltas', 'No deltas captured.')}</div>
+        <div className="text-xs italic text-muted-foreground">
+          {msg('managedAgents.sessions.trace.noDeltas', 'No deltas captured.')}
+        </div>
       )}
     </div>
   );
@@ -1289,7 +1479,11 @@ export function renderTranscriptMarkdownBlock(block: TranscriptMarkdownBlock, in
             <thead className="bg-secondary">
               <tr>
                 {block.headers.map((header, headerIndex) => (
-                  <th key={headerIndex} scope="col" className="border-b border-border px-3 py-2 font-semibold text-foreground">
+                  <th
+                    key={headerIndex}
+                    scope="col"
+                    className="border-b border-border px-3 py-2 font-semibold text-foreground"
+                  >
                     {renderTranscriptMarkdownInline(header, `table-${index}-head-${headerIndex}`)}
                   </th>
                 ))}
@@ -1334,27 +1528,36 @@ export function renderTranscriptMarkdownInline(text: string, keyPrefix: string):
     const key = `${keyPrefix}-${index}`;
     if (token.startsWith('`') && token.endsWith('`')) {
       nodes.push(
-        <code key={key} className="rounded border border-border bg-secondary px-1 py-0.5 font-mono text-[0.92em] text-foreground">
+        <code
+          key={key}
+          className="rounded border border-border bg-secondary px-1 py-0.5 font-mono text-[0.92em] text-foreground"
+        >
           {token.slice(1, -1)}
-        </code>
+        </code>,
       );
     } else if (token.startsWith('**') && token.endsWith('**')) {
       nodes.push(
         <strong key={key} className="font-semibold text-foreground">
           {renderTranscriptMarkdownInline(token.slice(2, -2), `${key}-strong`)}
-        </strong>
+        </strong>,
       );
     } else {
       const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       const href = link?.[2]?.trim() ?? '';
       nodes.push(
         isSafeTranscriptMarkdownHref(href) ? (
-          <a key={key} href={href} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+          <a
+            key={key}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-2 hover:underline"
+          >
             {renderTranscriptMarkdownInline(link?.[1] ?? token, `${key}-link`)}
           </a>
         ) : (
           token
-        )
+        ),
       );
     }
     lastIndex = match.index + token.length;
@@ -1408,15 +1611,19 @@ export function ToolResultSection({ event }: { event: QuickstartSessionEvent }) 
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <span className="text-xs text-muted-foreground">{msg('managedAgents.sessions.trace.toolResult', 'Tool result')}</span>
-        {typeof event.id === 'string' && event.id ? <span className="font-mono text-xs text-muted-foreground">{event.id}</span> : null}
+        <span className="text-xs text-muted-foreground">
+          {msg('managedAgents.sessions.trace.toolResult', 'Tool result')}
+        </span>
+        {typeof event.id === 'string' && event.id ? (
+          <span className="font-mono text-xs text-muted-foreground">{event.id}</span>
+        ) : null}
       </div>
       <pre
         className={clsx(
           'subtle-scrollbar max-h-80 overflow-auto rounded-md border p-3 font-mono text-xs leading-[18px]',
           event.is_error === true
             ? 'border-destructive/50 bg-destructive/10 text-destructive'
-            : 'border-border bg-secondary text-foreground'
+            : 'border-border bg-secondary text-foreground',
         )}
       >
         <HighlightedCode code={parsed} language={language} />
@@ -1428,7 +1635,7 @@ export function ToolResultSection({ event }: { event: QuickstartSessionEvent }) 
 export function ToolConfirmationSection({ event }: { event: QuickstartSessionEvent }) {
   const { msg } = useI18n();
   const payload: Record<string, unknown> = {
-    result: event.result
+    result: event.result,
   };
   if (typeof event.deny_message === 'string' && event.deny_message.trim()) {
     payload.deny_message = event.deny_message;
@@ -1461,7 +1668,7 @@ export function sessionCanonicalDisplayEvent(event: QuickstartSessionEvent): Qui
     session_id: payload.session_id ?? event.session_id,
     session_thread_id: payload.session_thread_id ?? event.session_thread_id,
     thread_id: payload.thread_id ?? event.thread_id,
-    _wrapped_event_id: event.id
+    _wrapped_event_id: event.id,
   };
 }
 
@@ -1523,7 +1730,7 @@ export function QuickstartSessionComposer({
   disabled,
   loading,
   onChange,
-  onSubmit
+  onSubmit,
 }: {
   value: string;
   placeholder: string;
@@ -1559,7 +1766,7 @@ export function QuickstartSessionComposer({
         placeholder={placeholder}
         className={clsx(
           'subtle-scrollbar block max-h-40 overflow-y-auto disabled:cursor-not-allowed disabled:bg-transparent disabled:opacity-50',
-          quickstartComposerTextareaClassName
+          quickstartComposerTextareaClassName,
         )}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -1581,7 +1788,11 @@ export function QuickstartSessionComposer({
           className={quickstartComposerSendButtonClassName}
           onClick={onSubmit}
         >
-          {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
+          {loading ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <ArrowUp className="size-4" aria-hidden />
+          )}
         </InputGroupButton>
       </InputGroupAddon>
     </InputGroup>
