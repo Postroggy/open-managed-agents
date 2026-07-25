@@ -1,6 +1,7 @@
 import { Label } from '@/shared/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { cn } from '@/shared/lib/utils';
+import { useI18n } from '@/shared/i18n';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { type ModelCatalogModel, modelCatalogDisplayName } from './model';
 
@@ -25,8 +26,13 @@ export function ModelCatalogSelect({
   label?: string;
   className?: string;
 }) {
+  const { msg } = useI18n();
   const selectedModel = models.find((model) => model.model_name === value);
-  const placeholder = loading ? 'Loading models...' : error ? 'Models unavailable' : 'Select model';
+  const placeholder = loading
+    ? msg('modelCatalog.loading', 'Loading models...')
+    : error
+      ? msg('modelCatalog.unavailable', 'Models unavailable')
+      : msg('modelCatalog.select', 'Select model');
 
   return (
     <div className={cn('grid min-w-0 gap-1.5', className)}>
@@ -35,7 +41,7 @@ export function ModelCatalogSelect({
         {stale ? (
           <span className="inline-flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
             <AlertCircle className="size-3" aria-hidden />
-            Stale catalog
+            {msg('modelCatalog.stale', 'Stale catalog')}
           </span>
         ) : null}
       </div>

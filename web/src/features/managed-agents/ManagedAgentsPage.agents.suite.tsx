@@ -25,6 +25,24 @@ import {
 } from './ManagedAgentsPage.test-utils';
 
 export function registerManagedAgentsAgentsTests() {
+  test('does not mark the create dialog busy after model configuration loading fails', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents');
+    mockAgentsApi([], { modelMappingsErrorOnce: true });
+    render(
+      <WorkspaceContext.Provider value={workspaceContextValue('default')}>
+        <ManagedAgentsPage section="agents" />
+      </WorkspaceContext.Provider>,
+      undefined,
+      { seedModelMappings: false },
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create agent' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Create agent' });
+    expect(await within(dialog).findByText('Could not load model configuration.')).toBeTruthy();
+    expect(dialog.getAttribute('aria-busy')).not.toBe('true');
+  });
+
   test('renders agent rows and creates an agent through the real v1 API', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/agents');
     const api = mockAgentsApi([serverAgent]);
@@ -1330,6 +1348,30 @@ export function registerManagedAgentsAgentsTests() {
     );
     expect(updateRequest?.body?.version).toBe(3);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit agent' })).toBeNull());
+  });
+
+  test('does not save an unavailable model with Cmd+S', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/agents/agent_edit_shortcut_invalid');
+    const api = mockAgentsApi([{ id: 'agent_edit_shortcut_invalid', name: 'Invalid shortcut agent', version: 3 }]);
+    render(<ManagedAgentsPage section="agents" />);
+
+    expect(await screen.findByRole('heading', { name: 'Invalid shortcut agent' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit agent' });
+    setAgentConfigEditorValue(
+      dialog,
+      'name: Invalid shortcut agent\nmodel: provider/not-in-catalog\ntools: []\nmcp_servers: []\nskills: []',
+      'Agent configuration',
+    );
+
+    fireEvent.keyDown(document, { key: 's', metaKey: true });
+
+    expect(await within(dialog).findByText('Select an available model first.')).toBeTruthy();
+    expect(
+      api.requests.some(
+        (request) => request.method === 'POST' && request.url === '/v1/agents/agent_edit_shortcut_invalid?beta=true',
+      ),
+    ).toBe(false);
   });
 
   test('queries agents for the active workspace and refetches when it changes', async () => {

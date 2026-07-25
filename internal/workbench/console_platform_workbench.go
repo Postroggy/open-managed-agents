@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"sort"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
+	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -634,7 +636,7 @@ func handleWorkbenchModels(w http.ResponseWriter, r *http.Request) {
 		writeWorkbenchCatalogUnavailable(w)
 		return
 	}
-	writeWorkbenchModelsSnapshot(w, snapshot)
+	writeWorkbenchModelsSnapshot(w, snapshot, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
 }
 
 func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) {
@@ -653,11 +655,11 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 	}
 	role, err := roleStore.GetOrganizationUserRole(r.Context(), principal.OrganizationID, principal.UserExternalID)
 	if err != nil {
-		log.Printf("authorize model catalog refresh organization_id=%d user_id=%s: %v", principal.OrganizationID, principal.UserExternalID, err)
+		log.Printf("authorize model catalog refresh organization_id=%d: %v", principal.OrganizationID, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "model_catalog_refresh_authorization_failed"})
 		return
 	}
-	if role != "admin" {
+	if !canRefreshModelCatalog(role) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
 		return
 	}
@@ -682,10 +684,19 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 		writeWorkbenchCatalogUnavailable(w)
 		return
 	}
-	writeWorkbenchModelsSnapshot(w, snapshot)
+	writeWorkbenchModelsSnapshot(w, snapshot, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
 }
 
-func writeWorkbenchModelsSnapshot(w http.ResponseWriter, snapshot modelcatalog.Snapshot) {
+func canRefreshModelCatalog(role string) bool {
+	switch strings.TrimSpace(role) {
+	case "admin", "owner", "primary_owner", "membership_admin":
+		return true
+	default:
+		return false
+	}
+}
+
+func writeWorkbenchModelsSnapshot(w http.ResponseWriter, snapshot modelcatalog.Snapshot, mappings map[string]string) {
 	models := make([]any, 0, len(snapshot.Models))
 	for _, model := range snapshot.Models {
 		models = append(models, workbenchModelFromCatalog(model))
@@ -707,8 +718,9 @@ func writeWorkbenchModelsSnapshot(w http.ResponseWriter, snapshot modelcatalog.S
 			"temperature":          1,
 			"max_tokens_to_sample": 20000,
 		},
-		"models":        models,
-		"model_catalog": catalogState,
+		"models":         models,
+		"model_catalog":  catalogState,
+		"model_mappings": mappings,
 	})
 }
 
@@ -948,11 +960,15 @@ func workbenchAnthropicRequest(r *http.Request, upstreamBody map[string]any, acc
 	if err != nil {
 		return nil, errWorkbenchGatewayNotConfigured
 	}
-	body, err := json.Marshal(upstreamBody)
+	body := maps.Clone(upstreamBody)
+	if modelID := workbenchString(body["model"]); strings.TrimSpace(modelID) != "" {
+		body["model"] = modelmapping.Resolve(modelID, upstreamConfig.ModelMappings)
+	}
+	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
-	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, bytes.NewReader(body))
+	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, bytes.NewReader(encoded))
 	if err != nil {
 		return nil, err
 	}
@@ -1349,6 +1365,7 @@ func handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
 		writeProxyMessagesAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "request body must match WorkbenchCompletionRequest")
 		return
 	}
+	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
 	model, err := resolveWorkbenchModel(
 		r,
 		chatNormalizeString(payload["model_name"]),
@@ -1363,31 +1380,21 @@ func handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
 		writeProxyMessagesAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "at least one non-empty message is required")
 		return
 	}
-	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
 	token := proxyMessagesAnthropicToken(upstreamConfig)
 	if token == "" {
 		writeProxyMessagesAnthropicError(w, http.StatusInternalServerError, "authentication_error", "anthropic_upstream.api_key is not configured")
 		return
 	}
-	endpoint, err := anthropicMessagesEndpoint(upstreamConfig)
+	_, err = anthropicMessagesEndpoint(upstreamConfig)
 	if err != nil {
 		writeProxyMessagesAnthropicError(w, http.StatusBadGateway, "api_error", err.Error())
 		return
 	}
-	body, err := json.Marshal(upstreamBody)
+	upstreamReq, err := workbenchAnthropicRequest(r, upstreamBody, "text/event-stream")
 	if err != nil {
 		writeProxyMessagesAnthropicError(w, http.StatusInternalServerError, "api_error", "failed to build Anthropic request")
 		return
 	}
-	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		writeProxyMessagesAnthropicError(w, http.StatusBadGateway, "api_error", err.Error())
-		return
-	}
-	upstreamReq.Header.Set("Accept", "text/event-stream")
-	upstreamReq.Header.Set("Content-Type", "application/json")
-	upstreamReq.Header.Set("X-API-Key", token)
-	upstreamReq.Header.Set("Anthropic-Version", anthropicAPIVersion)
 	if beta := workbenchAnthropicBetaHeader(payload["betas"]); beta != "" {
 		upstreamReq.Header.Set("Anthropic-Beta", beta)
 	}
@@ -2074,6 +2081,7 @@ func workbenchRevisionFromBody(r *http.Request, body map[string]any, fallbackID 
 	revision["created_at"] = formatJSISOString(time.Now())
 	workbenchSetStringField(revision, body, "system_prompt")
 	workbenchSetStringField(revision, body, "model_name")
+	resolveWorkbenchRevisionModel(r, revision)
 	workbenchSetNumberField(revision, body, "max_tokens_to_sample")
 	workbenchSetNumberField(revision, body, "temperature")
 	workbenchSetBoolField(revision, body, "show_raw_thinking")
@@ -2129,6 +2137,7 @@ func workbenchStoredRevision(r *http.Request, promptID string, revisionID string
 			} else {
 				delete(revision, "creator")
 			}
+			resolveWorkbenchRevisionModel(r, revision)
 			return revision, true
 		}
 		if err != nil && !errors.Is(err, ErrNotFound) {
@@ -2152,7 +2161,16 @@ func workbenchStoredRevision(r *http.Request, promptID string, revisionID string
 	} else {
 		delete(revision, "creator")
 	}
+	resolveWorkbenchRevisionModel(r, revision)
 	return revision, true
+}
+
+func resolveWorkbenchRevisionModel(r *http.Request, revision map[string]any) {
+	modelID := strings.TrimSpace(workbenchString(revision["model_name"]))
+	if modelID == "" {
+		return
+	}
+	revision["model_name"] = modelmapping.Resolve(modelID, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
 }
 
 func workbenchPromptStoreKey(r *http.Request, promptID string) string {

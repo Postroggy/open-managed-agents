@@ -3,12 +3,14 @@ package platformapi
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/superduck-ai/open-managed-agents/internal/aiupstream"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -17,7 +19,14 @@ func RegisterOrganizationProxyRoutes(r chi.Router, cfg config.Config) {
 	r.Post("/proxy/v1/messages", handleProxyMessages(cfg))
 }
 
+type messagesRewriteFields struct {
+	Model string `json:"model"`
+}
+
+type rawJSONEnvelope map[string]json.RawMessage
+
 func handleProxyMessages(cfg config.Config) http.HandlerFunc {
+	client := aiupstream.NewHTTPClient(nil, 0)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := visibleOrgUUID(w, r); !ok {
 			return
@@ -36,6 +45,13 @@ func handleProxyMessages(cfg config.Config) http.HandlerFunc {
 		}
 		defer func() { _ = r.Body.Close() }()
 
+		rewrittenBody, err := rewriteMappedModel(body, cfg.AnthropicUpstream.ModelMappings)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_request_error", "message": err.Error()})
+			return
+		}
+		body = rewrittenBody
+
 		upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, targetURL, bytes.NewReader(body))
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": "proxy_error", "message": err.Error()})
@@ -46,7 +62,7 @@ func handleProxyMessages(cfg config.Config) http.HandlerFunc {
 		upstreamReq.Header.Del("Host")
 		upstreamReq.Header.Set("X-API-Key", strings.TrimSpace(cfg.AnthropicUpstream.APIKey))
 
-		upstreamRes, err := aiupstream.NewHTTPClient(nil, 0).Do(upstreamReq)
+		upstreamRes, err := client.Do(upstreamReq)
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": "proxy_error", "message": err.Error()})
 			return
@@ -80,6 +96,34 @@ func handleProxyMessages(cfg config.Config) http.HandlerFunc {
 		w.WriteHeader(upstreamRes.StatusCode)
 		_, _ = w.Write(responseBody)
 	}
+}
+
+func rewriteMappedModel(body []byte, mappings map[string]string) ([]byte, error) {
+	if len(mappings) == 0 {
+		return body, nil
+	}
+	var fields messagesRewriteFields
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return body, nil
+	}
+	upstreamModel := modelmapping.Resolve(fields.Model, mappings)
+	if upstreamModel == fields.Model {
+		return body, nil
+	}
+	var payload rawJSONEnvelope
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return body, nil
+	}
+	encodedModel, err := json.Marshal(upstreamModel)
+	if err != nil {
+		return nil, fmt.Errorf("encode mapped Messages model: %w", err)
+	}
+	payload["model"] = encodedModel
+	rewritten, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("encode Messages request: %w", err)
+	}
+	return rewritten, nil
 }
 
 func anthropicMessagesEndpointFromConfig(cfg config.Config) (string, error) {

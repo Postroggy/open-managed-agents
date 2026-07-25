@@ -319,6 +319,9 @@ describe('WorkbenchPage', () => {
     await act(async () => {
       fireEvent.click(modelCombobox);
     });
+    expect(screen.getByRole('option', { name: /claude-opus-4-8/i }).textContent).toContain(
+      'Not available in current model catalog',
+    );
     const option = screen.getByRole('option', { name: /gateway\/available/i });
     await act(async () => {
       fireEvent.click(option);
@@ -335,6 +338,25 @@ describe('WorkbenchPage', () => {
     );
     const completion = api.requests.find((request) => request.url.endsWith('/workbench/completions'));
     expect(completion?.body?.model_name).toBe('gateway/available');
+  });
+
+  test('opens model settings when Evaluate is triggered without a catalog model', async () => {
+    resetTestDom('https://oma.duck.ai/workbench/prompt_1?tab=evaluate');
+    const api = mockWorkbenchApi({
+      initialPromptText: 'Write about {{animal}}.',
+      modelCatalog: {
+        default_prompt_settings: {},
+        models: [{ model_name: 'gateway/available', display_name: 'Gateway Available' }],
+        model_catalog: { stale: false, default_available: false },
+      },
+    });
+    renderWorkbench();
+
+    await screen.findByRole('button', { name: /Run All/ });
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true });
+
+    expect(await screen.findByLabelText('Model')).toBeTruthy();
+    expect(api.requests.some((request) => request.url.endsWith('/workbench/completions'))).toBe(false);
   });
 
   test('opens the official-style tools panel and custom tool form', async () => {

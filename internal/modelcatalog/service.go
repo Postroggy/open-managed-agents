@@ -52,9 +52,11 @@ func NewService(ctx context.Context, store Store, upstream Upstream, options Opt
 		return nil, fmt.Errorf("load model catalog snapshot: %w", err)
 	}
 	if exists {
-		if _, err := normalizeModels(stored.Models); err != nil {
+		normalized, err := normalizeModels(stored.Models)
+		if err != nil {
 			return nil, fmt.Errorf("stored model catalog snapshot: %w", err)
 		}
+		stored.Models = normalized
 	}
 
 	return &Service{
@@ -116,7 +118,7 @@ func (s *Service) refresh(ctx context.Context, waitForSharedSnapshot bool) error
 
 	models, err := s.fetchAll(refreshCtx)
 	if err != nil {
-		if recordErr := s.recordFailure(ctx, failureCategory(err)); recordErr != nil {
+		if recordErr := s.recordFailure(refreshCtx, failureCategory(err)); recordErr != nil {
 			return errors.Join(err, recordErr)
 		}
 		return err
@@ -130,7 +132,7 @@ func (s *Service) refresh(ctx context.Context, waitForSharedSnapshot bool) error
 	}
 	if err := s.store.SaveSuccess(refreshCtx, stored); err != nil {
 		persistErr := fmt.Errorf("persist successful model catalog refresh: %w", err)
-		if recordErr := s.recordFailure(ctx, "persistence_unavailable"); recordErr != nil {
+		if recordErr := s.recordFailure(refreshCtx, "persistence_unavailable"); recordErr != nil {
 			return errors.Join(persistErr, recordErr)
 		}
 		return persistErr
@@ -238,7 +240,7 @@ func (s *Service) fetchAll(ctx context.Context) ([]Model, error) {
 		}
 		for _, model := range normalized {
 			if _, alreadySeen := seenModelIDs[model.ID]; alreadySeen {
-				return nil, fmt.Errorf("%w: duplicate model id %q", errInvalidUpstreamResponse, model.ID)
+				continue
 			}
 			seenModelIDs[model.ID] = struct{}{}
 			models = append(models, model)

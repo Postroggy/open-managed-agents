@@ -1776,6 +1776,10 @@ export function AgentEditDialog({
     if (!parsed) {
       return;
     }
+    if (!modelCatalog.modelIDs.includes(agentModelName(parsed.model))) {
+      setSaveError(msg('managedAgents.agents.editDialog.selectModel', 'Select an available model first.'));
+      return;
+    }
 
     setSubmitting(true);
     setSaveError(null);

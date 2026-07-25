@@ -15,6 +15,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
+	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -162,6 +163,7 @@ func resolveWorkbenchModel(r *http.Request, candidates ...string) (string, error
 	}
 
 	modelID := firstNonEmpty(candidates...)
+	modelID = modelmapping.Resolve(modelID, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
 	if modelID == "" {
 		snapshot, err := catalog.Snapshot(r.Context())
 		if err != nil {

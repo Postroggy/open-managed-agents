@@ -31,6 +31,7 @@ import {
 } from '@/shared/ui/dropdown-menu';
 import { Input } from '@/shared/ui/input';
 import { Popover, PopoverTrigger } from '@/shared/ui/popover';
+import { toast } from '@/shared/ui/sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import {
   createWorkbenchEvaluation,
@@ -258,7 +259,6 @@ export function WorkbenchPage() {
   const hasSelectedCatalogModel = Boolean(selectedModel);
   const promptTitle = useMemo(() => displayPromptTitle(promptName, draft), [draft, promptName]);
   const hasPromptText = hasRunnableMessage(draft);
-  const improvePromptLabel = improvePromptActionLabel(hasPromptText, hasSelectedCatalogModel);
   const hasVariables = variables.length > 0;
   const canEvaluate = hasVariables && draft.tools.length === 0;
   const evaluateUnavailableReason = 'Run a prompt with at least one variable and no tools to use ‘Evaluate’.';
@@ -278,6 +278,7 @@ export function WorkbenchPage() {
     hasPromptText && variables.length === 0 && draft.messages[draft.messages.length - 1]?.role !== 'assistant';
   const canSaveCurrentRevision = Boolean(orgUuid && prompt && hasUnsavedChanges && saveStatus !== 'Saving');
   const isPromptReadOnly = draft.is_latest === false;
+  const improvePromptLabel = improvePromptActionLabel(hasPromptText, hasSelectedCatalogModel, isPromptReadOnly);
   const promptGeneratorWarning = useMemo(
     () => workbenchPromptGeneratorWarning(account, orgUuid, prepaidCreditAmount),
     [account, orgUuid, prepaidCreditAmount],
@@ -1035,7 +1036,14 @@ export function WorkbenchPage() {
       runControllerRef.current?.abort();
       return;
     }
-    if (!orgUuid || !prompt || !evaluateRows.length || hasUnsavedChanges || !hasSelectedCatalogModel) {
+    if (!hasSelectedCatalogModel) {
+      const message = 'Select an available model before running evaluations.';
+      setRunError(message);
+      toast.error(message);
+      setActiveDrawer('model');
+      return;
+    }
+    if (!orgUuid || !prompt || !evaluateRows.length || hasUnsavedChanges) {
       return;
     }
 
@@ -2865,7 +2873,10 @@ export function WorkbenchPage() {
   );
 }
 
-function improvePromptActionLabel(hasPromptText: boolean, hasSelectedCatalogModel: boolean) {
+function improvePromptActionLabel(hasPromptText: boolean, hasSelectedCatalogModel: boolean, isPromptReadOnly: boolean) {
+  if (isPromptReadOnly) {
+    return 'This prompt is read-only';
+  }
   if (!hasPromptText) {
     return 'Add some text to the prompt to use this feature';
   }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
@@ -41,11 +42,13 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	if h.catalog == nil {
+		log.Print("list models: model catalog is not configured")
 		writeCatalogUnavailable(w, r)
 		return
 	}
 	snapshot, err := h.catalog.Snapshot(r.Context())
 	if err != nil {
+		log.Printf("list models: load model catalog snapshot: %v", err)
 		writeCatalogUnavailable(w, r)
 		return
 	}

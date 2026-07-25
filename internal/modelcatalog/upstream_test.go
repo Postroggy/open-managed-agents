@@ -107,3 +107,27 @@ func TestHTTPUpstreamMapsOpaqueModelsAndPagination(t *testing.T) {
 		t.Fatalf("page = %#v, want %#v", page, want)
 	}
 }
+
+func TestHTTPUpstreamAppliesConfiguredModelMapping(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"logical/model","display_name":"Logical Model"}]}`))
+	}))
+	defer server.Close()
+
+	upstream := NewHTTPUpstream(config.AnthropicUpstreamConfig{
+		BaseURL: server.URL,
+		APIKey:  "test-key",
+		ModelMappings: map[string]string{
+			"logical/model": "provider/effective-model",
+		},
+	})
+	page, err := upstream.List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(page.Models) != 1 || page.Models[0].ID != "provider/effective-model" || page.Models[0].DisplayName != "provider/effective-model" {
+		t.Fatalf("mapped models = %#v", page.Models)
+	}
+}

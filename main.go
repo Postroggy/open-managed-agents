@@ -78,12 +78,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("initialize model catalog: %v", err)
 	}
-	if err := catalog.Refresh(ctx); err != nil {
-		logger.Warn("initial model catalog refresh failed", "error", err)
-	}
 	catalog.StartRefreshLoop(ctx, func(refreshErr error) {
 		logger.Warn("model catalog refresh failed", "error", refreshErr)
 	})
+	go func() {
+		if refreshErr := catalog.Refresh(ctx); refreshErr != nil {
+			logger.Warn("initial model catalog refresh failed", "error", refreshErr)
+		}
+	}()
 	platformSessions, err := platformsession.NewRedisStore(ctx, cfg.Redis.URL)
 	if err != nil {
 		log.Fatalf("open platform session store: %v", err)

@@ -28,23 +28,83 @@ import {
   generateCreateAgentConfig,
   parseCreateAgentConfigText,
 } from '../agentConfig';
+import { ManagedErrorAlert } from '../components/common';
 import { templateBody, templateTitle } from '../labels';
+import { useEffectiveModelMappings } from '../modelMappings';
 import { type AgentApiResponse, type AgentTemplate, type CodeFormat, type CreateAgentInput } from '../types';
 import { errorMessage, navigateToAgentConfig } from '../utils';
 import { CreateDialogConfigEditor } from './create-dialog-config-editor';
 import { agentModelName } from './model';
 
-export function CreateAgentDialog({
-  workspaceId,
-  onClose,
-  onCreate,
-}: {
+type CreateAgentDialogProps = {
   workspaceId: string;
   onClose: () => void;
   onCreate: (input: CreateAgentInput) => Promise<AgentApiResponse>;
-}) {
-  const { msg, locale } = useI18n();
+};
+
+export function CreateAgentDialog(props: CreateAgentDialogProps) {
   const { orgUuid } = useWorkspace();
+  const modelMappingsQuery = useEffectiveModelMappings(orgUuid);
+  if (orgUuid && modelMappingsQuery.isPending) {
+    return <CreateAgentDialogLoading onClose={props.onClose} />;
+  }
+  if (orgUuid && modelMappingsQuery.isError) {
+    return <CreateAgentDialogLoading error onClose={props.onClose} onRetry={() => void modelMappingsQuery.refetch()} />;
+  }
+  return <CreateAgentDialogContent {...props} orgUuid={orgUuid} modelMappings={modelMappingsQuery.data ?? {}} />;
+}
+
+function CreateAgentDialogLoading({
+  error = false,
+  onClose,
+  onRetry,
+}: {
+  error?: boolean;
+  onClose: () => void;
+  onRetry?: () => void;
+}) {
+  const { msg } = useI18n();
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        aria-label={msg('managedAgents.agents.createLabel', 'Create agent')}
+        aria-busy={error ? undefined : true}
+        className="max-w-[720px] sm:max-w-[720px]"
+      >
+        <DialogHeader>
+          <DialogTitle>{msg('managedAgents.agents.createLabel', 'Create agent')}</DialogTitle>
+          <DialogDescription>
+            {error
+              ? msg('managedAgents.models.loadFailed', 'Could not load model configuration.')
+              : msg('common.loading', 'Loading...')}
+          </DialogDescription>
+        </DialogHeader>
+        {error ? (
+          <>
+            <ManagedErrorAlert>
+              {msg(
+                'managedAgents.models.loadFailedBody',
+                'Retry before creating an agent so its displayed and saved model IDs stay consistent.',
+              )}
+            </ManagedErrorAlert>
+            <Button type="button" className="justify-self-end" onClick={onRetry}>
+              {msg('common.retry', 'Retry')}
+            </Button>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateAgentDialogContent({
+  workspaceId,
+  onClose,
+  onCreate,
+  orgUuid,
+  modelMappings,
+}: CreateAgentDialogProps & { orgUuid?: string; modelMappings: Record<string, string> }) {
+  const { msg, locale } = useI18n();
   const modelCatalog = useModelCatalog(orgUuid);
   const [startingPointOpen, setStartingPointOpen] = useState(true);
   const [mode, setMode] = useState<'describe' | 'template'>('describe');
@@ -145,11 +205,12 @@ export function CreateAgentDialog({
       return;
     }
     setMode(nextMode);
+    const modelID = agentModelName(configInputRef.current.model) || modelCatalog.defaultModelID;
     if (nextMode === 'describe') {
       setGeneratedConfig(null);
-      hydrateConfig(createDialogAgentConfig(blankAgentTemplate, locale));
+      hydrateConfig(createDialogAgentConfig(blankAgentTemplate, locale, undefined, modelID));
     } else {
-      hydrateConfig(createDialogAgentConfig(selectedTemplate, locale));
+      hydrateConfig(createDialogAgentConfig(selectedTemplate, locale, undefined, modelID));
     }
     setCreateError(null);
   };
@@ -158,7 +219,14 @@ export function CreateAgentDialog({
     setSelectedTemplateId(template.id);
     setMode('template');
     setGeneratedConfig(null);
-    hydrateConfig(createDialogAgentConfig(template, locale));
+    hydrateConfig(
+      createDialogAgentConfig(
+        template,
+        locale,
+        undefined,
+        agentModelName(configInputRef.current.model) || modelCatalog.defaultModelID,
+      ),
+    );
     setStartingPointOpen(false);
   };
 
@@ -190,6 +258,7 @@ export function CreateAgentDialog({
         description: prompt,
         currentConfig: baseConfig,
         availableModelIDs: modelCatalog.modelIDs,
+        modelMappings,
         signal: controller.signal,
         locale,
       });

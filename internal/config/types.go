@@ -55,8 +55,9 @@ type S3Config struct {
 }
 
 type AnthropicUpstreamConfig struct {
-	BaseURL string `yaml:"base_url"`
-	APIKey  string `yaml:"api_key"`
+	BaseURL       string            `yaml:"base_url"`
+	APIKey        string            `yaml:"api_key"`
+	ModelMappings map[string]string `yaml:"model_mappings"`
 }
 
 type ModelCatalogConfig struct {

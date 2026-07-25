@@ -1898,6 +1898,7 @@ export function CreatedAgentConfigPanel({
   onConfigureEnvironment,
   onFormatChange,
   onTabChange,
+  modelID,
 }: {
   template: AgentTemplate;
   agent: AgentApiResponse | null;
@@ -1916,9 +1917,12 @@ export function CreatedAgentConfigPanel({
   onConfigureEnvironment: () => Promise<void>;
   onFormatChange: (format: CodeFormat) => void;
   onTabChange: (tab: AgentPanelTab) => void;
+  modelID: string;
 }) {
   const { msg, locale } = useI18n();
-  const displayedConfig = displayAgentConfig(agentConfig ?? createDialogAgentConfig(template, locale));
+  const displayedConfig = displayAgentConfig(
+    agentConfig ?? createDialogAgentConfig(template, locale, undefined, modelID),
+  );
   const code = format === 'YAML' ? yamlStringify(displayedConfig) : JSON.stringify(displayedConfig, null, 2);
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-sm">

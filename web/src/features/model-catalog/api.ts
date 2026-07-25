@@ -9,7 +9,7 @@ export function loadModelCatalog(orgUuid: string) {
   return consoleApi<ModelCatalogResponse>(modelCatalogPath(orgUuid));
 }
 
-export function refreshModelCatalog(orgUuid: string, csrfToken?: string) {
+export function refreshModelCatalog(orgUuid: string, csrfToken: string) {
   return consoleApi<ModelCatalogResponse>(`${modelCatalogPath(orgUuid)}/refresh`, {
     method: 'POST',
     body: JSON.stringify({}),

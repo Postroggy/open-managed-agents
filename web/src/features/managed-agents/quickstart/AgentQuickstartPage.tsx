@@ -1,5 +1,6 @@
 import { type Locale, useI18n } from '../../../shared/i18n';
 import { useIsMobile } from '../../../shared/hooks/use-mobile';
+import { Button } from '../../../shared/ui/button';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -25,6 +26,7 @@ import {
   createDialogAgentConfig,
   quickstartBuildAgentConfigInput,
 } from '../agentConfig';
+import { ManagedErrorAlert } from '../components/common';
 import {
   createAgent,
   createQuickstartDeployment,
@@ -38,6 +40,7 @@ import {
   postQuickstartSessionMessage,
 } from '../api';
 import { templateBody, templateSearchText } from '../labels';
+import { useEffectiveModelMappings } from '../modelMappings';
 import {
   type AgentApiResponse,
   type AgentPanelTab,
@@ -92,6 +95,33 @@ export function clampQuickstartInspectorPaneWidth(width: number, containerWidth:
 }
 
 export function AgentQuickstartPage() {
+  const { msg } = useI18n();
+  const { orgUuid } = useWorkspace();
+  const modelMappingsQuery = useEffectiveModelMappings(orgUuid);
+  if (orgUuid && modelMappingsQuery.isPending) {
+    return <section aria-busy="true" className="h-[calc(100vh-48px)] min-h-[650px]" />;
+  }
+  if (orgUuid && modelMappingsQuery.isError) {
+    return (
+      <section className="flex h-[calc(100vh-48px)] min-h-[650px] items-center justify-center px-6">
+        <div className="flex w-full max-w-xl flex-col gap-3">
+          <ManagedErrorAlert>
+            {msg(
+              'managedAgents.models.loadFailedBody',
+              'Retry before creating an agent so its displayed and saved model IDs stay consistent.',
+            )}
+          </ManagedErrorAlert>
+          <Button type="button" className="self-start" onClick={() => void modelMappingsQuery.refetch()}>
+            {msg('common.retry', 'Retry')}
+          </Button>
+        </div>
+      </section>
+    );
+  }
+  return <AgentQuickstartContent modelMappings={modelMappingsQuery.data ?? {}} />;
+}
+
+function AgentQuickstartContent({ modelMappings }: { modelMappings: Record<string, string> }) {
   const { msg, locale } = useI18n();
   const isMobile = useIsMobile();
   const { activeWorkspaceId, orgUuid } = useWorkspace();
@@ -442,6 +472,7 @@ export function AgentQuickstartPage() {
             createdAgentConfigRef.current ??
               createDialogAgentConfig(blankAgentTemplate, promptLocaleRef.current, null, selectedModelIDRef.current),
             availableModelIDsRef.current,
+            modelMappings,
           );
           setCreatedAgentConfig(nextConfig);
           createdAgentConfigRef.current = nextConfig;
@@ -772,6 +803,7 @@ export function AgentQuickstartPage() {
       createdAgentConfigRef.current ??
         createDialogAgentConfig(blankAgentTemplate, promptLocaleRef.current, null, selectedModelIDRef.current),
       availableModelIDsRef.current,
+      modelMappings,
     );
     setCreatedAgentConfig(config);
     createdAgentConfigRef.current = config;
@@ -1223,6 +1255,7 @@ export function AgentQuickstartPage() {
                 onConfigureEnvironment={openPreviewEnvironmentStep}
                 onFormatChange={setFormat}
                 onTabChange={setAgentTab}
+                modelID={selectedModelID}
               />
             ) : detailTemplate ? (
               <TemplateDetailPanel

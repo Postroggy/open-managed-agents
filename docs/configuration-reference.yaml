@@ -35,6 +35,8 @@ anthropic_upstream:
   # Required. Public anthropic.com hosts are rejected.
   base_url: https://ai-gateway.example.internal
   api_key: replace-with-your-gateway-key
+  # Optional exact model ID overrides. Chained mappings are rejected.
+  model_mappings: {}
 
 model_catalog:
   refresh_interval: 5m

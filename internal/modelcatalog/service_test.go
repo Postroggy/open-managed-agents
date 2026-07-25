@@ -97,45 +97,35 @@ func TestServiceRefreshPublishesOnlyCompletePages(t *testing.T) {
 	}
 }
 
-func TestServiceRefreshRejectsDuplicateModelIDsWithoutPublishing(t *testing.T) {
+func TestServiceRefreshDeduplicatesEffectiveModelIDsAcrossPages(t *testing.T) {
 	t.Parallel()
-	lastSuccess := time.Date(2026, time.July, 24, 1, 2, 3, 0, time.UTC)
-	store := &fakeStore{
-		exists: true,
-		snapshot: StoredSnapshot{
-			Models:        []Model{{ID: "provider/known"}},
-			LastSuccessAt: &lastSuccess,
-		},
-	}
+	store := &fakeStore{}
 	service, err := NewService(context.Background(), store, &fakeUpstream{pages: map[string]Page{
 		"": {
-			Models:  []Model{{ID: "provider/duplicate"}},
+			Models:  []Model{{ID: "provider/effective", DisplayName: "First logical model"}},
 			HasMore: true,
-			LastID:  "provider/duplicate",
+			LastID:  "provider/source-cursor",
 		},
-		"provider/duplicate": {
-			Models: []Model{{ID: "provider/duplicate"}},
+		"provider/source-cursor": {
+			Models: []Model{{ID: "provider/effective", DisplayName: "Second logical model"}},
 		},
 	}}, Options{})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
 
-	if err := service.Refresh(context.Background()); err == nil {
-		t.Fatal("Refresh() error = nil, want duplicate model ID failure")
+	if err := service.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
 	}
 	snapshot, err := service.Snapshot(context.Background())
 	if err != nil {
 		t.Fatalf("Snapshot() error = %v", err)
 	}
-	if got, want := modelIDs(snapshot.Models), []string{"provider/known"}; !reflect.DeepEqual(got, want) {
+	if got, want := modelIDs(snapshot.Models), []string{"provider/effective"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("model IDs = %#v, want %#v", got, want)
 	}
-	if !snapshot.Stale {
-		t.Fatal("Snapshot().Stale = false, want true")
-	}
-	if store.snapshot.LastError != "invalid_upstream_response" {
-		t.Fatalf("LastError = %q, want invalid_upstream_response", store.snapshot.LastError)
+	if snapshot.Models[0].DisplayName != "First logical model" {
+		t.Fatalf("display name = %q, want first mapped model metadata", snapshot.Models[0].DisplayName)
 	}
 }
 
@@ -237,6 +227,50 @@ func TestServiceRefreshBoundsSuccessPersistenceWithRefreshTimeout(t *testing.T) 
 	}
 	if !store.saveHadDeadline {
 		t.Fatal("SaveSuccess() context has no deadline, want refresh timeout boundary")
+	}
+}
+
+func TestServiceRefreshBoundsFailurePersistenceWithRefreshTimeout(t *testing.T) {
+	t.Parallel()
+	store := &fakeStore{}
+	service, err := NewService(
+		context.Background(),
+		store,
+		&fakeUpstream{err: errors.New("gateway unavailable")},
+		Options{RefreshTimeout: time.Minute},
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if err := service.Refresh(context.Background()); err == nil {
+		t.Fatal("Refresh() error = nil, want upstream failure")
+	}
+	if !store.failureHadDeadline {
+		t.Fatal("RecordFailure() context has no deadline, want refresh timeout boundary")
+	}
+}
+
+func TestServiceNormalizesLoadedSnapshotBeforePublishing(t *testing.T) {
+	t.Parallel()
+	lastSuccess := time.Date(2026, time.July, 24, 1, 2, 3, 0, time.UTC)
+	service, err := NewService(context.Background(), &fakeStore{
+		exists: true,
+		snapshot: StoredSnapshot{
+			Models:        []Model{{ID: "provider/model"}},
+			LastSuccessAt: &lastSuccess,
+		},
+	}, &fakeUpstream{}, Options{})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	snapshot, err := service.Snapshot(context.Background())
+	if err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+	if snapshot.Models[0].DisplayName != "provider/model" {
+		t.Fatalf("display name = %q, want normalized model ID", snapshot.Models[0].DisplayName)
 	}
 }
 
@@ -436,13 +470,14 @@ func modelIDs(models []Model) []string {
 }
 
 type fakeStore struct {
-	exists          bool
-	snapshot        StoredSnapshot
-	successes       int
-	failures        int
-	saveErr         error
-	failureErr      error
-	saveHadDeadline bool
+	exists             bool
+	snapshot           StoredSnapshot
+	successes          int
+	failures           int
+	saveErr            error
+	failureErr         error
+	saveHadDeadline    bool
+	failureHadDeadline bool
 }
 
 type lockedFakeStore struct {
@@ -520,7 +555,8 @@ func (s *fakeStore) SaveSuccess(ctx context.Context, snapshot StoredSnapshot) er
 	return nil
 }
 
-func (s *fakeStore) RecordFailure(_ context.Context, attemptedAt time.Time, failure string) error {
+func (s *fakeStore) RecordFailure(ctx context.Context, attemptedAt time.Time, failure string) error {
+	_, s.failureHadDeadline = ctx.Deadline()
 	if s.failureErr != nil {
 		return s.failureErr
 	}

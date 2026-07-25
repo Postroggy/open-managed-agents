@@ -14,6 +14,7 @@ import (
 
 	"github.com/superduck-ai/open-managed-agents/internal/aiupstream"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
 )
 
 const (
@@ -25,16 +26,18 @@ const (
 var errInvalidUpstreamResponse = errors.New("invalid upstream model response")
 
 type HTTPUpstream struct {
-	baseURL string
-	apiKey  string
-	client  *http.Client
+	baseURL       string
+	apiKey        string
+	client        *http.Client
+	modelMappings map[string]string
 }
 
 func NewHTTPUpstream(upstream config.AnthropicUpstreamConfig) *HTTPUpstream {
 	return &HTTPUpstream{
-		baseURL: upstream.BaseURL,
-		apiKey:  strings.TrimSpace(upstream.APIKey),
-		client:  aiupstream.NewHTTPClient(nil, 0),
+		baseURL:       upstream.BaseURL,
+		apiKey:        strings.TrimSpace(upstream.APIKey),
+		client:        aiupstream.NewHTTPClient(nil, 0),
+		modelMappings: upstream.ModelMappings,
 	}
 }
 
@@ -80,6 +83,11 @@ func (u *HTTPUpstream) List(ctx context.Context, afterID string) (Page, error) {
 		model, err := upstreamModel.catalogModel()
 		if err != nil {
 			return Page{}, err
+		}
+		effectiveID := modelmapping.Resolve(model.ID, u.modelMappings)
+		if effectiveID != model.ID {
+			model.ID = effectiveID
+			model.DisplayName = effectiveID
 		}
 		models = append(models, model)
 	}

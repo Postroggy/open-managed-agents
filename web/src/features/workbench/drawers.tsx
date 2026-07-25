@@ -99,7 +99,7 @@ export function ModelDrawer({
     if (!draft.model_name || models.some((model) => model.model_name === draft.model_name)) {
       return models;
     }
-    return [{ model_name: draft.model_name }, ...models];
+    return [{ model_name: draft.model_name, description: 'Not available in current model catalog' }, ...models];
   }, [draft.model_name, models]);
   const filteredModels = useMemo(() => {
     const query = modelSearch.trim().toLowerCase();

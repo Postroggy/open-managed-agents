@@ -346,6 +346,7 @@ export function quickstartBuildAgentConfigInput(
   input: Record<string, unknown>,
   fallback: CreateAgentInput,
   availableModelIDs: readonly string[] = [],
+  modelMappings: Record<string, string> = {},
 ): CreateAgentInput {
   const rawConfig = toRecord(input.config) ?? input;
   const name = typeof rawConfig.name === 'string' && rawConfig.name.trim() ? rawConfig.name.trim() : fallback.name;
@@ -355,11 +356,8 @@ export function quickstartBuildAgentConfigInput(
       : rawConfig.description === null
         ? null
         : (fallback.description ?? null);
-  const requestedModel = quickstartModelInput(rawConfig.model, fallback.model);
-  const model =
-    availableModelIDs.length && !availableModelIDs.includes(agentModelName(requestedModel))
-      ? fallback.model
-      : requestedModel;
+  const requestedModel = resolveAgentModelInput(quickstartModelInput(rawConfig.model, fallback.model), modelMappings);
+  const model = !availableModelIDs.includes(agentModelName(requestedModel)) ? fallback.model : requestedModel;
   const system =
     typeof rawConfig.system === 'string'
       ? rawConfig.system
@@ -385,6 +383,13 @@ export function quickstartBuildAgentConfigInput(
     skills,
     ...(metadata ? { metadata } : {}),
   };
+}
+
+export function resolveAgentModelInput(model: AgentModelInput, modelMappings: Record<string, string>): AgentModelInput {
+  const modelID = typeof model === 'string' ? model : model.id;
+  const sourceID = modelID.trim();
+  const effectiveID = modelMappings[sourceID]?.trim() || sourceID;
+  return typeof model === 'string' ? effectiveID : { ...model, id: effectiveID };
 }
 
 export function quickstartModelInput(value: unknown, fallback: AgentModelInput): AgentModelInput {
@@ -461,6 +466,7 @@ export async function generateCreateAgentConfig({
   description,
   currentConfig,
   availableModelIDs,
+  modelMappings = {},
   signal,
   locale = 'en',
 }: {
@@ -469,6 +475,7 @@ export async function generateCreateAgentConfig({
   description: string;
   currentConfig: CreateAgentInput;
   availableModelIDs: string[];
+  modelMappings?: Record<string, string>;
   signal: AbortSignal;
   locale?: Locale;
 }) {
@@ -515,7 +522,7 @@ export async function generateCreateAgentConfig({
       if (type === 'content_block_stop' && currentTool) {
         const input = parseToolInput(currentTool.inputJson, currentTool.input);
         if (currentTool.name === 'build_agent_config') {
-          generatedConfig = quickstartBuildAgentConfigInput(input, currentConfig, availableModelIDs);
+          generatedConfig = quickstartBuildAgentConfigInput(input, currentConfig, availableModelIDs, modelMappings);
         }
         currentTool = null;
       }

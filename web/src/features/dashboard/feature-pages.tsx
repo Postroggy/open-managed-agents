@@ -140,6 +140,7 @@ export function PlaygroundPage() {
 }
 
 function CatalogModelSelect({ label, triggerClassName }: { label: string; triggerClassName?: string }) {
+  const { msg } = useI18n();
   const { orgUuid } = useWorkspace();
   const modelCatalog = useModelCatalog(orgUuid);
   const [selectedModelID, setSelectedModelID] = useState('');
@@ -151,10 +152,10 @@ function CatalogModelSelect({ label, triggerClassName }: { label: string; trigge
     label: modelCatalogDisplayName(model),
   }));
   const placeholder = modelCatalog.isPending
-    ? 'Loading models'
+    ? msg('modelCatalog.loading', 'Loading models...')
     : modelCatalog.isError
-      ? 'Models unavailable'
-      : 'Select a model';
+      ? msg('modelCatalog.unavailable', 'Models unavailable')
+      : msg('modelCatalog.select', 'Select model');
 
   return (
     <Select<string>

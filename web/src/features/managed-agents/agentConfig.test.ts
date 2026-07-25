@@ -5,7 +5,11 @@ import {
   createDialogAgentConfig,
   createDialogTemplateConfigs,
   createDialogTemplateConfigsZh,
+  jsonForTemplate,
+  quickstartBuildAgentConfigInput,
+  resolveAgentModelInput,
   templateSystem,
+  yamlForTemplate,
 } from './agentConfig';
 
 describe('localized create-agent template configs', () => {
@@ -44,6 +48,46 @@ describe('localized create-agent template configs', () => {
     expect(createDialogAgentConfig(blankAgentTemplate, 'en', null, 'gateway/agent-model').model).toBe(
       'gateway/agent-model',
     );
+  });
+
+  test('uses the configured effective model id in generated agent configs', () => {
+    const fallback = createDialogAgentConfig(blankAgentTemplate, 'en', undefined, 'glm-5-turbo');
+    const mappings = { 'claude-sonnet-4-6': 'glm-5-turbo' };
+
+    expect(
+      quickstartBuildAgentConfigInput({ model: 'claude-sonnet-4-6' }, fallback, ['glm-5-turbo'], mappings).model,
+    ).toBe('glm-5-turbo');
+    expect(
+      quickstartBuildAgentConfigInput(
+        { model: { id: 'claude-sonnet-4-6', speed: 'fast' } },
+        fallback,
+        ['glm-5-turbo'],
+        mappings,
+      ).model,
+    ).toEqual({ id: 'glm-5-turbo', speed: 'fast' });
+  });
+
+  test('keeps the selected fallback when the model catalog is empty', () => {
+    const fallback = createDialogAgentConfig(blankAgentTemplate, 'en', undefined, 'provider/fallback');
+
+    expect(quickstartBuildAgentConfigInput({ model: 'provider/generated' }, fallback, []).model).toBe(
+      'provider/fallback',
+    );
+  });
+
+  test('trims mapped and unmapped model ids at the configuration boundary', () => {
+    const mappings = { 'claude-sonnet-4-6': ' glm-5-turbo ' };
+
+    expect(resolveAgentModelInput(' claude-sonnet-4-6 ', mappings)).toBe('glm-5-turbo');
+    expect(resolveAgentModelInput(' glm-5 ', mappings)).toBe('glm-5');
+    expect(resolveAgentModelInput({ id: ' claude-sonnet-4-6 ', speed: 'fast' }, mappings)).toEqual({
+      id: 'glm-5-turbo',
+      speed: 'fast',
+    });
+    expect(resolveAgentModelInput({ id: ' glm-5 ', speed: 'standard' }, mappings)).toEqual({
+      id: 'glm-5',
+      speed: 'standard',
+    });
   });
 
   test('uses the localized config table as the system prompt source for every built-in template', () => {

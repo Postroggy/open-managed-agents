@@ -29,7 +29,12 @@ export function useModelCatalog(orgUuid?: string) {
 export function useRefreshModelCatalog(orgUuid?: string, csrfToken?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => refreshModelCatalog(orgUuid as string, csrfToken),
+    mutationFn: () => {
+      if (!orgUuid || !csrfToken) {
+        throw new Error('Organization and CSRF token are required to refresh the model catalog.');
+      }
+      return refreshModelCatalog(orgUuid, csrfToken);
+    },
     onSuccess: (catalog) => queryClient.setQueryData(modelCatalogQueryKey(orgUuid), catalog),
   });
 }
