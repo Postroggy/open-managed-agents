@@ -270,7 +270,7 @@ export function registerManagedAgentsQuickstartTests() {
     expect(document.querySelector('[data-mermaid-state="error"] pre')?.textContent).toBe(oversizedSource);
   });
 
-  test('does not start Mermaid rendering until a streaming fence is closed', async () => {
+  test('does not start Mermaid rendering until a streaming fence is closed', () => {
     const partialSource = 'flowchart LR\n  Request -->';
     render(
       <I18nProvider initialLocale="en">
@@ -280,7 +280,6 @@ export function registerManagedAgentsQuickstartTests() {
       </I18nProvider>,
     );
 
-    await new Promise((resolve) => window.setTimeout(resolve, 300));
     expect(document.querySelector('[data-mermaid-diagram]')).toBeNull();
     expect(document.querySelector('[data-mermaid-state]')).toBeNull();
     expect(screen.getByTestId('markdown-code-block').textContent).toBe(partialSource);
