@@ -6,22 +6,21 @@ Markdown 内容会出现在 Managed Agents Quickstart、Session transcript 和 W
 
 共享组件只负责把不可信的 Markdown 文本呈现为安全 DOM，不改变 SSE 状态、API payload 或持久化值。功能层始终保存原始文本，渲染层不回写 HTML。
 
-## 消费边界
+## 能力与消费边界
 
 ```mermaid
 flowchart LR
-  Model["模型生成文本"] --> Quickstart["Quickstart assistant 消息"]
-  Model --> Session["Session transcript 文本与 thinking"]
-  Model --> Preview["Workbench Response Preview"]
-  Model --> Evaluate["Workbench Evaluate 模型输出"]
-  Quickstart --> Shared["共享 MarkdownContent"]
-  Session --> Shared
-  Preview --> Shared
-  Evaluate --> Shared
+  Model["模型生成内容"] --> Policy["页面渲染策略"]
+  User["用户输入内容"] --> Policy
+  Other["其他文本数据源"] --> Policy
+  Policy -->|"声明为 Markdown"| Shared["共享 MarkdownContent"]
+  Policy -->|"保留原始语义"| Plain["纯文本或结构化组件"]
   Shared --> SafeDOM["安全的 CommonMark/GFM、代码高亮与 Mermaid DOM"]
 ```
 
-以下内容不进入 Markdown 渲染器：
+共享能力不限制内容来源。消费页面根据内容合同决定使用共享渲染器还是保留原始语义；新增消费方不得自行实现另一套 Markdown parser。
+
+本 PR 当前接入 Quickstart assistant 消息、Session transcript 文本与 thinking、Workbench Response Preview 和 Evaluate 模型输出。以下现有内容仍不进入 Markdown 渲染器：
 
 - 用户消息、可编辑 prompt、system prompt 和 Agent 配置；
 - 错误、状态、日志、命令和指标；
@@ -36,7 +35,7 @@ flowchart LR
 
 代码高亮只注册 JavaScript、JSON、Python、Bash、TypeScript 和 YAML 等项目明确使用的语言。未知语言按纯文本展示，不启用全语言自动检测。
 
-Mermaid 只在出现闭合的 `mermaid` 代码围栏时动态加载。渲染使用严格安全模式、源码长度和 flowchart 边数限制，并按当前主题生成 SVG；非法、超限、加载失败或仍在流式传输的未闭合围栏保留源码，不丢失模型输出。
+Mermaid 只在出现闭合的 `mermaid` 代码围栏时动态加载。渲染使用严格安全模式、源码长度和 flowchart 边数限制，并按当前主题生成 SVG；非法、超限、加载失败或仍在流式传输的未闭合围栏保留源码，不丢失原始 Markdown 内容。
 
 ## Session 迁移
 
@@ -50,7 +49,7 @@ Evaluate 的主模型输出和对比模型输出共用 `EvaluateOutputCell`，�
 
 ## 验收
 
-- 四个模型输出展示面使用同一共享组件，不存在 feature 专属 Markdown parser。
+- 四个当前接入的展示面使用同一共享组件，不存在 feature 专属 Markdown parser。
 - 标题、强调、列表、引用、表格、代码与 Mermaid 在各消费者中保持一致。
 - 用户输入、错误、日志和结构化 payload 不被解释为 Markdown。
 - 危险 URL、原始 HTML 与远程图片保持不可执行、不可点击或不展示。
