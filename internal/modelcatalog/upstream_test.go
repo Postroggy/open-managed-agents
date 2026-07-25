@@ -73,6 +73,24 @@ func TestHTTPUpstreamTreatsZeroTokenLimitsAsUnknown(t *testing.T) {
 	}
 }
 
+func TestHTTPUpstreamAcceptsEpochCreatedAt(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-1","created_at":0}]}`))
+	}))
+	defer server.Close()
+
+	upstream := NewHTTPUpstream(config.AnthropicUpstreamConfig{BaseURL: server.URL, APIKey: "test-key"})
+	page, err := upstream.List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(page.Models) != 1 || page.Models[0].CreatedAt != "1970-01-01T00:00:00Z" {
+		t.Fatalf("models = %#v, want epoch created_at", page.Models)
+	}
+}
+
 func TestHTTPUpstreamMapsOpaqueModelsAndPagination(t *testing.T) {
 	t.Parallel()
 	requests := make(chan *http.Request, 1)

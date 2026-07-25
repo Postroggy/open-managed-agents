@@ -52,7 +52,7 @@ flowchart LR
 
 `/v1/models` 使用命名 DTO 映射目录模型，不使用 `map[string]any` 动态拼装公开响应。列表支持 Anthropic 定义的 `limit`、`after_id` 和 `before_id`：`limit` 默认为 20，合法范围为 1–1000；游标在当前原子快照内解析。响应顺序保持 AI Gateway 顺序，因为 Anthropic 约定较新发布的模型排在前面。`GET /v1/models/{model_id}` 从同一快照读取单个模型。
 
-公开模型对象只包含 Anthropic `ModelInfo` 字段：`id`、`type`、`display_name`、`created_at`、`max_input_tokens`、`max_tokens` 和 `capabilities`。目录内部或 Gateway 扩展的 `description` 不进入该公开响应。AI Gateway 声明 `created_at` 时必须符合 RFC 3339；token 上限不能为负数，`0` 作为“未知”的兼容占位值归一化为字段缺失。
+公开模型对象只包含 Anthropic `ModelInfo` 字段：`id`、`type`、`display_name`、`created_at`、`max_input_tokens`、`max_tokens` 和 `capabilities`。目录内部或 Gateway 扩展的 `description` 不进入该公开响应。AI Gateway 声明 `created_at` 时必须使用 RFC 3339 字符串或 epoch 秒整数；token 上限不能为负数，`0` 作为“未知”的兼容占位值归一化为字段缺失。
 
 当前 Anthropic 文档将 `created_at`、token 上限和完整 `capabilities` 标为必填，但 BYOK Gateway 可能只实现较早版本或兼容子集。OMA 的兼容策略是：`id` 必须存在，`display_name` 缺失时回退到 Gateway 的 `name` 或不透明 ID；其余增强字段仅在 Gateway 明确返回时透传。缺失字段不会被伪造成 epoch、0 或“不支持”，因为这些值会改变模型语义。完整实现当前 Anthropic Models API 的 Gateway 会得到完整 `ModelInfo`；兼容子集仍可用于模型选择，但客户端可以通过字段是否存在识别元数据未知。
 
