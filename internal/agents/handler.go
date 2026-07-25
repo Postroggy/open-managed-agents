@@ -569,6 +569,9 @@ func (h *Handler) stateFromUpdate(r *http.Request, principal auth.Principal, cur
 		if err != nil {
 			return agentState{}, err
 		}
+		if mapped.ID == model.ID && mapped.Effort == nil && modelObjectOmitsEffort(raw) {
+			mapped.Effort = model.Effort
+		}
 		state.Model, err = httpapi.MarshalRaw(mapped)
 		if err != nil {
 			return agentState{}, err
@@ -816,13 +819,19 @@ func parseRequiredVersion(raw json.RawMessage) (int, error) {
 }
 
 type agentModelInput struct {
-	ID    *string `json:"id"`
-	Speed *string `json:"speed"`
+	ID     *string         `json:"id"`
+	Effort json.RawMessage `json:"effort"`
+	Speed  *string         `json:"speed"`
+}
+
+type agentModelEffort struct {
+	Type string `json:"type"`
 }
 
 type normalizedAgentModel struct {
-	ID    string `json:"id"`
-	Speed string `json:"speed"`
+	ID     string            `json:"id"`
+	Effort *agentModelEffort `json:"effort,omitempty"`
+	Speed  string            `json:"speed"`
 }
 
 func normalizeModel(raw json.RawMessage, mappings map[string]string) (normalizedAgentModel, error) {
@@ -855,6 +864,13 @@ func normalizeModel(raw json.RawMessage, mappings map[string]string) (normalized
 		ID:    modelID,
 		Speed: "standard",
 	}
+	if len(model.Effort) > 0 {
+		effort, err := normalizeModelEffort(model.Effort)
+		if err != nil {
+			return normalizedAgentModel{}, err
+		}
+		normalized.Effort = effort
+	}
 	if model.Speed != nil {
 		if *model.Speed != "standard" && *model.Speed != "fast" {
 			return normalizedAgentModel{}, errors.New("model.speed must be standard or fast")
@@ -862,6 +878,39 @@ func normalizeModel(raw json.RawMessage, mappings map[string]string) (normalized
 		normalized.Speed = *model.Speed
 	}
 	return normalized, nil
+}
+
+func normalizeModelEffort(raw json.RawMessage) (*agentModelEffort, error) {
+	var level string
+	if err := json.Unmarshal(raw, &level); err == nil {
+		if !validModelEffort(level) {
+			return nil, errors.New("model.effort must be low, medium, high, xhigh, or max")
+		}
+		return &agentModelEffort{Type: level}, nil
+	}
+	var effort agentModelEffort
+	if err := json.Unmarshal(raw, &effort); err != nil || !validModelEffort(effort.Type) {
+		return nil, errors.New("model.effort.type must be low, medium, high, xhigh, or max")
+	}
+	return &effort, nil
+}
+
+func validModelEffort(level string) bool {
+	switch level {
+	case "low", "medium", "high", "xhigh", "max":
+		return true
+	default:
+		return false
+	}
+}
+
+func modelObjectOmitsEffort(raw json.RawMessage) bool {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return false
+	}
+	_, hasEffort := fields["effort"]
+	return !hasEffort
 }
 
 func normalizeMCPServers(raw json.RawMessage) (json.RawMessage, error) {

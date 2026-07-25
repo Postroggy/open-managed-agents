@@ -27,6 +27,31 @@ func TestHTTPUpstreamRejectsMalformedResponse(t *testing.T) {
 	}
 }
 
+func TestHTTPUpstreamRejectsInvalidAnthropicModelMetadata(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name  string
+		model string
+	}{
+		{name: "created at is not RFC3339", model: `{"id":"model-1","created_at":"yesterday"}`},
+		{name: "max input tokens is not positive", model: `{"id":"model-1","max_input_tokens":0}`},
+		{name: "max tokens is not positive", model: `{"id":"model-1","max_tokens":-1}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"data":[` + test.model + `],"has_more":false}`))
+			}))
+			defer server.Close()
+
+			upstream := NewHTTPUpstream(config.AnthropicUpstreamConfig{BaseURL: server.URL, APIKey: "test-key"})
+			if _, err := upstream.List(context.Background(), ""); !errors.Is(err, errInvalidUpstreamResponse) {
+				t.Fatalf("List() error = %v, want invalid upstream response", err)
+			}
+		})
+	}
+}
+
 func TestHTTPUpstreamMapsOpaqueModelsAndPagination(t *testing.T) {
 	t.Parallel()
 	requests := make(chan *http.Request, 1)

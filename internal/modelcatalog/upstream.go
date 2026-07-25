@@ -147,6 +147,12 @@ func (m upstreamModel) catalogModel() (Model, error) {
 	if err != nil {
 		return Model{}, err
 	}
+	if err := validateTokenLimit("max_input_tokens", m.MaxInputTokens); err != nil {
+		return Model{}, err
+	}
+	if err := validateTokenLimit("max_tokens", m.MaxTokens); err != nil {
+		return Model{}, err
+	}
 	capabilities, err := parseCapabilities(m.Capabilities)
 	if err != nil {
 		return Model{}, err
@@ -175,7 +181,11 @@ func modelCreatedAt(createdAt json.RawMessage, created json.RawMessage) (string,
 		}
 		var value string
 		if err := json.Unmarshal(raw, &value); err == nil {
-			return value, nil
+			parsed, parseErr := time.Parse(time.RFC3339, value)
+			if parseErr != nil {
+				return "", fmt.Errorf("%w: model created time must be RFC3339", errInvalidUpstreamResponse)
+			}
+			return parsed.UTC().Format(time.RFC3339), nil
 		}
 		var seconds int64
 		if err := json.Unmarshal(raw, &seconds); err == nil {
@@ -184,6 +194,13 @@ func modelCreatedAt(createdAt json.RawMessage, created json.RawMessage) (string,
 		return "", fmt.Errorf("%w: model created time is invalid", errInvalidUpstreamResponse)
 	}
 	return "", nil
+}
+
+func validateTokenLimit(name string, value *int) error {
+	if value != nil && *value < 1 {
+		return fmt.Errorf("%w: %s must be positive", errInvalidUpstreamResponse, name)
+	}
+	return nil
 }
 
 func parseCapabilities(raw json.RawMessage) (Capabilities, error) {

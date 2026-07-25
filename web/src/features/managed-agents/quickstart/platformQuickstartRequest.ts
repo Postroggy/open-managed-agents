@@ -1,4 +1,5 @@
 import { type Locale } from '../../../shared/i18n';
+import { AGENT_MODEL_EFFORT_LEVELS } from '../types';
 import { platformQuickstartOfficialRequest } from './platformQuickstartOfficialRequest.generated';
 import { resolveQuickstartSystem } from './quickstartPromptText';
 
@@ -38,7 +39,6 @@ export const platformQuickstartSystem = platformQuickstartOfficialRequest.system
 export const platformQuickstartToolChoice = platformQuickstartOfficialRequest.tool_choice;
 
 const platformQuickstartToolsTemplate = platformQuickstartOfficialRequest.tools;
-
 export const platformQuickstartToolNames = platformQuickstartToolsTemplate.map((tool) =>
   typeof tool.name === 'string' ? tool.name : String(tool.type),
 );
@@ -84,6 +84,17 @@ export function quickstartToolsForModels(availableModelIDs: string[]) {
     properties: {
       ...objectModelProperties,
       id: { ...objectModelID, enum: modelIDs },
+      effort: {
+        anyOf: [
+          { type: 'string', enum: AGENT_MODEL_EFFORT_LEVELS },
+          {
+            type: 'object',
+            properties: { type: { type: 'string', enum: AGENT_MODEL_EFFORT_LEVELS } },
+            required: ['type'],
+            additionalProperties: false,
+          },
+        ],
+      },
     },
   };
   modelSchema.anyOf = alternatives;

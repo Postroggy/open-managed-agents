@@ -63,6 +63,16 @@ describe('platform quickstart request builder', () => {
     ).model;
     const alternatives = modelSchema.anyOf as Array<Record<string, unknown>>;
     expect(alternatives[0].enum).toEqual([platformQuickstartOfficialRequest.model]);
+    const objectModelProperties = alternatives[1].properties as Record<string, Record<string, unknown>>;
+    expect(objectModelProperties.effort.anyOf).toEqual([
+      { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      {
+        type: 'object',
+        properties: { type: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] } },
+        required: ['type'],
+        additionalProperties: false,
+      },
+    ]);
     expect(request.messages[0]).toEqual(platformQuickstartOfficialRequest.messages[0]);
     expect(request.system.map((block) => block.cache_control)).toEqual([{ type: 'ephemeral' }, { type: 'ephemeral' }]);
     expect(platformQuickstartToolNames).toEqual([

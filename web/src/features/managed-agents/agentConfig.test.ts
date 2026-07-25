@@ -59,12 +59,12 @@ describe('localized create-agent template configs', () => {
     ).toBe('glm-5-turbo');
     expect(
       quickstartBuildAgentConfigInput(
-        { model: { id: 'claude-sonnet-4-6', speed: 'fast' } },
+        { model: { id: 'claude-sonnet-4-6', speed: 'fast', effort: { type: 'high' } } },
         fallback,
         ['glm-5-turbo'],
         mappings,
       ).model,
-    ).toEqual({ id: 'glm-5-turbo', speed: 'fast' });
+    ).toEqual({ id: 'glm-5-turbo', speed: 'fast', effort: { type: 'high' } });
   });
 
   test('keeps the selected fallback when the model catalog is empty', () => {
@@ -80,9 +80,10 @@ describe('localized create-agent template configs', () => {
 
     expect(resolveAgentModelInput(' claude-sonnet-4-6 ', mappings)).toBe('glm-5-turbo');
     expect(resolveAgentModelInput(' glm-5 ', mappings)).toBe('glm-5');
-    expect(resolveAgentModelInput({ id: ' claude-sonnet-4-6 ', speed: 'fast' }, mappings)).toEqual({
+    expect(resolveAgentModelInput({ id: ' claude-sonnet-4-6 ', speed: 'fast', effort: 'high' }, mappings)).toEqual({
       id: 'glm-5-turbo',
       speed: 'fast',
+      effort: 'high',
     });
     expect(resolveAgentModelInput({ id: ' glm-5 ', speed: 'standard' }, mappings)).toEqual({
       id: 'glm-5',

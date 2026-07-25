@@ -7,9 +7,11 @@ import { z } from 'zod';
 import { agentModelName, BUILT_IN_AGENT_TOOLSETS } from './agents/AgentsResourcePage';
 import { postQuickstartProxyStream } from './api';
 import {
+  AGENT_MODEL_EFFORT_LEVELS,
   type AgentApiResponse,
   type AgentEditConfig,
   type AgentModelInput,
+  type AgentModelEffort,
   type AgentTemplate,
   type AgentUpdateInput,
   type CodeFormat,
@@ -30,6 +32,9 @@ export const agentModelInputSchema = z.union([
   z
     .object({
       id: z.string().trim().min(1, 'Model id is required.'),
+      effort: z
+        .union([z.enum(AGENT_MODEL_EFFORT_LEVELS), z.object({ type: z.enum(AGENT_MODEL_EFFORT_LEVELS) }).strict()])
+        .optional(),
       speed: z.string().trim().optional(),
     })
     .strict(),
@@ -398,8 +403,10 @@ export function quickstartModelInput(value: unknown, fallback: AgentModelInput):
   }
   const record = toRecord(value);
   if (record && typeof record.id === 'string' && record.id.trim()) {
+    const effort = agentModelEffort(record.effort);
     return {
       id: record.id.trim(),
+      ...(effort ? { effort } : {}),
       ...(typeof record.speed === 'string' && record.speed.trim() ? { speed: record.speed.trim() } : {}),
     };
   }
@@ -689,6 +696,7 @@ export function agentEditModelInput(model: AgentApiResponse['model']): AgentMode
   }
   return {
     id: agentModelName(model),
+    ...(model.effort ? { effort: cloneJsonValue(model.effort) } : {}),
     ...(typeof model.speed === 'string' && model.speed.trim() ? { speed: model.speed } : {}),
   };
 }
@@ -750,8 +758,21 @@ export function normalizeAgentEditModel(model: AgentModelInput): AgentModelInput
   }
   return {
     id: model.id.trim(),
+    ...(model.effort ? { effort: cloneJsonValue(model.effort) } : {}),
     ...(model.speed?.trim() ? { speed: model.speed.trim() } : {}),
   };
+}
+
+function agentModelEffort(value: unknown): AgentModelEffort | undefined {
+  const levels = new Set<string>(AGENT_MODEL_EFFORT_LEVELS);
+  if (typeof value === 'string' && levels.has(value)) {
+    return value as AgentModelEffort;
+  }
+  const record = toRecord(value);
+  if (record && typeof record.type === 'string' && levels.has(record.type)) {
+    return { type: record.type } as AgentModelEffort;
+  }
+  return undefined;
 }
 
 export function nullableTrimmedString(value: string | null | undefined) {

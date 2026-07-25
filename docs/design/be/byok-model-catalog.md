@@ -50,9 +50,29 @@ flowchart LR
 
 ## API 适配器
 
-`/v1/models` 保持 Anthropic 兼容的列表结构，并映射目录字段，但不会虚构 AI Gateway 未声明的能力。Console `/models` 将同一目录适配为 Workbench 所需结构，并向前端提供目录新鲜度元数据。两个读取接口都不会直接请求 AI Gateway。
+`/v1/models` 使用命名 DTO 映射目录模型，不使用 `map[string]any` 动态拼装公开响应。列表支持 Anthropic 定义的 `limit`、`after_id` 和 `before_id`：`limit` 默认为 20，合法范围为 1–1000；游标在当前原子快照内解析。响应顺序保持 AI Gateway 顺序，因为 Anthropic 约定较新发布的模型排在前面。`GET /v1/models/{model_id}` 从同一快照读取单个模型。
+
+公开模型对象只包含 Anthropic `ModelInfo` 字段：`id`、`type`、`display_name`、`created_at`、`max_input_tokens`、`max_tokens` 和 `capabilities`。目录内部或 Gateway 扩展的 `description` 不进入该公开响应。AI Gateway 声明 `created_at` 时必须符合 RFC 3339；声明 token 上限时必须为正整数。
+
+当前 Anthropic 文档将 `created_at`、token 上限和完整 `capabilities` 标为必填，但 BYOK Gateway 可能只实现较早版本或兼容子集。OMA 的兼容策略是：`id` 必须存在，`display_name` 缺失时回退到 Gateway 的 `name` 或不透明 ID；其余增强字段仅在 Gateway 明确返回时透传。缺失字段不会被伪造成 epoch、0 或“不支持”，因为这些值会改变模型语义。完整实现当前 Anthropic Models API 的 Gateway 会得到完整 `ModelInfo`；兼容子集仍可用于模型选择，但客户端可以通过字段是否存在识别元数据未知。
+
+Anthropic 当前定义的 `ModelCapabilities` 包含 Batch、引用、代码执行、上下文管理、Effort、图片输入、PDF 输入、结构化输出和 Thinking。目录对这些字段提供命名的三态视图，同时以开放 JSON 对象保留未来官方字段和 Gateway 扩展；`tool_use` 当前属于 Gateway 扩展，不冒充 Anthropic 的已定义字段。
+
+Console `/models` 将同一目录适配为 Workbench 所需结构，并向前端提供目录新鲜度元数据。两个读取接口都不会直接请求 AI Gateway。
 
 Managed Agents 的创建和更新路径通过目录校验提交的模型 ID。既有 Agent Version 和 Session Snapshot 保持原样读取；它们是历史引用，不是新的模型选择。
+
+Managed Agents 的 `model` 请求同时接受字符串 ID 和对象。对象支持 `speed: standard|fast`，也支持 `effort: low|medium|high|xhigh|max` 或 `{type: <level>}`；持久化响应把 effort 规范化为 `{type}`。使用对象更新同一个模型 ID 时，省略 effort 会保留已有值；传入字符串模型或切换模型 ID 时，省略 effort 则留给模型的 Gateway 默认值。OMA 不把 Anthropic 文档中的 Claude 型号枚举复制为本地白名单，模型 ID 仍由当前 BYOK 目录决定。
+
+## 官方合同依据
+
+截至 2026-07-25，本设计以以下 Anthropic 一手资料为准：
+
+- [List Models API](https://platform.claude.com/docs/en/api/models/list)：列表字段、能力结构、分页参数、默认/最大 limit 及排序语义。
+- [Get a Model API](https://platform.claude.com/docs/en/api/models/retrieve)：单模型读取路径和 `ModelInfo` 返回结构。
+- [Create Agent API](https://platform.claude.com/docs/en/api/beta/agents/create)：Managed Agents 的 model 字符串/对象联合类型、speed 与 effort 输入形式。
+- [Define your agent](https://platform.claude.com/docs/en/managed-agents/agent-setup)：Agent model 的配置语义，以及更新同模型时省略 effort 的保留规则。
+- [Anthropic Go SDK 的生成类型](https://github.com/anthropics/anthropic-sdk-go/blob/main/model.go)：由官方 OpenAPI 生成的 `ModelInfo`、`ModelCapabilities` 和分页参数类型，用于交叉核对文档字段。
 
 ## 客户端行为
 
