@@ -93,8 +93,8 @@ func modelResponse(model modelcatalog.Model) map[string]any {
 	if model.MaxTokens != nil {
 		response["max_tokens"] = *model.MaxTokens
 	}
-	if capabilities := model.Capabilities.RawJSON(); len(capabilities) > 0 {
-		response["capabilities"] = capabilities
+	if len(model.Capabilities) > 0 {
+		response["capabilities"] = model.Capabilities
 	}
 	return response
 }

@@ -17,11 +17,29 @@ var (
 	ErrRefreshInProgress = errors.New("model catalog refresh is already in progress")
 )
 
-type Capabilities struct {
-	Thinking         *bool `json:"-"`
-	AdaptiveThinking *bool `json:"-"`
-	ToolUse          *bool `json:"-"`
-	fields           map[string]json.RawMessage
+type Capabilities map[string]json.RawMessage
+
+type KnownCapabilities struct {
+	Batch             *bool
+	Citations         *bool
+	CodeExecution     *bool
+	ContextManagement *bool
+	ClearThinking     *bool
+	ClearToolUses     *bool
+	CompactContext    *bool
+	Effort            *bool
+	LowEffort         *bool
+	MediumEffort      *bool
+	HighEffort        *bool
+	XHighEffort       *bool
+	MaxEffort         *bool
+	ImageInput        *bool
+	PDFInput          *bool
+	StructuredOutputs *bool
+	Thinking          *bool
+	ThinkingEnabled   *bool
+	AdaptiveThinking  *bool
+	ToolUse           *bool
 }
 
 type capabilityPayload struct {
@@ -32,89 +50,88 @@ type capabilityPayload struct {
 func (c *Capabilities) UnmarshalJSON(data []byte) error {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
-		*c = Capabilities{}
+		*c = nil
 		return nil
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(trimmed, &fields); err != nil {
 		return fmt.Errorf("capabilities must be an object: %w", err)
 	}
-	parsed := Capabilities{fields: cloneCapabilityFields(fields)}
-	var err error
-	parsed.Thinking, parsed.AdaptiveThinking, err = thinkingCapabilities(fields["thinking"])
-	if err != nil {
+	if err := validateKnownCapabilities(fields); err != nil {
 		return err
 	}
-	parsed.ToolUse, err = supportedCapability(fields["tool_use"], "tool_use")
-	if err != nil {
-		return err
-	}
-	*c = parsed
+	*c = Capabilities(cloneCapabilityFields(fields))
 	return nil
-}
-
-func (c Capabilities) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.mergedFields())
-}
-
-func (c Capabilities) RawJSON() json.RawMessage {
-	fields := c.mergedFields()
-	if len(fields) == 0 {
-		return nil
-	}
-	encoded, err := json.Marshal(fields)
-	if err != nil {
-		return nil
-	}
-	return encoded
 }
 
 func (c *Capabilities) setSupported(name string, supported *bool) {
 	if supported == nil {
 		return
 	}
-	if c.fields == nil {
-		c.fields = make(map[string]json.RawMessage)
+	if *c == nil {
+		*c = make(Capabilities)
 	}
-	c.fields[name] = mergeSupportedCapability(c.fields[name], supported)
-	switch name {
-	case "thinking":
-		c.Thinking = cloneBool(supported)
-	case "tool_use":
-		c.ToolUse = cloneBool(supported)
+	(*c)[name] = mergeSupportedCapability((*c)[name], supported)
+}
+
+func (c Capabilities) Known() KnownCapabilities {
+	thinkingFields := capabilityObject(c["thinking"])
+	thinkingTypes := capabilityObject(thinkingFields["types"])
+	contextFields := capabilityObject(c["context_management"])
+	effortFields := capabilityObject(c["effort"])
+	return KnownCapabilities{
+		Batch:             capabilitySupported(c["batch"]),
+		Citations:         capabilitySupported(c["citations"]),
+		CodeExecution:     capabilitySupported(c["code_execution"]),
+		ContextManagement: capabilitySupported(c["context_management"]),
+		ClearThinking:     capabilitySupported(contextFields["clear_thinking_20251015"]),
+		ClearToolUses:     capabilitySupported(contextFields["clear_tool_uses_20250919"]),
+		CompactContext:    capabilitySupported(contextFields["compact_20260112"]),
+		Effort:            capabilitySupported(c["effort"]),
+		LowEffort:         capabilitySupported(effortFields["low"]),
+		MediumEffort:      capabilitySupported(effortFields["medium"]),
+		HighEffort:        capabilitySupported(effortFields["high"]),
+		XHighEffort:       capabilitySupported(effortFields["xhigh"]),
+		MaxEffort:         capabilitySupported(effortFields["max"]),
+		ImageInput:        capabilitySupported(c["image_input"]),
+		PDFInput:          capabilitySupported(c["pdf_input"]),
+		StructuredOutputs: capabilitySupported(c["structured_outputs"]),
+		Thinking:          capabilitySupported(c["thinking"]),
+		ThinkingEnabled:   capabilitySupported(thinkingTypes["enabled"]),
+		AdaptiveThinking:  capabilitySupported(thinkingTypes["adaptive"]),
+		ToolUse:           capabilitySupported(c["tool_use"]),
 	}
 }
 
-func (c Capabilities) mergedFields() map[string]json.RawMessage {
-	fields := cloneCapabilityFields(c.fields)
-	if fields == nil {
-		fields = make(map[string]json.RawMessage)
+func validateKnownCapabilities(fields map[string]json.RawMessage) error {
+	for _, name := range []string{
+		"batch", "citations", "code_execution", "context_management", "effort",
+		"image_input", "pdf_input", "structured_outputs", "thinking", "tool_use",
+	} {
+		if _, err := supportedCapability(fields[name], name); err != nil {
+			return err
+		}
 	}
-	if c.Thinking != nil {
-		fields["thinking"] = mergeSupportedCapability(fields["thinking"], c.Thinking)
+	thinkingFields := capabilityObject(fields["thinking"])
+	thinkingTypes := capabilityObject(thinkingFields["types"])
+	for _, name := range []string{"enabled", "adaptive"} {
+		if _, err := supportedCapability(thinkingTypes[name], "thinking.types."+name); err != nil {
+			return err
+		}
 	}
-	if c.AdaptiveThinking != nil {
-		fields["thinking"] = mergeNestedSupportedCapability(fields["thinking"], "adaptive", c.AdaptiveThinking)
+	contextFields := capabilityObject(fields["context_management"])
+	for _, name := range []string{"clear_thinking_20251015", "clear_tool_uses_20250919", "compact_20260112"} {
+		if _, err := supportedCapability(contextFields[name], "context_management."+name); err != nil {
+			return err
+		}
 	}
-	if c.ToolUse != nil {
-		fields["tool_use"] = mergeSupportedCapability(fields["tool_use"], c.ToolUse)
+	effortFields := capabilityObject(fields["effort"])
+	for _, name := range []string{"low", "medium", "high", "xhigh", "max"} {
+		if _, err := supportedCapability(effortFields[name], "effort."+name); err != nil {
+			return err
+		}
 	}
-	return fields
-}
-
-func thinkingCapabilities(raw json.RawMessage) (*bool, *bool, error) {
-	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return nil, nil, nil
-	}
-	var payload capabilityPayload
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, nil, fmt.Errorf("thinking capability must be an object: %w", err)
-	}
-	adaptive, err := supportedCapability(payload.Types["adaptive"], "thinking.types.adaptive")
-	if err != nil {
-		return nil, nil, err
-	}
-	return cloneBool(payload.Supported), adaptive, nil
+	return nil
 }
 
 func supportedCapability(raw json.RawMessage, name string) (*bool, error) {
@@ -128,18 +145,17 @@ func supportedCapability(raw json.RawMessage, name string) (*bool, error) {
 	return cloneBool(payload.Supported), nil
 }
 
+func capabilitySupported(raw json.RawMessage) *bool {
+	var payload capabilityPayload
+	if len(raw) == 0 || json.Unmarshal(raw, &payload) != nil {
+		return nil
+	}
+	return cloneBool(payload.Supported)
+}
+
 func mergeSupportedCapability(raw json.RawMessage, supported *bool) json.RawMessage {
 	fields := capabilityObject(raw)
 	fields["supported"], _ = json.Marshal(*supported)
-	encoded, _ := json.Marshal(fields)
-	return encoded
-}
-
-func mergeNestedSupportedCapability(raw json.RawMessage, name string, supported *bool) json.RawMessage {
-	fields := capabilityObject(raw)
-	types := capabilityObject(fields["types"])
-	types[name] = mergeSupportedCapability(types[name], supported)
-	fields["types"], _ = json.Marshal(types)
 	encoded, _ := json.Marshal(fields)
 	return encoded
 }

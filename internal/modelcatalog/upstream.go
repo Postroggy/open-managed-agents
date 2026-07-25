@@ -188,11 +188,11 @@ func modelCreatedAt(createdAt json.RawMessage, created json.RawMessage) (string,
 
 func parseCapabilities(raw json.RawMessage) (Capabilities, error) {
 	if len(raw) == 0 || string(raw) == "null" {
-		return Capabilities{}, nil
+		return nil, nil
 	}
 	var capabilities Capabilities
 	if err := json.Unmarshal(raw, &capabilities); err != nil {
-		return Capabilities{}, fmt.Errorf("%w: %v", errInvalidUpstreamResponse, err)
+		return nil, fmt.Errorf("%w: %v", errInvalidUpstreamResponse, err)
 	}
 	return capabilities, nil
 }

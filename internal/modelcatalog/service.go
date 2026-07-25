@@ -2,6 +2,7 @@ package modelcatalog
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -340,12 +341,14 @@ func cloneModel(model Model) Model {
 }
 
 func cloneCapabilities(capabilities Capabilities) Capabilities {
-	return Capabilities{
-		Thinking:         cloneBool(capabilities.Thinking),
-		AdaptiveThinking: cloneBool(capabilities.AdaptiveThinking),
-		ToolUse:          cloneBool(capabilities.ToolUse),
-		fields:           cloneCapabilityFields(capabilities.fields),
+	if capabilities == nil {
+		return nil
 	}
+	cloned := make(Capabilities, len(capabilities))
+	for name, value := range capabilities {
+		cloned[name] = append(json.RawMessage(nil), value...)
+	}
+	return cloned
 }
 
 func cloneInt(value *int) *int {

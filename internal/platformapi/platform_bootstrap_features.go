@@ -203,8 +203,9 @@ func bootstrapDashboardDiscoveryFeature(catalog platformModelCatalog) map[string
 			"chips": []string{},
 		})
 		specs := map[string]any{}
-		if model.Capabilities.AdaptiveThinking != nil {
-			specs["adaptive_thinking"] = *model.Capabilities.AdaptiveThinking
+		known := model.Capabilities.Known()
+		if known.AdaptiveThinking != nil {
+			specs["adaptive_thinking"] = *known.AdaptiveThinking
 		}
 		if model.MaxInputTokens != nil {
 			specs["context_window_tokens"] = *model.MaxInputTokens

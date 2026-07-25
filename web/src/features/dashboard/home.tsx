@@ -310,6 +310,8 @@ function ModelCard({ model, tone, isDefault }: { model: ModelCatalogModel; tone:
   const tags = [
     model.supports_tool_use ? msg('dashboard.models.tags.tools', 'Tools') : '',
     model.supports_thinking ? msg('dashboard.models.tags.thinking', 'Thinking') : '',
+    model.supports_image_input ? msg('dashboard.models.tags.images', 'Images') : '',
+    model.supports_pdf_input ? msg('dashboard.models.tags.pdf', 'PDF') : '',
     model.max_tokens
       ? msg('dashboard.models.contextTokens', '{count} context', { count: model.max_tokens.toLocaleString() })
       : '',

@@ -12,6 +12,10 @@
 
 模型 ID 是不透明字符串。目录只校验 ID 非空且可稳定持久化，不根据其拼写推断供应商、能力或价格层级。
 
+模型能力同样以 AI Gateway 的声明为准。目录将 `capabilities` 保存为开放字段集合，完整保留当前未知的 Gateway 扩展，同时为现有消费者提供已知能力视图，包括 Batch、引用、代码执行、上下文管理与压缩、Effort 等级、图片输入、PDF 输入、结构化输出、Thinking 类型和 Tool Use。图片、PDF、音频或视频输入是彼此独立的能力，不合并成含义模糊的“多模态”布尔值。
+
+能力值采用三态语义：Gateway 明确返回 `supported: true` 表示支持，明确返回 `false` 表示不支持，未返回则表示未知。未知能力不得按模型 ID、供应商名称或前端默认值推断为支持或不支持。
+
 ```mermaid
 flowchart LR
     U["AI Gateway /v1/models"] --> C["ModelCatalog 刷新"]
@@ -54,7 +58,7 @@ Managed Agents 的创建和更新路径通过目录校验提交的模型 ID。�
 
 Workbench、模板和 Quickstart 在展示模型选项前读取 Console 模型目录。模板不携带固定模型。Quickstart 使用用户选择的模型发起请求，并根据当前目录生成 `build_agent_config` 的模型 schema。客户端优先选择目录声明的有效默认模型；未声明时选择目录第一项；空目录时保持未选择并显示目录不可用状态。
 
-只有 AI Gateway 明确返回的能力字段才会透传。未知能力在前端按保守方式展示，不根据模型名称推断。
+只有 AI Gateway 明确返回的能力字段才会透传。Console `/models` 同时返回完整 `capabilities` 对象和 Workbench 兼容字段；前端分别展示 Thinking、工具、图片和 PDF 等已声明能力。未知能力在前端按保守方式展示，不根据模型名称推断。
 
 ## 配置
 

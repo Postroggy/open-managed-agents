@@ -57,14 +57,24 @@ func (c platformModelCatalog) bootstrapModels() []BootstrapModelOption {
 		if name == "" {
 			name = modelID
 		}
+		known := model.Capabilities.Known()
 		thinkingModes := []BootstrapThinkingModeOption{}
 		paprikaModes := []string{}
-		if model.Capabilities.Thinking != nil && *model.Capabilities.Thinking {
+		if known.AdaptiveThinking != nil && *known.AdaptiveThinking {
+			thinkingModes = adaptiveThinkingModes()
+		} else if (known.ThinkingEnabled != nil && *known.ThinkingEnabled) ||
+			(known.ThinkingEnabled == nil && known.Thinking != nil && *known.Thinking) {
 			thinkingModes = extendedThinkingModes()
-			if model.Capabilities.AdaptiveThinking != nil && *model.Capabilities.AdaptiveThinking {
-				thinkingModes = adaptiveThinkingModes()
-			}
+		}
+		if len(thinkingModes) > 0 {
 			paprikaModes = []string{"extended"}
+		}
+		var capabilities *BootstrapModelCapabilities
+		if known.ImageInput != nil || known.PDFInput != nil {
+			capabilities = &BootstrapModelCapabilities{
+				MMImages: known.ImageInput != nil && *known.ImageInput,
+				MMPDF:    known.PDFInput != nil && *known.PDFInput,
+			}
 		}
 		hardLimit := 0
 		if model.MaxInputTokens != nil {
@@ -75,6 +85,7 @@ func (c platformModelCatalog) bootstrapModels() []BootstrapModelOption {
 			Name:          name,
 			Description:   strings.TrimSpace(model.Description),
 			ThinkingModes: thinkingModes,
+			Capabilities:  capabilities,
 			PaprikaModes:  paprikaModes,
 			HardLimit:     hardLimit,
 		})

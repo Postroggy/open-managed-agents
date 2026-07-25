@@ -41,11 +41,17 @@ func TestHTTPUpstreamMapsOpaqueModelsAndPagination(t *testing.T) {
 				"created_at":"2026-07-24T00:00:00Z",
 				"max_input_tokens":32000,
 				"max_tokens":4096,
-				"capabilities":{
-					"thinking":{"supported":true,"types":{"adaptive":{"supported":false}}},
-					"tool_use":{"supported":false},
-					"image_input":{"supported":true}
-				}
+					"capabilities":{
+						"code_execution":{"supported":true},
+						"context_management":{"supported":true,"clear_thinking_20251015":{"supported":true},"clear_tool_uses_20250919":{"supported":true},"compact_20260112":{"supported":true}},
+						"effort":{"supported":true,"low":{"supported":true},"medium":{"supported":true},"high":{"supported":true},"xhigh":{"supported":false},"max":{"supported":true}},
+						"thinking":{"supported":true,"types":{"enabled":{"supported":true},"adaptive":{"supported":false}}},
+						"tool_use":{"supported":false},
+						"image_input":{"supported":true},
+						"pdf_input":{"supported":false},
+						"structured_outputs":{"supported":true},
+						"audio_input":{"supported":true,"formats":["wav"]}
+					}
 			}],
 			"has_more":true,
 			"last_id":"provider/model.v1"
@@ -73,24 +79,51 @@ func TestHTTPUpstreamMapsOpaqueModelsAndPagination(t *testing.T) {
 		t.Fatalf("request headers = %#v", request.Header)
 	}
 
-	thinking := true
-	adaptiveThinking := false
-	toolUse := false
 	inputTokens := 32000
 	maxTokens := 4096
 	capabilities, err := json.Marshal(page.Models[0].Capabilities)
 	if err != nil {
 		t.Fatalf("marshal capabilities: %v", err)
 	}
-	if page.Models[0].Capabilities.Thinking == nil || *page.Models[0].Capabilities.Thinking != thinking ||
-		page.Models[0].Capabilities.AdaptiveThinking == nil || *page.Models[0].Capabilities.AdaptiveThinking != adaptiveThinking ||
-		page.Models[0].Capabilities.ToolUse == nil || *page.Models[0].Capabilities.ToolUse != toolUse {
-		t.Fatalf("typed capabilities = %#v", page.Models[0].Capabilities)
+	known := page.Models[0].Capabilities.Known()
+	for name, capability := range map[string]*bool{
+		"code execution":     known.CodeExecution,
+		"clear thinking":     known.ClearThinking,
+		"clear tool uses":    known.ClearToolUses,
+		"compact context":    known.CompactContext,
+		"effort":             known.Effort,
+		"low effort":         known.LowEffort,
+		"medium effort":      known.MediumEffort,
+		"high effort":        known.HighEffort,
+		"max effort":         known.MaxEffort,
+		"thinking":           known.Thinking,
+		"thinking enabled":   known.ThinkingEnabled,
+		"image input":        known.ImageInput,
+		"structured outputs": known.StructuredOutputs,
+	} {
+		if capability == nil || !*capability {
+			t.Fatalf("%s = %v, want true", name, capability)
+		}
 	}
-	if !strings.Contains(string(capabilities), `"image_input":{"supported":true}`) {
-		t.Fatalf("capabilities = %s, want provider capability passthrough", capabilities)
+	for name, capability := range map[string]*bool{
+		"adaptive thinking": known.AdaptiveThinking,
+		"tool use":          known.ToolUse,
+		"pdf input":         known.PDFInput,
+		"xhigh effort":      known.XHighEffort,
+	} {
+		if capability == nil || *capability {
+			t.Fatalf("%s = %v, want false", name, capability)
+		}
 	}
-	page.Models[0].Capabilities = Capabilities{}
+	for _, capability := range []string{
+		`"image_input":{"supported":true}`,
+		`"audio_input":{"supported":true,"formats":["wav"]}`,
+	} {
+		if !strings.Contains(string(capabilities), capability) {
+			t.Fatalf("capabilities = %s, want provider capability %s", capabilities, capability)
+		}
+	}
+	page.Models[0].Capabilities = nil
 	want := Page{
 		Models: []Model{{
 			ID:             "provider/model.v1",

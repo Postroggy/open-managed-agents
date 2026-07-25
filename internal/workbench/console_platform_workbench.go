@@ -3157,6 +3157,9 @@ func workbenchModelFromCatalog(model modelcatalog.Model) map[string]any {
 		"model_name":   model.ID,
 		"display_name": model.DisplayName,
 	}
+	if len(model.Capabilities) > 0 {
+		response["capabilities"] = model.Capabilities
+	}
 	if model.Description != "" {
 		response["description"] = model.Description
 	}
@@ -3166,17 +3169,54 @@ func workbenchModelFromCatalog(model modelcatalog.Model) map[string]any {
 	if model.MaxTokens != nil {
 		response["max_output_tokens"] = *model.MaxTokens
 	}
-	if model.Capabilities.Thinking != nil {
-		response["supports_thinking"] = *model.Capabilities.Thinking
-		response["supports_thinking_display"] = *model.Capabilities.Thinking
-	}
-	if model.Capabilities.AdaptiveThinking != nil {
-		response["supports_auto_thinking"] = *model.Capabilities.AdaptiveThinking
-	}
-	if model.Capabilities.ToolUse != nil {
-		response["supports_tool_use"] = *model.Capabilities.ToolUse
+	known := model.Capabilities.Known()
+	setWorkbenchCapability(response, "supports_batch", known.Batch)
+	setWorkbenchCapability(response, "supports_citations", known.Citations)
+	setWorkbenchCapability(response, "supports_code_execution", known.CodeExecution)
+	setWorkbenchCapability(response, "supports_context_management", known.ContextManagement)
+	setWorkbenchCapability(response, "supports_clear_thinking", known.ClearThinking)
+	setWorkbenchCapability(response, "supports_clear_tool_uses", known.ClearToolUses)
+	setWorkbenchCapability(response, "supports_compact_context", known.CompactContext)
+	setWorkbenchCapability(response, "supports_thinking", known.Thinking)
+	setWorkbenchCapability(response, "supports_thinking_display", known.Thinking)
+	setWorkbenchCapability(response, "supports_thinking_enabled", known.ThinkingEnabled)
+	setWorkbenchCapability(response, "supports_auto_thinking", known.AdaptiveThinking)
+	setWorkbenchCapability(response, "supports_tool_use", known.ToolUse)
+	setWorkbenchCapability(response, "supports_images", known.ImageInput)
+	setWorkbenchCapability(response, "supports_vision", known.ImageInput)
+	setWorkbenchCapability(response, "supports_image_input", known.ImageInput)
+	setWorkbenchCapability(response, "supports_documents", known.PDFInput)
+	setWorkbenchCapability(response, "supports_pdf_input", known.PDFInput)
+	setWorkbenchCapability(response, "supports_structured_outputs", known.StructuredOutputs)
+	if known.Effort != nil {
+		response["supported_effort_levels"] = supportedWorkbenchEffortLevels(known)
 	}
 	return response
+}
+
+func setWorkbenchCapability(response map[string]any, name string, supported *bool) {
+	if supported != nil {
+		response[name] = *supported
+	}
+}
+
+func supportedWorkbenchEffortLevels(capabilities modelcatalog.KnownCapabilities) []any {
+	levels := make([]any, 0, 5)
+	for _, level := range []struct {
+		name      string
+		supported *bool
+	}{
+		{name: "low", supported: capabilities.LowEffort},
+		{name: "medium", supported: capabilities.MediumEffort},
+		{name: "high", supported: capabilities.HighEffort},
+		{name: "xhigh", supported: capabilities.XHighEffort},
+		{name: "max", supported: capabilities.MaxEffort},
+	} {
+		if level.supported != nil && *level.supported {
+			levels = append(levels, level.name)
+		}
+	}
+	return levels
 }
 
 func workbenchPromptIDFromRequest(r *http.Request) string {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -418,7 +419,19 @@ func TestWorkbenchCompletionReportsUnavailableCatalog(t *testing.T) {
 
 func TestWorkbenchModelsExposeStaleCatalogMetadata(t *testing.T) {
 	now := time.Date(2026, time.July, 24, 1, 2, 3, 0, time.UTC)
-	thinking := true
+	var capabilities modelcatalog.Capabilities
+	if err := json.Unmarshal([]byte(`{
+		"code_execution":{"supported":true},
+		"context_management":{"supported":true,"compact_20260112":{"supported":true}},
+		"effort":{"supported":true,"low":{"supported":true},"medium":{"supported":false},"high":{"supported":true},"xhigh":{"supported":false},"max":{"supported":true}},
+		"thinking":{"supported":true,"types":{"enabled":{"supported":true},"adaptive":{"supported":false}}},
+		"tool_use":{"supported":true},
+		"image_input":{"supported":true},
+		"pdf_input":{"supported":false},
+		"structured_outputs":{"supported":true}
+	}`), &capabilities); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
 	req := workbenchCreatorTestRequest("7482d00f-2e42-478b-b2db-07c3d056a3b6")
 	rec := httptest.NewRecorder()
 	handler := withWorkbenchDependenciesAndCatalog(
@@ -428,7 +441,7 @@ func TestWorkbenchModelsExposeStaleCatalogMetadata(t *testing.T) {
 			Models: []modelcatalog.Model{{
 				ID:           "provider/model",
 				DisplayName:  "Provider Model",
-				Capabilities: modelcatalog.Capabilities{Thinking: &thinking},
+				Capabilities: capabilities,
 			}},
 			DefaultModelID:   "provider/model",
 			DefaultAvailable: true,
@@ -454,11 +467,31 @@ func TestWorkbenchModelsExposeStaleCatalogMetadata(t *testing.T) {
 	}
 	models, _ := body["models"].([]any)
 	model, _ := models[0].(map[string]any)
-	if model["supports_thinking"] != true {
-		t.Fatalf("model = %#v, want thinking support", model)
+	for _, field := range []string{
+		"supports_code_execution",
+		"supports_compact_context",
+		"supports_thinking",
+		"supports_thinking_enabled",
+		"supports_tool_use",
+		"supports_images",
+		"supports_structured_outputs",
+	} {
+		if model[field] != true {
+			t.Fatalf("model[%q] = %#v, want true", field, model[field])
+		}
 	}
-	if _, inferred := model["supports_auto_thinking"]; inferred {
-		t.Fatalf("model = %#v, must not infer adaptive thinking", model)
+	for _, field := range []string{"supports_auto_thinking", "supports_documents"} {
+		if model[field] != false {
+			t.Fatalf("model[%q] = %#v, want false", field, model[field])
+		}
+	}
+	wantEffortLevels := []any{"low", "high", "max"}
+	if !reflect.DeepEqual(model["supported_effort_levels"], wantEffortLevels) {
+		t.Fatalf("supported effort levels = %#v, want %#v", model["supported_effort_levels"], wantEffortLevels)
+	}
+	rawCapabilities, _ := model["capabilities"].(map[string]any)
+	if _, ok := rawCapabilities["image_input"]; !ok {
+		t.Fatalf("capabilities = %#v, want complete provider payload", rawCapabilities)
 	}
 }
 

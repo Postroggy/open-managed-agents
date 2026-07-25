@@ -60,6 +60,8 @@ describe('Dashboard i18n', () => {
     expect(screen.getByRole('link', { name: '构建 Agent' }).dataset.slot).toBe('button');
     expect(screen.getByText('本月支出')).toBeTruthy();
     expect(screen.getByRole('heading', { name: '模型' })).toBeTruthy();
+    expect(screen.getByText('图片')).toBeTruthy();
+    expect(screen.getByText('PDF')).toBeTruthy();
     expect(screen.getByRole('heading', { name: '资源' })).toBeTruthy();
 
     dashboard.unmount();
@@ -1696,6 +1698,8 @@ function dashboardModelCatalog(
       {
         model_name: modelID,
         display_name: displayName,
+        supports_image_input: true,
+        supports_pdf_input: true,
         supports_tool_use: true,
       },
     ],
