@@ -2125,7 +2125,7 @@ export function registerManagedAgentsQuickstartTests() {
     detail = await screen.findByTestId('session-trace-detail');
     expect(within(detail).getByText('Message')).toBeTruthy();
     expect(await within(detail).findByText('Content')).toBeTruthy();
-    const detailCode = within(detail).getByTestId('session-trace-code-block');
+    const detailCode = within(detail).getByTestId('markdown-code-block');
     expect(detailCode.textContent).toContain('"order_id": "ORD-7742"');
     expect(detailCode.textContent).toContain('"total_amount": 142.50');
     expect(detailCode.textContent).not.toContain('```json');
