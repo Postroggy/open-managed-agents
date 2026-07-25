@@ -31,6 +31,9 @@ storage:
     region: us-east-1
     access_key_id: test-access-key
     secret_access_key: test-secret-key
+anthropic_upstream:
+  base_url: https://gateway.internal
+  api_key: test-gateway-key
 `
 
 const (
@@ -83,6 +86,9 @@ storage:
     access_key_id: yaml-access-key
     secret_access_key: yaml-secret-key
     force_path_style: false
+anthropic_upstream:
+  base_url: https://gateway.internal
+  api_key: yaml-gateway-key
 batch:
   worker_concurrency: 7
   upstream_timeout: 45s
@@ -130,6 +136,40 @@ bootstrap:
 	}
 	if cfg.Bootstrap.WorkspaceName != "yaml-workspace" {
 		t.Fatalf("Bootstrap.WorkspaceName = %q, want yaml-workspace", cfg.Bootstrap.WorkspaceName)
+	}
+}
+
+func TestLoadRejectsInvalidAIGatewayConfig(t *testing.T) {
+	testCases := []struct {
+		name      string
+		overrides string
+		wantError string
+	}{
+		{
+			name: "missing API key",
+			overrides: `
+anthropic_upstream:
+  api_key: ""
+`,
+			wantError: "AI gateway API key is required",
+		},
+		{
+			name: "public Anthropic upstream",
+			overrides: `
+anthropic_upstream:
+  base_url: https://api.anthropic.com
+`,
+			wantError: "public Anthropic upstreams are not allowed",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := loadConfigTestYAML(t, testCase.overrides)
+			if err == nil || !strings.Contains(err.Error(), testCase.wantError) {
+				t.Fatalf("Load() error = %v, want %q", err, testCase.wantError)
+			}
+		})
 	}
 }
 
@@ -369,12 +409,16 @@ func TestConfigExampleIsMinimalAndRunnable(t *testing.T) {
 	validateConfigTestFile(t, configPath)
 }
 
-func TestDockerComposeConfigIsValid(t *testing.T) {
+func TestDockerComposeTemplateRequiresLocalGatewayCredentials(t *testing.T) {
 	configPath, err := filepath.Abs(filepath.Join("..", "..", dockerComposeTemplatePath))
 	if err != nil {
 		t.Fatalf("resolve Docker Compose config path: %v", err)
 	}
-	validateConfigTestFile(t, configPath)
+	cfg := loadResolvedConfigTestFile(t, configPath)
+	err = validate(cfg)
+	if err == nil || !strings.Contains(err.Error(), "AI gateway API key is required") {
+		t.Fatalf("validate() error = %v, want missing local Gateway credentials", err)
+	}
 }
 
 func TestDockerComposeTemplateUsesPrivateGatewayPlaceholder(t *testing.T) {
@@ -382,7 +426,7 @@ func TestDockerComposeTemplateUsesPrivateGatewayPlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve Docker Compose config path: %v", err)
 	}
-	cfg := loadValidatedConfigTestFile(t, configPath)
+	cfg := loadResolvedConfigTestFile(t, configPath)
 	if _, err := aigateway.Endpoint(cfg.AnthropicUpstream.BaseURL, "v1/models", ""); err != nil {
 		t.Fatalf("Compose anthropic_upstream.base_url must be a valid private gateway placeholder: %v", err)
 	}
@@ -393,7 +437,7 @@ func TestDockerComposeKeepsSecretsOutOfTrackedTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve Docker Compose config path: %v", err)
 	}
-	cfg := loadValidatedConfigTestFile(t, configPath)
+	cfg := loadResolvedConfigTestFile(t, configPath)
 	secretValues := map[string]string{
 		"anthropic_upstream.api_key": cfg.AnthropicUpstream.APIKey,
 		"e2b.api_key":                cfg.E2B.APIKey,
@@ -447,7 +491,7 @@ func TestDockerComposeDeclaresDevelopmentCredentialPosture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve Docker Compose config path: %v", err)
 	}
-	cfg := loadValidatedConfigTestFile(t, configPath)
+	cfg := loadResolvedConfigTestFile(t, configPath)
 	if cfg.Env != EnvironmentDev {
 		t.Fatalf("Compose env = %q, want explicit local-development posture %q", cfg.Env, EnvironmentDev)
 	}
@@ -464,7 +508,7 @@ func TestDockerComposeSandboxCallbackUsesPublishedAPIPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve Docker Compose config path: %v", err)
 	}
-	cfg := loadValidatedConfigTestFile(t, configPath)
+	cfg := loadResolvedConfigTestFile(t, configPath)
 	if cfg.Server.Addr != ":8080" {
 		t.Fatalf("Compose server.addr = %q, want container port :8080", cfg.Server.Addr)
 	}
@@ -789,15 +833,21 @@ func validateConfigTestFile(t *testing.T, configPath string) {
 
 func loadValidatedConfigTestFile(t *testing.T, configPath string) Config {
 	t.Helper()
+	cfg := loadResolvedConfigTestFile(t, configPath)
+	if err := validate(cfg); err != nil {
+		t.Fatalf("validate config %q: %v", configPath, err)
+	}
+	return cfg
+}
+
+func loadResolvedConfigTestFile(t *testing.T, configPath string) Config {
+	t.Helper()
 	cfg, err := loadYAMLConfig(configPath)
 	if err != nil {
 		t.Fatalf("load config %q: %v", configPath, err)
 	}
 	if err := resolveConfigPaths(&cfg, filepath.Dir(configPath)); err != nil {
 		t.Fatalf("resolve config paths for %q: %v", configPath, err)
-	}
-	if err := validate(cfg); err != nil {
-		t.Fatalf("validate config %q: %v", configPath, err)
 	}
 	return cfg
 }

@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/api"
 	"github.com/superduck-ai/open-managed-agents/internal/batches"
 	"github.com/superduck-ai/open-managed-agents/internal/cleanup"
@@ -45,10 +44,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-	if err := aigateway.ValidateConfig(cfg.AnthropicUpstream.BaseURL, cfg.AnthropicUpstream.APIKey); err != nil {
-		log.Fatalf("validate AI gateway: %v", err)
-	}
-
 	database, err := db.Open(ctx, cfg)
 	if err != nil {
 		log.Fatalf("open database: %v", err)

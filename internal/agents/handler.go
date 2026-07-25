@@ -37,11 +37,18 @@ type Handler struct {
 	cfg     config.Config
 	db      *db.DB
 	catalog modelcatalog.Reader
-	prewarm skillPrewarmSnapshotEnqueuer
+	prewarm SkillPrewarmEnqueuer
 	router  chi.Router
 }
 
-type skillPrewarmSnapshotEnqueuer interface {
+type HandlerDeps struct {
+	Config       config.Config
+	DB           *db.DB
+	ModelCatalog modelcatalog.Reader
+	SkillPrewarm SkillPrewarmEnqueuer
+}
+
+type SkillPrewarmEnqueuer interface {
 	EnqueueSnapshot(ctx context.Context, workspaceID int64, snapshot json.RawMessage, source string, sourceID string, trigger string) error
 }
 
@@ -93,21 +100,13 @@ type agentReference struct {
 	Version int    `json:"version"`
 }
 
-func NewHandler(cfg config.Config, database *db.DB) *Handler {
-	return NewHandlerWithModelCatalogAndSkillPrewarm(cfg, database, nil, nil)
-}
-
-func NewHandlerWithSkillPrewarm(cfg config.Config, database *db.DB, prewarm skillPrewarmSnapshotEnqueuer) *Handler {
-	return NewHandlerWithModelCatalogAndSkillPrewarm(cfg, database, nil, prewarm)
-}
-
-func NewHandlerWithModelCatalogAndSkillPrewarm(
-	cfg config.Config,
-	database *db.DB,
-	catalog modelcatalog.Reader,
-	prewarm skillPrewarmSnapshotEnqueuer,
-) *Handler {
-	h := &Handler{cfg: cfg, db: database, catalog: catalog, prewarm: prewarm}
+func NewHandler(deps HandlerDeps) *Handler {
+	h := &Handler{
+		cfg:     deps.Config,
+		db:      deps.DB,
+		catalog: deps.ModelCatalog,
+		prewarm: deps.SkillPrewarm,
+	}
 	router := chi.NewRouter()
 	router.NotFound(notFound)
 	router.MethodNotAllowed(notFound)

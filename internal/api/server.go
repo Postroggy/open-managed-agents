@@ -96,6 +96,12 @@ func NewServer(deps ServerDeps) *Server {
 		deps.Config,
 		filestoreapi.NewService(deps.Config, deps.DB, deps.ObjectStore),
 	)
+	agentsHandler := agents.NewHandler(agents.HandlerDeps{
+		Config:       deps.Config,
+		DB:           deps.DB,
+		ModelCatalog: catalog,
+		SkillPrewarm: skillPrewarmEnqueuer,
+	})
 	s := &Server{
 		cfg:                  deps.Config,
 		db:                   deps.DB,
@@ -103,7 +109,7 @@ func NewServer(deps ServerDeps) *Server {
 		platformStore:        platformStore,
 		filestoreCredentials: deps.FilestoreCredentials,
 		admin:                adminapi.NewHandler(deps.Config, deps.DB),
-		agents:               agents.NewHandlerWithModelCatalogAndSkillPrewarm(deps.Config, deps.DB, catalog, skillPrewarmEnqueuer),
+		agents:               agentsHandler,
 		batch:                batches.NewHandler(deps.Config, deps.DB, deps.ObjectStore),
 		codeSessions:         codesessions.NewHandler(deps.Config, codeSessionService),
 		deployments:          deploymentsapi.NewHandlerWithSkillPrewarm(deps.Config, deps.DB, skillPrewarmEnqueuer),

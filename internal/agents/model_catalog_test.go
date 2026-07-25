@@ -16,12 +16,10 @@ import (
 
 func TestCreateAgentRejectsUnknownCatalogModel(t *testing.T) {
 	t.Parallel()
-	handler := NewHandlerWithModelCatalogAndSkillPrewarm(
-		config.Config{},
-		nil,
-		agentTestCatalog{models: []string{"provider/known"}},
-		nil,
-	)
+	handler := NewHandler(HandlerDeps{
+		Config:       config.Config{},
+		ModelCatalog: agentTestCatalog{models: []string{"provider/known"}},
+	})
 	request := agentCatalogRequest(`{"name":"catalog test","model":"provider/unknown"}`)
 	response := httptest.NewRecorder()
 
@@ -37,12 +35,10 @@ func TestCreateAgentRejectsUnknownCatalogModel(t *testing.T) {
 
 func TestCreateAgentReportsUnavailableCatalog(t *testing.T) {
 	t.Parallel()
-	handler := NewHandlerWithModelCatalogAndSkillPrewarm(
-		config.Config{},
-		nil,
-		agentTestCatalog{err: modelcatalog.ErrUnavailable},
-		nil,
-	)
+	handler := NewHandler(HandlerDeps{
+		Config:       config.Config{},
+		ModelCatalog: agentTestCatalog{err: modelcatalog.ErrUnavailable},
+	})
 	request := agentCatalogRequest(`{"name":"catalog test","model":"provider/model"}`)
 	response := httptest.NewRecorder()
 
@@ -55,12 +51,10 @@ func TestCreateAgentReportsUnavailableCatalog(t *testing.T) {
 
 func TestUpdateAgentRejectsUnknownCatalogModel(t *testing.T) {
 	t.Parallel()
-	handler := NewHandlerWithModelCatalogAndSkillPrewarm(
-		config.Config{},
-		nil,
-		agentTestCatalog{models: []string{"provider/known"}},
-		nil,
-	)
+	handler := NewHandler(HandlerDeps{
+		Config:       config.Config{},
+		ModelCatalog: agentTestCatalog{models: []string{"provider/known"}},
+	})
 
 	_, err := handler.stateFromUpdate(
 		agentCatalogRequest(`{}`),
@@ -75,12 +69,10 @@ func TestUpdateAgentRejectsUnknownCatalogModel(t *testing.T) {
 
 func TestUpdateAgentPreservesHistoricalModelWhenModelFieldIsOmitted(t *testing.T) {
 	t.Parallel()
-	handler := NewHandlerWithModelCatalogAndSkillPrewarm(
-		config.Config{},
-		nil,
-		agentTestCatalog{models: []string{"provider/current"}},
-		nil,
-	)
+	handler := NewHandler(HandlerDeps{
+		Config:       config.Config{},
+		ModelCatalog: agentTestCatalog{models: []string{"provider/current"}},
+	})
 	current := historicalAgent("provider/retired")
 
 	state, err := handler.stateFromUpdate(
