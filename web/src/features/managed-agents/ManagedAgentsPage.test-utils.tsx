@@ -57,7 +57,7 @@ const managedAgentsAuthContextValue: AuthContextValue = {
 export function render(
   ui: Parameters<typeof testingLibrary.render>[0],
   options?: Parameters<typeof testingLibrary.render>[1],
-  queryOptions: { seedModelMappings?: boolean } = {},
+  queryOptions: { modelCatalog?: Record<string, unknown>; seedModelMappings?: boolean } = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -65,7 +65,7 @@ export function render(
       mutations: { retry: false },
     },
   });
-  queryClient.setQueryData(modelCatalogQueryKey('org_test'), testModelCatalog());
+  queryClient.setQueryData(modelCatalogQueryKey('org_test'), queryOptions.modelCatalog ?? testModelCatalog());
   if (queryOptions.seedModelMappings !== false) {
     queryClient.setQueryData(['managed-agents', 'model-mappings', 'org_test'], {});
   }

@@ -33,7 +33,7 @@ export function isCatalogModelID(modelID: string, models: readonly ModelCatalogM
 
 export function resolveCatalogDefaultModelID(catalog: ModelCatalogResponse) {
   if (!catalog.model_catalog?.default_available) {
-    return '';
+    return catalogModelIDs(catalog.models ?? [])[0] ?? '';
   }
   const modelID = catalog.default_prompt_settings?.model_name?.trim() ?? '';
   return isCatalogModelID(modelID, catalog.models ?? []) ? modelID : '';

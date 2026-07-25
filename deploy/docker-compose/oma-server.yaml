@@ -33,7 +33,7 @@ anthropic_upstream:
   api_key: ""
 
 model_catalog:
-  # Leave empty to require users to select a discovered model explicitly.
+  # Leave empty to let the UI initially select the first discovered model.
   default_model_id: ""
 
 e2b:

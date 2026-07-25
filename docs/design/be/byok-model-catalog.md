@@ -8,7 +8,7 @@
 
 ## 领域合同
 
-`ModelCatalog` 负责模型发现、校验、发布和目录新鲜度。`CatalogSnapshot` 只包含一次完整的 AI Gateway 返回结果。`Model Selection` 必须显式产生：来源只能是 `model_catalog.default_model_id` 或用户选择，目录顺序不能作为默认选择规则。
+`ModelCatalog` 负责模型发现、校验、发布和目录新鲜度。`CatalogSnapshot` 只包含一次完整的 AI Gateway 返回结果。`Model Selection` 优先使用有效的 `model_catalog.default_model_id`；未配置有效默认值时，客户端使用目录第一项作为初始选择，用户仍可显式切换。
 
 模型 ID 是不透明字符串。目录只校验 ID 非空且可稳定持久化，不根据其拼写推断供应商、能力或价格层级。
 
@@ -52,7 +52,7 @@ Managed Agents 的创建和更新路径通过目录校验提交的模型 ID。�
 
 ## 客户端行为
 
-Workbench、模板和 Quickstart 在展示模型选项前读取 Console 模型目录。模板不携带固定模型。Quickstart 使用用户选择的模型发起请求，并根据当前目录生成 `build_agent_config` 的模型 schema。未配置有效默认模型时，界面必须要求用户选择，不能自动选择目录第一项。
+Workbench、模板和 Quickstart 在展示模型选项前读取 Console 模型目录。模板不携带固定模型。Quickstart 使用用户选择的模型发起请求，并根据当前目录生成 `build_agent_config` 的模型 schema。客户端优先选择目录声明的有效默认模型；未声明时选择目录第一项；空目录时保持未选择并显示目录不可用状态。
 
 只有 AI Gateway 明确返回的能力字段才会透传。未知能力在前端按保守方式展示，不根据模型名称推断。
 
@@ -67,4 +67,4 @@ model_catalog:
   default_model_id: ""
 ```
 
-`default_model_id` 是可选项。只有成功快照中包含完全相同的不透明 ID 时，该值才会作为默认模型暴露给消费者。
+`default_model_id` 是可选项。只有成功快照中包含完全相同的不透明 ID 时，该值才会作为安装级默认模型暴露给消费者。未暴露有效默认值时，客户端以目录第一项作为初始选择，但不会把该选择写回服务端配置。

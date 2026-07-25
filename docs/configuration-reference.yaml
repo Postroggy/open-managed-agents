@@ -41,7 +41,8 @@ anthropic_upstream:
 model_catalog:
   refresh_interval: 5m
   refresh_timeout: 15s
-  # Optional. It is used only when the fetched catalog contains this exact ID.
+  # Optional. It is used only when the fetched catalog contains this exact ID;
+  # otherwise the UI initially selects the first discovered model.
   default_model_id: ""
 
 batch:

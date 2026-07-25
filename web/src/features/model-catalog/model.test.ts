@@ -7,14 +7,14 @@ const models = [
 ];
 
 describe('model catalog selection', () => {
-  test('does not treat the first catalog entry as an implicit default', () => {
+  test('uses the first catalog entry when no configured default is available', () => {
     expect(
       resolveCatalogDefaultModelID({
         models,
         default_prompt_settings: { model_name: 'gateway/alpha' },
         model_catalog: { default_available: false, stale: false },
       }),
-    ).toBe('');
+    ).toBe('gateway/alpha');
   });
 
   test('returns an explicitly configured default only while it is available', () => {
