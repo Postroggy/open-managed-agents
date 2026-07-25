@@ -97,38 +97,6 @@ func TestServiceRefreshPublishesOnlyCompletePages(t *testing.T) {
 	}
 }
 
-func TestServiceRefreshDeduplicatesEffectiveModelIDsAcrossPages(t *testing.T) {
-	t.Parallel()
-	store := &fakeStore{}
-	service, err := NewService(context.Background(), store, &fakeUpstream{pages: map[string]Page{
-		"": {
-			Models:  []Model{{ID: "provider/effective", DisplayName: "First logical model"}},
-			HasMore: true,
-			LastID:  "provider/source-cursor",
-		},
-		"provider/source-cursor": {
-			Models: []Model{{ID: "provider/effective", DisplayName: "Second logical model"}},
-		},
-	}}, Options{})
-	if err != nil {
-		t.Fatalf("NewService() error = %v", err)
-	}
-
-	if err := service.Refresh(context.Background()); err != nil {
-		t.Fatalf("Refresh() error = %v", err)
-	}
-	snapshot, err := service.Snapshot(context.Background())
-	if err != nil {
-		t.Fatalf("Snapshot() error = %v", err)
-	}
-	if got, want := modelIDs(snapshot.Models), []string{"provider/effective"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("model IDs = %#v, want %#v", got, want)
-	}
-	if snapshot.Models[0].DisplayName != "First logical model" {
-		t.Fatalf("display name = %q, want first mapped model metadata", snapshot.Models[0].DisplayName)
-	}
-}
-
 func TestServiceRefreshKeepsLastSuccessfulSnapshotWhenUpstreamFails(t *testing.T) {
 	t.Parallel()
 	lastSuccess := time.Date(2026, time.July, 24, 1, 2, 3, 0, time.UTC)
@@ -248,6 +216,38 @@ func TestServiceRefreshBoundsFailurePersistenceWithRefreshTimeout(t *testing.T) 
 	}
 	if !store.failureHadDeadline {
 		t.Fatal("RecordFailure() context has no deadline, want refresh timeout boundary")
+	}
+}
+
+func TestServiceRefreshDeduplicatesEffectiveModelIDsAcrossPages(t *testing.T) {
+	t.Parallel()
+	store := &fakeStore{}
+	service, err := NewService(context.Background(), store, &fakeUpstream{pages: map[string]Page{
+		"": {
+			Models:  []Model{{ID: "provider/effective", DisplayName: "First logical model"}},
+			HasMore: true,
+			LastID:  "provider/source-cursor",
+		},
+		"provider/source-cursor": {
+			Models: []Model{{ID: "provider/effective", DisplayName: "Second logical model"}},
+		},
+	}}, Options{})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if err := service.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+	snapshot, err := service.Snapshot(context.Background())
+	if err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+	if got, want := modelIDs(snapshot.Models), []string{"provider/effective"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("model IDs = %#v, want %#v", got, want)
+	}
+	if snapshot.Models[0].DisplayName != "First logical model" {
+		t.Fatalf("display name = %q, want first mapped model metadata", snapshot.Models[0].DisplayName)
 	}
 }
 

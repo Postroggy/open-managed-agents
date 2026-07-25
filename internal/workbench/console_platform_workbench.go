@@ -688,12 +688,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 }
 
 func canRefreshModelCatalog(role string) bool {
-	switch strings.TrimSpace(role) {
-	case "admin", "owner", "primary_owner", "membership_admin":
-		return true
-	default:
-		return false
-	}
+	return strings.TrimSpace(role) == "admin"
 }
 
 func writeWorkbenchModelsSnapshot(w http.ResponseWriter, snapshot modelcatalog.Snapshot, mappings map[string]string) {

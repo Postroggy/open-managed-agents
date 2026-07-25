@@ -449,7 +449,10 @@ function CreateAgentDialogContent({
             value={selectedModelID}
             onValueChange={(modelID) => {
               const parsed = parseCurrentConfig();
-              hydrateConfig({ ...(parsed ?? configInputRef.current), model: modelID });
+              if (!parsed) {
+                return;
+              }
+              hydrateConfig({ ...parsed, model: modelID });
             }}
             loading={modelCatalog.isPending}
             error={modelCatalog.isError}

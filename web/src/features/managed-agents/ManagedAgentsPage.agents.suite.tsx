@@ -257,6 +257,10 @@ export function registerManagedAgentsAgentsTests() {
     expect(within(dialog).getByText(/JSON is not valid/i)).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Create agent' }).hasAttribute('disabled')).toBe(true);
 
+    await selectManagedComboboxOption(dialog, 'Model', /Claude Opus 4\.8/);
+    expect(within(dialog).getByText(/JSON is not valid/i)).toBeTruthy();
+    expect(within(dialog).getByRole('combobox', { name: 'Model' }).textContent).toContain('Claude Sonnet 4.6');
+
     setAgentConfigEditorValue(
       dialog,
       JSON.stringify(createAgentRequestFixture('Temporary config'), null, 2),

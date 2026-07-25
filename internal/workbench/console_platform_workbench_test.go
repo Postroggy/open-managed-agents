@@ -462,24 +462,7 @@ func TestWorkbenchModelsExposeStaleCatalogMetadata(t *testing.T) {
 }
 
 func TestWorkbenchModelCatalogRefreshRequiresOrganizationAdmin(t *testing.T) {
-	catalog := &workbenchRefreshTestCatalog{snapshot: modelcatalog.Snapshot{
-		Models: []modelcatalog.Model{{ID: "provider/model"}},
-	}}
-	req := workbenchModelCatalogRefreshRequest("user")
-	rec := httptest.NewRecorder()
-
-	withWorkbenchDependenciesAndCatalog(nil, config.AnthropicUpstreamConfig{}, catalog, handleWorkbenchModelCatalogRefresh)(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusForbidden, rec.Body.String())
-	}
-	if catalog.refreshes != 0 {
-		t.Fatalf("refreshes = %d, want 0", catalog.refreshes)
-	}
-}
-
-func TestWorkbenchModelCatalogRefreshAcceptsPrivilegedOrganizationRoles(t *testing.T) {
-	for _, role := range []string{"admin", "owner", "primary_owner", "membership_admin"} {
+	for _, role := range []string{"user", "developer", "billing", "claude_code_user", "owner", "primary_owner", "membership_admin"} {
 		t.Run(role, func(t *testing.T) {
 			catalog := &workbenchRefreshTestCatalog{snapshot: modelcatalog.Snapshot{
 				Models: []modelcatalog.Model{{ID: "provider/model"}},
@@ -489,10 +472,27 @@ func TestWorkbenchModelCatalogRefreshAcceptsPrivilegedOrganizationRoles(t *testi
 
 			withWorkbenchDependenciesAndCatalog(nil, config.AnthropicUpstreamConfig{}, catalog, handleWorkbenchModelCatalogRefresh)(rec, req)
 
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusForbidden, rec.Body.String())
+			}
+			if catalog.refreshes != 0 {
+				t.Fatalf("refreshes = %d, want 0", catalog.refreshes)
 			}
 		})
+	}
+}
+
+func TestWorkbenchModelCatalogRefreshAcceptsOrganizationAdmin(t *testing.T) {
+	catalog := &workbenchRefreshTestCatalog{snapshot: modelcatalog.Snapshot{
+		Models: []modelcatalog.Model{{ID: "provider/model"}},
+	}}
+	req := workbenchModelCatalogRefreshRequest("admin")
+	rec := httptest.NewRecorder()
+
+	withWorkbenchDependenciesAndCatalog(nil, config.AnthropicUpstreamConfig{}, catalog, handleWorkbenchModelCatalogRefresh)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 }
 
