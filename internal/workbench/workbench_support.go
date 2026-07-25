@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/superduck-ai/open-managed-agents/internal/aiupstream"
+	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
@@ -196,10 +196,10 @@ func writeWorkbenchModelSelectionError(w http.ResponseWriter, err error) {
 }
 
 func anthropicMessagesEndpoint(upstream config.AnthropicUpstreamConfig) (string, error) {
-	if err := aiupstream.ValidateDeployment(upstream.BaseURL, upstream.APIKey); err != nil {
+	if err := aigateway.ValidateConfig(upstream.BaseURL, upstream.APIKey); err != nil {
 		return "", err
 	}
-	return aiupstream.Endpoint(upstream.BaseURL, "v1/messages", "")
+	return aigateway.Endpoint(upstream.BaseURL, "v1/messages", "")
 }
 
 func proxyMessagesStream(w http.ResponseWriter, body io.Reader) {

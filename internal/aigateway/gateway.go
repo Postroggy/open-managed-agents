@@ -1,4 +1,4 @@
-package aiupstream
+package aigateway
 
 import (
 	"errors"
@@ -51,7 +51,7 @@ func Endpoint(baseURL string, resourcePath string, rawQuery string) (string, err
 	return endpointURL.String(), nil
 }
 
-func ValidateDeployment(baseURL string, apiKey string) error {
+func ValidateConfig(baseURL string, apiKey string) error {
 	if _, err := Endpoint(baseURL, "v1/models", ""); err != nil {
 		return err
 	}

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/superduck-ai/open-managed-agents/internal/aiupstream"
+	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
@@ -62,7 +62,7 @@ type flushingResponseWriter struct {
 
 // NewHandler 创建复用连接池的 Messages 代理 handler。
 func NewHandler(cfg config.Config) *Handler {
-	return &Handler{cfg: cfg, client: aiupstream.NewHTTPClient(newProxyTransport(), 0)}
+	return &Handler{cfg: cfg, client: aigateway.NewHTTPClient(newProxyTransport(), 0)}
 }
 
 func newProxyTransport() http.RoundTripper {
@@ -132,7 +132,7 @@ func writeRequestTooLarge(w http.ResponseWriter, r *http.Request) {
 }
 
 func messagesEndpoint(baseURL string, rawQuery string) (string, error) {
-	return aiupstream.Endpoint(baseURL, "v1/messages", rawQuery)
+	return aigateway.Endpoint(baseURL, "v1/messages", rawQuery)
 }
 
 func sanitizedRequestHeaders(source http.Header) http.Header {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/superduck-ai/open-managed-agents/internal/aiupstream"
+	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
 )
@@ -36,7 +36,7 @@ func NewHTTPUpstream(upstream config.AnthropicUpstreamConfig) *HTTPUpstream {
 	return &HTTPUpstream{
 		baseURL:       upstream.BaseURL,
 		apiKey:        strings.TrimSpace(upstream.APIKey),
-		client:        aiupstream.NewHTTPClient(nil, 0),
+		client:        aigateway.NewHTTPClient(nil, 0),
 		modelMappings: upstream.ModelMappings,
 	}
 }
@@ -95,7 +95,7 @@ func (u *HTTPUpstream) List(ctx context.Context, afterID string) (Page, error) {
 }
 
 func modelsEndpoint(baseURL string, afterID string) (string, error) {
-	endpoint, err := aiupstream.Endpoint(baseURL, "v1/models", "")
+	endpoint, err := aigateway.Endpoint(baseURL, "v1/models", "")
 	if err != nil {
 		return "", err
 	}

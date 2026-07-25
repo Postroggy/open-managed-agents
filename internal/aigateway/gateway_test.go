@@ -1,4 +1,4 @@
-package aiupstream
+package aigateway
 
 import (
 	"net/http"
@@ -34,7 +34,7 @@ func TestEndpointPreservesGatewayPrefixAndQuery(t *testing.T) {
 	}
 }
 
-func TestValidateDeploymentRequiresGatewayCredentials(t *testing.T) {
+func TestValidateConfigRequiresGatewayCredentials(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
 		name    string
@@ -49,15 +49,15 @@ func TestValidateDeploymentRequiresGatewayCredentials(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateDeployment(testCase.baseURL, testCase.apiKey)
+			err := ValidateConfig(testCase.baseURL, testCase.apiKey)
 			if err == nil || !strings.Contains(err.Error(), testCase.want) {
-				t.Fatalf("ValidateDeployment() error = %v, want %q", err, testCase.want)
+				t.Fatalf("ValidateConfig() error = %v, want %q", err, testCase.want)
 			}
 		})
 	}
 
-	if err := ValidateDeployment("https://gateway.internal", "secret"); err != nil {
-		t.Fatalf("ValidateDeployment() error = %v", err)
+	if err := ValidateConfig("https://gateway.internal", "secret"); err != nil {
+		t.Fatalf("ValidateConfig() error = %v", err)
 	}
 }
 

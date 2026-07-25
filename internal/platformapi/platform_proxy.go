@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/superduck-ai/open-managed-agents/internal/aiupstream"
+	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
 
@@ -26,7 +26,7 @@ type messagesRewriteFields struct {
 type rawJSONEnvelope map[string]json.RawMessage
 
 func handleProxyMessages(cfg config.Config) http.HandlerFunc {
-	client := aiupstream.NewHTTPClient(nil, 0)
+	client := aigateway.NewHTTPClient(nil, 0)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := visibleOrgUUID(w, r); !ok {
 			return
@@ -127,10 +127,10 @@ func rewriteMappedModel(body []byte, mappings map[string]string) ([]byte, error)
 }
 
 func anthropicMessagesEndpointFromConfig(cfg config.Config) (string, error) {
-	if err := aiupstream.ValidateDeployment(cfg.AnthropicUpstream.BaseURL, cfg.AnthropicUpstream.APIKey); err != nil {
+	if err := aigateway.ValidateConfig(cfg.AnthropicUpstream.BaseURL, cfg.AnthropicUpstream.APIKey); err != nil {
 		return "", err
 	}
-	return aiupstream.Endpoint(cfg.AnthropicUpstream.BaseURL, "v1/messages", "")
+	return aigateway.Endpoint(cfg.AnthropicUpstream.BaseURL, "v1/messages", "")
 }
 
 func proxyMessagesWantsStream(body []byte) bool {

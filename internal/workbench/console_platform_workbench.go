@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/superduck-ai/open-managed-agents/internal/aiupstream"
+	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
@@ -917,7 +917,7 @@ func workbenchAnthropicTextFromBody(r *http.Request, upstreamBody map[string]any
 	if err != nil {
 		return "", 0, 0, err
 	}
-	upstreamRes, err := aiupstream.NewHTTPClient(nil, 0).Do(upstreamReq)
+	upstreamRes, err := aigateway.NewHTTPClient(nil, 0).Do(upstreamReq)
 	if err != nil {
 		return "", 0, 0, err
 	}
@@ -948,7 +948,7 @@ func workbenchAnthropicTextFromBody(r *http.Request, upstreamBody map[string]any
 
 func workbenchAnthropicRequest(r *http.Request, upstreamBody map[string]any, accept string) (*http.Request, error) {
 	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
-	if err := aiupstream.ValidateDeployment(upstreamConfig.BaseURL, upstreamConfig.APIKey); err != nil {
+	if err := aigateway.ValidateConfig(upstreamConfig.BaseURL, upstreamConfig.APIKey); err != nil {
 		return nil, errWorkbenchGatewayNotConfigured
 	}
 	endpoint, err := anthropicMessagesEndpoint(upstreamConfig)
@@ -1394,7 +1394,7 @@ func handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
 		upstreamReq.Header.Set("Anthropic-Beta", beta)
 	}
 
-	client := aiupstream.NewHTTPClient(nil, 0)
+	client := aigateway.NewHTTPClient(nil, 0)
 	upstreamRes, err := client.Do(upstreamReq)
 	if err != nil {
 		writeProxyMessagesAnthropicError(w, http.StatusBadGateway, "api_error", err.Error())
@@ -1865,7 +1865,7 @@ func handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
 	endpoint := upstreamReq.URL.String()
 
 	log.Printf("workbench generate_prompt upstream_start org=%s endpoint=%s model=%s task_chars=%d thinking=%t", chi.URLParam(r, "orgUUID"), endpoint, model, len([]rune(task)), payload.TargetThinkingMode)
-	upstreamRes, err := aiupstream.NewHTTPClient(nil, 0).Do(upstreamReq)
+	upstreamRes, err := aigateway.NewHTTPClient(nil, 0).Do(upstreamReq)
 	if err != nil {
 		log.Printf("workbench generate_prompt failed org=%s endpoint=%s err=%v", chi.URLParam(r, "orgUUID"), endpoint, err)
 		workbenchWriteGenerationError(w, err)
