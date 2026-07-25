@@ -1,20 +1,27 @@
-import type { ComponentPropsWithoutRef } from 'react';
+import { isValidElement, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import clsx from 'clsx';
+import { MermaidDiagram } from './mermaid-diagram';
+import { remarkMermaidFenceState } from './remark-mermaid-fence-state';
+import { SyntaxCodeBlock } from './syntax-code-block';
 
 function safeMarkdownUrl(url: string) {
-  return /^(https?:|mailto:|\/|#)/i.test(url) ? url : '';
+  const allowedScheme = /^(https?:|mailto:|#)/i.test(url);
+  const internalPath = url.startsWith('/') && !url.startsWith('//');
+  return allowedScheme || internalPath ? url : '';
 }
 
 function MarkdownLink({ href = '', children, title }: ComponentPropsWithoutRef<'a'>) {
+  if (!href) return <>{children}</>;
+
   const external = /^(https?:|mailto:)/i.test(href);
   return (
     <a
       href={href}
       title={title}
       className="text-primary underline underline-offset-2 hover:text-primary/80"
-      {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      {...(external ? { target: '_blank', rel: 'noreferrer noopener' } : {})}
     >
       {children}
     </a>
@@ -35,11 +42,32 @@ const markdownComponents: Components = {
     <blockquote className="border-l-2 border-border pl-3 text-muted-foreground">{children}</blockquote>
   ),
   a: MarkdownLink,
-  pre: ({ children }) => (
-    <pre className="subtle-scrollbar overflow-x-auto rounded-md border border-border bg-secondary p-3 font-mono text-sm leading-6 [&>code]:bg-transparent [&>code]:p-0">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => {
+    if (
+      isValidElement<{
+        children?: ReactNode;
+        className?: string;
+        'data-mermaid-closed'?: boolean;
+      }>(children)
+    ) {
+      const child = children;
+      const source = String(child.props.children ?? '').replace(/\n$/, '');
+      const language = child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1];
+      if (language?.toLowerCase() === 'mermaid' && child.props['data-mermaid-closed']) {
+        return <MermaidDiagram source={source} />;
+      }
+      return (
+        <SyntaxCodeBlock
+          value={source}
+          language={language}
+          wrap
+          testId="markdown-code-block"
+          className="rounded-md bg-secondary"
+        />
+      );
+    }
+    return <pre>{children}</pre>;
+  },
   code: ({ className, children }) => (
     <code className={clsx('rounded bg-secondary px-1 py-0.5 font-mono text-[0.92em]', className)}>{children}</code>
   ),
@@ -53,12 +81,13 @@ const markdownComponents: Components = {
   hr: () => <hr className="border-border" />,
   img: () => null,
 };
+const markdownRemarkPlugins = [remarkGfm, remarkMermaidFenceState];
 
 export function MarkdownContent({ value, className }: { value: string; className?: string }) {
   return (
     <div className={clsx('space-y-3 whitespace-normal break-words', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={markdownRemarkPlugins}
         components={markdownComponents}
         skipHtml
         urlTransform={safeMarkdownUrl}

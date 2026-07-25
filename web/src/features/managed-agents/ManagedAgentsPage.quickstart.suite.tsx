@@ -149,11 +149,22 @@ export function registerManagedAgentsQuickstartTests() {
           <QuickstartTextTurn
             role="assistant"
             content={[
-              'Use **bold text** and `inline code`.',
+              '## Rendering summary',
+              '',
+              'Use **bold text**, *emphasis*, ~~obsolete text~~, and `inline code`.',
               '',
               '- First item',
               '- [Safe link](https://example.com)',
               '- [Unsafe link](javascript:alert(1))',
+              '- [Protocol-relative link](//attacker.example)',
+              '- [Internal link](/settings)',
+              '- [x] Completed task',
+              '',
+              '1. Ordered item',
+              '',
+              '> Keep this context visible.',
+              '',
+              'Visit https://example.org for details.',
               '',
               '```json',
               '{"ready": true}',
@@ -172,13 +183,25 @@ export function registerManagedAgentsQuickstartTests() {
 
     const emphasis = screen.getByText('bold text');
     expect(emphasis.tagName).toBe('STRONG');
+    expect(screen.getByRole('heading', { name: 'Rendering summary', level: 2 })).toBeTruthy();
+    expect(screen.getByText('emphasis').tagName).toBe('EM');
+    expect(screen.getByText('obsolete text').tagName).toBe('DEL');
     expect(screen.getByText('inline code').tagName).toBe('CODE');
     expect(screen.getByText('First item').closest('li')).toBeTruthy();
-    expect(screen.getByText('{"ready": true}').closest('pre')).toBeTruthy();
+    expect(screen.getByText('Ordered item').closest('ol')).toBeTruthy();
+    expect(screen.getByText('Keep this context visible.').closest('blockquote')).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: '' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('link', { name: 'https://example.org' }).getAttribute('href')).toBe('https://example.org');
+    const jsonCode = document.querySelector('code.language-json');
+    expect(jsonCode?.textContent).toBe('{"ready": true}');
+    expect(jsonCode?.closest('pre')).toBeTruthy();
+    expect(jsonCode?.querySelector('.hljs-attr')).toBeTruthy();
     expect(screen.getByRole('table')).toBeTruthy();
     expect(screen.getByText('BYOK').closest('td')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Safe link' }).getAttribute('href')).toBe('https://example.com');
     expect(screen.queryByRole('link', { name: 'Unsafe link' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Protocol-relative link' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Internal link' }).getAttribute('href')).toBe('/settings');
     expect(document.querySelector('script')).toBeNull();
   });
 
@@ -193,6 +216,122 @@ export function registerManagedAgentsQuickstartTests() {
 
     expect(screen.getByText('Keep **literal stars** in user input.')).toBeTruthy();
     expect(document.querySelector('strong')).toBeNull();
+  });
+
+  test('keeps explicitly unknown and plaintext code fences unhighlighted', () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <QuickstartTurnGroup continued>
+          <QuickstartTextTurn
+            role="assistant"
+            content={['```unknown', '{"unknown": true}', '```', '', '```plaintext', '{"plain": true}', '```'].join(
+              '\n',
+            )}
+          />
+        </QuickstartTurnGroup>
+      </I18nProvider>,
+    );
+
+    const codeBlocks = screen.getAllByTestId('markdown-code-block');
+    expect(codeBlocks).toHaveLength(2);
+    expect(codeBlocks.every((block) => block.querySelector('code')?.className.includes('language-') === false)).toBe(
+      true,
+    );
+    expect(codeBlocks.every((block) => block.querySelector('.hljs-attr') === null)).toBe(true);
+  });
+
+  test('keeps Mermaid source available when syntax is invalid or exceeds the render limit', async () => {
+    const invalidSource = 'flowchart this is not valid';
+    const { unmount } = render(
+      <I18nProvider initialLocale="en">
+        <QuickstartTurnGroup continued>
+          <QuickstartTextTurn role="assistant" content={['```mermaid', invalidSource, '```'].join('\n')} />
+        </QuickstartTurnGroup>
+      </I18nProvider>,
+    );
+
+    expect(
+      await screen.findByText('Mermaid diagram could not be rendered; showing source.', {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    expect(screen.getByText(invalidSource).closest('pre')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Mermaid diagram' })).toBeNull();
+
+    unmount();
+    const oversizedSource = `flowchart LR\nA[${'x'.repeat(20_001)}]`;
+    render(
+      <I18nProvider initialLocale="en">
+        <QuickstartTurnGroup continued>
+          <QuickstartTextTurn role="assistant" content={['```mermaid', oversizedSource, '```'].join('\n')} />
+        </QuickstartTurnGroup>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText('Mermaid diagram is too large; showing source.')).toBeTruthy();
+    expect(document.querySelector('[data-mermaid-state="error"] pre')?.textContent).toBe(oversizedSource);
+  });
+
+  test('does not start Mermaid rendering until a streaming fence is closed', async () => {
+    const partialSource = 'flowchart LR\n  Request -->';
+    render(
+      <I18nProvider initialLocale="en">
+        <QuickstartTurnGroup continued>
+          <QuickstartTextTurn role="assistant" content={['```mermaid', partialSource].join('\n')} />
+        </QuickstartTurnGroup>
+      </I18nProvider>,
+    );
+
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(document.querySelector('[data-mermaid-diagram]')).toBeNull();
+    expect(document.querySelector('[data-mermaid-state]')).toBeNull();
+    expect(screen.getByTestId('markdown-code-block').textContent).toBe(partialSource);
+  });
+
+  test('highlights supported code fences and renders a closed Mermaid fence', async () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <QuickstartTurnGroup continued>
+          <QuickstartTextTurn
+            role="assistant"
+            content={[
+              '```javascript',
+              'const ready = true;',
+              '```',
+              '',
+              '```json',
+              '{"ready": true}',
+              '```',
+              '',
+              '```python',
+              'def run(): return True',
+              '```',
+              '',
+              '```bash',
+              'echo ready',
+              '```',
+              '',
+              '```typescript',
+              'interface Agent { ready: boolean }',
+              '```',
+              '',
+              '```yaml',
+              'ready: true',
+              '```',
+              '',
+              '```mermaid',
+              'flowchart LR',
+              '  Request --> Response',
+              '```',
+            ].join('\n')}
+          />
+        </QuickstartTurnGroup>
+      </I18nProvider>,
+    );
+
+    for (const language of ['javascript', 'json', 'python', 'bash', 'typescript', 'yaml']) {
+      expect(document.querySelector(`code.language-${language} [class^="hljs-"]`)).toBeTruthy();
+    }
+    expect(await screen.findByRole('img', { name: 'Mermaid diagram' }, { timeout: 5000 })).toBeTruthy();
+    expect(document.querySelector('code.language-mermaid')).toBeNull();
   });
 
   test('preserves the human-readable fallback for unknown quickstart tools', () => {
