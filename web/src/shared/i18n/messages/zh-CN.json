@@ -709,6 +709,7 @@
   "managedAgents.quickstart.searchTemplates": "搜索模板",
   "managedAgents.quickstart.selectEnvironment": "选择环境",
   "managedAgents.quickstart.selectLanguage": "选择语言",
+  "managedAgents.quickstart.selectModel": "请先选择一个可用的模型。",
   "managedAgents.quickstart.selected": "已选择",
   "managedAgents.quickstart.selectingEnvironment": "正在选择环境",
   "managedAgents.quickstart.sendMessage": "发送消息",

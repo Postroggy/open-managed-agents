@@ -147,10 +147,12 @@ func (m upstreamModel) catalogModel() (Model, error) {
 	if err != nil {
 		return Model{}, err
 	}
-	if err := validateTokenLimit("max_input_tokens", m.MaxInputTokens); err != nil {
+	maxInputTokens, err := normalizeTokenLimit("max_input_tokens", m.MaxInputTokens)
+	if err != nil {
 		return Model{}, err
 	}
-	if err := validateTokenLimit("max_tokens", m.MaxTokens); err != nil {
+	maxTokens, err := normalizeTokenLimit("max_tokens", m.MaxTokens)
+	if err != nil {
 		return Model{}, err
 	}
 	capabilities, err := parseCapabilities(m.Capabilities)
@@ -168,8 +170,8 @@ func (m upstreamModel) catalogModel() (Model, error) {
 		DisplayName:    displayName,
 		Description:    strings.TrimSpace(m.Description),
 		CreatedAt:      createdAt,
-		MaxInputTokens: cloneInt(m.MaxInputTokens),
-		MaxTokens:      cloneInt(m.MaxTokens),
+		MaxInputTokens: maxInputTokens,
+		MaxTokens:      maxTokens,
 		Capabilities:   capabilities,
 	}, nil
 }
@@ -196,11 +198,14 @@ func modelCreatedAt(createdAt json.RawMessage, created json.RawMessage) (string,
 	return "", nil
 }
 
-func validateTokenLimit(name string, value *int) error {
-	if value != nil && *value < 1 {
-		return fmt.Errorf("%w: %s must be positive", errInvalidUpstreamResponse, name)
+func normalizeTokenLimit(name string, value *int) (*int, error) {
+	if value == nil || *value == 0 {
+		return nil, nil
 	}
-	return nil
+	if *value < 0 {
+		return nil, fmt.Errorf("%w: %s must not be negative", errInvalidUpstreamResponse, name)
+	}
+	return cloneInt(value), nil
 }
 
 func parseCapabilities(raw json.RawMessage) (Capabilities, error) {

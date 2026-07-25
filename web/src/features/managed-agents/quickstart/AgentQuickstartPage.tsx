@@ -299,7 +299,7 @@ function AgentQuickstartContent({ modelMappings }: { modelMappings: Record<strin
     const availableModelIDs = availableModelIDsRef.current;
     const builderModelID = agentModelName(agentConfig.model);
     if (!availableModelIDs.includes(builderModelID)) {
-      setChatError('Select an available model before continuing.');
+      setChatError(msg('managedAgents.quickstart.selectModel', 'Select an available model first.'));
       return;
     }
 

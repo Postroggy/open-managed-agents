@@ -34,8 +34,8 @@ func TestHTTPUpstreamRejectsInvalidAnthropicModelMetadata(t *testing.T) {
 		model string
 	}{
 		{name: "created at is not RFC3339", model: `{"id":"model-1","created_at":"yesterday"}`},
-		{name: "max input tokens is not positive", model: `{"id":"model-1","max_input_tokens":0}`},
-		{name: "max tokens is not positive", model: `{"id":"model-1","max_tokens":-1}`},
+		{name: "max input tokens is negative", model: `{"id":"model-1","max_input_tokens":-1}`},
+		{name: "max tokens is negative", model: `{"id":"model-1","max_tokens":-1}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -49,6 +49,27 @@ func TestHTTPUpstreamRejectsInvalidAnthropicModelMetadata(t *testing.T) {
 				t.Fatalf("List() error = %v, want invalid upstream response", err)
 			}
 		})
+	}
+}
+
+func TestHTTPUpstreamTreatsZeroTokenLimitsAsUnknown(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-1","max_input_tokens":0,"max_tokens":0}]}`))
+	}))
+	defer server.Close()
+
+	upstream := NewHTTPUpstream(config.AnthropicUpstreamConfig{BaseURL: server.URL, APIKey: "test-key"})
+	page, err := upstream.List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(page.Models) != 1 {
+		t.Fatalf("models = %#v, want one model", page.Models)
+	}
+	if page.Models[0].MaxInputTokens != nil || page.Models[0].MaxTokens != nil {
+		t.Fatalf("token limits = (%v, %v), want unknown", page.Models[0].MaxInputTokens, page.Models[0].MaxTokens)
 	}
 }
 
