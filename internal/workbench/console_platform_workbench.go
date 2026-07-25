@@ -18,6 +18,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
 	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
 
@@ -72,10 +73,10 @@ type workbenchKVEntry struct {
 type workbenchPersistenceContextKey struct{}
 type workbenchAnthropicUpstreamContextKey struct{}
 type workbenchModelCatalogContextKey struct{}
-type workbenchModelCatalogRoleStoreContextKey struct{}
+type workbenchModelCatalogUserStoreContextKey struct{}
 
-type workbenchModelCatalogRoleStore interface {
-	GetOrganizationUserRole(context.Context, int64, string) (string, error)
+type workbenchModelCatalogUserStore interface {
+	GetAdminUser(context.Context, int64, string) (db.AdminUser, error)
 }
 
 type workbenchPersistenceStore interface {
@@ -163,8 +164,8 @@ func withWorkbenchDependenciesAndCatalog(
 		if catalog != nil {
 			ctx = context.WithValue(ctx, workbenchModelCatalogContextKey{}, catalog)
 		}
-		if roleStore, ok := store.(workbenchModelCatalogRoleStore); ok {
-			ctx = context.WithValue(ctx, workbenchModelCatalogRoleStoreContextKey{}, roleStore)
+		if userStore, ok := store.(workbenchModelCatalogUserStore); ok {
+			ctx = context.WithValue(ctx, workbenchModelCatalogUserStoreContextKey{}, userStore)
 		}
 		r = r.WithContext(ctx)
 		handler(w, r)
@@ -186,8 +187,8 @@ func workbenchModelCatalogFromRequest(r *http.Request) modelcatalog.Reader {
 	return catalog
 }
 
-func workbenchModelCatalogRoleStoreFromRequest(r *http.Request) workbenchModelCatalogRoleStore {
-	store, _ := r.Context().Value(workbenchModelCatalogRoleStoreContextKey{}).(workbenchModelCatalogRoleStore)
+func workbenchModelCatalogUserStoreFromRequest(r *http.Request) workbenchModelCatalogUserStore {
+	store, _ := r.Context().Value(workbenchModelCatalogUserStoreContextKey{}).(workbenchModelCatalogUserStore)
 	return store
 }
 
@@ -648,18 +649,22 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
 		return
 	}
-	roleStore := workbenchModelCatalogRoleStoreFromRequest(r)
-	if roleStore == nil {
+	userStore := workbenchModelCatalogUserStoreFromRequest(r)
+	if userStore == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "model_catalog_refresh_unavailable"})
 		return
 	}
-	role, err := roleStore.GetOrganizationUserRole(r.Context(), principal.OrganizationID, principal.UserExternalID)
+	user, err := userStore.GetAdminUser(r.Context(), principal.OrganizationID, principal.UserExternalID)
 	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
+			return
+		}
 		log.Printf("authorize model catalog refresh organization_id=%d: %v", principal.OrganizationID, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "model_catalog_refresh_authorization_failed"})
 		return
 	}
-	if !canRefreshModelCatalog(role) {
+	if !canRefreshModelCatalog(user.Role) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
 		return
 	}

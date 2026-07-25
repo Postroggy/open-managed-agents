@@ -11,6 +11,7 @@ import (
 
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
 
 	"github.com/go-chi/chi/v5"
@@ -482,6 +483,27 @@ func TestWorkbenchModelCatalogRefreshRequiresOrganizationAdmin(t *testing.T) {
 	}
 }
 
+func TestWorkbenchModelCatalogRefreshRejectsMissingOrganizationUser(t *testing.T) {
+	catalog := &workbenchRefreshTestCatalog{}
+	req := workbenchModelCatalogRefreshRequest("admin")
+	ctx := context.WithValue(
+		req.Context(),
+		workbenchModelCatalogUserStoreContextKey{},
+		workbenchModelCatalogUserTestStore{err: db.ErrNotFound},
+	)
+	ctx = context.WithValue(ctx, workbenchModelCatalogContextKey{}, catalog)
+	rec := httptest.NewRecorder()
+
+	handleWorkbenchModelCatalogRefresh(rec, req.WithContext(ctx))
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+	if catalog.refreshes != 0 {
+		t.Fatalf("refreshes = %d, want 0", catalog.refreshes)
+	}
+}
+
 func TestWorkbenchModelCatalogRefreshAcceptsOrganizationAdmin(t *testing.T) {
 	catalog := &workbenchRefreshTestCatalog{snapshot: modelcatalog.Snapshot{
 		Models: []modelcatalog.Model{{ID: "provider/model"}},
@@ -835,12 +857,13 @@ func (c *workbenchRefreshTestCatalog) TryRefresh(context.Context) error {
 	return c.refreshErr
 }
 
-type workbenchModelCatalogRoleTestStore struct {
+type workbenchModelCatalogUserTestStore struct {
 	role string
+	err  error
 }
 
-func (s workbenchModelCatalogRoleTestStore) GetOrganizationUserRole(context.Context, int64, string) (string, error) {
-	return s.role, nil
+func (s workbenchModelCatalogUserTestStore) GetAdminUser(context.Context, int64, string) (db.AdminUser, error) {
+	return db.AdminUser{Role: s.role}, s.err
 }
 
 func workbenchModelCatalogRefreshRequest(role string) *http.Request {
@@ -854,7 +877,7 @@ func workbenchModelCatalogRefreshRequest(role string) *http.Request {
 		PlatformSessionExternalID: "platform_session_test",
 	}
 	ctx := auth.WithPrincipal(req.Context(), principal)
-	ctx = context.WithValue(ctx, workbenchModelCatalogRoleStoreContextKey{}, workbenchModelCatalogRoleTestStore{role: role})
+	ctx = context.WithValue(ctx, workbenchModelCatalogUserStoreContextKey{}, workbenchModelCatalogUserTestStore{role: role})
 	return req.WithContext(ctx)
 }
 
