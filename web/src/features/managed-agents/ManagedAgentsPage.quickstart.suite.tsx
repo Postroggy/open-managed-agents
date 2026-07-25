@@ -8,6 +8,7 @@ import {
   QuickstartAssistantTurn,
   QuickstartErrorTurn,
   QuickstartStreamingTurn,
+  QuickstartTextTurn,
   QuickstartTurnGroup,
 } from './quickstart/chatLayout';
 import { presentQuickstartTranscript } from './quickstart/transcriptModel';
@@ -139,6 +140,59 @@ export function registerManagedAgentsQuickstartTests() {
 
     expect(screen.getAllByText('Quickstart')).toHaveLength(1);
     expect(document.querySelectorAll('[data-slot="message-avatar"]')).toHaveLength(1);
+  });
+
+  test('renders markdown in quickstart assistant messages without trusting raw HTML or unsafe links', () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <QuickstartTurnGroup continued>
+          <QuickstartTextTurn
+            role="assistant"
+            content={[
+              'Use **bold text** and `inline code`.',
+              '',
+              '- First item',
+              '- [Safe link](https://example.com)',
+              '- [Unsafe link](javascript:alert(1))',
+              '',
+              '```json',
+              '{"ready": true}',
+              '```',
+              '',
+              '| Model | Ready |',
+              '| --- | --- |',
+              '| BYOK | yes |',
+              '',
+              '<script>window.quickstartMarkdownExecuted = true</script>',
+            ].join('\n')}
+          />
+        </QuickstartTurnGroup>
+      </I18nProvider>,
+    );
+
+    const emphasis = screen.getByText('bold text');
+    expect(emphasis.tagName).toBe('STRONG');
+    expect(screen.getByText('inline code').tagName).toBe('CODE');
+    expect(screen.getByText('First item').closest('li')).toBeTruthy();
+    expect(screen.getByText('{"ready": true}').closest('pre')).toBeTruthy();
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getByText('BYOK').closest('td')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Safe link' }).getAttribute('href')).toBe('https://example.com');
+    expect(screen.queryByRole('link', { name: 'Unsafe link' })).toBeNull();
+    expect(document.querySelector('script')).toBeNull();
+  });
+
+  test('keeps quickstart user messages as plain text', () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <QuickstartTurnGroup continued>
+          <QuickstartTextTurn role="user" content="Keep **literal stars** in user input." />
+        </QuickstartTurnGroup>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText('Keep **literal stars** in user input.')).toBeTruthy();
+    expect(document.querySelector('strong')).toBeNull();
   });
 
   test('preserves the human-readable fallback for unknown quickstart tools', () => {

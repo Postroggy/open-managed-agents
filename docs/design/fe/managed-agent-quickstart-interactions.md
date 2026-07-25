@@ -28,6 +28,8 @@ Quickstart 的文本消息、状态、工具调用、问题集和完成结果都
 
 原始 `chatItems` 不直接参与分组。`transcriptModel` 先把它们归一化为可见 presentation，过滤没有可见文本的消息，并从 `toolPresentation` 读取工具是否占用发言方；随后只在这份可见序列上计算 `continued`。renderer 消费同一份 presentation，不再单独通过返回 `null` 改变可见性。
 
+助手文本在气泡展示边界按 GitHub Flavored Markdown 渲染，支持标题、强调、列表、链接、代码和表格等常用结构；流式增量仍以原始文本进入 transcript，不在状态层保存 HTML。Markdown 组件跳过原始 HTML，只允许 HTTP、HTTPS、邮件、站内路径和锚点链接，并且不展示远程图片。用户消息保持纯文本，用户输入的 Markdown 标记不会改变气泡结构。
+
 流式 `Thinking` 和请求错误是临时的 assistant turn，也参与相同的分组规则：如果前一个可归属项已经是 assistant，它们复用该组的头像和名称；如果前一个可归属项是 user，它们开启新的 assistant 组。请求错误只有这一份临时 turn，不再同时写入永久 status item。普通状态行以及 `list_environments`、`list_vaults`、`flag_schedule_intent` 这类紧凑状态工具不占用发言方，也不切断前后的视觉消息组。
 
 ```mermaid
@@ -113,6 +115,7 @@ flowchart LR
   Components --> Transcript["transcriptModel：可见 presentation 与 continued"]
   Transcript --> TurnGroup["QuickstartTurnGroup：视觉消息分组 interface"]
   TurnGroup --> ChatLayout["chatLayout：头像、名称、间距与状态 turn"]
+  ChatLayout --> Markdown["shared/ui/markdown-content：安全 Markdown 呈现"]
   Components --> Chat["chatModel：文本与聊天状态"]
   Components --> Questions["questions/：问题集状态、编辑与回看"]
   Questions --> QuestionModel["questionModel：问题 payload 解析"]
@@ -146,6 +149,7 @@ flowchart LR
 - 待回答与已完成的问题卡都位于 transcript 内，不存在独立 pinned interaction 容器。
 - 连续同一发言方的消息只在组首显示头像和名称。
 - 流式与错误 turn 遵循同一分组规则，不重复显示连续 assistant 组的头像和名称。
+- 助手消息正确渲染常用 Markdown，原始 HTML 和危险 URL 不产生可执行或可点击内容；用户消息仍按纯文本展示。
 - `flag_schedule_intent` 以紧凑状态行保留在 transcript 中；未知工具保持既有的人类可读 fallback 和 Terminal 图标。
 - 窄屏模式隐藏可见步骤名称、缩短连接线、无横向溢出，进度条仍居中且完整名称可被辅助技术读取。
 - 缺少 `AuthProvider` 时不静默降级；测试环境显式注入认证上下文。
