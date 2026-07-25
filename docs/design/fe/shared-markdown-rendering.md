@@ -1,10 +1,10 @@
-# 模型输出 Markdown 统一渲染
+# 网页前端 Markdown 与 Mermaid 统一渲染
 
 ## 背景
 
-模型生成文本会同时出现在 Managed Agents Quickstart、Session transcript 和 Workbench。各功能自行解析 Markdown 会造成语法覆盖、安全策略和流式行为不一致，因此这些展示边界统一复用 `shared/ui/markdown-content`。
+Markdown 内容会出现在 Managed Agents Quickstart、Session transcript 和 Workbench 等网页前端界面。内容可能来自模型、用户或其他数据源；各功能自行解析 Markdown 会造成语法覆盖、安全策略和流式行为不一致，因此需要统一复用 `shared/ui/markdown-content`，并由消费页面明确决定哪些内容启用富文本渲染。
 
-共享组件只负责把不可信的模型文本呈现为安全 DOM，不改变 SSE 状态、API payload 或持久化值。功能层始终保存原始文本，渲染层不回写 HTML。
+共享组件只负责把不可信的 Markdown 文本呈现为安全 DOM，不改变 SSE 状态、API payload 或持久化值。功能层始终保存原始文本，渲染层不回写 HTML。
 
 ## 消费边界
 
