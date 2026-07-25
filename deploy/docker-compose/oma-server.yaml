@@ -27,7 +27,7 @@ storage:
     force_path_style: true
 
 anthropic_upstream:
-  # Replace this with the private company AI gateway in oma-server.local.yaml.
+  # Replace this with the configured AI Gateway in oma-server.local.yaml.
   # Public anthropic.com hosts are rejected.
   base_url: https://ai-gateway.example.internal
   api_key: ""

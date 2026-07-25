@@ -25,7 +25,7 @@ storage:
     force_path_style: true
 
 anthropic_upstream:
-  # Replace both values with the private company AI gateway deployment.
+  # Replace both values with the configured AI Gateway.
   # Public anthropic.com hosts are rejected.
   base_url: https://ai-gateway.example.internal
   api_key: replace-with-your-gateway-key
