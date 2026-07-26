@@ -1704,7 +1704,7 @@ export function registerManagedAgentsAgentsTests() {
     // nodes — a stale reference would silently no-op the second click.
     const clickDay = (day: number) => {
       const isoDay = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const button = document.querySelector<HTMLButtonElement>(`[data-day="${isoDay}"] button`);
+      const button = document.querySelector<HTMLButtonElement>(`button[data-day="${isoDay}"]`);
       expect(button).toBeTruthy();
       act(() => {
         fireEvent.click(button!);

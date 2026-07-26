@@ -5,6 +5,14 @@ import { DayPicker, getDefaultClassNames, type DayButton } from 'react-day-picke
 import { cn } from '@/shared/lib/utils';
 import { Button, buttonVariants } from '@/shared/ui/button';
 
+function calendarDayKey(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 function Calendar({
   className,
   classNames,
@@ -139,7 +147,7 @@ function CalendarDayButton({ className, day, modifiers, ...props }: React.Compon
       ref={ref}
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={calendarDayKey(day.date)}
       data-selected-single={
         modifiers.selected && !modifiers.range_start && !modifiers.range_end && !modifiers.range_middle
       }
