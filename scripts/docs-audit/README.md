@@ -30,7 +30,7 @@ python3 scripts/docs-audit/test_classify_changes.py
 
 Or: `just docs-audit` / `just docs-audit-diff` / `just docs-audit-test`.
 
-Docs agent (after merge / with secrets). Model must match DuckPR Review
+Docs agent (for an open same-repository PR / with secrets). Model must match DuckPR Review
 (successful runs use e.g. `anthropic/glm-5.2` + `LLM_BASE_URL=https://api.kimi.com/coding/`).
 Do **not** default to Claude models — this repo's DuckPR wiring is Kimi/OpenCode.
 
@@ -60,7 +60,7 @@ Edit `surface_map.md`. Tracked surface types:
 
 Mapping targets:
 
-```
+```text
 SurfaceID -> docs/design/path.md
 SurfaceID -> internal
 SurfaceID -> gated:<reason>

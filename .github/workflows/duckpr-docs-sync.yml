@@ -41,12 +41,7 @@ on:
     types: [created]
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  actions: read
-  checks: read
-  id-token: write
+  contents: read
 
 concurrency:
   group: duckpr-docs-sync-${{ github.event.issue.number || inputs.pr_number }}
@@ -64,6 +59,7 @@ jobs:
         github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
         github.actor != 'github-actions[bot]' &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
         (
           contains(github.event.comment.body, '@duckpr docs') ||
           contains(github.event.comment.body, '@pullfrog docs')
@@ -71,10 +67,15 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     outputs:
       pr_number: ${{ steps.ctx.outputs.pr_number }}
       head_ref: ${{ steps.ctx.outputs.head_ref }}
       head_sha: ${{ steps.ctx.outputs.head_sha }}
+      same_repo: ${{ steps.ctx.outputs.same_repo }}
       run_agent: ${{ steps.ctx.outputs.run_agent }}
     steps:
       - name: Resolve PR context
@@ -123,19 +124,24 @@ jobs:
             core.setOutput("html_url", pr.html_url || "");
             // Only run LLM agent on same-repo PRs (fork PRs cannot be pushed safely).
             const sameRepo = pr.head.repo.full_name === `${context.repo.owner}/${context.repo.repo}`;
+            core.setOutput("same_repo", sameRepo ? "true" : "false");
             core.setOutput("run_agent", (!skipAgent && sameRepo) ? "true" : "false");
             if (!sameRepo) {
-              core.warning(`PR head is ${pr.head.repo.full_name}; skipping LLM agent (push unsafe on forks).`);
+              core.warning(`PR head is ${pr.head.repo.full_name}; use Design Doc Surface Audit for fork PRs.`);
             }
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+        if: steps.ctx.outputs.same_repo == 'true'
         with:
           # Checkout the PR branch tip so audit matches what the agent will see.
+          repository: ${{ steps.ctx.outputs.head_repo }}
           ref: ${{ steps.ctx.outputs.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Run surface audit
         id: audit
+        if: steps.ctx.outputs.same_repo == 'true'
         run: |
           set +e
           python3 scripts/docs-audit/test_audit_design_docs.py
@@ -168,6 +174,7 @@ jobs:
           cat /tmp/docs-audit.txt
 
       - name: Comment audit on PR
+        if: steps.ctx.outputs.same_repo == 'true'
         uses: actions/github-script@v7
         env:
           PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
@@ -213,6 +220,10 @@ jobs:
     if: needs.audit-comment.outputs.run_agent == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - name: Create DuckPR GitHub App token
         id: duckpr-token
@@ -225,7 +236,7 @@ jobs:
           permission-checks: read
           permission-actions: read
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Must check out the branch name (not detached SHA) so agent can push.
           repository: ${{ github.repository }}
@@ -240,7 +251,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout private Pullfrog source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: superduck-ai/pullfrog-private
           ref: main
@@ -277,11 +288,11 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
-            const { data: files } = await github.rest.pulls.listFiles({
+            const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
-              per_page: 300,
+              per_page: 100,
             });
             const paths = files.map((f) => f.filename);
             require("fs").writeFileSync("/tmp/changed-paths.txt", paths.join("\n") + "\n");
@@ -324,12 +335,12 @@ jobs:
               repo: context.repo.repo,
               pull_number: prNumber,
             });
-            // changed_files: paths + +/- stats. Bounded to keep prompt sane.
-            const { data: files } = await github.rest.pulls.listFiles({
+            // changed_files: complete paginated paths + +/- stats.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
-              per_page: 300,
+              per_page: 100,
             });
             const changedFiles = files
               .map((f) => `${f.status.padEnd(9)} +${f.additions}/-${f.deletions}  ${f.filename}`)
@@ -373,7 +384,7 @@ jobs:
             // Trusted (workflow-produced) blocks use stable XML tags — these
             // contain no user-controlled content and the agent can trust them.
             const trustedParts = [
-              `<changed_files> (${files.length} file${files.length === 1 ? "" : "s"}, max 300 shown)`,
+              `<changed_files> (${files.length} file${files.length === 1 ? "" : "s"})`,
               "Format: <status> +<additions>/-<deletions>  <filename>",
               changedFiles || "(none)",
               "</changed_files>",
@@ -387,12 +398,30 @@ jobs:
               "</audit_findings>",
               "",
             ];
+            function validatedJsonFromPath(p, kind) {
+              if (!p || !fs.existsSync(p)) return null;
+              try {
+                const raw = fs.readFileSync(p, "utf8");
+                const value = JSON.parse(raw);
+                if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+                if (kind === "classify") {
+                  if (!Array.isArray(value.files) || typeof value.verdict?.action !== "string") return null;
+                } else if (!Number.isInteger(value.exit_code) || !Array.isArray(value.findings)) {
+                  return null;
+                }
+                return JSON.stringify(value, null, 2);
+              } catch {
+                return null;
+              }
+            }
             function classifyJsonFromPath(p) {
-              if (p && fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+              const value = validatedJsonFromPath(p, "classify");
+              if (value) return value;
               return "(classify JSON unavailable — run classify_changes.py yourself, step 2a)";
             }
             function auditJsonFromPath(p) {
-              if (p && fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+              const value = validatedJsonFromPath(p, "audit");
+              if (value) return value;
               return "(pre-sync audit JSON unavailable — run audit_design_docs.py yourself, step 1)";
             }
 
@@ -509,7 +538,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.ANTHROPIC_AUTH_TOKEN || secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ inputs.llm_base_url || vars.LLM_BASE_URL || vars.ANTHROPIC_BASE_URL }}
           ANTHROPIC_AUTH_TOKEN: ${{ secrets.LLM_API_KEY || secrets.ANTHROPIC_AUTH_TOKEN || secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.LLM_API_KEY || secrets.ANTHROPIC_AUTH_TOKEN || secrets.ANTHROPIC_API_KEY }}
           PULLFROG_MODEL: ${{ steps.model.outputs.model }}
           PULLFROG_AGENT: opencode
           # Avoid debug logging in CI — it can echo prompt content, model
@@ -528,11 +557,55 @@ jobs:
           git pull --quiet --ff-only origin "${HEAD_REF}" 2>/dev/null || true
           python3 scripts/docs-audit/audit_design_docs.py --diff --output /tmp/docs-audit-after.json > /tmp/docs-audit-after.txt 2>&1
           after_code=$?
-          high_after=$(python3 -c "import json;d=json.load(open('/tmp/docs-audit-after.json'));print(sum(1 for f in d.get('findings',[]) if f.get('severity')=='high'))" 2>/dev/null || echo "?")
+          python3 - <<'PY' > /tmp/docs-audit-comparison.txt
+          import json
+          from pathlib import Path
+
+          before = json.loads(Path("/tmp/docs-audit-before.json").read_text())
+          after = json.loads(Path("/tmp/docs-audit-after.json").read_text())
+          classify = json.loads(Path("/tmp/classify.json").read_text())
+          changed_paths = set(Path("/tmp/changed-paths.txt").read_text().splitlines())
+          owned_types = {
+              item.get("surface_hint")
+              for item in classify.get("files", [])
+              if item.get("action") in {"must_document", "should_document"}
+              and item.get("surface_hint")
+          }
+
+          def identity(finding):
+              return "/".join(
+                  str(finding.get(key, ""))
+                  for key in ("surface_type", "surface_id", "kind")
+              )
+
+          def is_owned(finding):
+              if finding.get("severity") != "high":
+                  return False
+              surface_type = finding.get("surface_type")
+              surface_id = str(finding.get("surface_id", ""))
+              if surface_type == "migrations":
+                  return any(path.endswith("/" + surface_id) for path in changed_paths)
+              if surface_type == "packages":
+                  prefix = f"internal/{surface_id}/"
+                  return any(path.startswith(prefix) for path in changed_paths)
+              return surface_type in owned_types
+
+          before_owned = {identity(f) for f in before.get("findings", []) if is_owned(f)}
+          after_owned = {identity(f) for f in after.get("findings", []) if is_owned(f)}
+          before_global = sum(f.get("severity") == "high" for f in before.get("findings", []))
+          after_global = sum(f.get("severity") == "high" for f in after.get("findings", []))
+          print(f"- owned high findings: `{len(before_owned)}` → `{len(after_owned)}`")
+          print(f"- global high findings (supplemental): `{before_global}` → `{after_global}`")
+          unresolved = sorted(before_owned & after_owned)
+          added = sorted(after_owned - before_owned)
+          print(f"- unresolved owned identities: `{', '.join(unresolved) if unresolved else 'none'}`")
+          print(f"- new owned identities: `{', '.join(added) if added else 'none'}`")
+          PY
           {
             echo "## Post-sync audit"
             echo
-            echo "- pre-sync: \`${HIGH_BEFORE}\` high findings → post-sync: \`${high_after}\` high findings (audit exit \`${after_code}\`)"
+            echo "- audit exit: \`${after_code}\`"
+            cat /tmp/docs-audit-comparison.txt
             echo
             echo "<details><summary>Audit report (after)</summary>"
             echo
@@ -542,12 +615,11 @@ jobs:
             echo '```'
             echo "</details>"
           } >> "${GITHUB_STEP_SUMMARY}"
-          echo "Post-sync audit: exit=$after_code high_before=${HIGH_BEFORE} high_after=$high_after"
+          echo "Post-sync audit: exit=$after_code"
           # Non-fatal: the agent already pushed. This step only reports drift.
           exit 0
         env:
           HEAD_REF: ${{ needs.audit-comment.outputs.head_ref }}
-          HIGH_BEFORE: ${{ steps.audit-before.outputs.high_before }}
 
       - name: Notify on docs-sync failure
         if: failure()

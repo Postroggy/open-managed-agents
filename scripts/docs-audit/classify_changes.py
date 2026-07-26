@@ -74,7 +74,7 @@ EXCLUDE_PATH_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\.(md|mdx)$"), "documentation file"),
     (re.compile(r"^(\.env|docker-compose|Makefile|justfile|Taskfile)"), "build/dev config"),
     (re.compile(r"\.(lock|sum|mod)$"), "lockfile / module manifest"),
-    (re.compile(r"^\.github/(dependabot|codeowners|mergify)"), "repo meta config"),
+    (re.compile(r"^\.github/(dependabot|CODEOWNERS|mergify)"), "repo meta config"),
 ]
 
 # Config-only Go packages: changes here are infra/config, not behavior.

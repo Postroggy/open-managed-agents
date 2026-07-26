@@ -93,7 +93,7 @@ docs-audit-snapshot:
 
 # Classify whether a PR's changed files need design-doc updates.
 # Usage: just docs-classify path1 path2 ...
-docs-classify paths:
+docs-classify *paths:
   python3 scripts/docs-audit/classify_changes.py --files {{paths}}
 
 web-complexity:

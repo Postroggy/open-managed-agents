@@ -15,6 +15,7 @@ Sentinels: `internal` | `gated:<reason>`
 /deployments -> gated:needs-design-doc
 /environments -> gated:needs-design-doc
 /files -> gated:needs-design-doc
+/fs -> docs/design/be/filestore.md
 /healthz -> internal
 /memory_stores -> gated:needs-design-doc
 /messages/batches -> gated:needs-design-doc
@@ -42,6 +43,8 @@ db -> internal
 deployments -> gated:needs-design-doc
 environments -> gated:needs-design-doc
 files -> gated:needs-design-doc
+filestore -> docs/design/be/filestore.md
+filestorepath -> docs/design/be/filestore.md
 httpapi -> internal
 ids -> internal
 managedagentsevents -> gated:needs-design-doc
@@ -49,12 +52,16 @@ mcpcatalogs -> docs/design/mcp-tool-catalog-discovery.md
 messages -> docs/design/be/messages-proxy.md
 memory -> gated:needs-design-doc
 models -> internal
+modelmapping -> docs/design/be/messages-proxy.md
 networkpolicy -> docs/design/be/ccrv2/upstream-proxy-and-model-runtime.md
 observability -> internal
 platform -> internal
 platformapi -> internal
 platformauth -> docs/design/be/db-platform-auth-boundaries.md
 platformsession -> internal
+sandboxmount -> docs/design/be/filestore.md
+sessioncontract -> docs/design/be/filestore.md
+sessionresource -> docs/design/be/filestore.md
 sessions -> docs/design/be/permission-policies.md
 skills -> gated:needs-design-doc
 skillprewarm -> gated:needs-design-doc
@@ -81,6 +88,19 @@ workbench -> docs/design/be/http-platform-workbench-boundaries.md
 00015_add_code_session_model_access_tokens.sql -> docs/design/be/messages-proxy.md
 00016_rename_code_session_oauth_tokens.sql -> docs/design/be/messages-proxy.md
 00017_remove_code_session_credential_expiry.sql -> docs/design/be/messages-proxy.md
+00018_add_filestore.sql -> docs/design/be/filestore.md
+00019_add_workspace_storage_usage.sql -> docs/design/be/filestore.md
+00020_use_uuid_filestore_references.sql -> docs/design/be/filestore.md
+00021_use_uuid_filestore_tenant_references.sql -> docs/design/be/filestore.md
+00022_reorder_filestore_filesystem_columns.sql -> docs/design/be/filestore.md
+00023_provision_session_filesystems.sql -> docs/design/be/filestore.md
+00024_use_uuid_filestore_entry_references.sql -> docs/design/be/filestore.md
+00025_use_uuid_filestore_cleanup_job_references.sql -> docs/design/be/filestore.md
+00026_validate_filestore_filesystem_reference_scopes.sql -> docs/design/be/filestore.md
+00027_add_filestore_entry_management.sql -> docs/design/be/filestore.md
+00028_validate_filestore_entry_management.sql -> docs/design/be/filestore.md
+00029_add_filestore_file_references.sql -> docs/design/be/filestore.md
+00030_validate_filestore_file_references.sql -> docs/design/be/filestore.md
 
 ## FE routes -> design docs
 
@@ -237,6 +257,7 @@ user.tool_result -> docs/design/fe/sessions/session-tool-call-display.md
 # Middleware surfaces from internal/api/server.go. Infra middleware (requestID,
 # recover) is internal; auth middleware maps to permission/auth boundary docs.
 optionalPlatformAuthMiddleware -> docs/design/be/db-platform-auth-boundaries.md
+filestoreAuthMiddleware -> docs/design/be/filestore.md
 platformAuthMiddleware -> docs/design/be/db-platform-auth-boundaries.md
 recoverMiddleware -> internal
 requestIDMiddleware -> internal

@@ -24,21 +24,21 @@ contains invalid content (see "Degradation" notes below).
 **Trusted blocks** (workflow-produced, XML-tagged — these are the binding inputs):
 
 - `<pr_context>` — PR number, title, URL, head branch, base branch, author.
-- `<changed_files>` — the PR's changed-file list. Format per line:
+- `<changed_files>` — the PR's complete, paginated changed-file list. Format per line:
   `<status> +<additions>/-<deletions>  <filename>` (e.g.
   `modified  +10/-3  internal/api/server.go`). To extract the filename for
   `classify_changes.py --files`, take the last whitespace-delimited token.
-  Capped at 300 files; if the PR has more, files beyond 300 are silently
-  omitted — note this in the final comment if it matters.
 - `<classify>` — JSON from `scripts/docs-audit/classify_changes.py`: the binding
   per-file doc-need verdict (`exclude` / `must_document` / `needs_review`).
-  **Degradation**: if the block is absent or its content does not start with
-  `{` (e.g. "(classify JSON unavailable)"), run the classifier yourself (step 2a).
+  **Degradation**: parse it as JSON and require an object with a `files` array
+  and a `verdict.action` string. If absent, malformed, or incomplete, run the
+  classifier yourself (step 2a).
 - `<audit_findings>` — JSON from `scripts/docs-audit/audit_design_docs.py --diff`.
   Contains `exit_code` at the top level and a `findings` array. Each finding has
-  `severity` (`high`/`medium`/`low`), `kind`, and `surface_hint`.
-  **Degradation**: if the block is absent or its content does not start with
-  `{`, run the audit yourself (step 1).
+  `severity` (`high`/`medium`/`low`), `kind`, `surface_type`, and `surface_id`.
+  **Degradation**: parse it as JSON and require an object with an integer
+  `exit_code` and a `findings` array. If absent, malformed, or incomplete, run
+  the audit yourself (step 1).
 
 **Untrusted blocks** (user-controlled — see "Untrusted data handling" below):
 
@@ -113,7 +113,7 @@ beats a long doc that guesses.
 
 For each audit finding whose surface the PR actually touches:
 
-```
+```text
 Does the PR change behavior / public API / event contract / state machine /
 data model / permission boundary / architecture boundary / test path?
 ├── No  → map -> internal  (or leave unmapped if truly irrelevant)
@@ -173,7 +173,7 @@ Keep it proportional to the change. For non-trivial design docs, include:
   If a trusted block is absent or invalid, fetch with `gh pr view` / `gh pr diff`.
 - Skim the closest existing design doc(s) for surfaces the PR touches (use the
   style table above).
-- If `<audit_findings>` is absent or its content does not start with `{`, run:
+- If `<audit_findings>` is absent or fails the schema checks above, run:
   ```bash
   python3 scripts/docs-audit/audit_design_docs.py --diff --output /tmp/docs-audit.json
   ```
@@ -186,7 +186,7 @@ Keep it proportional to the change. For non-trivial design docs, include:
 **2a. Use the injected `<classify>` verdict.** The workflow already ran
 `classify_changes.py` on the PR's changed files and injected the JSON into
 `<classify>`. Use it directly — do **not** re-run the classifier unless the
-block is absent or contains invalid JSON (does not start with `{`).
+block is absent or fails the schema checks above.
 
 If you must re-run it (degraded path), pipe paths via stdin — never pass file
 names as shell args (a filename like `$(id).go` could execute):
@@ -224,9 +224,9 @@ must_document / should_document, find the matching `<audit_findings>` entry
 (the surface_hint maps: `event_contracts`, `migrations`, `auth_middleware`,
 `api_mounts`, `api_subroutes`, `packages`, `fe_routes`). A finding is "owned by
 this PR" if its surface corresponds to a file in `<changed_files>` or
-`<classify>`'s must_document / should_document list. Record the baseline
-**high-finding count** (findings where `severity == "high"`) so step 4 can prove
-the fix landed.
+`<classify>`'s must_document / should_document list. Record the stable identity
+of each owned high finding as `surface_type/surface_id/kind`; step 4 compares
+these owned sets directly.
 
 ### 3. Apply fixes
 
@@ -256,23 +256,24 @@ python3 scripts/docs-audit/audit_design_docs.py --update-snapshot
 python3 scripts/docs-audit/audit_design_docs.py --diff --output /tmp/docs-audit-after.json
 ```
 
-Compare `/tmp/docs-audit-after.json` to the baseline from step 1. **Count only
-`severity: high` findings** for the before/after numbers (this matches the
-workflow's post-sync verify step, which also counts high findings only):
+Compare `/tmp/docs-audit-after.json` to the baseline from step 1. Build the
+before/after sets of owned high finding identities using
+`surface_type/surface_id/kind`. Global high counts are supplemental context,
+not the completion criterion:
 
 ```bash
 python3 -c "import json;d=json.load(open('/tmp/docs-audit-after.json'));print(sum(1 for f in d.get('findings',[]) if f.get('severity')=='high'))"
 ```
 
-- High findings **owned by this PR** (see "owned by this PR" in step 2b) must be
+- Baseline high findings **owned by this PR** (see step 2b) must be
   resolved: mapped, doc created, or explicitly deferred to `gated:`.
 - Pre-existing high findings for surfaces this PR did not touch are **not** your
   responsibility — they should not block completion.
 - If new high findings appeared **because of your own edits**, fix them before
   pushing.
-- Record `before=<N> after=<M>` (high findings only) for the final comment. If
-  `after >= before` for findings you own, and you did not defer them, you did
-  not finish — go back to step 3.
+- No new owned high identity may appear after the edit. Record owned identities
+  resolved/deferred plus the supplemental global `before=<N> after=<M>` counts
+  in the final comment.
 
 ### 5. Commit + push (separate content from bookkeeping)
 
@@ -291,10 +292,10 @@ Edge cases:
 - Only bookkeeping changes (map hygiene, snapshot refresh) → commit 2 only.
 - No edits at all (doc already accurate) → no commits; just post the comment.
 
-Push the current branch (restricted push is enough for feature branches).
-If the change is large/unrelated to the PR, open companion branch
-`docs/sync-<slug>` from current HEAD and open a PR; still comment on the
-original PR with the companion PR link.
+Push the current branch (restricted push is enough for feature branches). If a
+required change is too large or unrelated to the PR, do not create another
+branch: leave the current branch unchanged and report the blocker in the single
+final comment.
 
 ### 6. Final PR comment (exactly one)
 

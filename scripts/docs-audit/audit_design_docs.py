@@ -136,21 +136,45 @@ _CODE_SESSION_PREFIX_RE = re.compile(
 _FE_PATH_RE = re.compile(r"""^\s*path:\s*['"]([^'"]+)['"]\s*,?\s*$""", re.MULTILINE)
 
 
+def extract_go_function_body(text: str, function_name: str) -> str | None:
+    signature = re.search(
+        rf"func\s+\(s\s+\*Server\)\s+{re.escape(function_name)}\([^)]*\)\s*\{{",
+        text,
+    )
+    if not signature:
+        return None
+    body_start = signature.end()
+    depth = 1
+    for index in range(body_start, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[body_start:index]
+    return None
+
+
 def extract_api_mounts(server_go: Path, codesessions_go: Path | None = None) -> list[str]:
     surfaces: set[str] = set()
     if not server_go.exists():
         return []
     text = server_go.read_text(encoding="utf-8")
-    block_match = re.search(
-        r"func \(s \*Server\) mountSharedV1Resources\(r chi\.Router\) \{(?P<body>.*?\n)\}",
-        text,
-        re.DOTALL,
-    )
-    block = block_match.group("body") if block_match else text
-    for match in _MOUNT_RE.finditer(block):
-        surfaces.add(match.group(1))
-    for match in _POST_PATH_RE.finditer(block):
-        surfaces.add(match.group(1))
+    core_block = extract_go_function_body(text, "registerAuthenticatedV1Routes")
+    if core_block is None:
+        core_block = extract_go_function_body(text, "mountSharedV1Resources")
+    if core_block is None:
+        return []
+    blocks = [core_block]
+    for function_name in ("registerVersionedAPIRoutes", "registerPlatformConsoleRoutes"):
+        block = extract_go_function_body(text, function_name)
+        if block is not None:
+            blocks.append(block)
+    for block in blocks:
+        for match in _MOUNT_RE.finditer(block):
+            surfaces.add(match.group(1))
+        for match in _POST_PATH_RE.finditer(block):
+            surfaces.add(match.group(1))
     if 'router.Get("/healthz"' in text or '.Get("/healthz"' in text:
         surfaces.add("/healthz")
     if codesessions_go and codesessions_go.exists():
@@ -543,6 +567,25 @@ def build_snapshot(extracted: dict[str, list[str]]) -> dict[str, Any]:
     }
 
 
+def validate_snapshot(snapshot: Any) -> dict[str, Any]:
+    if not isinstance(snapshot, dict):
+        raise ValueError("root must be an object")
+    if snapshot.get("schema_version") != SNAPSHOT_SCHEMA_VERSION:
+        raise ValueError(
+            f"unsupported schema_version {snapshot.get('schema_version')!r}; "
+            f"expected {SNAPSHOT_SCHEMA_VERSION}"
+        )
+    surfaces = snapshot.get("surfaces")
+    if not isinstance(surfaces, dict):
+        raise ValueError("surfaces must be an object")
+    for surface_type, items in surfaces.items():
+        if not isinstance(surface_type, str) or not isinstance(items, list) or not all(
+            isinstance(item, str) for item in items
+        ):
+            raise ValueError("surfaces must map string keys to arrays of strings")
+    return snapshot
+
+
 def diff_snapshots(old: dict[str, Any], new: dict[str, Any]) -> list[Finding]:
     findings: list[Finding] = []
     old_surfaces = old.get("surfaces", {})
@@ -550,13 +593,19 @@ def diff_snapshots(old: dict[str, Any], new: dict[str, Any]) -> list[Finding]:
     for surface_type in sorted(set(old_surfaces) | set(new_surfaces)):
         if surface_type not in old_surfaces:
             findings.append(
-                Finding("diff", surface_type, "surface_type_added", f"surface type `{surface_type}` newly tracked", "low")
+                Finding(
+                    surface_type,
+                    surface_type,
+                    "surface_type_added",
+                    f"surface type `{surface_type}` newly tracked",
+                    "low",
+                )
             )
             continue
         if surface_type not in new_surfaces:
             findings.append(
                 Finding(
-                    "diff",
+                    surface_type,
                     surface_type,
                     "surface_type_removed",
                     f"surface type `{surface_type}` no longer tracked",
@@ -568,12 +617,12 @@ def diff_snapshots(old: dict[str, Any], new: dict[str, Any]) -> list[Finding]:
         new_set = set(new_surfaces[surface_type])
         for item in sorted(new_set - old_set):
             findings.append(
-                Finding("diff", item, "added", f"added {surface_type} `{item}` — map it or mark internal/gated")
+                Finding(surface_type, item, "added", f"added {surface_type} `{item}` — map it or mark internal/gated")
             )
         for item in sorted(old_set - new_set):
             findings.append(
                 Finding(
-                    "diff",
+                    surface_type,
                     item,
                     "removed",
                     f"removed {surface_type} `{item}` — prune surface_map and verify docs",
@@ -618,28 +667,20 @@ def print_report(result: AuditResult, diff_findings: list[Finding] | None = None
             print(f"  [{severity}] {f.surface_type}/{f.kind}: {f.message}")
 
 
+def finding_to_json(finding: Finding) -> dict[str, str]:
+    return {
+        "surface_type": finding.surface_type,
+        "surface_id": finding.surface_id,
+        "kind": finding.kind,
+        "severity": finding.severity,
+        "message": finding.message,
+    }
+
+
 def result_to_json(result: AuditResult, diff_findings: list[Finding] | None = None) -> dict[str, Any]:
-    findings = [
-        {
-            "surface_type": f.surface_type,
-            "surface_id": f.surface_id,
-            "kind": f.kind,
-            "severity": f.severity,
-            "message": f.message,
-        }
-        for f in result.findings
-    ]
+    findings = [finding_to_json(finding) for finding in result.findings]
     if diff_findings:
-        findings.extend(
-            {
-                "surface_type": f.surface_type,
-                "surface_id": f.surface_id,
-                "kind": f.kind,
-                "severity": f.severity,
-                "message": f.message,
-            }
-            for f in diff_findings
-        )
+        findings.extend(finding_to_json(finding) for finding in diff_findings)
     return {
         "extracted": result.extracted,
         "accounting": result.accounting,
@@ -673,7 +714,11 @@ def main(argv: list[str] | None = None) -> int:
         if not args.snapshot.exists():
             print(f"snapshot missing: {args.snapshot}", file=sys.stderr)
             return 2
-        old = json.loads(args.snapshot.read_text(encoding="utf-8"))
+        try:
+            old = validate_snapshot(json.loads(args.snapshot.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, OSError, ValueError) as exc:
+            print(f"snapshot invalid: {exc}", file=sys.stderr)
+            return 2
         diff_findings = diff_snapshots(old, snapshot)
         if diff_findings and result.exit_code == 0:
             result.exit_code = 1

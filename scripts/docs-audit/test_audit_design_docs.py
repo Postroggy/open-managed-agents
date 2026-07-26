@@ -21,6 +21,7 @@ from audit_design_docs import (
     extract_migrations,
     extract_packages,
     parse_surface_map,
+    validate_snapshot,
 )
 
 
@@ -97,6 +98,15 @@ func (s *Service) RegisterRoutes(router chi.Router) {
         self.assertIn("/agents:search", mounts)
         self.assertIn("/healthz", mounts)
         self.assertIn("/v1/code/sessions", mounts)
+
+    def test_extract_api_mounts_fails_closed_when_mount_function_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            server_path = Path(tmp) / "server.go"
+            server_path.write_text(
+                'package api\nfunc register(r chi.Router) { r.Mount("/platform", handler) }\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(extract_api_mounts(server_path), [])
 
     def test_extract_packages_migrations_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -361,6 +371,14 @@ class SnapshotDiffTests(unittest.TestCase):
         snap = build_snapshot({"api_mounts": ["/a"], "packages": ["p"]})
         loaded = json.loads(json.dumps(snap))
         self.assertEqual(loaded["schema_version"], 1)
+
+    def test_snapshot_rejects_unknown_schema_version(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported schema_version"):
+            validate_snapshot({"schema_version": 2, "surfaces": {}})
+
+    def test_snapshot_rejects_invalid_surface_values(self) -> None:
+        with self.assertRaisesRegex(ValueError, "arrays of strings"):
+            validate_snapshot({"schema_version": 1, "surfaces": {"packages": "agents"}})
 
 
 class FloorConstantTests(unittest.TestCase):

@@ -32,13 +32,13 @@
 
 `api_subroutes` / `event_contracts` / `auth_middleware` 是补盲区新增的三类——此前 audit 只看顶层 Mount，无法发现某个包内新增的子路由、事件契约变更、鉴权中间件调整。
 
-每类有 `EXTRACTION_FLOORS` 下限。提取数低于下限视为解析器损坏（layout 变化），直接 exit 2，而非报告逐项缺失。
+每类有 `EXTRACTION_FLOORS` 下限。核心路由注册函数无法识别或提取数低于下限时，视为解析器损坏（layout 变化），直接 exit 2，而非退回扫描整个 `server.go` 后报告逐项缺失。
 
 ### Surface map 三态
 
 `scripts/docs-audit/surface_map.md` 把每个 surface 映射到三种状态之一：
 
-```
+```text
 <surface> -> docs/design/<area>.md   # 已有设计文档
 <surface> -> internal                # 基础设施/无设计关切，无需文档
 <surface> -> gated:<reason>          # 明确推迟（如 gated:needs-design-doc）
@@ -65,7 +65,7 @@
 
 ### Snapshot 漂移
 
-`surface_snapshot.json` 记录上次提交时的 surface 全集。`--diff` 比对当前提取与快照，报告 added/removed surface。`--update-snapshot` 在 surface 变化后刷新快照。快照让"新增了一个未映射 API"这类增量可被自动化捕获，而非只靠人来发现。
+`surface_snapshot.json` 记录上次提交时的 surface 全集。`--diff` 比对当前提取与快照，报告 added/removed surface。读取时会校验 JSON、`schema_version` 与 `surfaces` 字段结构，损坏或不兼容的快照以 exit 2 明确失败。`--update-snapshot` 在 surface 变化后刷新快照。
 
 ## 写入层：docs-sync
 
@@ -103,7 +103,7 @@ agent 在 SKILL.md step 2 把这个 verdict 作为**约束性输入消费**：ve
 **Trusted 块**（workflow 产出，agent 可信）：
 
 - `<pr_context>` — PR 号、标题、URL、head/base 分支、**作者**。
-- `<changed_files>` — 变更文件列表（`<status> +<add>/-<del>  <filename>` 格式，上限 300）。
+- `<changed_files>` — 通过 GitHub API 分页获取的完整变更文件列表（`<status> +<add>/-<del>  <filename>` 格式）。
 - `<classify>` — `classify_changes.py` 的判定 JSON（约束性 per-file triage）。
 - `<audit_findings>` — `audit_design_docs.py --diff` 的 JSON（pre-sync 基线，含 `exit_code` + `findings[]`）。
 
@@ -123,16 +123,17 @@ agent 在 SKILL.md step 2 把这个 verdict 作为**约束性输入消费**：ve
 
 untrusted 块还有长度上限（每块 20KB，DuckPR 侧 `extractDocsExtraPrompt` 另有 4KB 上限），防止 PR body 撑爆 agent 上下文。
 
-`<classify>` 和 `<audit_findings>` 共同构成写入层的判定输入：classify 决定"要不要写"，audit findings 决定"写哪些 surface"。agent 据此 triage 该 PR 实际 owns 哪些 finding（finding 的 surface 出现在 `<changed_files>` 或 `<classify>` 的 must/should 列表中），而非全盘处理。
+`<classify>` 和 `<audit_findings>` 在注入前都会解析 JSON 并校验最低 schema：前者必须包含 `files[]` 与 `verdict.action`，后者必须包含整数 `exit_code` 与 `findings[]`；校验失败时 agent 必须重跑确定性工具。两者共同决定"要不要写"和"写哪些 surface"。
 
 ### 安全边界
 
 docs-sync 的攻击面比 DuckPR Review 更大：它不仅消耗 LLM token，还推送代码到 PR 分支。因此有多层显式安全边界：
 
-- **权限门控**（DuckPR `dispatchDocsSync`）— `@duckpr docs` 触发者必须有仓库 `write` 及以上权限。Review 只把 authorPermission 作为 prompt context 传入；docs-sync 在 dispatch 前硬性拒绝低权限用户（`isPermissionAtLeast(perm, "write")`），失败时删 dedupe key 允许重试。这阻止任意 read 权限用户触发 LLM token 消耗。
+- **权限门控** — `issue_comment` 入口只接受 `OWNER` / `MEMBER` / `COLLABORATOR`；DuckPR `dispatchDocsSync` 同时要求触发者具有仓库 `write` 及以上权限。
+- **同仓执行边界** — 手动 docs-sync 只检出和执行同仓 PR 的脚本。fork PR 由 `pull_request` 触发的只读 `Design Doc Surface Audit` 覆盖，不进入带评论写权限的手动执行链。
+- **最小 token 权限** — workflow 顶层仅 `contents: read`；job 按需增加 `issues: write` / `pull-requests: read`。分支推送只使用 DuckPR App token，不给默认 `GITHUB_TOKEN` 内容写权限，也不申请未消费的 OIDC 权限。
 - **`--audit-only` 旁路** — `@duckpr docs --audit-only` 跳过 LLM agent，仅运行确定性 audit。适用于只需覆盖检查、token 敏感或低权限场景。
 - **`persist-credentials: false`** — checkout 步骤不把 DuckPR App token 写入 `.git/config`。Pullfrog 的 ASKPASS 机制（`utils/gitAuth.ts`）在每次 `$git()` 调用时通过本地 HTTP 服务器临时注入凭据，`setupGit()` 还会重写 origin URL 去掉嵌入的 token。即使 agent 被 prompt 注入，也无法通过 `git config --get-regexp http` 读到 App token。
-- **OIDC 环境变量清除**（Pullfrog `agents/opencode.ts` / `opencode_v2.ts` / `claude.ts`）— docs-sync 需要 `id-token: write` 来换取 Pullfrog API token，但 `ACTIONS_ID_TOKEN_REQUEST_URL` / `ACTIONS_ID_TOKEN_REQUEST_TOKEN` 等 OIDC 变量通过 `...process.env` 继承给 agent 子进程。spawn 前用 `DENIED_OVERRIDE_NAMES` 集合清除这些变量，阻止被注入的 agent 伪造 GitHub OIDC token。
 - **命令注入防御** — `classify_changes.py` 的文件路径通过 stdin 管道传递（`< /tmp/paths.txt`），不用 `--files $(cat ...)` 命令替换。攻击者在 PR 中添加 `$(id).go` 这类文件名不会触发 shell 执行。
 - **日志净化** — CI 日志不打印 `base_url` 完整 URL（只输出 `gateway=anthropic-compatible|unset`）；`LOG_LEVEL` 设为 `info` 而非 `debug`，避免 prompt 内容 / 模型请求 / 部分凭据写入 Actions 日志。
 
@@ -141,13 +142,13 @@ docs-sync 的攻击面比 DuckPR Review 更大：它不仅消耗 LLM token，还
 - Truth first：只写 PR diff / linked issue / 既有设计文档中能验证的行为；不清楚处留 `<!-- TODO -->` 或映射 `-> gated:<reason>`，禁止臆造字段/类型/状态机。
 - 决策优先级：更新既有文档 > 新建聚焦文档 > `-> internal` > `-> gated:<reason>` > 「无需更新」。多数 PR 的正确输出是"不写新文档"。
 - 只允许写 `docs/design/**`、`surface_map.md`、`surface_snapshot.json`；禁止改业务代码/测试/配置/workflow。
-- 只留一条总结评论（含 classify verdict + before→after finding 计数）。
+- 只留一条总结评论。完成条件按本 PR 所拥有的 high finding 稳定标识 `surface_type/surface_id/kind` 比较；全局 before→after 计数只作补充，不能掩盖 owned regression。
 - **commit 规范**：内容编辑（`docs/design/...`）与 bookkeeping 编辑（`surface_map.md` + `surface_snapshot.json`）分两个 commit，便于 review。
 - **reviewer 路由**：最终评论 `cc @<pr author>` 请其核实文档与代码改动一致。
 
 ### 写后验证
 
-agent 推送后，workflow 重跑 `audit_design_docs.py --diff` 取 after 快照，对比 pre-sync 的 high finding 计数，写入 job summary。这把"文档同步是否真的改善了 audit"变成可量化证据，而非只看 agent 评论的自述。
+agent 推送后，workflow 重跑 `audit_design_docs.py --diff` 取 after 快照。skill 要求比较本 PR 所拥有的 high finding 稳定标识，确认基线项已解决或明确 deferred，且没有新增 owned high finding；workflow 的全局计数写入 job summary 仅提供整体背景。
 
 ## 边界
 

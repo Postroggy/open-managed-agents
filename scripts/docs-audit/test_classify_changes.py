@@ -12,6 +12,10 @@ from classify_changes import classify_file, aggregate, main
 
 
 class ClassifyFileTests(unittest.TestCase):
+    def test_codeowners_is_excluded(self) -> None:
+        c = classify_file(".github/CODEOWNERS")
+        self.assertEqual(c.action, "exclude")
+
     def test_ci_workflow_excluded_high(self) -> None:
         c = classify_file(".github/workflows/ci.yml")
         self.assertEqual(c.action, "exclude")
