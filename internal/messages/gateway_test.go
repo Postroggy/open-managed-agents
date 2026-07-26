@@ -186,7 +186,7 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 		requests = append(requests, request)
 		w.Header().Set("Content-Type", "application/json")
 		if len(requests) == 1 {
-			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"web_search\",\"input\":{\"query\":\"golang release\",\"max_uses\":1,\"allowed_domains\":[\"go.dev\"]}}],\"stop_reason\":\"tool_use\"}")
+			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"web_search\",\"input\":{\"query\":\"golang release\"}}],\"stop_reason\":\"tool_use\"}")
 			return
 		}
 		_, _ = io.WriteString(w, "{\"id\":\"msg_final\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}")
@@ -195,7 +195,7 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Go", URL: "https://go.dev", Snippet: "release"}}}}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxToolLoops: 2}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher)
-	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[{\"role\":\"user\",\"content\":\"search\"}],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
+	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[{\"role\":\"user\",\"content\":\"search\"}],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\",\"max_uses\":1,\"allowed_domains\":[\"go.dev\"]}]}")
 	response, handled, err := gateway.handle(context.Background(), body, "beta=true", http.Header{"Anthropic-Version": []string{"2023-06-01"}})
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
@@ -220,6 +220,9 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 	if !ok || len(tools) != 1 || tools[0].(map[string]any)["name"] != searchToolName {
 		t.Fatalf("projected tools = %#v", requests[0]["tools"])
 	}
+	if strings.Contains(string(encodedFirstRequest), "allowed_domains") || strings.Contains(string(encodedFirstRequest), "max_uses") {
+		t.Fatalf("caller search policy leaked into model-controlled tool input: %s", encodedFirstRequest)
+	}
 	messages, ok := requests[1]["messages"].([]any)
 	if !ok || len(messages) != 3 {
 		t.Fatalf("continuation messages = %#v", requests[1]["messages"])
@@ -231,6 +234,52 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 	content := final["content"].([]any)
 	if content[0].(map[string]any)["type"] != "server_tool_use" || content[1].(map[string]any)["type"] != "web_search_tool_result" {
 		t.Fatalf("projected content = %#v", content)
+	}
+}
+
+func TestGatewayEnforcesCallerMaxUses(t *testing.T) {
+	requestCount := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		if requestCount == 1 {
+			_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"tool_use","id":"toolu_1","name":"web_search","input":{"query":"first"}},{"type":"tool_use","id":"toolu_2","name":"web_search","input":{"query":"second"}}],"stop_reason":"tool_use"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`)
+	}))
+	defer upstream.Close()
+	searcher := &gatewayTestSearcher{}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher)
+	body := []byte(`{"messages":[],"tools":[{"type":"web_search_20250305","max_uses":1}]}`)
+	response, handled, err := gateway.handle(context.Background(), body, "", nil)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
+	}
+	if len(searcher.requests) != 1 || searcher.requests[0].Query != "first" {
+		t.Fatalf("provider requests = %#v, want only the first search", searcher.requests)
+	}
+	if !strings.Contains(string(response.body), "web_search_tool_result_error") {
+		t.Fatalf("max_uses response = %s, want an error result for the second call", response.body)
+	}
+}
+
+func TestGatewayRejectsUnsupportedCallerLocation(t *testing.T) {
+	requestCount := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requestCount++
+	}))
+	defer upstream.Close()
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{})
+	body := []byte(`{"messages":[],"tools":[{"type":"web_search_20250305","user_location":{"type":"approximate","country":"US"}}]}`)
+	_, handled, err := gateway.handle(context.Background(), body, "", nil)
+	if !handled || err == nil || !strings.Contains(err.Error(), "user_location is unsupported") {
+		t.Fatalf("handled = %v, err = %v, want explicit unsupported user_location error", handled, err)
+	}
+	if requestCount != 0 {
+		t.Fatalf("upstream requests = %d, want 0", requestCount)
 	}
 }
 

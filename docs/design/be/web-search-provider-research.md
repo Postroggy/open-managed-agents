@@ -1,7 +1,6 @@
 # Brave Search API 与 Exa Search API 调研
 
 > 调研范围：仅使用 Brave Search API 与 Exa 官方文档，核对搜索请求模式、搜索模式与参数、分页、内容获取、结果字段和鉴权方式，并评估当前 internal/websearch 抽象。
->
 > 调研日期：2026-07-22。
 > 实现状态：provider-neutral 类型已落地到 `internal/websearch/types.go`，并已接入 Tavily 与 Brave。Brave 当前支持 Web Search 的通用请求参数、结果映射和页式分页；Exa 的 provider-specific 参数和内容抓取尚未实现。
 

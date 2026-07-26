@@ -44,7 +44,7 @@ sequenceDiagram
     OMA-->>CC: server_tool_use + web_search_tool_result + final content
 ```
 
-内部 transcript 与下游 transcript 分开维护；tool id 映射保持稳定。provider 失败转为 `web_search_tool_result_error`，内部调用次数有上限，最终按原请求的 `stream` 选项返回 JSON 或合成 SSE。gateway 暂不处理 `web_fetch`、BYOK 原生 web search 和 Batch Messages，也不修改 CCRv2 relay/MITM 协议。
+内部 transcript 与下游 transcript 分开维护；tool id 映射保持稳定。调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略：调用次数由 OMA 强制限制，域名约束直接传给搜索 provider，不交给 BYOK 模型生成或修改。当前 provider-neutral 合同无法表达 `user_location`，因此请求携带该字段时会在调用 BYOK 前明确报错，而不是静默忽略。provider 失败转为 `web_search_tool_result_error`，内部调用次数还有全局 loop 上限，最终按原请求的 `stream` 选项返回 JSON 或合成 SSE。gateway 暂不处理 `web_fetch`、BYOK 原生 web search 和 Batch Messages，也不修改 CCRv2 relay/MITM 协议。
 
 管理后台继续使用原平台路径 `POST /api/organizations/{orgUuid}/proxy/v1/messages`。该路由及其独立代理实现不作为 `/v1/messages` 的兼容别名，也不承载 Claude Code 的 session-scoped token。它在 `anthropic_upstream.model_mappings` 命中请求顶层 `model` 时把该逻辑模型 ID 替换为配置的上游模型 ID。Messages 的已知改写字段通过命名 DTO 解析；只有为保留第三方未知字段而使用的 request envelope 在该 HTTP 边界保留 `json.RawMessage`，不会把动态 JSON 结构传入内部领域模型。Quickstart Builder 返回的 Agent config 在前端的命名配置归一化边界解析模型字段，Agent 写入边界再执行防御性解析。未配置、未命中或请求体无法按 JSON object 解析时，请求体保持不变并交给上游处理。公共 `POST /v1/messages` 不应用该 Console 映射；只有上述 code-session Web Search 条件命中时才进入 gateway，否则继续透明流式转发请求体。
 

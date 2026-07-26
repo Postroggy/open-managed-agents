@@ -54,11 +54,13 @@ type gatewayExecution struct {
 }
 
 type gatewaySearchInput struct {
-	Query          string               `json:"query"`
-	MaxUses        int                  `json:"max_uses,omitempty"`
-	AllowedDomains []string             `json:"allowed_domains,omitempty"`
-	BlockedDomains []string             `json:"blocked_domains,omitempty"`
-	UserLocation   *gatewayUserLocation `json:"user_location,omitempty"`
+	Query string `json:"query"`
+}
+
+type gatewaySearchPolicy struct {
+	MaxUses        int
+	AllowedDomains []string
+	BlockedDomains []string
 }
 
 type gatewayUserLocation struct {
@@ -129,7 +131,7 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 	if strings.TrimSpace(g.upstreamAPIKey) == "" {
 		return gatewayResponse{}, true, errors.New("messages upstream key is required")
 	}
-	upstreamFields, err := projectGatewayFields(request.fields)
+	upstreamFields, searchPolicy, err := projectGatewayFields(request.fields)
 	if err != nil {
 		return gatewayResponse{}, true, fmt.Errorf("project messages request: %w", err)
 	}
@@ -183,7 +185,7 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 			return gatewayResponse{}, true, fmt.Errorf("encode assistant messages transcript: %w", err)
 		}
 		transcript = append(transcript, assistantMessage)
-		results, newExecutions, nextSearchUses, err := g.executeToolCalls(ctx, calls, searchUses)
+		results, newExecutions, nextSearchUses, err := g.executeToolCalls(ctx, calls, searchPolicy, searchUses)
 		if err != nil {
 			return gatewayResponse{}, true, err
 		}
@@ -198,7 +200,7 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 	return gatewayResponse{}, true, errors.New("web search tool loop exceeded maximum iterations")
 }
 
-func (g *gateway) executeToolCalls(ctx context.Context, calls []gatewayToolCall, searchUses int) ([]json.RawMessage, []gatewayExecution, int, error) {
+func (g *gateway) executeToolCalls(ctx context.Context, calls []gatewayToolCall, policy gatewaySearchPolicy, searchUses int) ([]json.RawMessage, []gatewayExecution, int, error) {
 	results := make([]json.RawMessage, 0, len(calls))
 	executions := make([]gatewayExecution, 0, len(calls))
 	for _, call := range calls {
@@ -211,14 +213,12 @@ func (g *gateway) executeToolCalls(ctx context.Context, calls []gatewayToolCall,
 			continue
 		}
 		var searchErr error
-		if call.search.UserLocation != nil {
-			searchErr = errors.New("web search user_location is unsupported")
-		} else if call.search.MaxUses > 0 && searchUses >= call.search.MaxUses {
+		if policy.MaxUses > 0 && searchUses >= policy.MaxUses {
 			searchErr = errors.New("web search max uses exceeded")
 		} else {
 			searchUses++
 		}
-		result, searchErr := g.search(ctx, *call.search, searchErr)
+		result, searchErr := g.search(ctx, call.search.Query, policy, searchErr)
 		executions = append(executions, gatewayExecution{call: call, results: result, err: searchErr})
 		toolResult, err := gatewayToolResult(call, result.Results, searchErr)
 		if err != nil {
@@ -268,21 +268,30 @@ func hasWebSearchTool(raw json.RawMessage) bool {
 	return false
 }
 
-func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.RawMessage, gatewaySearchPolicy, error) {
 	projected := cloneRawMap(fields)
 	var tools []json.RawMessage
 	if err := json.Unmarshal(fields["tools"], &tools); err != nil {
-		return nil, fmt.Errorf("tools must be an array: %w", err)
+		return nil, gatewaySearchPolicy{}, fmt.Errorf("tools must be an array: %w", err)
 	}
 	projectedTools := make([]json.RawMessage, 0, len(tools))
+	var searchPolicy gatewaySearchPolicy
+	foundSearchTool := false
 	for _, rawTool := range tools {
-		var tool struct {
-			Type string `json:"type"`
-		}
+		var tool gatewaySearchTool
 		if err := json.Unmarshal(rawTool, &tool); err != nil {
-			return nil, fmt.Errorf("decode tool: %w", err)
+			return nil, gatewaySearchPolicy{}, fmt.Errorf("decode tool: %w", err)
 		}
 		if isWebSearchToolType(tool.Type) {
+			if foundSearchTool {
+				return nil, gatewaySearchPolicy{}, errors.New("multiple web search tools are unsupported")
+			}
+			var err error
+			searchPolicy, err = tool.searchPolicy()
+			if err != nil {
+				return nil, gatewaySearchPolicy{}, err
+			}
+			foundSearchTool = true
 			projectedTools = append(projectedTools, searchToolDefinition())
 			continue
 		}
@@ -290,10 +299,38 @@ func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.Ra
 	}
 	encodedTools, err := json.Marshal(projectedTools)
 	if err != nil {
-		return nil, fmt.Errorf("encode tools: %w", err)
+		return nil, gatewaySearchPolicy{}, fmt.Errorf("encode tools: %w", err)
 	}
 	projected["tools"] = encodedTools
-	return projected, nil
+	return projected, searchPolicy, nil
+}
+
+type gatewaySearchTool struct {
+	Type           string               `json:"type"`
+	MaxUses        *int                 `json:"max_uses,omitempty"`
+	AllowedDomains []string             `json:"allowed_domains,omitempty"`
+	BlockedDomains []string             `json:"blocked_domains,omitempty"`
+	UserLocation   *gatewayUserLocation `json:"user_location,omitempty"`
+}
+
+func (t gatewaySearchTool) searchPolicy() (gatewaySearchPolicy, error) {
+	if t.MaxUses != nil && *t.MaxUses <= 0 {
+		return gatewaySearchPolicy{}, errors.New("web search max_uses must be positive")
+	}
+	if len(t.AllowedDomains) > 0 && len(t.BlockedDomains) > 0 {
+		return gatewaySearchPolicy{}, errors.New("web search cannot include both allowed_domains and blocked_domains")
+	}
+	if t.UserLocation != nil {
+		return gatewaySearchPolicy{}, errors.New("web search user_location is unsupported by the configured provider")
+	}
+	policy := gatewaySearchPolicy{
+		AllowedDomains: append([]string(nil), t.AllowedDomains...),
+		BlockedDomains: append([]string(nil), t.BlockedDomains...),
+	}
+	if t.MaxUses != nil {
+		policy.MaxUses = *t.MaxUses
+	}
+	return policy, nil
 }
 
 func isServerWebSearchToolType(value string) bool {
@@ -310,7 +347,7 @@ func isWebSearchToolType(value string) bool {
 }
 
 func searchToolDefinition() json.RawMessage {
-	return json.RawMessage(`{"name":"web_search","description":"Search the public web and return relevant results.","input_schema":{"type":"object","properties":{"query":{"type":"string","description":"The web search query"},"max_uses":{"type":"integer","minimum":1},"allowed_domains":{"type":"array","items":{"type":"string"}},"blocked_domains":{"type":"array","items":{"type":"string"}},"user_location":{"type":"object","properties":{"type":{"type":"string","enum":["approximate"]},"city":{"type":"string"},"region":{"type":"string"},"country":{"type":"string"},"timezone":{"type":"string"}},"required":["type"]}},"required":["query"]}}`)
+	return json.RawMessage(`{"name":"web_search","description":"Search the public web and return relevant results.","input_schema":{"type":"object","properties":{"query":{"type":"string","description":"The web search query"}},"required":["query"]}}`)
 }
 
 func (g *gateway) send(ctx context.Context, body []byte, rawQuery string, headers http.Header) (gatewayResponse, error) {
@@ -352,7 +389,7 @@ func gatewayLoopLimit(g *gateway) int {
 	return defaultGatewayLoops
 }
 
-func (g *gateway) search(ctx context.Context, input gatewaySearchInput, priorErr error) (results websearch.SearchResponse, err error) {
+func (g *gateway) search(ctx context.Context, query string, policy gatewaySearchPolicy, priorErr error) (results websearch.SearchResponse, err error) {
 	if priorErr != nil {
 		return results, priorErr
 	}
@@ -363,11 +400,11 @@ func (g *gateway) search(ctx context.Context, input gatewaySearchInput, priorErr
 		}
 	}()
 	return g.searcher.Search(ctx, websearch.SearchRequest{
-		Query: input.Query,
+		Query: query,
 		Options: websearch.SearchOptions{
 			MaxResults:     5,
-			IncludeDomains: append([]string(nil), input.AllowedDomains...),
-			ExcludeDomains: append([]string(nil), input.BlockedDomains...),
+			IncludeDomains: append([]string(nil), policy.AllowedDomains...),
+			ExcludeDomains: append([]string(nil), policy.BlockedDomains...),
 		},
 	})
 }
@@ -406,9 +443,6 @@ func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
 		input.Query = strings.TrimSpace(input.Query)
 		if input.Query == "" {
 			return nil, errors.New("web search tool input query is required")
-		}
-		if len(input.AllowedDomains) > 0 && len(input.BlockedDomains) > 0 {
-			return nil, errors.New("web search tool input cannot include both allowed_domains and blocked_domains")
 		}
 		call.search = &input
 		calls = append(calls, call)
