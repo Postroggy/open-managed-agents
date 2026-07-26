@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { createdFilterRange } from './api';
 import { createdFilterLabel, formatCreatedRange, formatCreatedRangeDay } from './labels';
 
 // Force a UTC- timezone for this file so the legacy `Date.parse` path — which
@@ -14,7 +15,20 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  if (previousTimezone === undefined) {
+    delete process.env.TZ;
+    return;
+  }
   process.env.TZ = previousTimezone;
+});
+
+describe('createdFilterRange', () => {
+  test('converts the selected local calendar day boundaries to UTC', () => {
+    expect(createdFilterRange({ kind: 'custom', from: '2026-07-20', to: '2026-07-20' })).toEqual({
+      gte: '2026-07-20T07:00:00.000Z',
+      lte: '2026-07-21T06:59:59.999Z',
+    });
+  });
 });
 
 describe('formatCreatedRangeDay', () => {

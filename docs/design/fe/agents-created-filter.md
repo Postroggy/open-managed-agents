@@ -73,9 +73,9 @@ stateDiagram-v2
 | `all` | `null` | `null` |
 | `last7` | `now − 7d`（UTC ISO） | `null` |
 | `last30` | `now − 30d`（UTC ISO） | `null` |
-| `custom` | `{from}T00:00:00.000Z` | `{to}T23:59:59.999Z` |
+| `custom` | 本地日历日 `from` 的日始转 UTC | 本地日历日 `to` 的日末转 UTC |
 
-custom 的两个 `yyyy-MM-dd` 映射为 UTC 日始 / 日末，确保选中的整两天都被包含。后端 `internal/agents/handler.go` 已解析 `[gte]` / `[lte]`，无需后端改动。客户端 `agentMatchesClientFilters` 同步支持上下界，保证搜索聚合结果在客户端再裁剪一次。
+custom 的两个 `yyyy-MM-dd` 先按浏览器本地时区解析为日历日，再将本地日始 / 日末转换为 UTC ISO-8601 时间戳，确保过滤范围与用户看到并选择的整日一致。后端 `internal/agents/handler.go` 已解析 `[gte]` / `[lte]`，无需后端改动。客户端 `agentMatchesClientFilters` 同步支持上下界，保证搜索聚合结果在客户端再裁剪一次。
 
 ## 时区与本地化
 
@@ -84,7 +84,7 @@ custom 的两个 `yyyy-MM-dd` 映射为 UTC 日始 / 日末，确保选中的整
 - **存储**：`from` / `to` 为 `yyyy-MM-dd`（`applyCustomRange` 用 `date-fns` `format` 序列化 Calendar 选中的本地 Date）。
 - **解析**：`labels.ts` 用 `date-fns` `parseISO` 把 `yyyy-MM-dd` 解析为**本地**日。早期实现用 `Date.parse`，会把 `yyyy-MM-dd` 当 UTC 午夜，在 UTC− 时区把展示标签前移一天（如 PST 下选 `2026-07-20` 显示成 `Jul 19, 2026`）。
 - **展示**：trigger label 与 draft 预览共用 `formatCreatedRange` / `formatCreatedRangeDay`，内部基于 `Intl.DateTimeFormat(locale)`，中文界面输出中文月份（如 `2026年7月20日`），不再固定英文 `MMM d, yyyy`。
-- **API 边界**用 UTC 日边界（见上表），与日历日解耦，避免不同时区用户看到不同结果集。
+- **API 边界**：将用户本地时区的日始 / 日末转换为 UTC（见上表）。因此不同时区用户选择同一日期字符串时，可能发送不同 UTC 时刻，但各自都覆盖界面所表达的完整本地日。
 
 ## 键盘可达性
 

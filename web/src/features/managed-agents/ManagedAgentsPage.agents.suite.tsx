@@ -1702,15 +1702,16 @@ export function registerManagedAgentsAgentsTests() {
     // react-day-picker runs in controlled mode (selected = props.selected), so
     // picking `from` re-renders the calendar and replaces the day-button DOM
     // nodes — a stale reference would silently no-op the second click.
-    const clickDay = (dataDay: string) => {
-      const button = document.querySelector<HTMLButtonElement>(`button[data-day="${dataDay}"]`);
+    const clickDay = (day: number) => {
+      const isoDay = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const button = document.querySelector<HTMLButtonElement>(`[data-day="${isoDay}"] button`);
       expect(button).toBeTruthy();
       act(() => {
         fireEvent.click(button!);
       });
     };
-    clickDay(`${month}/1/${year}`);
-    clickDay(`${month}/15/${year}`);
+    clickDay(1);
+    clickDay(15);
 
     // Editing the draft must not trigger a list request — only Apply commits.
     expect(api.requests.length).toBe(baseline);
@@ -1725,13 +1726,10 @@ export function registerManagedAgentsAgentsTests() {
     const matched = api.requests.find(
       (request) => request.url.includes('created_at%5Bgte%5D=') && request.url.includes('created_at%5Blte%5D='),
     )!;
-    const monthPadded = String(month).padStart(2, '0');
-    expect(matched.url).toContain(
-      `created_at%5Bgte%5D=${encodeURIComponent(`${year}-${monthPadded}-01T00:00:00.000Z`)}`,
-    );
-    expect(matched.url).toContain(
-      `created_at%5Blte%5D=${encodeURIComponent(`${year}-${monthPadded}-15T23:59:59.999Z`)}`,
-    );
+    const expectedStart = new Date(year, month - 1, 1, 0, 0, 0, 0).toISOString();
+    const expectedEnd = new Date(year, month - 1, 15, 23, 59, 59, 999).toISOString();
+    expect(matched.url).toContain(`created_at%5Bgte%5D=${encodeURIComponent(expectedStart)}`);
+    expect(matched.url).toContain(`created_at%5Blte%5D=${encodeURIComponent(expectedEnd)}`);
 
     // Trigger label renders the committed range via the shared locale-aware helper.
     const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(year, month - 1, 1));

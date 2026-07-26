@@ -2,6 +2,7 @@ import { anthropicBetaApi } from '../../shared/api/anthropic';
 import { consoleApi } from '../../shared/api/client';
 import { consumeSseBuffer, postJsonSseStream } from '../../shared/api/streaming';
 import { type QueryClient } from '@tanstack/react-query';
+import { endOfDay, parseISO, startOfDay } from 'date-fns';
 import { agentDetailCreatedRange, agentDetailStatusValues } from './agents/AgentsResourcePage';
 import { credentialAuthBody, normalizeMemoryFolderPath } from './resources/ManagedResources';
 import { compareSessionEvents, sessionEventType } from './sessions/SessionDetailPage';
@@ -73,8 +74,8 @@ export async function getEffectiveModelMappings(orgUuid: string) {
 
 // Maps an `AgentCreatedFilter` onto inclusive `created_at[gte]`/`[lte]` ISO-8601
 // bounds accepted by the agents list API. Preset windows compute a lower bound
-// from "now"; custom ranges turn the selected `yyyy-MM-dd` calendar days into
-// UTC day-start/day-end timestamps so the entire selected days are included.
+// from "now"; custom ranges convert the selected local calendar-day bounds to
+// UTC timestamps so the entire days shown to the user are included.
 export function createdFilterRange(filter: AgentCreatedFilter): { gte: string | null; lte: string | null } {
   const now = Date.now();
   switch (filter.kind) {
@@ -84,8 +85,8 @@ export function createdFilterRange(filter: AgentCreatedFilter): { gte: string | 
       return { gte: new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString(), lte: null };
     case 'custom':
       return {
-        gte: new Date(`${filter.from}T00:00:00.000Z`).toISOString(),
-        lte: new Date(`${filter.to}T23:59:59.999Z`).toISOString(),
+        gte: startOfDay(parseISO(filter.from)).toISOString(),
+        lte: endOfDay(parseISO(filter.to)).toISOString(),
       };
     case 'all':
       return { gte: null, lte: null };
