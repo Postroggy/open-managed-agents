@@ -41,15 +41,16 @@ flowchart LR
 
 移除后，上图中的 `data_residency` 节点在每一层都被删除：
 
-- **DB**：新增 migration `00018_drop_workspace_data_residency.sql`，`drop column if exists data_residency`（幂等；Down 恢复带默认值的列）。
+- **DB**：新增 migration `00031_drop_workspace_data_residency.sql`，`drop column if exists data_residency`（幂等；Down 恢复带默认值的列）。该编号位于主线现有 Filestore migrations 之后，避免与已有 `00018_add_filestore.sql` 冲突。
 - **领域类型**：`platform.ConsoleWorkspace`、`db.AdminWorkspace` 移除 `DataResidency` 与 `DataResidencySettings` 字段。
 - **HTTP handler**：console（`internal/platformapi/console_api_keys.go`）与 admin（`internal/admin/service.go`、`dto.go`、`domain_workspace.go`）的请求 DTO、响应映射、normalize/encode/decode 辅助函数与类型别名全部移除。
 - **前端**：`web/src/shared/workspaces`（`api.ts` 类型、`presentation.ts` 的 `buildCreateWorkspaceInput`、`context.ts` fallback）、`CreateWorkspaceDialog`（geo Field 与 `FieldDescription`）、`WorkspacesSettingsPage`（Residency 列与 `geoLabel`）、i18n（`workspace.geo`、`workspace.geoHelp`、`settings.workspaces.residency`、`settings.workspaces.defaultInference`，en + zh-CN）。
 
 ## 数据模型与 migration
 
-- migration `00018` 使用 `drop column if exists`，对已应用旧迁移的库与全新库都安全。
-- `internal/db/schema.go` 是 legacy bootstrap 文本 schema（仅 `migrateLegacyTextIDSchema` 使用），按项目规则不修改；其内部仍保留旧列定义，但 `Migrate()` 在 goose migration 之后执行，`00018` 会把列删掉，最终 schema 不含该列。
+- migration `00031` 使用 `drop column if exists`，对已应用旧迁移的库与全新库都安全。
+- `internal/db/schema.go` 是 legacy bootstrap 文本 schema（仅 `migrateLegacyTextIDSchema` 使用），按项目规则不修改；其内部仍保留旧列定义，但 `Migrate()` 在 goose migration 之后执行，`00031` 会把列删掉，最终 schema 不含该列。
+- Admin workspace 数据访问保留主线的 sqlx 命名参数与结构体扫描，只从 row、SQL 字段列表和参数映射中移除该列。
 - 不涉及外键（遵循 no-FK 规则），列删除无引用约束需要处理。
 
 ## API 合同与兼容取舍
@@ -115,5 +116,5 @@ sequenceDiagram
 
 ## 回滚
 
-- migration `00018` 的 Down 段恢复 `data_residency jsonb not null default '{"workspace_geo":"us","allowed_inference_geos":"unrestricted","default_inference_geo":"global"}'::jsonb`，可逆向。
+- migration `00031` 的 Down 段恢复 `data_residency jsonb not null default '{"workspace_geo":"us","allowed_inference_geos":"unrestricted","default_inference_geo":"global"}'::jsonb`，可逆向。
 - 代码层回滚需 revert 两个 PR；列恢复后旧默认值自动生效。
