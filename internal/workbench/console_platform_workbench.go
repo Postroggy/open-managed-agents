@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"maps"
 	"net/http"
 	"sort"
@@ -98,53 +98,6 @@ type workbenchPersistenceStore interface {
 	TakeWorkbenchGeneratedTestCase(ctx context.Context, orgUUID string, requested map[string]any) (map[string]any, bool, error)
 }
 
-func registerOrgWorkbenchRoutes(
-	r chi.Router,
-	store OrganizationStore,
-	upstream config.AnthropicUpstreamConfig,
-	catalog modelcatalog.Reader,
-) {
-	workbenchStore := workbenchPersistenceFromStore(store)
-	h := func(handler http.HandlerFunc) http.HandlerFunc {
-		return withWorkbenchDependenciesAndCatalog(workbenchStore, upstream, catalog, handler)
-	}
-	r.Get("/models", h(handleWorkbenchModels))
-	r.Post("/models/refresh", h(handleWorkbenchModelCatalogRefresh))
-	r.Get("/rate_limits_v2", h(handleWorkbenchRateLimitsV2))
-	r.Get("/workspaces/{workspaceId}/rate_limits", h(handleWorkbenchWorkspaceRateLimits))
-	r.Get("/workspaces/{workspaceId}/prompts", h(handleListWorkbenchWorkspacePrompts))
-	r.Post("/workspaces/{workspaceId}/prompts", h(handleCreateWorkbenchPrompt))
-
-	r.Get("/workbench/prompts", h(handleListWorkbenchPrompts))
-	r.Get("/workbench/prompts/{promptUuid}", h(handleGetWorkbenchPrompt))
-	r.Put("/workbench/prompts/{promptUuid}", h(handleUpdateWorkbenchPrompt))
-	r.Delete("/workbench/prompts/{promptUuid}", h(handleDeleteWorkbenchPrompt))
-	r.Post("/workbench/prompts/{promptUuid}/admin_delete", h(handleDeleteWorkbenchPrompt))
-	r.Post("/workbench/prompts/{promptUuid}/sharing", h(handleUpdateWorkbenchPromptSharing))
-	r.Get("/workbench/prompts/{promptUuid}/revisions", h(handleListWorkbenchPromptRevisions))
-	r.Post("/workbench/prompts/{promptUuid}/revisions", h(handleCreateWorkbenchPromptRevision))
-	r.Get("/workbench/prompts/{promptUuid}/revisions/{revisionUuid}", h(handleGetWorkbenchPromptRevision))
-	r.Post("/workbench/prompts/{promptUuid}/revisions/{revisionUuid}/rename", h(handleGetWorkbenchPromptRevision))
-	r.Get("/workbench/prompts/{promptUuid}/kv_store/get/{key}", h(handleWorkbenchKVGet))
-	r.Post("/workbench/prompts/{promptUuid}/kv_store/set/{key}", h(handleWorkbenchKVSet))
-	r.Get("/workbench/revisions/{revisionUuid}/evaluations/list", h(handleWorkbenchEvaluationsList))
-	r.Post("/workbench/revisions/{revisionUuid}/evaluations/create", h(handleWorkbenchCreateEvaluation))
-	r.Post("/workbench/evaluations/{evaluationUuid}/save_completion", h(handleWorkbenchOK))
-	r.Post("/workbench/evaluations/{evaluationUuid}/update_variables", h(handleWorkbenchOK))
-	r.Post("/workbench/evaluations/{evaluationUuid}/update_golden_answer", h(handleWorkbenchOK))
-	r.Post("/workbench/evaluations/{evaluationUuid}/update_rating", h(handleWorkbenchOK))
-	r.Post("/workbench/evaluations/{evaluationUuid}/delete", h(handleWorkbenchDeleteEvaluation))
-	r.Delete("/workbench/evaluations/{evaluationUuid}", h(handleWorkbenchDeleteEvaluation))
-	r.Post("/workbench/feedback", h(handleWorkbenchOK))
-
-	r.Post("/workbench/completions", h(handleWorkbenchCompletions))
-	r.Post("/workbench/generate_prompt", h(handleWorkbenchGeneratePrompt))
-	r.Post("/workbench/generate_title", h(handleWorkbenchGenerateTitle))
-	r.Post("/workbench/evaluations/generate_test_case", h(handleWorkbenchGenerateTestCase))
-	r.Post("/workbench/metaprompt/generate_test_cases", h(handleWorkbenchGenerateTestCases))
-	r.Post("/workbench/metaprompt/convert_prompt/{action}", h(handleWorkbenchStream("")))
-}
-
 func workbenchPersistenceFromStore(store OrganizationStore) workbenchPersistenceStore {
 	persistence, _ := store.(workbenchPersistenceStore)
 	return persistence
@@ -191,7 +144,6 @@ func workbenchModelCatalogUserStoreFromRequest(r *http.Request) workbenchModelCa
 	store, _ := r.Context().Value(workbenchModelCatalogUserStoreContextKey{}).(workbenchModelCatalogUserStore)
 	return store
 }
-
 func workbenchWritePersistenceError(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
@@ -203,7 +155,7 @@ func workbenchWritePersistenceError(w http.ResponseWriter, err error) bool {
 	return true
 }
 
-func handleListWorkbenchPrompts(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleListWorkbenchPrompts(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -216,15 +168,15 @@ func handleListWorkbenchPrompts(w http.ResponseWriter, r *http.Request) {
 	}
 	prompts := make([]any, 0, 4)
 	seen := map[string]bool{}
-	deleted, err := workbenchPromptDeleted(r, workbenchDefaultPromptID)
+	deleted, err := h.promptDeleted(r, workbenchDefaultPromptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
 	if !deleted {
-		prompts = append(prompts, workbenchPromptSummary(r, workbenchDefaultPromptID, "default", ""))
+		prompts = append(prompts, h.promptSummary(r, workbenchDefaultPromptID, "default", ""))
 		seen[workbenchDefaultPromptID] = true
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		records, err := store.ListWorkbenchPrompts(r.Context(), workbenchOrgUUID(r), workspaceID)
 		if workbenchWritePersistenceError(w, err) {
 			return
@@ -234,14 +186,14 @@ func handleListWorkbenchPrompts(w http.ResponseWriter, r *http.Request) {
 			if promptID == "" || seen[promptID] || record.DeletedAt != nil {
 				continue
 			}
-			prompts = append(prompts, workbenchPromptSummary(r, promptID, record.WorkspaceID, record.Name))
+			prompts = append(prompts, h.promptSummary(r, promptID, record.WorkspaceID, record.Name))
 			seen[promptID] = true
 		}
 	}
 	writeJSON(w, http.StatusOK, prompts)
 }
 
-func handleListWorkbenchWorkspacePrompts(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleListWorkbenchWorkspacePrompts(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -251,18 +203,18 @@ func handleListWorkbenchWorkspacePrompts(w http.ResponseWriter, r *http.Request)
 	}
 	prompts := make([]any, 0, 4)
 	seen := map[string]bool{}
-	deleted, err := workbenchPromptDeleted(r, workbenchDefaultPromptID)
+	deleted, err := h.promptDeleted(r, workbenchDefaultPromptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
 	if !deleted {
-		prompt := workbenchPromptSummary(r, workbenchDefaultPromptID, workspaceID, "")
+		prompt := h.promptSummary(r, workbenchDefaultPromptID, workspaceID, "")
 		if promptWorkspaceID, _ := prompt["workspace_id"].(string); strings.TrimSpace(promptWorkspaceID) == workspaceID {
 			prompts = append(prompts, prompt)
 			seen[workbenchDefaultPromptID] = true
 		}
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		records, err := store.ListWorkbenchPrompts(r.Context(), workbenchOrgUUID(r), workspaceID)
 		if workbenchWritePersistenceError(w, err) {
 			return
@@ -272,14 +224,14 @@ func handleListWorkbenchWorkspacePrompts(w http.ResponseWriter, r *http.Request)
 			if promptID == "" || seen[promptID] || record.DeletedAt != nil {
 				continue
 			}
-			prompts = append(prompts, workbenchPromptSummary(r, promptID, record.WorkspaceID, record.Name))
+			prompts = append(prompts, h.promptSummary(r, promptID, record.WorkspaceID, record.Name))
 			seen[promptID] = true
 		}
 	}
 	writeJSON(w, http.StatusOK, prompts)
 }
 
-func handleCreateWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleCreateWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -292,30 +244,30 @@ func handleCreateWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
 		workspaceID = "default"
 	}
 	promptID := workbenchDefaultPromptID
-	if err := workbenchUndeletePrompt(r, promptID, workspaceID); workbenchWritePersistenceError(w, err) {
+	if err := h.undeletePrompt(r, promptID, workspaceID); workbenchWritePersistenceError(w, err) {
 		return
 	}
 	name, hasName := body["name"].(string)
 	if hasName {
-		if err := workbenchStorePromptName(r, promptID, name); workbenchWritePersistenceError(w, err) {
+		if err := h.storePromptName(r, promptID, name); workbenchWritePersistenceError(w, err) {
 			return
 		}
 	}
 	if revisionBody, ok := body["latest_revision"].(map[string]any); ok {
-		revision := workbenchRevisionFromBody(r, revisionBody, "workbench-revision-"+uuid.NewString(), true, false)
-		if err := workbenchStoreRevision(r, promptID, revision); workbenchWritePersistenceError(w, err) {
+		revision := h.revisionFromBody(r, revisionBody, "workbench-revision-"+uuid.NewString(), true, false)
+		if err := h.storeRevision(r, promptID, revision); workbenchWritePersistenceError(w, err) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, workbenchPromptDetail(r, promptID, workspaceID, name))
+	writeJSON(w, http.StatusOK, h.promptDetail(r, promptID, workspaceID, name))
 }
 
-func handleGetWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleGetWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -323,16 +275,16 @@ func handleGetWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
 		writeWorkbenchPromptNotFound(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, workbenchPromptDetail(r, promptID, "default", ""))
+	writeJSON(w, http.StatusOK, h.promptDetail(r, promptID, "default", ""))
 }
 
-func handleUpdateWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleUpdateWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	body, _ := readJSONObject(r)
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -342,19 +294,19 @@ func handleUpdateWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	name, _ := body["name"].(string)
 	if _, ok := body["name"]; ok {
-		if err := workbenchStorePromptName(r, promptID, name); workbenchWritePersistenceError(w, err) {
+		if err := h.storePromptName(r, promptID, name); workbenchWritePersistenceError(w, err) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, workbenchPromptDetail(r, promptID, "default", name))
+	writeJSON(w, http.StatusOK, h.promptDetail(r, promptID, "default", name))
 }
 
-func handleUpdateWorkbenchPromptSharing(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleUpdateWorkbenchPromptSharing(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -362,20 +314,20 @@ func handleUpdateWorkbenchPromptSharing(w http.ResponseWriter, r *http.Request) 
 		writeWorkbenchPromptNotFound(w)
 		return
 	}
-	if err := workbenchStorePromptSharing(r, promptID, true); workbenchWritePersistenceError(w, err) {
+	if err := h.storePromptSharing(r, promptID, true); workbenchWritePersistenceError(w, err) {
 		return
 	}
-	prompt := workbenchPromptDetail(r, promptID, "default", "")
+	prompt := h.promptDetail(r, promptID, "default", "")
 	prompt["is_shared_with_workspace"] = true
 	writeJSON(w, http.StatusOK, prompt)
 }
 
-func handleListWorkbenchPromptRevisions(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleListWorkbenchPromptRevisions(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -398,15 +350,15 @@ func handleListWorkbenchPromptRevisions(w http.ResponseWriter, r *http.Request) 
 		revisions = append(revisions, revision)
 		seenRevisions[revisionID] = true
 	}
-	if revision, revisionID, ok := workbenchStoredLatestRevision(r, promptID, includeMessages, true); ok {
+	if revision, revisionID, ok := h.storedLatestRevision(r, promptID, includeMessages, true); ok {
 		appendRevision(revision, revisionID)
 		hasLatest = true
 	}
-	for _, revisionID := range workbenchEvaluationRevisionIDs(r) {
+	for _, revisionID := range h.evaluationRevisionIDs(r) {
 		if seenRevisions[revisionID] {
 			continue
 		}
-		revision, ok := workbenchRevisionFromEvaluations(r, revisionID, includeMessages, true)
+		revision, ok := h.revisionFromEvaluations(r, revisionID, includeMessages, true)
 		if !ok {
 			continue
 		}
@@ -416,7 +368,7 @@ func handleListWorkbenchPromptRevisions(w http.ResponseWriter, r *http.Request) 
 		appendRevision(revision, revisionID)
 		hasLatest = true
 	}
-	defaultRevision := workbenchRevision(r, workbenchRevisionIDFromRequest(r), includeMessages, true)
+	defaultRevision := h.revision(r, workbenchRevisionIDFromRequest(r), includeMessages, true)
 	if hasLatest {
 		defaultRevision["is_latest"] = false
 	}
@@ -424,7 +376,7 @@ func handleListWorkbenchPromptRevisions(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, revisions)
 }
 
-func handleCreateWorkbenchPromptRevision(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleCreateWorkbenchPromptRevision(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -434,7 +386,7 @@ func handleCreateWorkbenchPromptRevision(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -442,19 +394,19 @@ func handleCreateWorkbenchPromptRevision(w http.ResponseWriter, r *http.Request)
 		writeWorkbenchPromptNotFound(w)
 		return
 	}
-	revision := workbenchRevisionFromBody(r, body, "workbench-revision-"+uuid.NewString(), true, false)
-	if err := workbenchStoreRevision(r, promptID, revision); workbenchWritePersistenceError(w, err) {
+	revision := h.revisionFromBody(r, body, "workbench-revision-"+uuid.NewString(), true, false)
+	if err := h.storeRevision(r, promptID, revision); workbenchWritePersistenceError(w, err) {
 		return
 	}
 	writeJSON(w, http.StatusOK, revision)
 }
 
-func handleGetWorkbenchPromptRevision(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleGetWorkbenchPromptRevision(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -463,23 +415,23 @@ func handleGetWorkbenchPromptRevision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	revisionID := workbenchRevisionIDFromRequest(r)
-	if revision, ok := workbenchStoredRevision(r, promptID, revisionID, true, false); ok {
+	if revision, ok := h.storedRevision(r, promptID, revisionID, true, false); ok {
 		writeJSON(w, http.StatusOK, revision)
 		return
 	}
-	if revision, ok := workbenchRevisionFromEvaluations(r, revisionID, true, false); ok {
+	if revision, ok := h.revisionFromEvaluations(r, revisionID, true, false); ok {
 		writeJSON(w, http.StatusOK, revision)
 		return
 	}
-	writeJSON(w, http.StatusOK, workbenchRevision(r, revisionID, true, false))
+	writeJSON(w, http.StatusOK, h.revision(r, revisionID, true, false))
 }
 
-func handleWorkbenchKVGet(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchKVGet(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -488,7 +440,7 @@ func handleWorkbenchKVGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := chi.URLParam(r, "key")
-	if entry, ok := workbenchStoredKV(r, promptID, key); ok {
+	if entry, ok := h.storedKV(r, promptID, key); ok {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"value":   entry.Value,
@@ -504,7 +456,7 @@ func handleWorkbenchKVGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleWorkbenchKVSet(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchKVSet(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -514,7 +466,7 @@ func handleWorkbenchKVSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	promptID := workbenchPromptIDFromRequest(r)
-	deleted, err := workbenchPromptDeleted(r, promptID)
+	deleted, err := h.promptDeleted(r, promptID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -525,23 +477,23 @@ func handleWorkbenchKVSet(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	value, ok := workbenchKVValueFromBody(body)
 	if key == "draft_revision" && (!ok || workbenchDraftRevisionShouldClear(value)) {
-		if err := workbenchDeleteKV(r, promptID, key); workbenchWritePersistenceError(w, err) {
+		if err := h.deleteKV(r, promptID, key); workbenchWritePersistenceError(w, err) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"success": true, "version": nil})
 		return
 	}
 	if key == "draft_revision" && ok && !workbenchDraftRevisionHasContent(value) {
-		currentDraft := workbenchPromptDraftRevisionString(r, promptID)
+		currentDraft := h.promptDraftRevisionString(r, promptID)
 		if workbenchDraftRevisionHasContent(currentDraft) {
 			version := any(nil)
-			if entry, ok := workbenchStoredKV(r, promptID, key); ok {
+			if entry, ok := h.storedKV(r, promptID, key); ok {
 				version = entry.Version
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"success": true, "version": version})
 			return
 		}
-		if err := workbenchDeleteKV(r, promptID, key); workbenchWritePersistenceError(w, err) {
+		if err := h.deleteKV(r, promptID, key); workbenchWritePersistenceError(w, err) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"success": true, "version": nil})
@@ -554,38 +506,38 @@ func handleWorkbenchKVSet(w http.ResponseWriter, r *http.Request) {
 	if key == "draft_revision" {
 		value = workbenchNormalizeDraftRevisionValue(value)
 	}
-	if err := workbenchStoreKV(r, promptID, key, workbenchKVEntry{Value: value, Version: version}); workbenchWritePersistenceError(w, err) {
+	if err := h.storeKV(r, promptID, key, workbenchKVEntry{Value: value, Version: version}); workbenchWritePersistenceError(w, err) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "version": version})
 }
 
-func handleWorkbenchEvaluationsList(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchEvaluationsList(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
-	writeJSON(w, http.StatusOK, workbenchStoredEvaluations(r, workbenchRevisionIDFromRequest(r)))
+	writeJSON(w, http.StatusOK, h.storedEvaluations(r, workbenchRevisionIDFromRequest(r)))
 }
 
-func handleWorkbenchCreateEvaluation(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchCreateEvaluation(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	body, _ := readJSONObject(r)
 	evaluation := workbenchEvaluationFromBody(r, body, workbenchRevisionIDFromRequest(r))
-	if err := workbenchStoreEvaluation(r, evaluation); workbenchWritePersistenceError(w, err) {
+	if err := h.storeEvaluation(r, evaluation); workbenchWritePersistenceError(w, err) {
 		return
 	}
 	writeJSON(w, http.StatusOK, evaluation)
 }
 
-func handleWorkbenchOK(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchOK(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	body, _ := readJSONObject(r)
 	if evaluationID := strings.TrimSpace(chi.URLParam(r, "evaluationUuid")); evaluationID != "" {
-		evaluation, ok, err := workbenchUpdateEvaluation(r, evaluationID, body)
+		evaluation, ok, err := h.updateEvaluation(r, evaluationID, body)
 		if workbenchWritePersistenceError(w, err) {
 			return
 		}
@@ -597,12 +549,12 @@ func handleWorkbenchOK(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
-func handleWorkbenchDeleteEvaluation(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchDeleteEvaluation(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
 	evaluationID := strings.TrimSpace(chi.URLParam(r, "evaluationUuid"))
-	deleted, ok, err := workbenchDeleteEvaluation(r, evaluationID)
+	deleted, ok, err := h.deleteEvaluation(r, evaluationID)
 	if workbenchWritePersistenceError(w, err) {
 		return
 	}
@@ -613,17 +565,17 @@ func handleWorkbenchDeleteEvaluation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
-func handleDeleteWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleDeleteWorkbenchPrompt(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
-	if err := workbenchDeletePrompt(r, workbenchPromptIDFromRequest(r)); workbenchWritePersistenceError(w, err) {
+	if err := h.deletePrompt(r, workbenchPromptIDFromRequest(r)); workbenchWritePersistenceError(w, err) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
-func handleWorkbenchModels(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchModels(w http.ResponseWriter, r *http.Request) {
 	if !visibleOrgUUIDOrPlatformClaudeMirror(w, r) {
 		return
 	}
@@ -660,7 +612,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
 			return
 		}
-		log.Printf("authorize model catalog refresh organization_id=%d: %v", principal.OrganizationID, err)
+		slog.Default().ErrorContext(r.Context(), "authorize model catalog refresh", "organization_id", principal.OrganizationID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "model_catalog_refresh_authorization_failed"})
 		return
 	}
@@ -680,7 +632,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "model_catalog_refresh_in_progress"})
 			return
 		}
-		log.Printf("refresh model catalog: %v", err)
+		slog.Default().ErrorContext(r.Context(), "refresh model catalog", "error", err)
 		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "model_catalog_refresh_failed"})
 		return
 	}
@@ -731,7 +683,7 @@ func writeWorkbenchCatalogUnavailable(w http.ResponseWriter) {
 	})
 }
 
-func handleWorkbenchRateLimitsV2(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchRateLimitsV2(w http.ResponseWriter, r *http.Request) {
 	if !visibleOrgUUIDOrPlatformClaudeMirror(w, r) {
 		return
 	}
@@ -741,7 +693,7 @@ func handleWorkbenchRateLimitsV2(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleWorkbenchWorkspaceRateLimits(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchWorkspaceRateLimits(w http.ResponseWriter, r *http.Request) {
 	if !visibleOrgUUIDOrPlatformClaudeMirror(w, r) {
 		return
 	}
@@ -811,7 +763,7 @@ func platformClaudeRateLimit(limitType string, value int) map[string]any {
 	return map[string]any{"type": limitType, "value": value, "multiplier_config": nil}
 }
 
-func handleWorkbenchStream(text string) http.HandlerFunc {
+func (h *workbenchHandler) handleWorkbenchStream(text string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := visibleOrgUUID(w, r); !ok {
 			return
@@ -825,7 +777,7 @@ func handleWorkbenchStream(text string) http.HandlerFunc {
 	}
 }
 
-func handleWorkbenchGenerateTestCase(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchGenerateTestCase(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -844,13 +796,13 @@ func handleWorkbenchGenerateTestCase(w http.ResponseWriter, r *http.Request) {
 		workbenchWriteGenerationError(w, err)
 		return
 	}
-	if err := workbenchStoreGeneratedTestCase(r, generatedValues); workbenchWritePersistenceError(w, err) {
+	if err := h.storeGeneratedTestCase(r, generatedValues); workbenchWritePersistenceError(w, err) {
 		return
 	}
 	workbenchWriteCompletionStream(w, model, text)
 }
 
-func handleWorkbenchGenerateTestCases(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchGenerateTestCases(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -1356,7 +1308,7 @@ func workbenchWriteCompletionStream(w http.ResponseWriter, model string, text st
 	workbenchWriteSSE(w, "message_stop", map[string]any{"type": "message_stop"})
 }
 
-func handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -1741,7 +1693,7 @@ type workbenchGenerateTitleResponse struct {
 	} `json:"usage"`
 }
 
-func handleWorkbenchGenerateTitle(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchGenerateTitle(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -1835,7 +1787,7 @@ func workbenchTruncateRunes(text string, maxRunes int) string {
 	return strings.TrimSpace(string(runes[:maxRunes]))
 }
 
-func handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
 	if !visibleWorkbenchOrg(w, r) {
 		return
 	}
@@ -1863,23 +1815,17 @@ func handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
 		"text/event-stream",
 	)
 	if err != nil {
-		log.Printf("workbench generate_prompt unavailable org=%s err=%v", chi.URLParam(r, "orgUUID"), err)
 		workbenchWriteGenerationError(w, err)
 		return
 	}
-	endpoint := upstreamReq.URL.String()
-
-	log.Printf("workbench generate_prompt upstream_start org=%s endpoint=%s model=%s task_chars=%d thinking=%t", chi.URLParam(r, "orgUUID"), endpoint, model, len([]rune(task)), payload.TargetThinkingMode)
 	upstreamRes, err := aigateway.NewHTTPClient(nil, 0).Do(upstreamReq)
 	if err != nil {
-		log.Printf("workbench generate_prompt failed org=%s endpoint=%s err=%v", chi.URLParam(r, "orgUUID"), endpoint, err)
 		workbenchWriteGenerationError(w, err)
 		return
 	}
 	defer upstreamRes.Body.Close()
 
 	if upstreamRes.StatusCode < 200 || upstreamRes.StatusCode >= 300 {
-		log.Printf("workbench generate_prompt rejected org=%s endpoint=%s status=%d", chi.URLParam(r, "orgUUID"), endpoint, upstreamRes.StatusCode)
 		copyProxyMessagesResponseHeaders(w.Header(), upstreamRes.Header)
 		if w.Header().Get("Content-Type") == "" {
 			w.Header().Set("Content-Type", "application/json")
@@ -1888,8 +1834,7 @@ func handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(w, upstreamRes.Body)
 		return
 	}
-
-	log.Printf("workbench generate_prompt upstream_stream org=%s endpoint=%s status=%d content_type=%q", chi.URLParam(r, "orgUUID"), endpoint, upstreamRes.StatusCode, upstreamRes.Header.Get("Content-Type"))
+	slog.Default().DebugContext(r.Context(), "workbench generate prompt upstream stream", "upstream_host", upstreamReq.URL.Host, "status", upstreamRes.StatusCode, "content_type", upstreamRes.Header.Get("Content-Type"))
 	copyProxyMessagesResponseHeaders(w.Header(), upstreamRes.Header)
 	if w.Header().Get("Content-Type") == "" {
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -1942,11 +1887,11 @@ func workbenchProxyGeneratePromptStream(w http.ResponseWriter, body io.Reader) {
 	proxyMessagesStream(w, body)
 }
 
-func workbenchPromptSummary(r *http.Request, promptID string, workspaceID string, name string) map[string]any {
+func (h *workbenchHandler) promptSummary(r *http.Request, promptID string, workspaceID string, name string) map[string]any {
 	createdAt := workbenchDefaultCreatedAt
 	updatedAt := workbenchDefaultCreatedAt
 	isShared := workbenchPromptShared(r, promptID)
-	if record, ok := workbenchStoredPromptRecord(r, promptID); ok {
+	if record, ok := h.storedPromptRecord(r, promptID); ok {
 		if strings.TrimSpace(record.WorkspaceID) != "" {
 			workspaceID = record.WorkspaceID
 		}
@@ -1973,11 +1918,11 @@ func workbenchPromptSummary(r *http.Request, promptID string, workspaceID string
 	}
 }
 
-func workbenchPromptDetail(r *http.Request, promptID string, workspaceID string, name string) map[string]any {
-	prompt := workbenchPromptSummary(r, promptID, workspaceID, name)
-	prompt["latest_revision"] = workbenchLatestRevision(r, promptID, true, false)
+func (h *workbenchHandler) promptDetail(r *http.Request, promptID string, workspaceID string, name string) map[string]any {
+	prompt := h.promptSummary(r, promptID, workspaceID, name)
+	prompt["latest_revision"] = h.latestRevision(r, promptID, true, false)
 	kvStore := map[string]any{}
-	if entry, ok := workbenchStoredKV(r, promptID, "draft_revision"); ok && strings.TrimSpace(entry.Value) != "" {
+	if entry, ok := h.storedKV(r, promptID, "draft_revision"); ok && strings.TrimSpace(entry.Value) != "" {
 		kvStore["draft_revision"] = entry.Value
 	}
 	if promptID == workbenchDefaultPromptID {
@@ -2001,25 +1946,25 @@ func workbenchDefaultExamples() []any {
 	}
 }
 
-func workbenchLatestRevision(r *http.Request, promptID string, includeMessages bool, includeCreator bool) map[string]any {
-	if revision, _, ok := workbenchStoredLatestRevision(r, promptID, includeMessages, includeCreator); ok {
+func (h *workbenchHandler) latestRevision(r *http.Request, promptID string, includeMessages bool, includeCreator bool) map[string]any {
+	if revision, _, ok := h.storedLatestRevision(r, promptID, includeMessages, includeCreator); ok {
 		return revision
 	}
-	return workbenchRevision(r, workbenchDefaultRevisionID, includeMessages, includeCreator)
+	return h.revision(r, workbenchDefaultRevisionID, includeMessages, includeCreator)
 }
 
-func workbenchStoredLatestRevision(r *http.Request, promptID string, includeMessages bool, includeCreator bool) (map[string]any, string, bool) {
-	if record, ok := workbenchStoredPromptRecord(r, promptID); ok && record.LatestRevisionUUID != nil {
+func (h *workbenchHandler) storedLatestRevision(r *http.Request, promptID string, includeMessages bool, includeCreator bool) (map[string]any, string, bool) {
+	if record, ok := h.storedPromptRecord(r, promptID); ok && record.LatestRevisionUUID != nil {
 		revisionID := strings.TrimSpace(*record.LatestRevisionUUID)
 		if revisionID != "" {
-			if revision, ok := workbenchStoredRevision(r, promptID, revisionID, includeMessages, includeCreator); ok {
+			if revision, ok := h.storedRevision(r, promptID, revisionID, includeMessages, includeCreator); ok {
 				return revision, revisionID, true
 			}
 		}
 	}
 	if latestID, ok := workbenchLocalLatestRevisionIDs.Load(workbenchPromptStoreKey(r, promptID)); ok {
 		if revisionID, ok := latestID.(string); ok {
-			if revision, ok := workbenchStoredRevision(r, promptID, revisionID, includeMessages, includeCreator); ok {
+			if revision, ok := h.storedRevision(r, promptID, revisionID, includeMessages, includeCreator); ok {
 				return revision, revisionID, true
 			}
 		}
@@ -2027,7 +1972,7 @@ func workbenchStoredLatestRevision(r *http.Request, promptID string, includeMess
 	return nil, "", false
 }
 
-func workbenchRevision(r *http.Request, revisionID string, includeMessages bool, includeCreator bool) map[string]any {
+func (h *workbenchHandler) revision(r *http.Request, revisionID string, includeMessages bool, includeCreator bool) map[string]any {
 	revision := map[string]any{
 		"system_prompt":            "",
 		"model_name":               "",
@@ -2051,13 +1996,13 @@ func workbenchRevision(r *http.Request, revisionID string, includeMessages bool,
 	return revision
 }
 
-func workbenchRevisionFromEvaluations(r *http.Request, revisionID string, includeMessages bool, includeCreator bool) (map[string]any, bool) {
-	evaluations := workbenchStoredEvaluationMaps(r, revisionID)
+func (h *workbenchHandler) revisionFromEvaluations(r *http.Request, revisionID string, includeMessages bool, includeCreator bool) (map[string]any, bool) {
+	evaluations := h.storedEvaluationMaps(r, revisionID)
 	if len(evaluations) == 0 {
 		return nil, false
 	}
 	variables := workbenchVariableNamesFromEvaluations(evaluations)
-	revision := workbenchRevision(r, revisionID, includeMessages, includeCreator)
+	revision := h.revision(r, revisionID, includeMessages, includeCreator)
 	revision["variables"] = variables
 	if includeMessages {
 		revision["messages"] = workbenchMessagesForVariables(variables)
@@ -2072,16 +2017,16 @@ func workbenchCompactRevision(revision map[string]any) map[string]any {
 	return compact
 }
 
-func workbenchRevisionFromBody(r *http.Request, body map[string]any, fallbackID string, includeMessages bool, includeCreator bool) map[string]any {
+func (h *workbenchHandler) revisionFromBody(r *http.Request, body map[string]any, fallbackID string, includeMessages bool, includeCreator bool) map[string]any {
 	revisionID := strings.TrimSpace(workbenchString(body["id"]))
 	if revisionID == "" {
 		revisionID = fallbackID
 	}
-	revision := workbenchRevision(r, revisionID, includeMessages, includeCreator)
+	revision := h.revision(r, revisionID, includeMessages, includeCreator)
 	revision["created_at"] = formatJSISOString(time.Now())
 	workbenchSetStringField(revision, body, "system_prompt")
 	workbenchSetStringField(revision, body, "model_name")
-	resolveWorkbenchRevisionModel(r, revision)
+	h.resolveRevisionModel(revision)
 	workbenchSetNumberField(revision, body, "max_tokens_to_sample")
 	workbenchSetNumberField(revision, body, "temperature")
 	workbenchSetBoolField(revision, body, "show_raw_thinking")
@@ -2095,12 +2040,12 @@ func workbenchRevisionFromBody(r *http.Request, body map[string]any, fallbackID 
 	return revision
 }
 
-func workbenchStoreRevision(r *http.Request, promptID string, revision map[string]any) error {
+func (h *workbenchHandler) storeRevision(r *http.Request, promptID string, revision map[string]any) error {
 	revisionID := strings.TrimSpace(workbenchString(revision["id"]))
 	if revisionID == "" {
 		return nil
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		if err := store.UpsertWorkbenchRevision(r.Context(), WorkbenchRevisionRecord{
 			OrgUUID:      workbenchOrgUUID(r),
 			PromptUUID:   strings.TrimSpace(promptID),
@@ -2109,7 +2054,7 @@ func workbenchStoreRevision(r *http.Request, promptID string, revision map[strin
 		}); err != nil {
 			return err
 		}
-		record, err := workbenchPromptRecordForUpsert(r, promptID, "default")
+		record, err := h.promptRecordForUpsert(r, promptID, "default")
 		if err != nil {
 			return err
 		}
@@ -2124,8 +2069,8 @@ func workbenchStoreRevision(r *http.Request, promptID string, revision map[strin
 	return nil
 }
 
-func workbenchStoredRevision(r *http.Request, promptID string, revisionID string, includeMessages bool, includeCreator bool) (map[string]any, bool) {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+func (h *workbenchHandler) storedRevision(r *http.Request, promptID string, revisionID string, includeMessages bool, includeCreator bool) (map[string]any, bool) {
+	if store := h.store; store != nil {
 		record, err := store.GetWorkbenchRevision(r.Context(), workbenchOrgUUID(r), strings.TrimSpace(promptID), strings.TrimSpace(revisionID))
 		if err == nil && record != nil {
 			revision := workbenchCloneMap(record.Payload)
@@ -2137,7 +2082,7 @@ func workbenchStoredRevision(r *http.Request, promptID string, revisionID string
 			} else {
 				delete(revision, "creator")
 			}
-			resolveWorkbenchRevisionModel(r, revision)
+			h.resolveRevisionModel(revision)
 			return revision, true
 		}
 		if err != nil && !errors.Is(err, ErrNotFound) {
@@ -2161,16 +2106,16 @@ func workbenchStoredRevision(r *http.Request, promptID string, revisionID string
 	} else {
 		delete(revision, "creator")
 	}
-	resolveWorkbenchRevisionModel(r, revision)
+	h.resolveRevisionModel(revision)
 	return revision, true
 }
 
-func resolveWorkbenchRevisionModel(r *http.Request, revision map[string]any) {
+func (h *workbenchHandler) resolveRevisionModel(revision map[string]any) {
 	modelID := strings.TrimSpace(workbenchString(revision["model_name"]))
 	if modelID == "" {
 		return
 	}
-	revision["model_name"] = modelmapping.Resolve(modelID, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
+	revision["model_name"] = modelmapping.Resolve(modelID, h.upstream.ModelMappings)
 }
 
 func workbenchPromptStoreKey(r *http.Request, promptID string) string {
@@ -2189,8 +2134,8 @@ func workbenchOrgUUID(r *http.Request) string {
 	return strings.TrimSpace(chi.URLParam(r, "orgUuid"))
 }
 
-func workbenchStoredPromptRecord(r *http.Request, promptID string) (*WorkbenchPromptRecord, bool) {
-	store := workbenchPersistenceFromRequest(r)
+func (h *workbenchHandler) storedPromptRecord(r *http.Request, promptID string) (*WorkbenchPromptRecord, bool) {
+	store := h.store
 	if store == nil {
 		return nil, false
 	}
@@ -2201,7 +2146,7 @@ func workbenchStoredPromptRecord(r *http.Request, promptID string) (*WorkbenchPr
 	return record, true
 }
 
-func workbenchPromptRecordForUpsert(r *http.Request, promptID string, workspaceID string) (WorkbenchPromptRecord, error) {
+func (h *workbenchHandler) promptRecordForUpsert(r *http.Request, promptID string, workspaceID string) (WorkbenchPromptRecord, error) {
 	promptID = strings.TrimSpace(promptID)
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
@@ -2221,7 +2166,7 @@ func workbenchPromptRecordForUpsert(r *http.Request, promptID string, workspaceI
 			record.LatestRevisionUUID = &revisionID
 		}
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		current, err := store.GetWorkbenchPrompt(r.Context(), record.OrgUUID, promptID)
 		if err == nil && current != nil {
 			record = *current
@@ -2237,8 +2182,8 @@ func workbenchPromptRecordForUpsert(r *http.Request, promptID string, workspaceI
 	return record, nil
 }
 
-func workbenchPromptDeleted(r *http.Request, promptID string) (bool, error) {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+func (h *workbenchHandler) promptDeleted(r *http.Request, promptID string) (bool, error) {
+	if store := h.store; store != nil {
 		record, err := store.GetWorkbenchPrompt(r.Context(), workbenchOrgUUID(r), strings.TrimSpace(promptID))
 		if err == nil && record != nil {
 			return record.DeletedAt != nil, nil
@@ -2251,9 +2196,9 @@ func workbenchPromptDeleted(r *http.Request, promptID string) (bool, error) {
 	return ok, nil
 }
 
-func workbenchDeletePrompt(r *http.Request, promptID string) error {
+func (h *workbenchHandler) deletePrompt(r *http.Request, promptID string) error {
 	promptID = strings.TrimSpace(promptID)
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		if err := store.DeleteWorkbenchPromptState(r.Context(), workbenchOrgUUID(r), promptID); err != nil {
 			return err
 		}
@@ -2268,18 +2213,18 @@ func workbenchDeletePrompt(r *http.Request, promptID string) error {
 	workbenchDeleteMapStringPrefix(&workbenchLocalEvaluations, workbenchEvaluationOrgPrefix(r))
 	workbenchDeleteMapStringPrefix(&workbenchLocalGeneratedTestCases, workbenchGeneratedTestCaseStoreKey(r))
 	if promptID == workbenchDefaultPromptID {
-		return workbenchUndeletePrompt(r, promptID, "default")
+		return h.undeletePrompt(r, promptID, "default")
 	}
 	return nil
 }
 
-func workbenchUndeletePrompt(r *http.Request, promptID string, workspaceID string) error {
+func (h *workbenchHandler) undeletePrompt(r *http.Request, promptID string, workspaceID string) error {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		workspaceID = "default"
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
-		record, err := workbenchPromptRecordForUpsert(r, promptID, workspaceID)
+	if store := h.store; store != nil {
+		record, err := h.promptRecordForUpsert(r, promptID, workspaceID)
 		if err != nil {
 			return err
 		}
@@ -2307,9 +2252,9 @@ func writeWorkbenchPromptNotFound(w http.ResponseWriter) {
 	writeJSON(w, http.StatusNotFound, map[string]any{"error": "not_found", "entity": "prompt"})
 }
 
-func workbenchStorePromptName(r *http.Request, promptID string, name string) error {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
-		record, err := workbenchPromptRecordForUpsert(r, promptID, "default")
+func (h *workbenchHandler) storePromptName(r *http.Request, promptID string, name string) error {
+	if store := h.store; store != nil {
+		record, err := h.promptRecordForUpsert(r, promptID, "default")
 		if err != nil {
 			return err
 		}
@@ -2323,9 +2268,9 @@ func workbenchStorePromptName(r *http.Request, promptID string, name string) err
 	return nil
 }
 
-func workbenchStorePromptSharing(r *http.Request, promptID string, shared bool) error {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
-		record, err := workbenchPromptRecordForUpsert(r, promptID, "default")
+func (h *workbenchHandler) storePromptSharing(r *http.Request, promptID string, shared bool) error {
+	if store := h.store; store != nil {
+		record, err := h.promptRecordForUpsert(r, promptID, "default")
 		if err != nil {
 			return err
 		}
@@ -2367,12 +2312,12 @@ func workbenchPromptShared(r *http.Request, promptID string) bool {
 	return ok && shared
 }
 
-func workbenchStoreKV(r *http.Request, promptID string, key string, entry workbenchKVEntry) error {
+func (h *workbenchHandler) storeKV(r *http.Request, promptID string, key string, entry workbenchKVEntry) error {
 	if strings.TrimSpace(key) == "" {
 		return nil
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
-		record, err := workbenchPromptRecordForUpsert(r, promptID, "default")
+	if store := h.store; store != nil {
+		record, err := h.promptRecordForUpsert(r, promptID, "default")
 		if err != nil {
 			return err
 		}
@@ -2394,8 +2339,8 @@ func workbenchStoreKV(r *http.Request, promptID string, key string, entry workbe
 	return nil
 }
 
-func workbenchDeleteKV(r *http.Request, promptID string, key string) error {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+func (h *workbenchHandler) deleteKV(r *http.Request, promptID string, key string) error {
+	if store := h.store; store != nil {
 		if err := store.DeleteWorkbenchKV(r.Context(), workbenchOrgUUID(r), strings.TrimSpace(promptID), strings.TrimSpace(key)); err != nil {
 			return err
 		}
@@ -2404,8 +2349,8 @@ func workbenchDeleteKV(r *http.Request, promptID string, key string) error {
 	return nil
 }
 
-func workbenchStoredKV(r *http.Request, promptID string, key string) (workbenchKVEntry, bool) {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+func (h *workbenchHandler) storedKV(r *http.Request, promptID string, key string) (workbenchKVEntry, bool) {
+	if store := h.store; store != nil {
 		record, err := store.GetWorkbenchKV(r.Context(), workbenchOrgUUID(r), strings.TrimSpace(promptID), strings.TrimSpace(key))
 		if err == nil && record != nil {
 			return workbenchKVEntry{Value: record.Value, Version: chatClone(record.Version)}, true
@@ -2451,12 +2396,12 @@ func workbenchEvaluationFromBody(r *http.Request, body map[string]any, revisionI
 	return evaluation
 }
 
-func workbenchStoreEvaluation(r *http.Request, evaluation map[string]any) error {
+func (h *workbenchHandler) storeEvaluation(r *http.Request, evaluation map[string]any) error {
 	revisionID := strings.TrimSpace(workbenchString(evaluation["revision_id"]))
 	if revisionID == "" {
 		return nil
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		evaluationID := strings.TrimSpace(workbenchString(evaluation["id"]))
 		if evaluationID == "" {
 			return nil
@@ -2480,8 +2425,8 @@ func workbenchStoreEvaluation(r *http.Request, evaluation map[string]any) error 
 	return nil
 }
 
-func workbenchStoredEvaluations(r *http.Request, revisionID string) []any {
-	evaluations := workbenchStoredEvaluationMaps(r, revisionID)
+func (h *workbenchHandler) storedEvaluations(r *http.Request, revisionID string) []any {
+	evaluations := h.storedEvaluationMaps(r, revisionID)
 	out := make([]any, 0, len(evaluations))
 	for _, evaluation := range evaluations {
 		out = append(out, workbenchCloneMap(evaluation))
@@ -2489,8 +2434,8 @@ func workbenchStoredEvaluations(r *http.Request, revisionID string) []any {
 	return out
 }
 
-func workbenchStoredEvaluationMaps(r *http.Request, revisionID string) []map[string]any {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+func (h *workbenchHandler) storedEvaluationMaps(r *http.Request, revisionID string) []map[string]any {
+	if store := h.store; store != nil {
 		records, err := store.ListWorkbenchEvaluations(r.Context(), workbenchOrgUUID(r), strings.TrimSpace(revisionID))
 		if err == nil {
 			evaluations := make([]map[string]any, 0, len(records))
@@ -2506,11 +2451,11 @@ func workbenchStoredEvaluationMaps(r *http.Request, revisionID string) []map[str
 	return workbenchEvaluationSliceFromStore(workbenchEvaluationStoreKey(r, revisionID))
 }
 
-func workbenchUpdateEvaluation(r *http.Request, evaluationID string, body map[string]any) (map[string]any, bool, error) {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+func (h *workbenchHandler) updateEvaluation(r *http.Request, evaluationID string, body map[string]any) (map[string]any, bool, error) {
+	if store := h.store; store != nil {
 		record, err := store.GetWorkbenchEvaluation(r.Context(), workbenchOrgUUID(r), strings.TrimSpace(evaluationID))
 		if err == nil && record != nil {
-			next := workbenchEvaluationWithPatch(r, record.Payload, body)
+			next := h.evaluationWithPatch(r, record.Payload, body)
 			revisionID := strings.TrimSpace(workbenchString(next["revision_id"]))
 			if revisionID == "" {
 				revisionID = record.RevisionUUID
@@ -2550,7 +2495,7 @@ func workbenchUpdateEvaluation(r *http.Request, evaluationID string, body map[st
 			if workbenchString(evaluation["id"]) != evaluationID {
 				continue
 			}
-			next := workbenchEvaluationWithPatch(r, evaluation, body)
+			next := h.evaluationWithPatch(r, evaluation, body)
 			evaluations[idx] = workbenchCloneMap(next)
 			updated = next
 			updatedKey = keyString
@@ -2566,13 +2511,13 @@ func workbenchUpdateEvaluation(r *http.Request, evaluationID string, body map[st
 	return workbenchCloneMap(updated), true, nil
 }
 
-func workbenchEvaluationWithPatch(r *http.Request, evaluation map[string]any, body map[string]any) map[string]any {
+func (h *workbenchHandler) evaluationWithPatch(r *http.Request, evaluation map[string]any, body map[string]any) map[string]any {
 	next := workbenchCloneMap(evaluation)
 	for _, field := range []string{"completion", "completion_text", "rating", "golden_answer", "variable_values"} {
 		if value, ok := body[field]; ok {
 			if field == "variable_values" {
 				variableValues := workbenchMapField(body, field)
-				if generatedValues, ok := workbenchTakeGeneratedTestCase(r, variableValues); ok {
+				if generatedValues, ok := h.takeGeneratedTestCase(r, variableValues); ok {
 					variableValues = generatedValues
 				}
 				next[field] = variableValues
@@ -2587,11 +2532,11 @@ func workbenchEvaluationWithPatch(r *http.Request, evaluation map[string]any, bo
 	return next
 }
 
-func workbenchDeleteEvaluation(r *http.Request, evaluationID string) (map[string]any, bool, error) {
+func (h *workbenchHandler) deleteEvaluation(r *http.Request, evaluationID string) (map[string]any, bool, error) {
 	if strings.TrimSpace(evaluationID) == "" {
 		return nil, false, nil
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		record, err := store.DeleteWorkbenchEvaluation(r.Context(), workbenchOrgUUID(r), strings.TrimSpace(evaluationID))
 		if err == nil && record != nil {
 			return workbenchCloneMap(record.Payload), true, nil
@@ -2656,8 +2601,8 @@ func workbenchEvaluationSliceFromStore(key string) []map[string]any {
 	return out
 }
 
-func workbenchEvaluationRevisionIDs(r *http.Request) []string {
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+func (h *workbenchHandler) evaluationRevisionIDs(r *http.Request) []string {
+	if store := h.store; store != nil {
 		revisionIDs, err := store.ListWorkbenchEvaluationRevisionIDs(r.Context(), workbenchOrgUUID(r))
 		if err == nil {
 			return revisionIDs
@@ -2722,11 +2667,11 @@ func workbenchGeneratedTestCaseStoreKey(r *http.Request) string {
 	return strings.TrimSpace(chi.URLParam(r, "orgUuid")) + "\x00generated_test_cases"
 }
 
-func workbenchStoreGeneratedTestCase(r *http.Request, values map[string]any) error {
+func (h *workbenchHandler) storeGeneratedTestCase(r *http.Request, values map[string]any) error {
 	if len(values) == 0 {
 		return nil
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		if err := store.AppendWorkbenchGeneratedTestCase(r.Context(), workbenchOrgUUID(r), workbenchCloneMap(values)); err != nil {
 			return err
 		}
@@ -2745,11 +2690,11 @@ func workbenchStoreGeneratedTestCase(r *http.Request, values map[string]any) err
 	return nil
 }
 
-func workbenchTakeGeneratedTestCase(r *http.Request, requested map[string]any) (map[string]any, bool) {
+func (h *workbenchHandler) takeGeneratedTestCase(r *http.Request, requested map[string]any) (map[string]any, bool) {
 	if !workbenchShouldUseGeneratedTestCase(requested) {
 		return nil, false
 	}
-	if store := workbenchPersistenceFromRequest(r); store != nil {
+	if store := h.store; store != nil {
 		values, ok, err := store.TakeWorkbenchGeneratedTestCase(r.Context(), workbenchOrgUUID(r), requested)
 		if err == nil && ok {
 			return values, true
@@ -3091,11 +3036,11 @@ func workbenchCloneMap(value map[string]any) map[string]any {
 	return cloned
 }
 
-func workbenchPromptDraftRevisionString(r *http.Request, promptID string) string {
-	if entry, ok := workbenchStoredKV(r, promptID, "draft_revision"); ok && strings.TrimSpace(entry.Value) != "" {
+func (h *workbenchHandler) promptDraftRevisionString(r *http.Request, promptID string) string {
+	if entry, ok := h.storedKV(r, promptID, "draft_revision"); ok && strings.TrimSpace(entry.Value) != "" {
 		return entry.Value
 	}
-	return workbenchRevisionString(workbenchLatestRevision(r, promptID, true, false))
+	return workbenchRevisionString(h.latestRevision(r, promptID, true, false))
 }
 
 func workbenchRevisionString(revision map[string]any) string {

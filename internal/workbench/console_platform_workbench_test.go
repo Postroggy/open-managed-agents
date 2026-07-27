@@ -16,7 +16,28 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/samber/lo"
 )
+
+func handleWorkbenchModels(w http.ResponseWriter, r *http.Request) {
+	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchModels(w, r)
+}
+
+func handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
+	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchCompletions(w, r)
+}
+
+func handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
+	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchGeneratePrompt(w, r)
+}
+
+func handleWorkbenchGenerateTitle(w http.ResponseWriter, r *http.Request) {
+	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchGenerateTitle(w, r)
+}
+
+func handleWorkbenchGenerateTestCase(w http.ResponseWriter, r *http.Request) {
+	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchGenerateTestCase(w, r)
+}
 
 func TestWorkbenchCreatorUsesPrincipalWhenCookiePresent(t *testing.T) {
 	bootstrap := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +229,6 @@ func TestWorkbenchAnthropicTextResolvesUpstreamModelAtRequestBoundary(t *testing
 	}
 
 	withWorkbenchDependenciesAndCatalog(nil, upstream, mappedWorkbenchTestCatalog(), handler)(rec, req)
-
 	if upstreamModel != "glm-5-turbo" {
 		t.Fatalf("upstream model = %q, want glm-5-turbo", upstreamModel)
 	}
@@ -250,17 +270,63 @@ func TestWorkbenchAnthropicTokenUsesConfig(t *testing.T) {
 	}
 }
 
+func TestWorkbenchModelsExposeEffectiveModelMappings(t *testing.T) {
+	orgUUID := "7482d00f-2e42-478b-b2db-07c3d056a3b6"
+	req := workbenchCreatorTestRequest(orgUUID)
+	rec := httptest.NewRecorder()
+	upstream := config.AnthropicUpstreamConfig{
+		ModelMappings: map[string]string{
+			"claude-sonnet-4-6": "glm-5-turbo",
+			"claude-opus-4-8":   "glm-5.2",
+		},
+	}
+
+	catalog := workbenchTestCatalog{snapshot: modelcatalog.Snapshot{
+		Models: []modelcatalog.Model{
+			{ID: "glm-5-turbo", DisplayName: "GLM 5 Turbo"},
+			{ID: "glm-5.2", DisplayName: "GLM 5.2"},
+		},
+		DefaultModelID:   "glm-5-turbo",
+		DefaultAvailable: true,
+	}}
+	withWorkbenchDependenciesAndCatalog(nil, upstream, catalog, handleWorkbenchModels)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		ModelMappings map[string]string `json:"model_mappings"`
+		Models        []struct {
+			ModelName string `json:"model_name"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ModelMappings["claude-sonnet-4-6"] != "glm-5-turbo" {
+		t.Fatalf("model_mappings = %#v", body.ModelMappings)
+	}
+	modelNames := make([]string, 0, len(body.Models))
+	for _, model := range body.Models {
+		modelNames = append(modelNames, model.ModelName)
+	}
+	for _, want := range []string{"glm-5-turbo", "glm-5.2"} {
+		if !lo.Contains(modelNames, want) {
+			t.Fatalf("models = %#v, missing %q", modelNames, want)
+		}
+	}
+}
+
 func TestWorkbenchRevisionModelUsesMappingAtWriteAndReadBoundaries(t *testing.T) {
 	orgUUID := "3458f354-f4ba-4bcd-95ef-ef48b2534447"
 	promptID := "prompt_model_mapping"
 	revisionID := "revision_model_mapping"
 	req := workbenchCreatorTestRequest(orgUUID)
-	ctx := context.WithValue(req.Context(), workbenchAnthropicUpstreamContextKey{}, config.AnthropicUpstreamConfig{
+	handler := newWorkbenchHandler(nil, config.AnthropicUpstreamConfig{
 		ModelMappings: map[string]string{"claude-sonnet-4-6": "glm-5-turbo"},
-	})
-	req = req.WithContext(ctx)
+	}, nil)
 
-	created := workbenchRevisionFromBody(
+	created := handler.revisionFromBody(
 		req,
 		map[string]any{"model_name": "claude-sonnet-4-6"},
 		revisionID,
@@ -274,7 +340,7 @@ func TestWorkbenchRevisionModelUsesMappingAtWriteAndReadBoundaries(t *testing.T)
 	key := workbenchRevisionStoreKey(req, promptID, revisionID)
 	workbenchLocalRevisions.Store(key, map[string]any{"id": revisionID, "model_name": "claude-sonnet-4-6"})
 	defer workbenchLocalRevisions.Delete(key)
-	stored, ok := workbenchStoredRevision(req, promptID, revisionID, false, false)
+	stored, ok := handler.storedRevision(req, promptID, revisionID, false, false)
 	if !ok || stored["model_name"] != "glm-5-turbo" {
 		t.Fatalf("stored revision = %#v, want mapped model", stored)
 	}
@@ -602,6 +668,7 @@ func TestCreateWorkbenchPromptReusesCapturedDefaultPrompt(t *testing.T) {
 			},
 		},
 	}
+	handler := newWorkbenchHandler(store, config.AnthropicUpstreamConfig{}, nil)
 
 	createReq := workbenchWorkspaceTestRequest(
 		http.MethodPost,
@@ -609,10 +676,9 @@ func TestCreateWorkbenchPromptReusesCapturedDefaultPrompt(t *testing.T) {
 		orgUUID,
 		"default",
 		`{}`,
-		store,
 	)
 	createRec := httptest.NewRecorder()
-	handleCreateWorkbenchPrompt(createRec, createReq)
+	handler.handleCreateWorkbenchPrompt(createRec, createReq)
 	if createRec.Code != http.StatusOK {
 		t.Fatalf("create status = %d, body = %s", createRec.Code, createRec.Body.String())
 	}
@@ -637,10 +703,9 @@ func TestCreateWorkbenchPromptReusesCapturedDefaultPrompt(t *testing.T) {
 		orgUUID,
 		"default",
 		"",
-		store,
 	)
 	listDefaultRec := httptest.NewRecorder()
-	handleListWorkbenchWorkspacePrompts(listDefaultRec, listDefaultReq)
+	handler.handleListWorkbenchWorkspacePrompts(listDefaultRec, listDefaultReq)
 	if listDefaultRec.Code != http.StatusOK {
 		t.Fatalf("list default status = %d, body = %s", listDefaultRec.Code, listDefaultRec.Body.String())
 	}
@@ -658,10 +723,9 @@ func TestCreateWorkbenchPromptReusesCapturedDefaultPrompt(t *testing.T) {
 		orgUUID,
 		"wrkspc_previous",
 		"",
-		store,
 	)
 	listPreviousRec := httptest.NewRecorder()
-	handleListWorkbenchWorkspacePrompts(listPreviousRec, listPreviousReq)
+	handler.handleListWorkbenchWorkspacePrompts(listPreviousRec, listPreviousReq)
 	if listPreviousRec.Code != http.StatusOK {
 		t.Fatalf("list previous status = %d, body = %s", listPreviousRec.Code, listPreviousRec.Body.String())
 	}
@@ -686,6 +750,7 @@ func TestDeleteCapturedDefaultWorkbenchPromptResetsInsteadOfHidingIt(t *testing.
 			},
 		},
 	}
+	handler := newWorkbenchHandler(store, config.AnthropicUpstreamConfig{}, nil)
 
 	deleteReq := workbenchPromptTestRequest(
 		http.MethodDelete,
@@ -693,10 +758,9 @@ func TestDeleteCapturedDefaultWorkbenchPromptResetsInsteadOfHidingIt(t *testing.
 		orgUUID,
 		workbenchDefaultPromptID,
 		"",
-		store,
 	)
 	deleteRec := httptest.NewRecorder()
-	handleDeleteWorkbenchPrompt(deleteRec, deleteReq)
+	handler.handleDeleteWorkbenchPrompt(deleteRec, deleteReq)
 	if deleteRec.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, body = %s", deleteRec.Code, deleteRec.Body.String())
 	}
@@ -707,10 +771,9 @@ func TestDeleteCapturedDefaultWorkbenchPromptResetsInsteadOfHidingIt(t *testing.
 		orgUUID,
 		workbenchDefaultPromptID,
 		"",
-		store,
 	)
 	getRec := httptest.NewRecorder()
-	handleGetWorkbenchPrompt(getRec, getReq)
+	handler.handleGetWorkbenchPrompt(getRec, getReq)
 	if getRec.Code != http.StatusOK {
 		t.Fatalf("get status = %d, body = %s", getRec.Code, getRec.Body.String())
 	}
@@ -738,10 +801,11 @@ func TestListWorkbenchPromptsIncludesCurrentWorkspacePrompts(t *testing.T) {
 			},
 		},
 	}
-	req := workbenchPromptListTestRequest(orgUUID, "default", store)
+	handler := newWorkbenchHandler(store, config.AnthropicUpstreamConfig{}, nil)
+	req := workbenchPromptListTestRequest(orgUUID, "default")
 	rec := httptest.NewRecorder()
 
-	handleListWorkbenchPrompts(rec, req)
+	handler.handleListWorkbenchPrompts(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list status = %d, body = %s", rec.Code, rec.Body.String())
@@ -770,6 +834,7 @@ func TestListWorkbenchPromptsIncludesCurrentWorkspacePrompts(t *testing.T) {
 func TestCreateWorkbenchPromptAcceptsInitialRevision(t *testing.T) {
 	orgUUID := "1a3f24b5-2f6b-4d2d-85d3-5342b67b3c1a"
 	store := &fakeWorkbenchPersistenceStore{}
+	handler := newWorkbenchHandler(store, config.AnthropicUpstreamConfig{}, nil)
 	body := `{
 		"name": "Copied prompt",
 		"latest_revision": {
@@ -791,10 +856,9 @@ func TestCreateWorkbenchPromptAcceptsInitialRevision(t *testing.T) {
 		orgUUID,
 		"default",
 		body,
-		store,
 	)
 	rec := httptest.NewRecorder()
-	handleCreateWorkbenchPrompt(rec, req)
+	handler.handleCreateWorkbenchPrompt(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -829,14 +893,12 @@ func workbenchCreatorTestRequest(orgUUID string) *http.Request {
 	return workbenchTestRequestWithMethod(req, orgUUID)
 }
 
-func workbenchPromptListTestRequest(orgUUID string, workspaceID string, store workbenchPersistenceStore) *http.Request {
+func workbenchPromptListTestRequest(orgUUID string, workspaceID string) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "/api/organizations/"+orgUUID+"/workbench/prompts", nil)
 	if workspaceID != "" {
 		req.Header.Set("X-Workspace-ID", workspaceID)
 	}
-	req = workbenchTestRequestWithMethod(req, orgUUID)
-	ctx := context.WithValue(req.Context(), workbenchPersistenceContextKey{}, store)
-	return req.WithContext(ctx)
+	return workbenchTestRequestWithMethod(req, orgUUID)
 }
 
 func workbenchPostTestRequest(orgUUID string, path string, body string) *http.Request {
@@ -939,7 +1001,7 @@ func workbenchTestRequestWithMethod(req *http.Request, orgUUID string) *http.Req
 	return req.WithContext(ctx)
 }
 
-func workbenchWorkspaceTestRequest(method string, path string, orgUUID string, workspaceID string, body string, store workbenchPersistenceStore) *http.Request {
+func workbenchWorkspaceTestRequest(method string, path string, orgUUID string, workspaceID string, body string) *http.Request {
 	var reader *strings.Reader
 	if body != "" {
 		reader = strings.NewReader(body)
@@ -952,11 +1014,10 @@ func workbenchWorkspaceTestRequest(method string, path string, orgUUID string, w
 	}
 	req = workbenchTestRequestWithMethod(req, orgUUID)
 	chi.RouteContext(req.Context()).URLParams.Add("workspaceId", workspaceID)
-	ctx := context.WithValue(req.Context(), workbenchPersistenceContextKey{}, store)
-	return req.WithContext(ctx)
+	return req
 }
 
-func workbenchPromptTestRequest(method string, path string, orgUUID string, promptID string, body string, store workbenchPersistenceStore) *http.Request {
+func workbenchPromptTestRequest(method string, path string, orgUUID string, promptID string, body string) *http.Request {
 	var reader *strings.Reader
 	if body != "" {
 		reader = strings.NewReader(body)
@@ -969,8 +1030,7 @@ func workbenchPromptTestRequest(method string, path string, orgUUID string, prom
 	}
 	req = workbenchTestRequestWithMethod(req, orgUUID)
 	chi.RouteContext(req.Context()).URLParams.Add("promptUuid", promptID)
-	ctx := context.WithValue(req.Context(), workbenchPersistenceContextKey{}, store)
-	return req.WithContext(ctx)
+	return req
 }
 
 type fakeWorkbenchPersistenceStore struct {

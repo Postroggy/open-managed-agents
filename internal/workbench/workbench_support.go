@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -46,8 +47,15 @@ func RegisterOrgWorkbenchRoutes(
 	store OrganizationStore,
 	upstream config.AnthropicUpstreamConfig,
 	catalog modelcatalog.Reader,
+	logger *slog.Logger,
 ) {
-	registerOrgWorkbenchRoutes(r, store, upstream, catalog)
+	h := newWorkbenchHandler(store, upstream, logger)
+	workbenchRouter := chi.NewRouter()
+	workbenchRouter.Use(func(next http.Handler) http.Handler {
+		return withWorkbenchDependenciesAndCatalog(h.store, upstream, catalog, next.ServeHTTP)
+	})
+	h.registerRoutes(workbenchRouter)
+	r.Mount("/", workbenchRouter)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
