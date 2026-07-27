@@ -22,7 +22,6 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/observability"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
 	"github.com/superduck-ai/open-managed-agents/internal/runtime/e2bruntime"
-	"github.com/superduck-ai/open-managed-agents/internal/skillprewarm"
 	skillsapi "github.com/superduck-ai/open-managed-agents/internal/skills"
 	"github.com/superduck-ai/open-managed-agents/internal/storage"
 	"github.com/superduck-ai/open-managed-agents/internal/webhooks"
@@ -103,14 +102,13 @@ func main() {
 		Provider:        e2bruntime.NewProvider(cfg.E2B),
 		Config:          cfg,
 		CodeSessions:    codesessions.NewServiceWithCredentials(database, codeSessionCredentials),
-		Skills:          skillsapi.NewRuntimeResolver(cfg, database, objectStore),
+		Skills:          skillsapi.NewRuntimeResolver(database),
 		FilestoreTokens: filestoreCredentials,
 	})
 	if err != nil {
 		log.Fatalf("create environment runner: %v", err)
 	}
 	environmentRunner.Start(ctx)
-	skillprewarm.StartWorker(ctx, database, objectStore, cfg)
 	webhooks.StartWorker(ctx, database, cfg.Webhook)
 
 	server := &http.Server{
