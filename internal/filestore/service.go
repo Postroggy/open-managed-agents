@@ -1,7 +1,6 @@
 package filestore
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
@@ -32,6 +31,7 @@ type filestoreDatabase interface {
 	GetFilestoreFilesystem(context.Context, int64, string) (db.FilestoreFilesystem, error)
 	GetFilestoreEntry(context.Context, int64, int64, string) (db.FilestoreEntry, error)
 	ListFilestoreEntriesPage(context.Context, db.ListFilestoreEntriesPageParams) (db.FilestoreEntryPage, error)
+	ListFilestoreSkillArchiveEntries(context.Context, int64, int64) ([]db.FilestoreEntry, error)
 	MakeFilestoreDirectory(context.Context, db.MakeFilestoreDirectoryInput) (db.FilestoreEntry, error)
 	PutFilestoreFile(context.Context, db.PutFilestoreFileInput) (db.FilestoreMutationResult, error)
 	CopyFilestoreFile(context.Context, db.CopyFilestoreFileInput) (db.FilestoreMutationResult, error)
@@ -51,6 +51,7 @@ type Service struct {
 	db    filestoreDatabase
 	store storage.ObjectStore
 	now   func() time.Time
+	paths pathRouter
 }
 
 type readFileResult struct {
@@ -61,7 +62,22 @@ type readFileResult struct {
 
 // NewService 创建 Filestore 业务服务。
 func NewService(cfg config.Config, database filestoreDatabase, store storage.ObjectStore) *Service {
-	return &Service{cfg: cfg, db: database, store: store, now: time.Now}
+	persistent := &persistentPathBackend{db: database, store: store}
+	skills := &skillArchivePathBackend{
+		db:    database,
+		store: store,
+		cache: newSkillArchiveCache(defaultSkillArchiveCacheEntries),
+	}
+	return &Service{
+		cfg:   cfg,
+		db:    database,
+		store: store,
+		now:   time.Now,
+		paths: pathRouter{
+			persistent: persistent,
+			readOnly:   []readOnlyPathBackend{skills},
+		},
+	}
 }
 
 // ListDirectory 按路径与内部 ID 的稳定顺序列出目录，使用键集游标避免 offset 分页漂移。
@@ -84,45 +100,8 @@ func (s *Service) ListDirectory(ctx context.Context, principal Principal, reques
 	if apiErr != nil {
 		return listDirectoryResponse{}, apiErr
 	}
-	params := db.ListFilestoreEntriesPageParams{
-		WorkspaceID:   principal.WorkspaceID,
-		FilesystemID:  filesystem.ID,
-		DirectoryPath: request.Path,
-		Recursive:     request.Recursive,
-		Limit:         int(limit),
-	}
-	if request.Cursor != "" {
-		// Path 是主排序键，ID 在路径相同的边界情形下提供稳定的决胜键。
-		params.Cursor = &db.FilestoreEntryPageCursor{Path: cursor.LastPath, ID: cursor.LastID}
-	}
-	page, err := s.db.ListFilestoreEntriesPage(ctx, params)
-	if err != nil {
-		return listDirectoryResponse{}, mapDatabaseError("list directory", err)
-	}
-	entries := page.Entries
-	response := listDirectoryResponse{Entries: make([]entryPayload, 0, len(entries))}
-	for _, entry := range entries {
-		payload, err := payloadFromEntry(entry, filesystem.ExternalID)
-		if err != nil {
-			return listDirectoryResponse{}, internalError("encode directory entry", err)
-		}
-		response.Entries = append(response.Entries, payload)
-	}
-	if page.HasMore && len(entries) != 0 {
-		// 只在确有下一页时签发游标；最后一页返回空 cursor，rclone 据此停止翻页。
-		last := entries[len(entries)-1]
-		response.Cursor, err = encodeDirectoryCursor(directoryCursor{
-			FilesystemID: request.FilesystemID,
-			Path:         request.Path,
-			Recursive:    request.Recursive,
-			LastPath:     last.Path,
-			LastID:       last.ID,
-		})
-		if err != nil {
-			return listDirectoryResponse{}, internalError("encode directory cursor", err)
-		}
-	}
-	return response, nil
+	backend := s.paths.backendFor(readOperationListDirectory, request.Path)
+	return backend.listDirectory(ctx, principal, filesystem, request, cursor, int(limit))
 }
 
 // MakeDirectory 创建目录；MakeParents 为真时在同一事务内补齐整条父目录链。
@@ -132,6 +111,9 @@ func (s *Service) MakeDirectory(ctx context.Context, principal Principal, reques
 	}
 	filesystem, apiErr := s.resolveFilesystem(ctx, principal, request.FilesystemID)
 	if apiErr != nil {
+		return directoryResponse{}, apiErr
+	}
+	if apiErr := s.paths.authorizeMutation(request.Path); apiErr != nil {
 		return directoryResponse{}, apiErr
 	}
 	entry, err := s.db.MakeFilestoreDirectory(ctx, db.MakeFilestoreDirectoryInput{
@@ -154,6 +136,9 @@ func (s *Service) RemoveDirectory(ctx context.Context, principal Principal, requ
 	}
 	filesystem, apiErr := s.resolveFilesystem(ctx, principal, request.FilesystemID)
 	if apiErr != nil {
+		return apiErr
+	}
+	if apiErr := s.paths.authorizeMutation(request.Path); apiErr != nil {
 		return apiErr
 	}
 	_, err := s.db.RemoveFilestoreDirectory(ctx, db.RemoveFilestoreDirectoryInput{
@@ -180,6 +165,9 @@ func (s *Service) CreateFile(ctx context.Context, principal Principal, params cr
 	}
 	filesystem, apiErr := s.resolveFilesystem(ctx, principal, params.FilesystemID)
 	if apiErr != nil {
+		return fileResponse{}, apiErr
+	}
+	if apiErr := s.paths.authorizeMutation(params.Path); apiErr != nil {
 		return fileResponse{}, apiErr
 	}
 	if apiErr := s.requireParentDirectory(ctx, principal.WorkspaceID, filesystem.ID, params.Path); apiErr != nil {
@@ -253,7 +241,10 @@ func (s *Service) CreateFile(ctx context.Context, principal Principal, params cr
 	return fileResponse{File: payload}, nil
 }
 
-// CopyFile 在对象存储端复制字节内容，再以乐观校验将新对象绑定到目标路径。
+// CopyFile 为 rclone-filestore 的 server-side copy 预留后端能力：它在对象
+// 存储端复制字节内容，再以乐观校验将新对象绑定到目标路径。当前
+// multimount/FUSE 的主路径几乎不会走到这里；普通文件复制通常由客户端先读源
+// 文件，再通过 create/write 生成目标文件。
 func (s *Service) CopyFile(ctx context.Context, principal Principal, request copyMoveFileRequest) (fileResponse, *apiError) {
 	if apiErr := validateFileTransferRequest(request); apiErr != nil {
 		return fileResponse{}, apiErr
@@ -262,12 +253,25 @@ func (s *Service) CopyFile(ctx context.Context, principal Principal, request cop
 	if apiErr != nil {
 		return fileResponse{}, apiErr
 	}
+	if apiErr := s.paths.authorizeMutation(request.Source, request.Destination); apiErr != nil {
+		return fileResponse{}, apiErr
+	}
 	source, err := s.db.GetFilestoreEntry(ctx, principal.WorkspaceID, filesystem.ID, request.Source)
 	if err != nil {
 		return fileResponse{}, mapDatabaseError("read copy source", err)
 	}
 	if source.Kind != db.FilestoreEntryKindFile || source.S3Key == nil {
 		return fileResponse{}, failedPrecondition("source is not a file")
+	}
+	if source.SourceFileUUID != nil {
+		// 这里拒绝的是 Filestore 协议里的 copyFile：它表示“在对象存储端做
+		// 服务端复制（server-side copy），把一个由 Filestore 自己拥有的对象
+		// 复制成新对象，再把该副本绑定到目标路径”，而不是客户端先把源文件
+		// 读出来，再调用 createFile 生成一个新文件。
+		// Session /uploads 中的 borrowed file 只是对 Files API 对象的引用；
+		// Sandbox 内的普通 cp 仍然可以通过 read + create/write 完成复制，但
+		// 不能在这个控制面接口里被隐式转换成新的 Filestore-owned file。
+		return fileResponse{}, failedPrecondition("borrowed file references cannot be copied")
 	}
 	if apiErr := s.requireParentDirectory(ctx, principal.WorkspaceID, filesystem.ID, request.Destination); apiErr != nil {
 		return fileResponse{}, apiErr
@@ -322,6 +326,9 @@ func (s *Service) MoveFile(ctx context.Context, principal Principal, request cop
 	if apiErr != nil {
 		return fileResponse{}, apiErr
 	}
+	if apiErr := s.paths.authorizeMutation(request.Source, request.Destination); apiErr != nil {
+		return fileResponse{}, apiErr
+	}
 	result, err := s.db.MoveFilestoreFile(ctx, db.MoveFilestoreFileInput{
 		WorkspaceID:       principal.WorkspaceID,
 		FilesystemID:      filesystem.ID,
@@ -355,6 +362,9 @@ func (s *Service) MoveDirectory(ctx context.Context, principal Principal, reques
 	if apiErr != nil {
 		return directoryResponse{}, apiErr
 	}
+	if apiErr := s.paths.authorizeMutation(request.Source, request.Destination); apiErr != nil {
+		return directoryResponse{}, apiErr
+	}
 	result, err := s.db.MoveFilestoreDirectory(ctx, db.MoveFilestoreDirectoryInput{
 		WorkspaceID:     principal.WorkspaceID,
 		FilesystemID:    filesystem.ID,
@@ -377,32 +387,8 @@ func (s *Service) ReadFile(ctx context.Context, principal Principal, request rea
 	if apiErr != nil {
 		return readFileResult{}, apiErr
 	}
-	entry, err := s.db.GetFilestoreEntry(ctx, principal.WorkspaceID, filesystem.ID, request.Path)
-	if err != nil {
-		return readFileResult{}, mapDatabaseError("read file metadata", err)
-	}
-	if entry.Kind != db.FilestoreEntryKindFile || entry.S3Key == nil || entry.SizeBytes == nil {
-		return readFileResult{}, failedPrecondition("path is not a file")
-	}
-	objectRange, responseSize, apiErr := resolveReadRange(request.Range, *entry.SizeBytes)
-	if apiErr != nil {
-		return readFileResult{}, apiErr
-	}
-	mediaType := stringValue(entry.MediaType)
-	if responseSize == 0 {
-		// 空区间无需访问 S3；仍返回可关闭的空流，使 Handler 的生命周期保持统一。
-		return readFileResult{Body: io.NopCloser(bytes.NewReader(nil)), MediaType: mediaType}, nil
-	}
-	object, err := s.store.Open(ctx, *entry.S3Key, objectRange)
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return readFileResult{}, internalError("read file object", errors.New("object metadata exists but blob is missing"))
-		}
-		return readFileResult{}, mapBlobstoreError("read file", err)
-	}
-	// 数据库元数据与已解析区间共同决定协议层应返回的精确字节数。
-	// S3 响应可能没有 Content-Length（Object.Size 为 -1），不能让传输语义取决于该可选响应头。
-	return readFileResult{Body: object.Body, Size: responseSize, MediaType: mediaType}, nil
+	backend := s.paths.backendFor(readOperationFile, request.Path)
+	return backend.readFile(ctx, principal, filesystem, request)
 }
 
 // RemoveFile 软删除元数据并登记对象清理任务；重复删除按幂等成功处理。
@@ -412,6 +398,9 @@ func (s *Service) RemoveFile(ctx context.Context, principal Principal, request p
 	}
 	filesystem, apiErr := s.resolveFilesystem(ctx, principal, request.FilesystemID)
 	if apiErr != nil {
+		return apiErr
+	}
+	if apiErr := s.paths.authorizeMutation(request.Path); apiErr != nil {
 		return apiErr
 	}
 	_, err := s.db.RemoveFilestoreFile(ctx, db.RemoveFilestoreEntryInput{
@@ -435,15 +424,8 @@ func (s *Service) ReadMetadata(ctx context.Context, principal Principal, request
 	if apiErr != nil {
 		return entryPayload{}, apiErr
 	}
-	entry, err := s.db.GetFilestoreEntry(ctx, principal.WorkspaceID, filesystem.ID, request.Path)
-	if err != nil {
-		return entryPayload{}, mapDatabaseError("read metadata", err)
-	}
-	payload, err := payloadFromEntry(entry, filesystem.ExternalID)
-	if err != nil {
-		return entryPayload{}, internalError("encode metadata", err)
-	}
-	return payload, nil
+	backend := s.paths.backendFor(readOperationMetadata, request.Path)
+	return backend.readMetadata(ctx, principal, filesystem, request.Path)
 }
 
 func (s *Service) resolveFilesystem(ctx context.Context, principal Principal, filesystemID string) (db.FilestoreFilesystem, *apiError) {
