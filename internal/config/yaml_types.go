@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -41,7 +43,7 @@ type yamlConfig struct {
 	Redis             RedisConfig             `yaml:"redis"`
 	Storage           StorageConfig           `yaml:"storage"`
 	AnthropicUpstream AnthropicUpstreamConfig `yaml:"anthropic_upstream"`
-	WebSearch         WebSearchConfig         `yaml:"web_search"`
+	WebSearch         yamlWebSearchConfig     `yaml:"web_search"`
 	Batch             BatchConfig             `yaml:"batch"`
 	E2B               E2BConfig               `yaml:"e2b"`
 	EnvironmentRunner EnvironmentRunnerConfig `yaml:"environment_runner"`
@@ -49,6 +51,19 @@ type yamlConfig struct {
 	Webhook           yamlWebhookConfig       `yaml:"webhook"`
 	Bootstrap         yamlBootstrapConfig     `yaml:"bootstrap"`
 	SDKFixtures       SDKFixtureConfig        `yaml:"sdk_fixtures"`
+}
+
+type yamlWebSearchConfig struct {
+	Provider     string                                 `yaml:"provider"`
+	Timeout      time.Duration                          `yaml:"timeout"`
+	MaxToolLoops int                                    `yaml:"max_tool_loops"`
+	Providers    map[string]yamlWebSearchProviderConfig `yaml:"providers"`
+}
+
+type yamlWebSearchProviderConfig struct {
+	Endpoint string         `yaml:"endpoint"`
+	APIKey   string         `yaml:"api_key"`
+	Options  map[string]any `yaml:"options"`
 }
 
 type yamlDatabaseConfig struct {
@@ -96,7 +111,7 @@ func newYAMLConfig() yamlConfig {
 		Redis:             defaults.Redis,
 		Storage:           defaults.Storage,
 		AnthropicUpstream: defaults.AnthropicUpstream,
-		WebSearch:         defaults.WebSearch,
+		WebSearch:         newYAMLWebSearchConfig(defaults.WebSearch),
 		Batch:             defaults.Batch,
 		E2B:               defaults.E2B,
 		EnvironmentRunner: defaults.EnvironmentRunner,
@@ -129,7 +144,11 @@ func newYAMLConfig() yamlConfig {
 	}
 }
 
-func (input yamlConfig) resolve() Config {
+func (input yamlConfig) resolve() (Config, error) {
+	webSearch, err := input.WebSearch.resolve()
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		Env:               input.Env,
 		Server:            input.Server,
@@ -137,7 +156,7 @@ func (input yamlConfig) resolve() Config {
 		Redis:             input.Redis,
 		Storage:           input.Storage,
 		AnthropicUpstream: input.AnthropicUpstream,
-		WebSearch:         input.WebSearch,
+		WebSearch:         webSearch,
 		Batch:             input.Batch,
 		E2B:               input.E2B,
 		EnvironmentRunner: input.EnvironmentRunner,
@@ -176,5 +195,54 @@ func (input yamlConfig) resolve() Config {
 	} else {
 		setDefaultSeedAPIKeys(&cfg)
 	}
-	return cfg
+	return cfg, nil
+}
+
+func newYAMLWebSearchConfig(cfg WebSearchConfig) yamlWebSearchConfig {
+	providers := make(map[string]yamlWebSearchProviderConfig, len(cfg.Providers))
+	for name, provider := range cfg.Providers {
+		options := make(map[string]any, len(provider.Options))
+		for key, raw := range provider.Options {
+			var value any
+			if json.Unmarshal(raw, &value) == nil {
+				options[key] = value
+			}
+		}
+		providers[name] = yamlWebSearchProviderConfig{
+			Endpoint: provider.Endpoint,
+			APIKey:   provider.APIKey,
+			Options:  options,
+		}
+	}
+	return yamlWebSearchConfig{
+		Provider:     cfg.Provider,
+		Timeout:      cfg.Timeout,
+		MaxToolLoops: cfg.MaxToolLoops,
+		Providers:    providers,
+	}
+}
+
+func (input yamlWebSearchConfig) resolve() (WebSearchConfig, error) {
+	providers := make(map[string]WebSearchProviderConfig, len(input.Providers))
+	for name, provider := range input.Providers {
+		options := make(map[string]json.RawMessage, len(provider.Options))
+		for key, value := range provider.Options {
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return WebSearchConfig{}, fmt.Errorf("web_search.providers.%s.options.%s: %w", name, key, err)
+			}
+			options[key] = encoded
+		}
+		providers[name] = WebSearchProviderConfig{
+			Endpoint: provider.Endpoint,
+			APIKey:   provider.APIKey,
+			Options:  options,
+		}
+	}
+	return WebSearchConfig{
+		Provider:     input.Provider,
+		Timeout:      input.Timeout,
+		MaxToolLoops: input.MaxToolLoops,
+		Providers:    providers,
+	}, nil
 }

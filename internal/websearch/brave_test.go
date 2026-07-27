@@ -2,6 +2,7 @@ package websearch
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +26,16 @@ func TestBraveClientFailures(t *testing.T) {
 		_, err := client.Search(context.Background(), SearchRequest{Query: "query", Options: SearchOptions{PageToken: "10"}})
 		if err == nil || !strings.Contains(err.Error(), "page token") {
 			t.Fatalf("error = %v", err)
+		}
+	})
+	t.Run("domain restrictions are explicit", func(t *testing.T) {
+		client := NewBraveClient(BraveClientConfig{Endpoint: "http://example.test", APIKey: "key", Timeout: time.Second}, nil)
+		_, err := client.Search(context.Background(), SearchRequest{
+			Query:   "query",
+			Options: SearchOptions{IncludeDomains: []string{"example.test"}},
+		})
+		if err == nil || !strings.Contains(err.Error(), "does not support domain restrictions") {
+			t.Fatalf("error = %v, want explicit unsupported-domain error", err)
 		}
 	})
 	t.Run("provider error does not expose response", func(t *testing.T) {
@@ -51,7 +62,7 @@ func TestBraveClientFailures(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
-	t.Run("date options override defaults", func(t *testing.T) {
+	t.Run("date options become freshness", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if got := r.URL.Query().Get("freshness"); got != "2025-01-01to2025-01-31" {
 				t.Errorf("freshness = %q", got)
@@ -59,13 +70,12 @@ func TestBraveClientFailures(t *testing.T) {
 			_, _ = io.WriteString(w, "{\"query\":{\"more_results_available\":false},\"web\":{\"results\":[]}}")
 		}))
 		defer server.Close()
-		client := NewBraveClient(BraveClientConfig{Endpoint: server.URL, APIKey: "key", Timeout: time.Second, Options: SearchOptions{Freshness: "pw"}}, nil)
+		client := NewBraveClient(BraveClientConfig{Endpoint: server.URL, APIKey: "key", Timeout: time.Second, Options: BraveOptions{
+			StartPublishedAt: "2025-01-01T00:00:00Z",
+			EndPublishedAt:   "2025-01-31T00:00:00Z",
+		}}, nil)
 		_, err := client.Search(context.Background(), SearchRequest{
 			Query: "query",
-			Options: SearchOptions{
-				StartPublishedAt: time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
-				EndPublishedAt:   time.Date(2025, time.January, 31, 0, 0, 0, 0, time.UTC),
-			},
 		})
 		if err != nil {
 			t.Fatalf("search: %v", err)
@@ -96,12 +106,12 @@ func TestBraveClientSearch(t *testing.T) {
 	}))
 	defer server.Close()
 	spellcheck := true
-	client := NewBraveClient(BraveClientConfig{Endpoint: server.URL, APIKey: "brave-key", Timeout: time.Second, Options: SearchOptions{
-		MaxResults: 30, Country: "US", SearchLanguage: "en", UILanguage: "en-US", Freshness: "pw",
+	client := NewBraveClient(BraveClientConfig{Endpoint: server.URL, APIKey: "brave-key", Timeout: time.Second, Options: BraveOptions{
+		Country: "US", SearchLanguage: "en", UILanguage: "en-US", Freshness: "pw",
 		SafeSearch: "strict", Spellcheck: &spellcheck, ResultFilter: "web", Goggles: []string{"goggle-a", "goggle-b"},
 		ExtraSnippets: true, Units: "metric",
 	}}, nil)
-	response, err := client.Search(context.Background(), SearchRequest{Query: " golang release ", Options: SearchOptions{PageToken: "2"}})
+	response, err := client.Search(context.Background(), SearchRequest{Query: " golang release ", Options: SearchOptions{MaxResults: 30, PageToken: "2"}})
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
@@ -116,7 +126,19 @@ func TestBraveClientSearch(t *testing.T) {
 }
 
 func TestNewProviderBrave(t *testing.T) {
-	provider := NewProvider(config.WebSearchConfig{Provider: "brave", APIKey: "key"}, nil)
+	provider, err := NewProvider(config.WebSearchConfig{
+		Provider: "brave",
+		Providers: map[string]config.WebSearchProviderConfig{
+			"brave": {APIKey: "key", Options: map[string]json.RawMessage{
+				"safe_search":        json.RawMessage(`"strict"`),
+				"start_published_at": json.RawMessage(`""`),
+				"end_published_at":   json.RawMessage(`""`),
+			}},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
 	if _, ok := provider.(*BraveClient); !ok {
 		t.Fatalf("provider = %T, want *BraveClient", provider)
 	}

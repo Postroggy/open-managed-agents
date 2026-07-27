@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/superduck-ai/open-managed-agents/internal/config"
 )
 
 const (
@@ -23,7 +25,7 @@ type BraveClient struct {
 	endpoint       string
 	apiKey         string
 	client         *http.Client
-	defaultOptions SearchOptions
+	defaultOptions BraveOptions
 }
 
 var _ Provider = (*BraveClient)(nil)
@@ -32,7 +34,68 @@ type BraveClientConfig struct {
 	Endpoint string
 	APIKey   string
 	Timeout  time.Duration
-	Options  SearchOptions
+	Options  BraveOptions
+}
+
+type BraveOptions struct {
+	Country          string   `json:"country"`
+	SearchLanguage   string   `json:"search_language"`
+	UILanguage       string   `json:"ui_language"`
+	Freshness        string   `json:"freshness"`
+	StartPublishedAt string   `json:"start_published_at"`
+	EndPublishedAt   string   `json:"end_published_at"`
+	SafeSearch       string   `json:"safe_search"`
+	Spellcheck       *bool    `json:"spellcheck"`
+	ResultFilter     string   `json:"result_filter"`
+	Goggles          []string `json:"goggles"`
+	ExtraSnippets    bool     `json:"extra_snippets"`
+	Units            string   `json:"units"`
+}
+
+type braveFactory struct{}
+
+func (braveFactory) Name() string {
+	return "brave"
+}
+
+func (braveFactory) New(cfg config.WebSearchProviderConfig, timeout time.Duration, client *http.Client) (Provider, error) {
+	var options BraveOptions
+	if err := decodeProviderOptions(cfg.Options, &options); err != nil {
+		return nil, fmt.Errorf("configure brave web search: %w", err)
+	}
+	if err := options.validate(); err != nil {
+		return nil, fmt.Errorf("configure brave web search: %w", err)
+	}
+	return NewBraveClient(BraveClientConfig{
+		Endpoint: cfg.Endpoint,
+		APIKey:   cfg.APIKey,
+		Timeout:  timeout,
+		Options:  options,
+	}, client), nil
+}
+
+func (options BraveOptions) validate() error {
+	if options.Country != "" && len(options.Country) != 2 {
+		return errors.New("country must be a two-letter code")
+	}
+	switch options.SafeSearch {
+	case "", "off", "moderate", "strict":
+	default:
+		return fmt.Errorf("safe_search %q is invalid", options.SafeSearch)
+	}
+	switch options.Units {
+	case "", "metric", "imperial":
+	default:
+		return fmt.Errorf("units %q is invalid", options.Units)
+	}
+	if _, err := braveFreshness(options); err != nil {
+		return err
+	}
+	return nil
+}
+
+func init() {
+	registerProviderFactory(braveFactory{})
 }
 
 func NewBraveClient(cfg BraveClientConfig, client *http.Client) *BraveClient {
@@ -51,7 +114,7 @@ func NewBraveClient(cfg BraveClientConfig, client *http.Client) *BraveClient {
 		endpoint:       strings.TrimSpace(cfg.Endpoint),
 		apiKey:         strings.TrimSpace(cfg.APIKey),
 		client:         &configured,
-		defaultOptions: cloneSearchOptions(cfg.Options),
+		defaultOptions: cloneBraveOptions(cfg.Options),
 	}
 }
 
@@ -63,8 +126,10 @@ func (c *BraveClient) Search(ctx context.Context, request SearchRequest) (Search
 	if query == "" {
 		return SearchResponse{}, errors.New("web search query is required")
 	}
-	options := mergeSearchOptions(c.defaultOptions, request.Options)
-	endpoint, err := c.searchURL(query, options)
+	if len(request.Options.IncludeDomains) > 0 || len(request.Options.ExcludeDomains) > 0 {
+		return SearchResponse{}, errors.New("brave web search does not support domain restrictions")
+	}
+	endpoint, err := c.searchURL(query, request.Options)
 	if err != nil {
 		return SearchResponse{}, fmt.Errorf("build brave search endpoint: %w", err)
 	}
@@ -84,8 +149,8 @@ func (c *BraveClient) Search(ctx context.Context, request SearchRequest) (Search
 	}
 	if decoded.HasMore {
 		offset := 0
-		if options.PageToken != "" {
-			offset, err = strconv.Atoi(options.PageToken)
+		if request.Options.PageToken != "" {
+			offset, err = strconv.Atoi(request.Options.PageToken)
 			if err != nil {
 				return SearchResponse{}, fmt.Errorf("parse brave search page token: %w", err)
 			}
@@ -111,36 +176,40 @@ func (c *BraveClient) searchURL(query string, options SearchOptions) (string, er
 		}
 		values.Set("count", strconv.Itoa(count))
 	}
-	if options.Country != "" {
-		values.Set("country", options.Country)
+	if c.defaultOptions.Country != "" {
+		values.Set("country", c.defaultOptions.Country)
 	}
-	if options.SearchLanguage != "" {
-		values.Set("search_lang", options.SearchLanguage)
+	if c.defaultOptions.SearchLanguage != "" {
+		values.Set("search_lang", c.defaultOptions.SearchLanguage)
 	}
-	if options.UILanguage != "" {
-		values.Set("ui_lang", options.UILanguage)
+	if c.defaultOptions.UILanguage != "" {
+		values.Set("ui_lang", c.defaultOptions.UILanguage)
 	}
-	if freshness := braveFreshness(options); freshness != "" {
+	freshness, err := braveFreshness(c.defaultOptions)
+	if err != nil {
+		return "", err
+	}
+	if freshness != "" {
 		values.Set("freshness", freshness)
 	}
-	if options.SafeSearch != "" {
-		values.Set("safesearch", options.SafeSearch)
+	if c.defaultOptions.SafeSearch != "" {
+		values.Set("safesearch", c.defaultOptions.SafeSearch)
 	}
-	if options.Spellcheck != nil {
-		values.Set("spellcheck", strconv.FormatBool(*options.Spellcheck))
+	if c.defaultOptions.Spellcheck != nil {
+		values.Set("spellcheck", strconv.FormatBool(*c.defaultOptions.Spellcheck))
 	}
-	if options.ResultFilter != "" {
-		values.Set("result_filter", options.ResultFilter)
+	if c.defaultOptions.ResultFilter != "" {
+		values.Set("result_filter", c.defaultOptions.ResultFilter)
 	}
-	if len(options.Goggles) > 0 {
+	if len(c.defaultOptions.Goggles) > 0 {
 		values.Del("goggles")
-		values["goggles"] = append([]string(nil), options.Goggles...)
+		values["goggles"] = append([]string(nil), c.defaultOptions.Goggles...)
 	}
-	if options.ExtraSnippets {
+	if c.defaultOptions.ExtraSnippets {
 		values.Set("extra_snippets", "true")
 	}
-	if options.Units != "" {
-		values.Set("units", options.Units)
+	if c.defaultOptions.Units != "" {
+		values.Set("units", c.defaultOptions.Units)
 	}
 	if options.PageToken != "" {
 		offset, parseErr := strconv.Atoi(options.PageToken)
@@ -199,77 +268,45 @@ func decodeBraveResponse(body []byte) (SearchResponse, error) {
 	return SearchResponse{Results: results, HasMore: response.Query.MoreResultsAvailable, RequestID: response.ID}, nil
 }
 
-func braveFreshness(options SearchOptions) string {
+func braveFreshness(options BraveOptions) (string, error) {
 	if options.Freshness != "" {
-		return options.Freshness
+		return options.Freshness, nil
 	}
-	if options.StartPublishedAt.IsZero() && options.EndPublishedAt.IsZero() {
-		return ""
+	start, err := normalizeBraveDate(options.StartPublishedAt)
+	if err != nil {
+		return "", fmt.Errorf("start_published_at: %w", err)
 	}
-	start := options.StartPublishedAt.Format("2006-01-02")
-	end := options.EndPublishedAt.Format("2006-01-02")
-	if options.StartPublishedAt.IsZero() {
+	end, err := normalizeBraveDate(options.EndPublishedAt)
+	if err != nil {
+		return "", fmt.Errorf("end_published_at: %w", err)
+	}
+	if start == "" && end == "" {
+		return "", nil
+	}
+	if start == "" {
 		start = end
 	}
-	if options.EndPublishedAt.IsZero() {
+	if end == "" {
 		end = start
 	}
-	return start + "to" + end
+	return start + "to" + end, nil
 }
 
-func mergeSearchOptions(defaults, request SearchOptions) SearchOptions {
-	merged := cloneSearchOptions(defaults)
-	if request.MaxResults != 0 {
-		merged.MaxResults = request.MaxResults
+func normalizeBraveDate(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", nil
 	}
-	if request.Country != "" {
-		merged.Country = request.Country
+	for _, layout := range []string{time.RFC3339, "2006-01-02"} {
+		parsed, err := time.Parse(layout, trimmed)
+		if err == nil {
+			return parsed.Format("2006-01-02"), nil
+		}
 	}
-	if request.SearchLanguage != "" {
-		merged.SearchLanguage = request.SearchLanguage
-	}
-	if request.UILanguage != "" {
-		merged.UILanguage = request.UILanguage
-	}
-	if request.Freshness != "" {
-		merged.Freshness = request.Freshness
-	}
-	if request.SafeSearch != "" {
-		merged.SafeSearch = request.SafeSearch
-	}
-	if request.Spellcheck != nil {
-		merged.Spellcheck = request.Spellcheck
-	}
-	if request.ResultFilter != "" {
-		merged.ResultFilter = request.ResultFilter
-	}
-	if len(request.Goggles) > 0 {
-		merged.Goggles = append([]string(nil), request.Goggles...)
-	}
-	if request.ExtraSnippets {
-		merged.ExtraSnippets = true
-	}
-	if request.Units != "" {
-		merged.Units = request.Units
-	}
-	if request.PageToken != "" {
-		merged.PageToken = request.PageToken
-	}
-	if !request.StartPublishedAt.IsZero() {
-		merged.StartPublishedAt = request.StartPublishedAt
-	}
-	if !request.EndPublishedAt.IsZero() {
-		merged.EndPublishedAt = request.EndPublishedAt
-	}
-	if (!request.StartPublishedAt.IsZero() || !request.EndPublishedAt.IsZero()) && request.Freshness == "" {
-		merged.Freshness = ""
-	}
-	return merged
+	return "", errors.New("must be an ISO-8601 date or timestamp")
 }
 
-func cloneSearchOptions(options SearchOptions) SearchOptions {
-	options.IncludeDomains = append([]string(nil), options.IncludeDomains...)
-	options.ExcludeDomains = append([]string(nil), options.ExcludeDomains...)
+func cloneBraveOptions(options BraveOptions) BraveOptions {
 	options.Goggles = append([]string(nil), options.Goggles...)
 	return options
 }

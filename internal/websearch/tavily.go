@@ -9,13 +9,15 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/superduck-ai/open-managed-agents/internal/config"
 )
 
 const (
-	DefaultEndpoint = "https://api.tavily.com/search"
-	defaultTimeout  = 30 * time.Second
-	maxResponseSize = 2 << 20
-	maxResults      = 10
+	DefaultTavilyEndpoint = "https://api.tavily.com/search"
+	defaultTimeout        = 30 * time.Second
+	maxResponseSize       = 2 << 20
+	maxResults            = 10
 )
 
 type TavilyClient struct {
@@ -34,9 +36,27 @@ type tavilySearchRequest struct {
 
 var _ Provider = (*TavilyClient)(nil)
 
+type tavilyFactory struct{}
+
+func (tavilyFactory) Name() string {
+	return "tavily"
+}
+
+func (tavilyFactory) New(cfg config.WebSearchProviderConfig, timeout time.Duration, client *http.Client) (Provider, error) {
+	var options struct{}
+	if err := decodeProviderOptions(cfg.Options, &options); err != nil {
+		return nil, fmt.Errorf("configure tavily web search: %w", err)
+	}
+	return NewTavilyClient(cfg.Endpoint, cfg.APIKey, timeout, client), nil
+}
+
+func init() {
+	registerProviderFactory(tavilyFactory{})
+}
+
 func NewTavilyClient(endpoint, apiKey string, timeout time.Duration, client *http.Client) *TavilyClient {
 	if strings.TrimSpace(endpoint) == "" {
-		endpoint = DefaultEndpoint
+		endpoint = DefaultTavilyEndpoint
 	}
 	if timeout <= 0 {
 		timeout = defaultTimeout

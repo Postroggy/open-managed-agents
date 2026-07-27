@@ -19,6 +19,10 @@ func defaultConfig() Config {
 		WebSearch: WebSearchConfig{
 			Provider:     "tavily",
 			MaxToolLoops: 3,
+			Providers: map[string]WebSearchProviderConfig{
+				"tavily": {},
+				"brave":  {},
+			},
 		},
 		Batch: BatchConfig{
 			WorkerEnabled:             true,

@@ -95,7 +95,7 @@ func loadYAMLConfig(path string) (Config, error) {
 	}
 	input := newYAMLConfig()
 	if len(bytes.TrimSpace(data)) == 0 {
-		return input.resolve(), nil
+		return input.resolve()
 	}
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
@@ -117,7 +117,7 @@ func loadYAMLConfig(path string) (Config, error) {
 	if err := document.Decode(&input); err != nil {
 		return Config{}, fmt.Errorf("decode config file %q: %w", path, err)
 	}
-	return input.resolve(), nil
+	return input.resolve()
 }
 
 // validateYAMLNode preserves strict unknown-field and null rejection before
@@ -146,6 +146,15 @@ func validateYAMLNodeWithAliases(node *yaml.Node, target reflect.Type, prefix []
 			}
 		}
 	case yaml.MappingNode:
+		if target.Kind() == reflect.Map {
+			for index := 0; index+1 < len(node.Content); index += 2 {
+				name := node.Content[index].Value
+				if err := validateYAMLNodeWithAliases(node.Content[index+1], target.Elem(), appendYAMLPath(prefix, name), aliases); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		if target.Kind() != reflect.Struct {
 			return nil
 		}

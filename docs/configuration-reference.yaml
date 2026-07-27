@@ -40,21 +40,28 @@ anthropic_upstream:
 
 web_search:
   provider: tavily
-  endpoint: ""
-  api_key: ""
   timeout: 30s
   max_tool_loops: 3
-  brave:
-    country: US
-    search_language: en
-    ui_language: en-US
-    freshness: ""
-    safe_search: moderate
-    spellcheck: true
-    result_filter: web
-    goggles: []
-    extra_snippets: false
-    units: metric
+  providers:
+    tavily:
+      endpoint: ""
+      api_key: ""
+    brave:
+      endpoint: ""
+      api_key: ""
+      options:
+        country: US
+        search_language: en
+        ui_language: en-US
+        freshness: ""
+        start_published_at: ""
+        end_published_at: ""
+        safe_search: moderate
+        spellcheck: true
+        result_filter: web
+        goggles: []
+        extra_snippets: false
+        units: metric
 
 batch:
   worker_enabled: true

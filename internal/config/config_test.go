@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
@@ -96,22 +97,29 @@ bootstrap:
   workspace_name: yaml-workspace
 web_search:
   provider: tavily
-  endpoint: http://localhost:9999/search
-  api_key: yaml-search-key
   timeout: 7s
   max_tool_loops: 5
-  brave:
-    country: US
-    search_language: en
-    ui_language: en-US
-    freshness: pw
-    safe_search: strict
-    spellcheck: true
-    result_filter: web
-    goggles:
-      - https://example.test/goggle
-    extra_snippets: true
-    units: metric
+  providers:
+    tavily:
+      endpoint: http://localhost:9999/search
+      api_key: yaml-search-key
+    brave:
+      endpoint: http://localhost:9998/search
+      api_key: yaml-brave-key
+      options:
+        country: US
+        search_language: en
+        ui_language: en-US
+        freshness: pw
+        start_published_at: 2025-01-01T00:00:00Z
+        end_published_at: 2025-01-31T00:00:00Z
+        safe_search: strict
+        spellcheck: true
+        result_filter: web
+        goggles:
+          - https://example.test/goggle
+        extra_snippets: true
+        units: metric
 `)
 	t.Setenv("CONFIG_TEST_HOME", filepath.Join(root, "home"))
 	t.Chdir(nested)
@@ -147,11 +155,35 @@ web_search:
 	if cfg.Bootstrap.WorkspaceName != "yaml-workspace" {
 		t.Fatalf("Bootstrap.WorkspaceName = %q, want yaml-workspace", cfg.Bootstrap.WorkspaceName)
 	}
-	if cfg.WebSearch.Provider != "tavily" || cfg.WebSearch.APIKey != "yaml-search-key" || cfg.WebSearch.MaxToolLoops != 5 {
+	if cfg.WebSearch.Provider != "tavily" || cfg.WebSearch.MaxToolLoops != 5 {
 		t.Fatalf("unexpected web search config: %#v", cfg.WebSearch)
 	}
-	if cfg.WebSearch.Brave.Country != "US" || cfg.WebSearch.Brave.SearchLanguage != "en" || cfg.WebSearch.Brave.SafeSearch != "strict" || !cfg.WebSearch.Brave.ExtraSnippets || len(cfg.WebSearch.Brave.Goggles) != 1 {
-		t.Fatalf("unexpected Brave web search config: %#v", cfg.WebSearch.Brave)
+	tavily := cfg.WebSearch.Providers["tavily"]
+	if tavily.Endpoint != "http://localhost:9999/search" || tavily.APIKey != "yaml-search-key" {
+		t.Fatalf("unexpected Tavily web search config: %#v", tavily)
+	}
+	brave := cfg.WebSearch.Providers["brave"]
+	encodedOptions, err := json.Marshal(brave.Options)
+	if err != nil {
+		t.Fatalf("marshal Brave web search options: %v", err)
+	}
+	var braveOptions struct {
+		Country          string   `json:"country"`
+		SearchLanguage   string   `json:"search_language"`
+		StartPublishedAt string   `json:"start_published_at"`
+		EndPublishedAt   string   `json:"end_published_at"`
+		SafeSearch       string   `json:"safe_search"`
+		ExtraSnippets    bool     `json:"extra_snippets"`
+		Goggles          []string `json:"goggles"`
+	}
+	if err := json.Unmarshal(encodedOptions, &braveOptions); err != nil {
+		t.Fatalf("decode Brave web search options: %v", err)
+	}
+	if brave.Endpoint != "http://localhost:9998/search" || brave.APIKey != "yaml-brave-key" ||
+		braveOptions.Country != "US" || braveOptions.SearchLanguage != "en" || braveOptions.SafeSearch != "strict" ||
+		braveOptions.StartPublishedAt != "2025-01-01T00:00:00Z" || braveOptions.EndPublishedAt != "2025-01-31T00:00:00Z" ||
+		!braveOptions.ExtraSnippets || len(braveOptions.Goggles) != 1 {
+		t.Fatalf("unexpected Brave web search config: provider=%#v options=%#v", brave, braveOptions)
 	}
 }
 
@@ -255,6 +287,7 @@ func TestLoadYAMLRejectsUnknownField(t *testing.T) {
 	}{
 		{name: "regular field", overrides: "database:\n  urll: postgresql://typo/database\n", wantField: "urll"},
 		{name: "optional list item field", overrides: "bootstrap:\n  seed_api_keys:\n    - external_idd: typo\n      key: secret\n", wantField: "external_idd"},
+		{name: "provider field", overrides: "web_search:\n  providers:\n    tavily:\n      endpiont: https://example.test\n", wantField: "endpiont"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

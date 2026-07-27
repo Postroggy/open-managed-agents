@@ -6,12 +6,12 @@
 
 ## 结论
 
-原有抽象足以表达“输入查询、返回若干标题/链接/正文摘要”的最小 provider-neutral 搜索能力，但不足以无损覆盖 Brave 与 Exa 的主要能力。现已保留 Provider 接口并扩展 SearchRequest、SearchResponse、SearchOptions 和 Result；这些类型覆盖通用交集和未来扩展位，但不试图把两家 provider 的高级协议全部塞进基础接口。
+原有抽象足以表达“输入查询、返回若干标题/链接/正文摘要”的最小 provider-neutral 搜索能力，但不足以无损覆盖 Brave 与 Exa 的主要能力。现已保留 Provider 接口并扩展 SearchRequest、SearchResponse、SearchOptions 和 Result；这些类型覆盖通用交集和未来扩展位，但不试图把两家 provider 的高级协议全部塞进基础接口。provider 配置使用 `web_search.providers.<name>` 映射，provider-specific options 在各自 adapter 内解码，避免公共配置类型依赖某个 provider。
 
 具体判断如下：
 
 - Provider.Search(context.Context, SearchRequest) (SearchResponse, error) 的调用形状适合两家 API：两者都能被适配成一次非流式搜索调用，并返回统一结果列表及响应元数据。
-- 当前 SearchOptions 已覆盖 MaxResults、IncludeDomains、ExcludeDomains，以及 Brave 的语言、地区、新鲜度、安全搜索、结果模块、Goggles 和分页等选项；Exa 的 provider-specific 模式和内容选项仍由后续适配器决定。
+- 当前公共 SearchOptions 只覆盖 MaxResults、IncludeDomains、ExcludeDomains 和 opaque PageToken；Brave 的语言、地区、新鲜度、安全搜索、结果模块、Goggles 等选项属于 Brave adapter 的 typed options，不是 provider-neutral 合同。Exa 的 provider-specific 模式和内容选项仍由后续适配器决定。
 - 当前 Result 已将摘要与正文分成 Snippet/Text，并支持 PublishedDate、PageAge、ID、Author、Favicon、Highlights、Summary 和 ExtraSnippets 等字段；不能被 provider-neutral 模型表达的 provider-specific 结果类型仍应在适配器中降级或另设能力接口。
 - SearchResponse 现在可以表达分页是否还有结果：Brave 返回 query.more_results_available，Exa Search 官方 /search 文档没有公开页码、offset 或 next-cursor 字段；Exa 的 numResults 是单次请求数量，不等同于可遍历分页。
 - Brave Web Search 返回的是 description 和可选 extra_snippets，不提供该搜索 endpoint 的通用正文抓取协议；Brave 适配器将 description 映射为 Snippet。Exa 可以在 /search 内嵌 contents，也可以调用独立的 /contents 获取文本、highlights、summary、子页面和链接，后续适配器可分别映射到 Text、Highlights 和 Summary。
@@ -28,20 +28,14 @@ type Provider interface {
 }
 ```
 
-provider-neutral 的 SearchOptions、Result 和 SearchResponse 定义在 internal/websearch/types.go；Tavily 和 Brave 只负责 provider-specific payload 与字段映射：
+provider-neutral 的 SearchOptions、Result 和 SearchResponse 定义在 internal/websearch/types.go；Tavily 和 Brave 只负责 provider-specific payload 与字段映射。公共请求类型保持跨 provider 的最小交集：
 
 ```go
 type SearchOptions struct {
     MaxResults     int
     IncludeDomains []string
     ExcludeDomains []string
-    SearchMode     string
-    Country        string
-    SearchLanguage string
-    UILanguage     string
-    Freshness      string
     PageToken      string
-    Content        ContentOptions
 }
 
 type Result struct {
@@ -67,7 +61,7 @@ type SearchResponse struct {
 }
 ```
 
-NewProvider 当前注册 Tavily 和 Brave；Brave 使用独立的 BraveWebSearchConfig，并将 credential 保留在 OMA 服务端 provider client 中。
+NewProvider 当前通过 provider factory registry 注册 Tavily 和 Brave；每个 adapter 自己声明名称、解码配置和构造 client。`config.WebSearchProviderConfig` 只承载 endpoint、credential 和 opaque options，Brave 的 `country`、`search_language`、`ui_language`、`freshness`、`start_published_at`、`end_published_at`、`safe_search`、`spellcheck`、`result_filter`、`goggles`、`extra_snippets`、`units` 等字段只在 Brave adapter 的 `BraveOptions` 中解析，并将 credential 保留在 OMA 服务端 provider client 中。
 
 ## 请求模式与鉴权对比
 
@@ -98,17 +92,17 @@ Brave Web Search 没有类似 Exa type 的官方搜索模式参数。搜索策�
 | 参数 | 官方语义 | 当前抽象覆盖情况 |
 | --- | --- | --- |
 | q | 必填查询词；API Reference 说明最多 400 字符、50 个单词 | 由 query string 覆盖 |
-| country | 两字符国家代码，指定结果来源国家 | SearchOptions.Country |
-| search_lang | 搜索结果语言 | SearchOptions.SearchLanguage |
-| ui_lang | 响应中面向用户的 UI 语言 | SearchOptions.UILanguage |
+| country | 两字符国家代码，指定结果来源国家 | BraveOptions.Country |
+| search_lang | 搜索结果语言 | BraveOptions.SearchLanguage |
+| ui_lang | 响应中面向用户的 UI 语言 | BraveOptions.UILanguage |
 | count | 每页 Web results 数量，最大 20；实际返回数可能更少 | MaxResults 可部分映射 |
 | offset | 以“页”为单位的 0-based offset；官方 API Reference 说明与 count 配合分页，指南还建议检查 query.more_results_available | SearchOptions.PageToken |
-| safesearch | off、moderate、strict | SearchOptions.SafeSearch |
-| spellcheck | 是否对 query 做拼写检查；修改后的 query 出现在响应的 altered 字段 | SearchOptions.Spellcheck |
-| freshness | 按页面年龄筛选：pd、pw、pm、py 或自定义日期范围 | SearchOptions.Freshness 或日期范围 |
+| safesearch | off、moderate、strict | BraveOptions.SafeSearch |
+| spellcheck | 是否对 query 做拼写检查；修改后的 query 出现在响应的 altered 字段 | BraveOptions.Spellcheck |
+| freshness | 按页面年龄筛选：pd、pw、pm、py 或自定义日期范围 | BraveOptions.Freshness 或日期范围 |
 | extra_snippets | 为每个 Web result 增加最多 5 个额外片段 | Result.ExtraSnippets 保留数组 |
-| result_filter | 选择返回的结果模块/类型 | SearchOptions.ResultFilter |
-| goggles | 使用 URL 或内联定义进行自定义重排/过滤，可组合多个 | SearchOptions.Goggles |
+| result_filter | 选择返回的结果模块/类型 | BraveOptions.ResultFilter |
+| goggles | 使用 URL 或内联定义进行自定义重排/过滤，可组合多个 | BraveOptions.Goggles |
 
 Brave 官方文档还说明：
 

@@ -7,10 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
+	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	"github.com/superduck-ai/open-managed-agents/internal/websearch"
 )
 
@@ -26,6 +30,7 @@ type gateway struct {
 	maxToolLoops    int
 	client          *http.Client
 	searcher        websearch.Provider
+	logger          *slog.Logger
 }
 
 type gatewayResponse struct {
@@ -95,16 +100,18 @@ type gatewaySearchResultBlock struct {
 	PageAge       string `json:"page_age,omitempty"`
 }
 
-func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provider) *gateway {
+func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provider, logger *slog.Logger) *gateway {
 	if client == nil {
 		client = &http.Client{Transport: newProxyTransport()}
 	}
+	logger = logging.LoggerOrDefault(logger)
 	return &gateway{
 		upstreamBaseURL: cfg.AnthropicUpstream.BaseURL,
 		upstreamAPIKey:  cfg.AnthropicUpstream.APIKey,
 		maxToolLoops:    cfg.WebSearch.MaxToolLoops,
 		client:          client,
 		searcher:        searcher,
+		logger:          logger,
 	}
 }
 
@@ -394,7 +401,12 @@ func (g *gateway) search(ctx context.Context, query string, policy gatewaySearch
 		return results, priorErr
 	}
 	defer func() {
-		if recover() != nil {
+		if recovered := recover(); recovered != nil {
+			g.logger.ErrorContext(ctx, "web search provider panic",
+				"request_id", httpapi.RequestID(ctx),
+				"panic_type", fmt.Sprintf("%T", recovered),
+				"stack", string(debug.Stack()),
+			)
 			results = websearch.SearchResponse{}
 			err = errors.New("web search provider panicked")
 		}

@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
 	EnvironmentDev  = "dev"
@@ -61,25 +64,18 @@ type AnthropicUpstreamConfig struct {
 }
 
 type WebSearchConfig struct {
-	Provider     string               `yaml:"provider"`
-	Endpoint     string               `yaml:"endpoint"`
-	APIKey       string               `yaml:"api_key"`
-	Timeout      time.Duration        `yaml:"timeout"`
-	MaxToolLoops int                  `yaml:"max_tool_loops"`
-	Brave        BraveWebSearchConfig `yaml:"brave"`
+	Provider     string                             `yaml:"provider"`
+	Timeout      time.Duration                      `yaml:"timeout"`
+	MaxToolLoops int                                `yaml:"max_tool_loops"`
+	Providers    map[string]WebSearchProviderConfig `yaml:"providers"`
 }
 
-type BraveWebSearchConfig struct {
-	Country        string   `yaml:"country"`
-	SearchLanguage string   `yaml:"search_language"`
-	UILanguage     string   `yaml:"ui_language"`
-	Freshness      string   `yaml:"freshness"`
-	SafeSearch     string   `yaml:"safe_search"`
-	Spellcheck     *bool    `yaml:"spellcheck"`
-	ResultFilter   string   `yaml:"result_filter"`
-	Goggles        []string `yaml:"goggles"`
-	ExtraSnippets  bool     `yaml:"extra_snippets"`
-	Units          string   `yaml:"units"`
+// WebSearchProviderConfig keeps provider payloads at the configuration boundary.
+// Each provider factory decodes Options into its own named schema before use.
+type WebSearchProviderConfig struct {
+	Endpoint string                     `yaml:"endpoint"`
+	APIKey   string                     `yaml:"api_key"`
+	Options  map[string]json.RawMessage `yaml:"options"`
 }
 
 type BatchConfig struct {

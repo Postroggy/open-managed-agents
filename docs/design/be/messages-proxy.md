@@ -23,7 +23,7 @@ POST /v1/messages
 - SSE 响应逐块 flush，并关闭代理缓冲；
 - 请求 body 上限为 32 MiB。
 
-对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在请求声明受支持的 Anthropic server tool（当前为 `web_search_20250305`、`web_search_20260209` 或 `web_search_20260318`）且本地 provider 已配置时启用 Web Search gateway。gateway 只依赖 provider-neutral 的 `Search` 接口；该接口使用结构化的 `SearchRequest`/`SearchResponse`，可保留分页和 provider request ID 等响应元数据，结果模型区分摘要、正文、highlights 和 summary。当前 registry 已支持 Tavily 和 Brave；`web_search.endpoint` 为空时，各 provider 使用自己的默认 endpoint。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
+对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在请求声明受支持的 Anthropic server tool（当前为 `web_search_20250305`、`web_search_20260209` 或 `web_search_20260318`）且本地 provider 已配置时启用 Web Search gateway。gateway 只依赖 provider-neutral 的 `Search` 接口；该接口使用结构化的 `SearchRequest`/`SearchResponse`，可保留分页和 provider request ID 等响应元数据，结果模型区分摘要、正文、highlights 和 summary。当前 registry 已支持 Tavily 和 Brave；`web_search.providers.<name>.endpoint` 为空时，各 provider 使用自己的默认 endpoint。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
 
 gateway 保留 Claude Code 的一次外部请求，但内部使用非流式 BYOK continuation loop：
 
@@ -116,6 +116,9 @@ sequenceDiagram
 ## 验收覆盖
 
 - `tests/messages_api_test.go`：缺少上游 key、跨资源使用、未 register、lease 过期、public session 终止、长时间运行、普通 API key、平台 cookie、header 清洗与响应 header 透传；
+- `internal/messages/gateway_test.go`：未知/空配置保持透明转发，provider failure 与 panic 转为 tool error（panic 日志包含 `request_id` 和 stack），混合 tool 的非搜索结果带 `is_error: true`，`max_uses` 与全局 loop 上限均有调用次数断言，unsupported `user_location` 在 BYOK 前拒绝，连续两轮 SSE 重建 `server_tool_use`、`web_search_tool_result` 和 `web_search_result`；
+- `internal/websearch/*_test.go`：Tavily/Brave factory registry、provider-owned options 解码与校验、credential 不进入 upstream request，以及 Brave 不支持域名策略时显式报错；
+- `internal/config/config_test.go`：`web_search.providers.<name>` 的 endpoint/key/options 解析、未知 provider 字段拒绝和配置参考文件覆盖；
 - `tests/platform_proxy_directory_api_test.go`：管理后台原有独立路径的 JSON 与 SSE 转发；
 - `internal/environments/environment_manager_test.go`：沙箱 payload 不含上游 key 或 Claude 凭证环境变量，api base URL 和 lifecycle-bound token auth 正确，启动 payload 会被删除；
 - `tests/environments_runner_cloud_test.go`：真实 runner 组装出的 runtime payload 使用 session-scoped token。

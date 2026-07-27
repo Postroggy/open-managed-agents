@@ -319,8 +319,7 @@ func TestMessagesWebSearchGateway(t *testing.T) {
 	cfg.AnthropicUpstream.BaseURL = upstream.URL
 	cfg.AnthropicUpstream.APIKey = "messages-gateway-upstream"
 	cfg.WebSearch.Provider = "tavily"
-	cfg.WebSearch.Endpoint = tavily.URL
-	cfg.WebSearch.APIKey = "tavily-test-key"
+	cfg.WebSearch.Providers["tavily"] = config.WebSearchProviderConfig{Endpoint: tavily.URL, APIKey: "tavily-test-key"}
 	app := newTestAppWithStore(t, &cfg, newFakeStore("messages-web-search-gateway-bucket"))
 	defer app.close()
 
