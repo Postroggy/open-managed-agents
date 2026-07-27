@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -142,6 +144,7 @@ func TestStartRcloneFilestoreFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			runner := &Runner{
 				provider: test.provider,
+				logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 			}
 			err := runner.startRcloneFilestore(context.Background(), "sandbox_test", rcloneFilestoreLaunch{
 				ConfigPayload: []byte(`{"mounts":[]}`),

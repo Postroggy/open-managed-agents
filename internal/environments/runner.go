@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -14,6 +14,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/filestore"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
+	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	"github.com/superduck-ai/open-managed-agents/internal/networkpolicy"
 	"github.com/superduck-ai/open-managed-agents/internal/runtime/e2bruntime"
 	skillsapi "github.com/superduck-ai/open-managed-agents/internal/skills"
@@ -59,16 +60,17 @@ type RunnerDependencies struct {
 	CodeSessions    CodeSessionRuntime
 	Skills          RuntimeSkillResolver
 	FilestoreTokens FilestoreTokenIssuer
+	Logger          *slog.Logger
 }
 
 type Runner struct {
-	db           *db.DB
-	provider     e2bruntime.Provider
-	cfg          config.Config
-	codeSessions CodeSessionRuntime
-	skills       RuntimeSkillResolver
-
+	db              *db.DB
+	provider        e2bruntime.Provider
+	cfg             config.Config
+	codeSessions    CodeSessionRuntime
+	skills          RuntimeSkillResolver
 	filestoreTokens FilestoreTokenIssuer
+	logger          *slog.Logger
 }
 
 type managedAgentLaunchPreparation struct {
@@ -109,6 +111,7 @@ func NewRunner(deps RunnerDependencies) (*Runner, error) {
 		codeSessions:    deps.CodeSessions,
 		skills:          deps.Skills,
 		filestoreTokens: deps.FilestoreTokens,
+		logger:          logging.LoggerOrDefault(deps.Logger),
 	}, nil
 }
 
@@ -160,7 +163,7 @@ func (r *Runner) loop(ctx context.Context, workerID string) {
 		}
 		processed, err := r.RunOnce(ctx, workerID)
 		if err != nil {
-			log.Printf("environment runner worker=%s: %v", workerID, err)
+			r.logger.ErrorContext(ctx, "environment runner", "worker_id", workerID, "error", err)
 		}
 		if processed {
 			continue
@@ -316,7 +319,8 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 		// rclone 和固定挂载已就绪；manager 随后通过 stdin 取得双凭证，
 		// 并在启动 Claude 前 register worker，建立首个 CCR lease。
 		if err := r.provider.StartBackgroundCommand(ctx, providerSandboxID, launch.Manager.ShellCommand, launch.Manager.Payload); err != nil {
-			publicError := logManagedAgentRuntimeStageFailure(
+			publicError := r.logManagedAgentRuntimeStageFailure(
+				ctx,
 				"environment_manager_start",
 				errEnvironmentManagerStart,
 				err,
@@ -349,11 +353,12 @@ func (r *Runner) failManagedAgentRuntime(
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := r.codeSessions.TerminateManagedAgentCodeSession(cleanupCtx, session, codeSessionID); err != nil {
-		log.Printf(
-			"terminate failed managed-agent runtime code_session_id=%s stage_error_type=%T cleanup_error_type=%T",
-			codeSessionID,
-			cause,
-			err,
+		r.logger.ErrorContext(
+			cleanupCtx,
+			"terminate failed managed agent runtime",
+			"code_session_id", codeSessionID,
+			"stage_error_type", fmt.Sprintf("%T", cause),
+			"error", err,
 		)
 	}
 	r.failCreatedSandbox(ctx, record, work, providerSandboxID, cause)
@@ -493,19 +498,19 @@ func (r *Runner) publishManagedAgentRuntime(
 func (r *Runner) startRcloneFilestore(ctx context.Context, sandboxID string, launch rcloneFilestoreLaunch) error {
 	if err := r.provider.WriteFile(ctx, sandboxID, rcloneConfigPath, launch.ConfigPayload); err != nil {
 		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
-		return logRcloneStageFailure("config_write", errRcloneConfigWrite, err)
+		return r.logRcloneStageFailure(ctx, "config_write", errRcloneConfigWrite, err)
 	}
 	if err := r.provider.RunCommand(ctx, sandboxID, rcloneConfigPermissionsCommand(), rcloneCommandGraceTimeout); err != nil {
 		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
-		return logRcloneStageFailure("config_permissions", errRcloneConfigPermissions, err)
+		return r.logRcloneStageFailure(ctx, "config_permissions", errRcloneConfigPermissions, err)
 	}
 	if err := r.provider.StartBackgroundCommand(ctx, sandboxID, rcloneStartCommand(), nil); err != nil {
 		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
-		return logRcloneStageFailure("process_start", errRcloneProcessStart, err)
+		return r.logRcloneStageFailure(ctx, "process_start", errRcloneProcessStart, err)
 	}
 	if err := r.waitForRcloneReady(ctx, sandboxID, rcloneReadyPollInterval, rcloneReadyTimeout); err != nil {
 		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
-		return logRcloneStageFailure("readiness", errRcloneReadiness, err)
+		return r.logRcloneStageFailure(ctx, "readiness", errRcloneReadiness, err)
 	}
 	r.removeRcloneConfig(ctx, sandboxID)
 	return nil
@@ -522,36 +527,40 @@ func (r *Runner) removeRcloneConfig(ctx context.Context, sandboxID string) {
 		if cleanupErr == nil {
 			return
 		}
-		log.Printf(
-			"rclone-filestore stage=config_cleanup attempt=%d error_type=%T",
-			attempt,
-			cleanupErr,
+		r.logger.WarnContext(
+			ctx,
+			"rclone filestore config cleanup",
+			"attempt", attempt,
+			"error", cleanupErr,
 		)
 		exists, probeErr := r.provider.FileExists(ctx, sandboxID, rcloneConfigPath)
 		if probeErr == nil && !exists {
 			return
 		}
 		if probeErr != nil {
-			log.Printf(
-				"rclone-filestore stage=config_cleanup_probe attempt=%d error_type=%T",
-				attempt,
-				probeErr,
+			r.logger.WarnContext(
+				ctx,
+				"rclone filestore config cleanup probe",
+				"attempt", attempt,
+				"error", probeErr,
 			)
 		}
 	}
-	log.Printf(
-		"rclone-filestore stage=config_cleanup exhausted_attempts=%d config_may_remain=true",
-		rcloneConfigCleanupTries,
+	r.logger.ErrorContext(
+		ctx,
+		"rclone filestore config cleanup exhausted",
+		"attempts", rcloneConfigCleanupTries,
+		"config_may_remain", true,
 	)
 }
 
-func logRcloneStageFailure(stage string, publicError, cause error) error {
-	log.Printf("rclone-filestore stage=%s error_type=%T", stage, cause)
+func (r *Runner) logRcloneStageFailure(ctx context.Context, stage string, publicError, cause error) error {
+	r.logger.ErrorContext(ctx, "rclone filestore stage failed", "stage", stage, "error", cause)
 	return publicError
 }
 
-func logManagedAgentRuntimeStageFailure(stage string, publicError, cause error) error {
-	log.Printf("managed-agent runtime stage=%s error_type=%T", stage, cause)
+func (r *Runner) logManagedAgentRuntimeStageFailure(ctx context.Context, stage string, publicError, cause error) error {
+	r.logger.ErrorContext(ctx, "managed agent runtime stage failed", "stage", stage, "error", cause)
 	return publicError
 }
 

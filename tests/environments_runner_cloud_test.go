@@ -942,7 +942,7 @@ func newManagedAgentRunner(
 		DB:              app.db,
 		Provider:        provider,
 		Config:          cfg,
-		CodeSessions:    codesessions.NewServiceWithCredentials(app.db, app.credentials),
+		CodeSessions:    codesessions.NewServiceWithCredentials(app.db, app.credentials, nil),
 		Skills:          skillsapi.NewRuntimeResolver(app.db),
 		FilestoreTokens: app.filestoreCredentials,
 	})
