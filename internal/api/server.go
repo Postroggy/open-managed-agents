@@ -2,9 +2,9 @@ package api
 
 import (
 	"errors"
-	"log"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	adminapi "github.com/superduck-ai/open-managed-agents/internal/admin"
@@ -17,17 +17,19 @@ import (
 	deploymentsapi "github.com/superduck-ai/open-managed-agents/internal/deployments"
 	"github.com/superduck-ai/open-managed-agents/internal/environments"
 	"github.com/superduck-ai/open-managed-agents/internal/files"
+	filestoreapi "github.com/superduck-ai/open-managed-agents/internal/filestore"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
+	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	"github.com/superduck-ai/open-managed-agents/internal/mcpcatalogs"
 	memoryapi "github.com/superduck-ai/open-managed-agents/internal/memory"
+	messagesapi "github.com/superduck-ai/open-managed-agents/internal/messages"
 	modelsapi "github.com/superduck-ai/open-managed-agents/internal/models"
 	"github.com/superduck-ai/open-managed-agents/internal/platform"
 	platformapi "github.com/superduck-ai/open-managed-agents/internal/platformapi"
 	"github.com/superduck-ai/open-managed-agents/internal/platformauth"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
 	sessionsapi "github.com/superduck-ai/open-managed-agents/internal/sessions"
-	"github.com/superduck-ai/open-managed-agents/internal/skillprewarm"
 	skillsapi "github.com/superduck-ai/open-managed-agents/internal/skills"
 	"github.com/superduck-ai/open-managed-agents/internal/storage"
 	vaultsapi "github.com/superduck-ai/open-managed-agents/internal/vaults"
@@ -38,66 +40,93 @@ import (
 )
 
 type Server struct {
-	cfg            config.Config
-	db             *db.DB
-	router         chi.Router
-	platformStore  platformsession.Store
-	admin          *adminapi.Handler
-	agents         *agents.Handler
-	batch          *batches.Handler
-	codeSessions   *codesessions.Handler
-	deployments    *deploymentsapi.Handler
-	deploymentRuns *deploymentsapi.RunsHandler
-	envs           *environments.Handler
-	files          *files.Handler
-	memory         *memoryapi.Handler
-	models         *modelsapi.Handler
-	sessions       *sessionsapi.Handler
-	skills         *skillsapi.Handler
-	vaults         *vaultsapi.Handler
-	webhooks       *webhooksapi.Handler
+	cfg                  config.Config
+	db                   *db.DB
+	logger               *slog.Logger
+	router               chi.Router
+	platformStore        platformsession.Store
+	filestoreCredentials *filestoreapi.TokenCredentials
+	admin                *adminapi.Handler
+	agents               *agents.Handler
+	batch                *batches.Handler
+	codeSessions         *codesessions.Handler
+	deployments          *deploymentsapi.Handler
+	deploymentRuns       *deploymentsapi.RunsHandler
+	envs                 *environments.Handler
+	files                *files.Handler
+	filestore            *filestoreapi.Handler
+	memory               *memoryapi.Handler
+	messages             *messagesapi.Handler
+	models               *modelsapi.Handler
+	sessions             *sessionsapi.Handler
+	skills               *skillsapi.Handler
+	vaults               *vaultsapi.Handler
+	webhooks             *webhooksapi.Handler
 }
 
-func NewServer(cfg config.Config, database *db.DB, objectStore storage.ObjectStore) *Server {
-	return NewServerWithLogger(cfg, database, objectStore, nil)
+// ServerDeps 汇总组装 HTTP API Server 所需依赖。
+// PlatformStore 为 nil 时回落到内存 store。
+// ObjectStore 由应用启动层从共享 storage.Client 派生，绑定默认 bucket，供对象资源与 Filestore 共用。
+// Logger 是进程根 logger；nil 时统一回落到 slog.Default，生产组装应显式传入。
+type ServerDeps struct {
+	Config                 config.Config
+	DB                     *db.DB
+	ObjectStore            storage.ObjectStore
+	Logger                 *slog.Logger
+	PlatformStore          platformsession.Store
+	CodeSessionCredentials *codesessions.SessionCredentials
+	FilestoreCredentials   *filestoreapi.TokenCredentials
+	FilestoreService       *filestoreapi.Service
 }
 
-func NewServerWithLogger(cfg config.Config, database *db.DB, objectStore storage.ObjectStore, logger *slog.Logger) *Server {
-	return NewServerWithPlatformSessions(cfg, database, objectStore, logger, platformsession.NewMemoryStore())
-}
-
-func NewServerWithPlatformSessions(cfg config.Config, database *db.DB, objectStore storage.ObjectStore, logger *slog.Logger, platformStore platformsession.Store) *Server {
+// NewServer 用显式依赖组装 HTTP API Server。
+// 注入 CodeSessionCredentials，保证 HTTP 验签与 sandbox 启动签发使用同一公钥身份。
+func NewServer(deps ServerDeps) *Server {
+	rootLogger := logging.LoggerOrDefault(deps.Logger)
+	componentLogger := func(component string) *slog.Logger {
+		return rootLogger.With("component", component)
+	}
+	platformStore := deps.PlatformStore
 	if platformStore == nil {
 		platformStore = platformsession.NewMemoryStore()
 	}
-	codeSessionService := codesessions.NewService(database)
-	skillPrewarmEnqueuer := skillprewarm.NewEnqueuer(database)
-	s := &Server{
-		cfg:            cfg,
-		db:             database,
-		platformStore:  platformStore,
-		admin:          adminapi.NewHandler(cfg, database),
-		agents:         agents.NewHandlerWithSkillPrewarm(cfg, database, skillPrewarmEnqueuer),
-		batch:          batches.NewHandler(cfg, database, objectStore),
-		codeSessions:   codesessions.NewHandler(cfg, codeSessionService),
-		deployments:    deploymentsapi.NewHandlerWithSkillPrewarm(cfg, database, skillPrewarmEnqueuer),
-		deploymentRuns: deploymentsapi.NewRunsHandler(cfg, database),
-		envs:           environments.NewHandler(cfg, database),
-		files:          files.NewHandler(cfg, database, objectStore),
-		memory:         memoryapi.NewHandler(cfg, database, objectStore),
-		models:         modelsapi.NewHandler(),
-		sessions:       sessionsapi.NewHandler(cfg, database, codeSessionService),
-		skills:         skillsapi.NewHandlerWithSkillPrewarm(cfg, database, objectStore, skillPrewarmEnqueuer),
-		vaults:         vaultsapi.NewHandler(cfg, database),
-		webhooks:       webhooksapi.NewHandler(cfg, database),
+	codeSessionLogger := componentLogger("codesessions")
+	codeSessionService := codesessions.NewServiceWithCredentials(deps.DB, deps.CodeSessionCredentials, codeSessionLogger)
+	webhookLogger := componentLogger("webhooks")
+	webhookEnqueuer := webhooksapi.NewEnqueuer(deps.DB, deps.Config.Webhook, webhookLogger)
+	workbenchLogger := componentLogger("workbench")
+	mcpCatalogHandler := mcpcatalogs.NewHandler(deps.DB, componentLogger("mcp_catalogs"))
+	filestoreService := deps.FilestoreService
+	if filestoreService == nil {
+		filestoreService = filestoreapi.NewService(deps.Config, deps.DB, deps.ObjectStore)
 	}
-	s.codeSessions.SetBridgeAuthenticator(s.authenticateCodeSessionBridge)
-
+	filestoreHandler := filestoreapi.NewHandler(deps.Config, filestoreService, componentLogger("filestore"))
+	s := &Server{
+		cfg:                  deps.Config,
+		db:                   deps.DB,
+		logger:               componentLogger("api"),
+		platformStore:        platformStore,
+		filestoreCredentials: deps.FilestoreCredentials,
+		admin:                adminapi.NewHandler(deps.Config, deps.DB, componentLogger("admin")),
+		agents:               agents.NewHandler(deps.Config, deps.DB, componentLogger("agents")),
+		batch:                batches.NewHandler(deps.Config, deps.DB, deps.ObjectStore, componentLogger("batches")),
+		codeSessions:         codesessions.NewHandler(deps.Config, codeSessionService, codeSessionLogger),
+		deployments:          deploymentsapi.NewHandler(deps.Config, deps.DB, webhookEnqueuer, componentLogger("deployments")),
+		deploymentRuns:       deploymentsapi.NewRunsHandler(deps.Config, deps.DB, componentLogger("deployment_runs")),
+		envs:                 environments.NewHandler(deps.Config, deps.DB, componentLogger("environments")),
+		files:                files.NewHandler(deps.Config, deps.DB, deps.ObjectStore, componentLogger("files")),
+		filestore:            filestoreHandler,
+		memory:               memoryapi.NewHandler(deps.Config, deps.DB, deps.ObjectStore, componentLogger("memory")),
+		messages:             messagesapi.NewHandler(deps.Config, componentLogger("messages")),
+		models:               modelsapi.NewHandler(deps.Config.AnthropicUpstream),
+		sessions:             sessionsapi.NewHandler(deps.Config, deps.DB, codeSessionService, webhookEnqueuer, componentLogger("sessions")),
+		skills:               skillsapi.NewHandler(deps.Config, deps.DB, deps.ObjectStore, componentLogger("skills")),
+		vaults:               vaultsapi.NewHandler(deps.Config, deps.DB, webhookEnqueuer, componentLogger("vaults")),
+		webhooks:             webhooksapi.NewHandler(deps.Config.Webhook, deps.DB, webhookLogger),
+	}
 	router := chi.NewRouter()
 	router.Use(s.requestIDMiddleware)
-	if logger != nil {
-		router.Use(requestLoggingMiddleware(logger.With("component", "http")))
-	}
+	router.Use(requestLoggingMiddleware(componentLogger("http")))
 	router.Use(s.recoverMiddleware)
 	router.NotFound(notFound)
 	router.MethodNotAllowed(notFound)
@@ -105,7 +134,7 @@ func NewServerWithPlatformSessions(cfg config.Config, database *db.DB, objectSto
 		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	s.registerVersionedAPIRoutes(router)
-	s.registerPlatformConsoleRoutes(router)
+	s.registerPlatformConsoleRoutes(router, workbenchLogger, mcpCatalogHandler)
 	s.router = router
 	return s
 }
@@ -123,6 +152,13 @@ func (s *Server) registerVersionedAPIRoutes(router chi.Router) {
 		// code-session runtime、worker 与旧版 ingress 各自执行协议鉴权，因此注册在 workspace/service 通用鉴权组之外。
 		s.codeSessions.RegisterV1Routes(r)
 		platformapi.RegisterPlatformPrivacyConsentRoutes(r)
+		// 整个 Filestore 命名空间使用专用鉴权和错误外观；具体协议操作由资源 Handler 校验。
+		r.Route("/filestore", func(r chi.Router) {
+			r.Use(s.filestoreAuthMiddleware)
+			r.Mount("/fs", s.filestore)
+			r.NotFound(filestoreNotFound)
+			r.MethodNotAllowed(filestoreNotFound)
+		})
 		r.With(s.v1AuthMiddleware).Group(func(r chi.Router) {
 			s.registerAuthenticatedV1Routes(r)
 		})
@@ -133,7 +169,23 @@ func (s *Server) registerVersionedAPIRoutes(router chi.Router) {
 	router.Route("/v2", s.codeSessions.RegisterV2Routes)
 }
 
-func (s *Server) registerPlatformConsoleRoutes(router chi.Router) {
+func (s *Server) filestoreAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, authErr := s.authenticateFilestore(r)
+		if authErr != nil {
+			// 鉴权发生在 Handler 之外，也必须维持 rclone-filestore 可识别的扁平错误信封。
+			filestoreapi.WriteProtocolError(w, authErr.status, authErr.code, authErr.message)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(filestoreapi.WithPrincipal(r.Context(), principal)))
+	})
+}
+
+func filestoreNotFound(w http.ResponseWriter, _ *http.Request) {
+	filestoreapi.WriteProtocolError(w, http.StatusNotFound, "not_found", "Not found")
+}
+
+func (s *Server) registerPlatformConsoleRoutes(router chi.Router, workbenchLogger *slog.Logger, mcpCatalogHandler *mcpcatalogs.Handler) {
 	router.Group(func(r chi.Router) {
 		r.Use(s.optionalPlatformAuthMiddleware)
 		platformapi.RegisterDirectoryRoutes(r)
@@ -153,7 +205,7 @@ func (s *Server) registerPlatformConsoleRoutes(router chi.Router) {
 			platformapi.RegisterOrganizationBillingRoutes(r)
 			platformapi.RegisterOrganizationAnalyticsRoutes(r)
 			platformapi.RegisterOrganizationProxyRoutes(r, s.cfg)
-			workbenchapi.RegisterOrgWorkbenchRoutes(r, s.db)
+			workbenchapi.RegisterOrgWorkbenchRoutes(r, s.db, s.cfg.AnthropicUpstream, workbenchLogger)
 			r.Post("/mcp/vault-auth/start", s.handlePlatformMCPVaultAuthStart)
 		})
 		r.Route("/api/oauth/organizations/{orgUuid}", func(r chi.Router) {
@@ -165,7 +217,7 @@ func (s *Server) registerPlatformConsoleRoutes(router chi.Router) {
 			platformapi.RegisterConsoleOrganizationAPIKeyRoutes(r, s.db)
 			platformapi.RegisterConsoleOrganizationMemberRoutes(r, s.db)
 			platformapi.RegisterConsoleOrganizationInviteRoutes(r, s.db)
-			mcpcatalogs.NewHandler(s.db).RegisterRoutes(r)
+			mcpCatalogHandler.RegisterRoutes(r)
 		})
 		r.Route("/api/{orgUuid}", func(r chi.Router) {
 			s.files.RegisterPlatformRoutes(r)
@@ -182,6 +234,7 @@ func (s *Server) registerAuthenticatedV1Routes(r chi.Router) {
 	r.Mount("/environments", s.envs)
 	r.Mount("/files", s.files)
 	r.Mount("/memory_stores", s.memory)
+	r.Post("/messages", s.messages.Create)
 	r.Mount("/messages/batches", s.batch)
 	r.Mount("/models", s.models)
 	r.Mount("/organizations", s.admin)
@@ -212,7 +265,13 @@ func (s *Server) recoverMiddleware(next http.Handler) http.Handler {
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				requestID := httpapi.RequestID(r.Context())
-				log.Printf("panic request_id=%s: %v", requestID, recovered)
+				s.logger.ErrorContext(
+					r.Context(),
+					"panic recovered",
+					"request_id", requestID,
+					"panic", recovered,
+					"stack", string(debug.Stack()),
+				)
 				httpapi.WriteError(w, r, httpapi.NewError(http.StatusInternalServerError, "api_error", "Internal server error"))
 			}
 		}()
@@ -333,74 +392,6 @@ func setPlatformRecoveredSessionCookies(w http.ResponseWriter, principal auth.Pr
 	})
 }
 
-func (s *Server) authenticateService(r *http.Request) (auth.Principal, *httpapi.Error) {
-	apiKey := auth.ExtractAPIKey(r)
-	if apiKey == "" {
-		return auth.Principal{}, httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Missing API key")
-	}
-	key, err := s.db.GetAPIKey(r.Context(), auth.HashAPIKey(apiKey))
-	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			if isEnvironmentCredentialPath(r.URL.Path) {
-				envKey, envErr := s.db.GetEnvironmentKey(r.Context(), auth.HashAPIKey(apiKey))
-				if envErr == nil {
-					return auth.Principal{
-						CredentialType:         auth.CredentialTypeEnvironmentKey,
-						EnvironmentKeyID:       envKey.ID,
-						OrganizationID:         envKey.OrganizationID,
-						OrganizationExternalID: envKey.OrganizationExternalID,
-						WorkspaceID:            envKey.WorkspaceID,
-						WorkspaceUUID:          envKey.WorkspaceUUID,
-						WorkspaceExternalID:    envKey.WorkspaceExternalID,
-						EnvironmentID:          envKey.EnvironmentID,
-						EnvironmentExternalID:  envKey.EnvironmentExternalID,
-					}, nil
-				}
-				if envErr != nil && !errors.Is(envErr, db.ErrNotFound) {
-					log.Printf("authenticate environment key: %v", envErr)
-					return auth.Principal{}, httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed")
-				}
-			}
-			return auth.Principal{}, httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Invalid API key")
-		}
-		log.Printf("authenticate api key: %v", err)
-		return auth.Principal{}, httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed")
-	}
-	return auth.Principal{
-		CredentialType:         auth.CredentialTypeAPIKey,
-		APIKeyID:               key.ID,
-		APIKeyExternalID:       key.ExternalID,
-		OrganizationID:         key.OrganizationID,
-		OrganizationExternalID: key.OrganizationExternalID,
-		WorkspaceID:            key.WorkspaceID,
-		WorkspaceUUID:          key.WorkspaceUUID,
-		WorkspaceExternalID:    key.WorkspaceExternalID,
-	}, nil
-}
-
-func (s *Server) authenticateCodeSessionBridge(r *http.Request, codeSessionID string) (auth.Principal, *httpapi.Error) {
-	principal, apiErr := s.authenticateService(r)
-	if apiErr != nil {
-		return auth.Principal{}, apiErr
-	}
-	codeSessionID = strings.TrimSpace(codeSessionID)
-	if codeSessionID == "" {
-		return auth.Principal{}, httpapi.NewError(http.StatusNotFound, "not_found_error", "Not found")
-	}
-	record, err := s.db.GetCodeSession(r.Context(), codeSessionID)
-	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return auth.Principal{}, httpapi.NewError(http.StatusNotFound, "not_found_error", "Code session not found")
-		}
-		log.Printf("authenticate code session bridge: %v", err)
-		return auth.Principal{}, httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed")
-	}
-	if record.OrganizationID != principal.OrganizationID || record.WorkspaceID != principal.WorkspaceID {
-		return auth.Principal{}, httpapi.NewError(http.StatusNotFound, "not_found_error", "Code session not found")
-	}
-	return principal, nil
-}
-
 func (s *Server) authenticatePlatformSession(r *http.Request) (auth.Principal, *httpapi.Error) {
 	sessionKey := auth.ExtractPlatformSessionKey(r)
 	if sessionKey == "" {
@@ -411,7 +402,7 @@ func (s *Server) authenticatePlatformSession(r *http.Request) (auth.Principal, *
 		if errors.Is(err, platformsession.ErrNotFound) {
 			return auth.Principal{}, httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Invalid session")
 		}
-		log.Printf("authenticate platform session: %v", err)
+		s.logger.ErrorContext(r.Context(), "authenticate platform session", "error", err)
 		return auth.Principal{}, httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed")
 	}
 	if strings.TrimSpace(session.OrganizationUUID) == "" && strings.TrimSpace(session.OrganizationExternalID) != "" {
@@ -433,7 +424,7 @@ func (s *Server) authenticatePlatformSession(r *http.Request) (auth.Principal, *
 		if errors.Is(err, db.ErrNotFound) {
 			return auth.Principal{}, httpapi.NewError(http.StatusForbidden, "permission_error", "Workspace not found")
 		}
-		log.Printf("load platform workspace override: %v", err)
+		s.logger.ErrorContext(r.Context(), "load platform workspace override", "error", err)
 		return auth.Principal{}, httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed")
 	}
 	if workspace.ArchivedAt != nil {
@@ -468,7 +459,7 @@ func (s *Server) recoverPlatformMirrorSession(r *http.Request) (auth.Principal, 
 			if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 				return auth.Principal{}, "", httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Invalid session"), true
 			}
-			log.Printf("recover platform session context: %v", err)
+			s.logger.ErrorContext(r.Context(), "recover platform session context", "error", err)
 			return auth.Principal{}, "", httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed"), true
 		}
 	}
@@ -481,11 +472,11 @@ func (s *Server) recoverPlatformMirrorSession(r *http.Request) (auth.Principal, 
 		if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 			return auth.Principal{}, "", httpapi.NewError(http.StatusUnauthorized, "authentication_error", "Invalid session"), true
 		}
-		log.Printf("recover platform session identity: %v", err)
+		s.logger.ErrorContext(r.Context(), "recover platform session identity", "error", err)
 		return auth.Principal{}, "", httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed"), true
 	}
 	if err := s.platformStore.Save(r.Context(), sessionKey, session); err != nil {
-		log.Printf("save recovered platform session: %v", err)
+		s.logger.ErrorContext(r.Context(), "save recovered platform session", "error", err)
 		return auth.Principal{}, "", httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed"), true
 	}
 	principal := session.Principal()
@@ -506,7 +497,7 @@ func (s *Server) applyPlatformOrganizationOverride(r *http.Request, principal au
 		if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 			return auth.Principal{}, httpapi.NewError(http.StatusForbidden, "permission_error", "Organization not found")
 		}
-		log.Printf("load platform organization override: %v", err)
+		s.logger.ErrorContext(r.Context(), "load platform organization override", "error", err)
 		return auth.Principal{}, httpapi.NewError(http.StatusInternalServerError, "api_error", "Authentication failed")
 	}
 	if org.UUID != principal.OrganizationUUID && org.ExternalID != principal.OrganizationExternalID {
@@ -535,7 +526,7 @@ func (s *Server) platformMirrorOrganizationAlias(r *http.Request, principal auth
 	if errors.Is(err, db.ErrNotFound) || errors.Is(err, platform.ErrNotFound) {
 		return orgID
 	}
-	log.Printf("load platform mirror organization alias: %v", err)
+	s.logger.ErrorContext(r.Context(), "load platform mirror organization alias", "error", err)
 	return ""
 }
 

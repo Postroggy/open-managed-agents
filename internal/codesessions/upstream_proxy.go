@@ -91,7 +91,7 @@ func (h *Handler) handleUpstreamProxyCACertificate(w http.ResponseWriter, r *htt
 
 func (h *Handler) handleUpstreamProxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	// 必须在升级协议前完成 Bearer/X-Api-Key 鉴权，避免未授权客户端占用长连接。
-	record, ok := h.authenticateRuntimeSession(w, r)
+	claims, sessionIngressToken, ok := h.authenticateRuntimeSession(w, r)
 	if !ok {
 		return
 	}
@@ -106,14 +106,18 @@ func (h *Handler) handleUpstreamProxyWebSocket(w http.ResponseWriter, r *http.Re
 		Handshake: func(*websocket.Config, *http.Request) error { return nil },
 		Handler: func(connection *websocket.Conn) {
 			connection.MaxPayloadBytes = maxUpstreamProxyChunkBytes + 16
-			// CONNECT Basic 的用户名和密码在本协议中都绑定同一个 code-session external ID。
-			h.serveUpstreamProxyTunnel(connection, record.ExternalID)
+			// CONNECT Basic 用户名绑定 code-session ID，密码必须与 WebSocket Bearer 是同一个 ingress JWT。
+			h.serveUpstreamProxyTunnel(connection, upstreamProxyIdentity{
+				codeSessionExternalID: claims.SessionID,
+				organizationUUID:      claims.OrganizationUUID,
+				workspaceUUID:         claims.WorkspaceUUID,
+			}, sessionIngressToken)
 		},
 	}
 	server.ServeHTTP(w, r)
 }
 
-func (h *Handler) serveUpstreamProxyTunnel(connection *websocket.Conn, sessionID string) {
+func (h *Handler) serveUpstreamProxyTunnel(connection *websocket.Conn, identity upstreamProxyIdentity, sessionIngressToken string) {
 	// 首个 WebSocket message 必须完整承载 CONNECT head。后续 message 才视为原始 TLS 字节流。
 	firstChunk, err := receiveUpstreamProxyChunk(connection)
 	if err != nil || len(firstChunk) > maxUpstreamProxyConnectHeadBytes {
@@ -127,15 +131,21 @@ func (h *Handler) serveUpstreamProxyTunnel(connection *websocket.Conn, sessionID
 	}
 	// WebSocket Bearer 鉴权之后仍校验 CONNECT Basic 的用户名和密码，确保 relay 不能把
 	// 一个 session 的已升级连接改造成另一个 session 的出口。
-	if !upstreamProxyCredentialsMatch(connectRequest, sessionID) {
+	if !upstreamProxyCredentialsMatch(connectRequest, identity.codeSessionExternalID, sessionIngressToken) {
 		_ = sendUpstreamProxyHTTPStatus(connection, http.StatusProxyAuthRequired)
+		return
+	}
+	// Environment networking 策略在凭证校验之后、DNS 解析/拨号之前执行；
+	// 拒绝返回通用 framed 403，reason 只进服务端审计日志。
+	if !h.authorizeUpstreamProxyTarget(connection.Request().Context(), identity, connectRequest.Target) {
+		_ = sendUpstreamProxyHTTPStatus(connection, http.StatusForbidden)
 		return
 	}
 	// 先解析并锁定目标 IP，再拨号该 IP；不要在校验后重新按域名解析，否则会留下 DNS rebinding 窗口。
 	resolvedTarget, err := resolveUpstreamProxyTarget(
 		connection.Request().Context(),
 		connectRequest.Target,
-		h.cfg.CodeSessionUpstreamProxyDisableSSRFProtection,
+		h.cfg.CodeSession.UpstreamProxyDisableSSRFProtection,
 	)
 	if err != nil {
 		status := http.StatusBadGateway
@@ -146,7 +156,7 @@ func (h *Handler) serveUpstreamProxyTunnel(connection *websocket.Conn, sessionID
 		_ = sendUpstreamProxyHTTPStatus(connection, status)
 		return
 	}
-	if h.cfg.CodeSessionUpstreamProxyMITMEnabled {
+	if h.cfg.CodeSession.UpstreamProxyMITMEnabled {
 		h.serveUpstreamProxyMITM(connection, connectRequest.Target, resolvedTarget)
 		return
 	}
@@ -219,12 +229,11 @@ func parseUpstreamProxyAuthorization(value string) (string, string, error) {
 	return sessionID, token, nil
 }
 
-func upstreamProxyCredentialsMatch(request upstreamProxyConnectRequest, expected string) bool {
+func upstreamProxyCredentialsMatch(request upstreamProxyConnectRequest, expectedSessionID string, expectedToken string) bool {
 	// 对等长凭证使用常量时间比较，避免在首个不同字节处提前返回。
 	// code-session external ID 的长度不作为秘密，因此长度不一致仍会立即失败。
-	// CONNECT Basic 的用户名和密码在本协议中都绑定同一个 code-session external ID。
-	return subtle.ConstantTimeCompare([]byte(request.SessionID), []byte(expected)) == 1 &&
-		subtle.ConstantTimeCompare([]byte(request.Token), []byte(expected)) == 1
+	return subtle.ConstantTimeCompare([]byte(request.SessionID), []byte(expectedSessionID)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Token), []byte(expectedToken)) == 1
 }
 
 func resolveUpstreamProxyTarget(ctx context.Context, target string, disableSSRFProtection bool) (string, error) {

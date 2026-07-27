@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
+	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	maevents "github.com/superduck-ai/open-managed-agents/internal/managedagentsevents"
 
 	"github.com/google/uuid"
@@ -21,27 +22,11 @@ import (
 // Service 封装会被 sessions、environment runner 与 code-session HTTP handler 共同复用的业务能力。
 // 它不持有 HTTP 鉴权、代理连接或日志状态，因而可以安全地注入非 HTTP 调用方。
 type Service struct {
-	db     *db.DB
-	sinkMu sync.Mutex
-	sink   PublicEventSink
-}
-
-type ManagedAgentCreateInput struct {
-	Session                    db.Session
-	Environment                db.Environment
-	Model                      string
-	Title                      string
-	WorkDir                    string
-	PermissionMode             string
-	DangerouslySkipPermissions bool
-	Config                     json.RawMessage
-	InitialEvents              []json.RawMessage
-}
-
-type ManagedAgentCreateResult struct {
-	CodeSessionID   string
-	PublicSessionID string
-	SDKURLPath      string
+	db          *db.DB
+	credentials *SessionCredentials
+	logger      *slog.Logger
+	sinkMu      sync.Mutex
+	sink        PublicEventSink
 }
 
 type workerOutputEvent struct {
@@ -49,59 +34,13 @@ type workerOutputEvent struct {
 	Ephemeral bool
 }
 
-// NewService 创建只依赖持久化边界的 code-session 业务服务。
-func NewService(database *db.DB) *Service {
-	return &Service{db: database}
-}
-
-func (s *Service) CreateManagedAgentCodeSession(ctx context.Context, input ManagedAgentCreateInput) (ManagedAgentCreateResult, error) {
-	codeSessionID, err := ids.New("cse_")
-	if err != nil {
-		return ManagedAgentCreateResult{}, err
+func NewServiceWithCredentials(database *db.DB, credentials *SessionCredentials, logger *slog.Logger) *Service {
+	// 显式注入避免 Service 在同一进程中各自生成临时 Ed25519 密钥。
+	if credentials == nil {
+		panic("codesessions: session credentials are required")
 	}
-	now := time.Now().UTC()
-	configObject := rawObject(input.Config)
-	metadata, err := marshalRaw(map[string]any{
-		"source":                         "managed_agents_local",
-		"public_session_id":              input.Session.ExternalID,
-		"environment_id":                 input.Environment.ExternalID,
-		"title":                          input.Title,
-		"config":                         configObject,
-		"dangerously_skip_permissions":   input.DangerouslySkipPermissions,
-		"managed_agent_session_work_dir": strings.TrimSpace(input.WorkDir),
-	})
-	if err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	record, err := s.db.CreateCodeSession(ctx, db.CreateCodeSessionInput{
-		ExternalID:            codeSessionID,
-		OrganizationID:        input.Session.OrganizationID,
-		WorkspaceID:           input.Session.WorkspaceID,
-		SessionID:             input.Session.ID,
-		SessionExternalID:     input.Session.ExternalID,
-		EnvironmentID:         input.Environment.ID,
-		EnvironmentExternalID: input.Environment.ExternalID,
-		WorkDir:               strings.TrimSpace(input.WorkDir),
-		PermissionMode:        strings.TrimSpace(input.PermissionMode),
-		Model:                 strings.TrimSpace(input.Model),
-		Status:                "active",
-		Metadata:              metadata,
-		CreatedAt:             now,
-	})
-	if err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	if err := s.queueInitialize(ctx, record, input.Config, now); err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	if err := s.queueInitialPublicSessionEvents(ctx, record, input.InitialEvents, now); err != nil {
-		return ManagedAgentCreateResult{}, err
-	}
-	return ManagedAgentCreateResult{
-		CodeSessionID:   record.ExternalID,
-		PublicSessionID: record.SessionExternalID,
-		SDKURLPath:      "/v1/code/sessions/" + record.ExternalID,
-	}, nil
+	logger = logging.LoggerOrDefault(logger)
+	return &Service{db: database, credentials: credentials, logger: logger}
 }
 
 func (s *Service) queueInitialPublicSessionEvents(ctx context.Context, codeSession db.CodeSession, payloads []json.RawMessage, now time.Time) error {
@@ -112,7 +51,7 @@ func (s *Service) queueInitialPublicSessionEvents(ctx context.Context, codeSessi
 	for _, raw := range payloads {
 		object, err := decodeJSONObject(raw)
 		if err != nil {
-			log.Printf("skip initial code session event code_session_id=%s: %v", codeSession.ExternalID, err)
+			s.logger.WarnContext(ctx, "skip initial code session event", "code_session_id", codeSession.ExternalID, "error", err)
 			continue
 		}
 		if !forwardPublicEventToWorker(stringField(object, "type")) {
@@ -120,7 +59,7 @@ func (s *Service) queueInitialPublicSessionEvents(ctx context.Context, codeSessi
 		}
 		payload, err := workerPayloadForPublicEvent(codeSession.ExternalID, raw, now)
 		if err != nil {
-			log.Printf("convert initial code session event code_session_id=%s: %v", codeSession.ExternalID, err)
+			s.logger.ErrorContext(ctx, "convert initial code session event", "code_session_id", codeSession.ExternalID, "error", err)
 			continue
 		}
 		workerPayloads = append(workerPayloads, payload)
@@ -155,7 +94,7 @@ func (s *Service) QueuePublicSessionEvents(ctx context.Context, session db.Sessi
 		}
 		payload, err := workerPayloadForPublicEvent(codeSession.ExternalID, event.Payload, event.ProcessedAt)
 		if err != nil {
-			log.Printf("convert public session event to code session payload session_id=%s event_id=%s: %v", session.ExternalID, event.ExternalID, err)
+			s.logger.ErrorContext(ctx, "convert public session event to code session payload", "session_id", session.ExternalID, "event_id", event.ExternalID, "error", err)
 			continue
 		}
 		payloads = append(payloads, payload)
@@ -417,7 +356,7 @@ func (s *Service) publishPublicPayloads(ctx context.Context, codeSessionID strin
 		return nil
 	}
 	if err := s.publishSubagentInternalEvents(ctx, codeSession); err != nil {
-		log.Printf("publish subagent internal events code_session_id=%s session_id=%s: %v", codeSession.ExternalID, codeSession.SessionExternalID, err)
+		s.logger.ErrorContext(ctx, "publish subagent internal events", "code_session_id", codeSession.ExternalID, "session_id", codeSession.SessionExternalID, "error", err)
 	}
 	return nil
 }

@@ -6,13 +6,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/superduck-ai/open-managed-agents/internal/codesessions"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/filestore"
 )
 
 func TestV1FallbacksRequireAuthentication(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer(config.Config{}, nil, nil)
+	credentials, err := codesessions.NewSessionCredentials(config.Config{})
+	if err != nil {
+		t.Fatalf("create code session credentials: %v", err)
+	}
+	filestoreCredentials, err := filestore.NewTokenCredentials(config.Config{})
+	if err != nil {
+		t.Fatalf("create filestore credentials: %v", err)
+	}
+	server := NewServer(ServerDeps{
+		CodeSessionCredentials: credentials,
+		FilestoreCredentials:   filestoreCredentials,
+	})
 	for _, test := range []struct {
 		name   string
 		method string
