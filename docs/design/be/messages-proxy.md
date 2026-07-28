@@ -47,7 +47,7 @@ sequenceDiagram
         BYOK-->>OMA: tool_use(web_search) + tool_use(client)
         OMA-->>CC: pending server_tool_use + client tool_use<br/>stop_reason=tool_use
         CC->>CC: 执行 Bash/Edit/MCP
-        CC->>OMA: 新 Messages 请求，仅含 client tool_result<br/>保留同一 tools 数组
+        CC->>OMA: 新 Messages 请求，client tool_result 置前<br/>可附带后续 content，并保留同一 tools 数组
         OMA->>Search: 执行 pending Search
         Search-->>OMA: results or provider error
         OMA->>BYOK: 同一 user message 中按原调用顺序放齐所有 tool_result
@@ -56,7 +56,7 @@ sequenceDiagram
     end
 ```
 
-内部 transcript 与 Claude Code transcript 通过双向投影保持一致。BYOK 的 ordinary `toolu_*` 会编码为带 `srvtoolu_` 前缀的可逆 server ID；Claude Code 后续重放完整历史时，gateway 会把 `server_tool_use`/`web_search_tool_result` 展开回 BYOK 的 assistant `tool_use` 与下一条 user `tool_result`。mixed continuation 中 Claude Code 只返回自己拥有的 client results，每个 client `tool_use` 必须恰好对应一个 `tool_result`，并保留声明 pending search 的同一 Web Search tool；缺失、重复或未知 result，以及缺少 pending search tool 时返回 `400 invalid_request_error`，不会把 server block 透传给 BYOK。gateway 执行 pending search 后按原 tool call 顺序合并结果；普通 client tool 不由 OMA 伪造 error result。已完成的 search 历史即使后续请求不再声明 Web Search，也仍会反向投影，但不会允许 BYOK 发起新的搜索。
+内部 transcript 与 Claude Code transcript 通过双向投影保持一致。BYOK 的 ordinary `toolu_*` 会编码为带 `srvtoolu_` 前缀的可逆 server ID；Claude Code 后续重放完整历史时，gateway 会把 `server_tool_use`/`web_search_tool_result` 展开回 BYOK 的 assistant `tool_use` 与下一条 user `tool_result`。mixed continuation 中 Claude Code 只返回自己拥有的 client results，每个 client `tool_use` 必须恰好对应一个 `tool_result`，并保留声明 pending search 的同一 Web Search tool；缺失、重复或未知 result，以及缺少 pending search tool 时返回 `400 invalid_request_error`，不会把 server block 透传给 BYOK。gateway 执行 pending search 后按原 tool call 顺序合并结果，再原样追加 user message 中位于 results 之后的 text 或其他 content block；普通 client tool 不由 OMA 伪造 error result。已完成的 search 历史即使后续请求不再声明 Web Search，也仍会反向投影，但不会允许 BYOK 发起新的搜索。
 
 调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略。`max_uses` 统计每条入站 Messages 请求内实际尝试的搜索次数；同一请求的内部 BYOK continuation 不会重置计数，超限调用不访问 provider，并返回 `web_search_tool_result_error`/`max_uses_exceeded`。`web_search.max_tool_loops` 是独立的 BYOK 请求次数上限，包含初始请求；最后一次允许的 BYOK 响应若仍要求搜索，gateway 会在调用 provider 前终止，避免产生无法回传的搜索成本。域名约束直接传给搜索 provider，不交给 BYOK 模型生成或修改。
 
