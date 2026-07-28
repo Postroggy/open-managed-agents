@@ -183,10 +183,11 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	afterID := r.URL.Query().Get("after_id")
 	beforeID := r.URL.Query().Get("before_id")
+	scopeID := r.URL.Query().Get("scope_id")
 
 	records, hasMore, err := h.db.ListFilesPage(r.Context(), db.ListFilesPageParams{
 		WorkspaceID: principal.WorkspaceID,
-		ScopeID:     r.URL.Query().Get("scope_id"),
+		ScopeID:     scopeID,
 		AfterID:     afterID,
 		BeforeID:    beforeID,
 		Limit:       limit,

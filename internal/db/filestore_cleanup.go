@@ -226,6 +226,11 @@ func (d *DB) ExpireFilestoreEntries(ctx context.Context, limit int) ([]Filestore
 		`, map[string]any{"entry_id": entry.ID, "now": now}); err != nil {
 			return nil, err
 		}
+		if err := softDeleteSessionFileProjectionByEntryTx(
+			ctx, tx, scope.WorkspaceID, entry.UUID,
+		); err != nil {
+			return nil, err
+		}
 		releasedBytes, err := addWorkspaceStorageDelta(
 			releasedBytesByWorkspace[scope.WorkspaceID], filestoreInt64(entry.SizeBytes),
 		)
@@ -644,7 +649,13 @@ func (d *DB) failLeasedFilestoreCleanupJob(ctx context.Context, jobID int64, lea
 	return nil
 }
 
-func enqueueFilestoreFilesystemCleanupJobTx(ctx context.Context, tx *sqlx.Tx, filesystem FilestoreFilesystem, workspaceID int64, runAfter time.Time) (FilestoreFilesystemCleanupJob, error) {
+func enqueueFilestoreFilesystemCleanupJobTx(
+	ctx context.Context,
+	tx *sqlx.Tx,
+	filesystem FilestoreFilesystem,
+	workspaceID int64,
+	runAfter time.Time,
+) (FilestoreFilesystemCleanupJob, error) {
 	var job FilestoreFilesystemCleanupJob
 	err := namedGetContext(ctx, tx, &job, enqueueFilestoreFilesystemCleanupJobQuery, map[string]any{
 		"workspace_id":  workspaceID,

@@ -319,6 +319,13 @@ func (d *DB) DeleteSession(ctx context.Context, workspaceID int64, externalID st
 	if err := retireSessionFilesystemTx(ctx, tx, session); err != nil {
 		return Session{}, err
 	}
+	if _, err := namedExecContext(ctx, tx, softDeleteSessionFileProjectionsByScopeSQL, map[string]any{
+		"workspace_id": session.WorkspaceID,
+		"scope_type":   sessionFileProjectionScope,
+		"scope_id":     session.ExternalID,
+	}); err != nil {
+		return Session{}, err
+	}
 	if _, err := namedExecContext(ctx, tx, deleteSessionThreadsQuery, arguments); err != nil {
 		return Session{}, err
 	}
