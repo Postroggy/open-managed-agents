@@ -95,7 +95,7 @@ func loadYAMLConfig(path string) (Config, error) {
 	}
 	input := newYAMLConfig()
 	if len(bytes.TrimSpace(data)) == 0 {
-		return input.resolve()
+		return input.resolve(), nil
 	}
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
@@ -117,7 +117,7 @@ func loadYAMLConfig(path string) (Config, error) {
 	if err := document.Decode(&input); err != nil {
 		return Config{}, fmt.Errorf("decode config file %q: %w", path, err)
 	}
-	return input.resolve()
+	return input.resolve(), nil
 }
 
 // validateYAMLNode preserves strict unknown-field and null rejection before
