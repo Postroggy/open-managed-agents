@@ -117,6 +117,8 @@ Caddy 配置更简洁，与项目技术栈一致（都是 Go），Caddyfile 仅 
 
 本地文件是完整运行配置，不是局部 overlay；应用不会合并模板与本地文件。数据库、Redis、S3、E2B 和上游凭证等业务字段全部由本地 YAML 提供，不再由进程环境变量逐项覆盖。真实 API key、access token 和 signing key 只能进入本地文件，不能写回受跟踪模板。生产部署可通过 Compose override 或平台 Secret Manager 将另一份受控的完整 YAML 只读挂载到同一个容器目标路径。
 
+本地模板的 `e2b.api_key` 是 `e2b_` 加小写十六进制的固定占位值。e2b-local 不校验该凭证，但 E2B Go SDK 会在访问自定义 `api_url` 前先校验 key 格式；留空或使用 `local` 会在请求到达 e2b-local 前失败。该占位值只允许与模板中的本地 `api_url`/`sandbox_url` 一起使用，不是 E2B Cloud 凭证；连接公共 E2B endpoint 时必须替换为真实密钥。
+
 oma-server 在容器内监听 `:8080`，Compose 通过 `38080:8080` 发布到宿主机。本地 sandbox 位于该容器网络之外，因此回调地址显式配置为 `code_session.sandbox_api_base_url: http://host.docker.internal:38080`。这里不能从 `server.addr` 推导：前者是 sandbox 可达的宿主机地址和发布端口，后者只是进程在容器内的监听地址。配置合同测试会同时校验监听端口、Compose 端口映射和回调 URL，防止三者漂移。
 
 ### 4.7 明确采用本地开发凭证姿态

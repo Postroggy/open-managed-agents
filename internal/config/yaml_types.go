@@ -54,10 +54,10 @@ type yamlConfig struct {
 }
 
 type yamlWebSearchConfig struct {
-	Provider     string                                 `yaml:"provider"`
-	Timeout      time.Duration                          `yaml:"timeout"`
-	MaxToolLoops int                                    `yaml:"max_tool_loops"`
-	Providers    map[string]yamlWebSearchProviderConfig `yaml:"providers"`
+	Provider                string                                 `yaml:"provider"`
+	Timeout                 time.Duration                          `yaml:"timeout"`
+	MaxServerToolIterations int                                    `yaml:"max_server_tool_iterations"`
+	Providers               map[string]yamlWebSearchProviderConfig `yaml:"providers"`
 }
 
 type yamlWebSearchProviderConfig struct {
@@ -215,10 +215,10 @@ func newYAMLWebSearchConfig(cfg WebSearchConfig) yamlWebSearchConfig {
 		}
 	}
 	return yamlWebSearchConfig{
-		Provider:     cfg.Provider,
-		Timeout:      cfg.Timeout,
-		MaxToolLoops: cfg.MaxToolLoops,
-		Providers:    providers,
+		Provider:                cfg.Provider,
+		Timeout:                 cfg.Timeout,
+		MaxServerToolIterations: cfg.MaxServerToolIterations,
+		Providers:               providers,
 	}
 }
 
@@ -240,9 +240,9 @@ func (input yamlWebSearchConfig) resolve() (WebSearchConfig, error) {
 		}
 	}
 	return WebSearchConfig{
-		Provider:     input.Provider,
-		Timeout:      input.Timeout,
-		MaxToolLoops: input.MaxToolLoops,
-		Providers:    providers,
+		Provider:                input.Provider,
+		Timeout:                 input.Timeout,
+		MaxServerToolIterations: input.MaxServerToolIterations,
+		Providers:               providers,
 	}, nil
 }

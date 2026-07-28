@@ -18,7 +18,7 @@ func TestConfigExampleContainsSupportedFields(t *testing.T) {
 		"anthropic_upstream",
 		"anthropic_upstream.api_key",
 		"web_search",
-		"web_search.max_tool_loops",
+		"web_search.max_server_tool_iterations",
 		"web_search.provider",
 		"web_search.timeout",
 		"web_search.providers",

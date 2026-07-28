@@ -17,8 +17,8 @@ func defaultConfig() Config {
 			BaseURL: "https://api.anthropic.com",
 		},
 		WebSearch: WebSearchConfig{
-			Provider:     "tavily",
-			MaxToolLoops: 3,
+			Provider:                "tavily",
+			MaxServerToolIterations: 10,
 			Providers: map[string]WebSearchProviderConfig{
 				"tavily": {},
 				"brave":  {},

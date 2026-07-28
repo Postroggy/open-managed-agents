@@ -98,7 +98,7 @@ bootstrap:
 web_search:
   provider: tavily
   timeout: 7s
-  max_tool_loops: 5
+  max_server_tool_iterations: 5
   providers:
     tavily:
       endpoint: http://localhost:9999/search
@@ -155,7 +155,7 @@ web_search:
 	if cfg.Bootstrap.WorkspaceName != "yaml-workspace" {
 		t.Fatalf("Bootstrap.WorkspaceName = %q, want yaml-workspace", cfg.Bootstrap.WorkspaceName)
 	}
-	if cfg.WebSearch.Provider != "tavily" || cfg.WebSearch.MaxToolLoops != 5 {
+	if cfg.WebSearch.Provider != "tavily" || cfg.WebSearch.MaxServerToolIterations != 5 {
 		t.Fatalf("unexpected web search config: %#v", cfg.WebSearch)
 	}
 	tavily := cfg.WebSearch.Providers["tavily"]
@@ -440,7 +440,6 @@ func TestDockerComposeKeepsSecretsOutOfTrackedTemplate(t *testing.T) {
 	cfg := loadValidatedConfigTestFile(t, configPath)
 	secretValues := map[string]string{
 		"anthropic_upstream.api_key": cfg.AnthropicUpstream.APIKey,
-		"e2b.api_key":                cfg.E2B.APIKey,
 		"e2b.access_token":           cfg.E2B.AccessToken,
 		"webhook.signing_key":        cfg.Webhook.SigningKey,
 	}
@@ -448,6 +447,10 @@ func TestDockerComposeKeepsSecretsOutOfTrackedTemplate(t *testing.T) {
 		if strings.TrimSpace(value) != "" {
 			t.Fatalf("tracked Compose template %s must be empty", name)
 		}
+	}
+	const localE2BAPIKey = "e2b_0000000000000000000000000000000000000000"
+	if cfg.E2B.APIKey != localE2BAPIKey {
+		t.Fatalf("tracked Compose template e2b.api_key = %q, want fixed local placeholder", cfg.E2B.APIKey)
 	}
 
 	compose := loadDockerComposeTestFile(t)
@@ -554,6 +557,18 @@ func TestLoadStorageS3ForcePathStyleDefault(t *testing.T) {
 	}
 	if !cfg.Storage.S3.ForcePathStyle {
 		t.Fatal("Storage.S3.ForcePathStyle = false, want true")
+	}
+}
+
+func TestLoadWebSearchServerToolIterationsDefault(t *testing.T) {
+	prepareLoadTest(t)
+
+	cfg, err := loadConfigTestYAML(t, "")
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.WebSearch.MaxServerToolIterations != 10 {
+		t.Fatalf("MaxServerToolIterations = %d, want 10", cfg.WebSearch.MaxServerToolIterations)
 	}
 }
 

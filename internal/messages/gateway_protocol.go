@@ -9,7 +9,15 @@ import (
 	"strings"
 )
 
-const omaServerToolIDPrefix = "srvtoolu_oma_"
+const (
+	omaServerToolIDPrefix  = "srvtoolu_oma_"
+	omaSearchContentPrefix = "oma_search_v1_"
+)
+
+type gatewayOpaqueSearchContent struct {
+	Content       string `json:"content"`
+	PublishedDate string `json:"published_date,omitempty"`
+}
 
 type gatewayMessageEnvelope struct {
 	Role    string          `json:"role"`
@@ -33,7 +41,6 @@ type gatewayProjectedMessage struct {
 type gatewayPendingTurn struct {
 	orderedCalls  []gatewayToolCall
 	clientResults map[string]json.RawMessage
-	passthrough   []json.RawMessage
 }
 
 func hasGatewayWebSearchHistory(messages []json.RawMessage) bool {
@@ -83,7 +90,7 @@ func gatewaySearchCalls(calls []gatewayToolCall) []gatewayToolCall {
 	return searchCalls
 }
 
-func finalizeGatewayResponse(response gatewayResponse, content []json.RawMessage, stream bool) (gatewayResponse, error) {
+func finalizeGatewayResponse(response gatewayResponse, content []json.RawMessage, stream bool, stopReason string) (gatewayResponse, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(response.body, &fields); err != nil {
 		return gatewayResponse{}, fmt.Errorf("decode messages response: %w", err)
@@ -93,6 +100,13 @@ func finalizeGatewayResponse(response gatewayResponse, content []json.RawMessage
 		return gatewayResponse{}, fmt.Errorf("encode messages response content: %w", err)
 	}
 	fields["content"] = encodedContent
+	if stopReason != "" {
+		encodedStopReason, err := json.Marshal(stopReason)
+		if err != nil {
+			return gatewayResponse{}, fmt.Errorf("encode messages stop reason: %w", err)
+		}
+		fields["stop_reason"] = encodedStopReason
+	}
 	response.body, err = json.Marshal(fields)
 	if err != nil {
 		return gatewayResponse{}, fmt.Errorf("encode messages response: %w", err)
@@ -114,12 +128,19 @@ func (g *gateway) prepareGatewayTranscript(ctx context.Context, messages []json.
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	paused, err := findPausedGatewayTurn(messages)
+	if err != nil {
+		return nil, nil, 0, err
+	}
 	transcript, err := projectGatewayTranscript(messages)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	if pending == nil {
+	if pending == nil && paused == nil {
 		return transcript, nil, 0, nil
+	}
+	if paused != nil {
+		return g.resumePausedGatewayTurn(ctx, transcript, paused, policy)
 	}
 	searchResults, executions, searchUses, err := g.executeSearchCalls(ctx, pending.searchCalls(), policy, 0)
 	if err != nil {
@@ -141,6 +162,92 @@ func (g *gateway) prepareGatewayTranscript(ctx context.Context, messages []json.
 		return nil, nil, 0, err
 	}
 	return transcript, prefix, searchUses, nil
+}
+
+func (g *gateway) resumePausedGatewayTurn(ctx context.Context, transcript []json.RawMessage, pending *gatewayPendingTurn, policy gatewaySearchPolicy) ([]json.RawMessage, []json.RawMessage, int, error) {
+	searchResults, executions, searchUses, err := g.executeSearchCalls(ctx, pending.searchCalls(), policy, 0)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	resultMessage, err := userGatewayMessage(searchResults)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	transcript = append(transcript, resultMessage)
+	prefix, err := gatewayExecutionResultBlocks(executions)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return transcript, prefix, searchUses, nil
+}
+
+func isGatewayPauseContinuation(messages []json.RawMessage) bool {
+	if len(messages) == 0 {
+		return false
+	}
+	message, err := decodeGatewayMessage(messages[len(messages)-1])
+	if err != nil || message.Role != "assistant" {
+		return false
+	}
+	var blocks []json.RawMessage
+	if json.Unmarshal(message.Content, &blocks) != nil {
+		return false
+	}
+	for _, rawBlock := range blocks {
+		var block gatewayProtocolBlock
+		if json.Unmarshal(rawBlock, &block) == nil &&
+			(block.Type == "web_search_tool_result" ||
+				(block.Type == "server_tool_use" && block.Name == searchToolName)) {
+			return true
+		}
+	}
+	return false
+}
+
+func findPausedGatewayTurn(messages []json.RawMessage) (*gatewayPendingTurn, error) {
+	if !isGatewayPauseContinuation(messages) {
+		return nil, nil
+	}
+	assistant, err := decodeGatewayMessage(messages[len(messages)-1])
+	if err != nil {
+		return nil, err
+	}
+	var blocks []json.RawMessage
+	if err := json.Unmarshal(assistant.Content, &blocks); err != nil {
+		return nil, err
+	}
+	completedSearches := make(map[string]struct{})
+	for _, rawBlock := range blocks {
+		var block gatewayProtocolBlock
+		if json.Unmarshal(rawBlock, &block) == nil && block.Type == "web_search_tool_result" {
+			completedSearches[block.ToolUseID] = struct{}{}
+		}
+	}
+	turn := &gatewayPendingTurn{clientResults: make(map[string]json.RawMessage)}
+	for _, rawBlock := range blocks {
+		var block gatewayProtocolBlock
+		if err := json.Unmarshal(rawBlock, &block); err != nil {
+			return nil, fmt.Errorf("decode paused assistant content block: %w", err)
+		}
+		if block.Type == "tool_use" {
+			return nil, errors.New("pause_turn continuation cannot contain a pending client tool use")
+		}
+		if block.Type != "server_tool_use" || block.Name != searchToolName {
+			continue
+		}
+		if _, complete := completedSearches[block.ID]; complete {
+			continue
+		}
+		call, err := pendingGatewaySearchCall(block)
+		if err != nil {
+			return nil, err
+		}
+		turn.orderedCalls = append(turn.orderedCalls, call)
+	}
+	if len(turn.orderedCalls) == 0 {
+		return nil, nil
+	}
+	return turn, nil
 }
 
 func findPendingGatewayTurn(messages []json.RawMessage) (*gatewayPendingTurn, error) {
@@ -212,8 +319,7 @@ func findPendingGatewayTurn(messages []json.RawMessage) (*gatewayPendingTurn, er
 			return nil, fmt.Errorf("decode client tool result: %w", err)
 		}
 		if block.Type != "tool_result" {
-			turn.passthrough = append(turn.passthrough, append(json.RawMessage(nil), rawBlock...))
-			continue
+			return nil, errors.New("mixed tool continuation must contain only tool_result blocks")
 		}
 		if _, ok := clientCalls[block.ToolUseID]; !ok {
 			return nil, fmt.Errorf("unexpected client tool result %q", block.ToolUseID)
@@ -275,7 +381,7 @@ func (t *gatewayPendingTurn) mergeResults(searchResults []json.RawMessage) ([]js
 		}
 		byID[result.ToolUseID] = rawResult
 	}
-	merged := make([]json.RawMessage, 0, len(t.orderedCalls)+len(t.passthrough))
+	merged := make([]json.RawMessage, 0, len(t.orderedCalls))
 	for _, call := range t.orderedCalls {
 		if call.search != nil {
 			result, ok := byID[call.id]
@@ -291,7 +397,6 @@ func (t *gatewayPendingTurn) mergeResults(searchResults []json.RawMessage) ([]js
 		}
 		merged = append(merged, result)
 	}
-	merged = append(merged, t.passthrough...)
 	return merged, nil
 }
 
@@ -482,7 +587,14 @@ func projectServerResultToClient(block gatewayProtocolBlock) (json.RawMessage, e
 		return nil, fmt.Errorf("decode web search result content: %w", err)
 	}
 	for index := range searchResults {
+		content, publishedDate, err := decodeGatewaySearchContent(searchResults[index].EncryptedContent)
+		if err != nil {
+			return nil, fmt.Errorf("decode web search encrypted_content: %w", err)
+		}
 		searchResults[index].Type = ""
+		searchResults[index].Content = content
+		searchResults[index].EncryptedContent = ""
+		searchResults[index].PublishedDate = publishedDate
 	}
 	content, err := json.Marshal(searchResults)
 	if err != nil {
@@ -629,7 +741,11 @@ func gatewayWebSearchResultBlock(execution gatewayExecution) (json.RawMessage, e
 	}
 	resultContent := make([]gatewaySearchResultBlock, 0, len(execution.results.Results))
 	for _, result := range execution.results.Results {
-		resultContent = append(resultContent, resultToContentItem(result, "web_search_result"))
+		contentItem, err := resultToServerContentItem(result)
+		if err != nil {
+			return nil, fmt.Errorf("encode web search result content: %w", err)
+		}
+		resultContent = append(resultContent, contentItem)
 	}
 	encodedContent, err := json.Marshal(resultContent)
 	if err != nil {
@@ -640,6 +756,29 @@ func gatewayWebSearchResultBlock(execution gatewayExecution) (json.RawMessage, e
 		ToolUseID string          `json:"tool_use_id"`
 		Content   json.RawMessage `json:"content"`
 	}{Type: "web_search_tool_result", ToolUseID: externalID, Content: encodedContent})
+}
+
+func encodeGatewaySearchContent(content, publishedDate string) (string, error) {
+	payload, err := json.Marshal(gatewayOpaqueSearchContent{Content: content, PublishedDate: publishedDate})
+	if err != nil {
+		return "", fmt.Errorf("marshal opaque web search content: %w", err)
+	}
+	return omaSearchContentPrefix + base64.RawURLEncoding.EncodeToString(payload), nil
+}
+
+func decodeGatewaySearchContent(encryptedContent string) (string, string, error) {
+	if !strings.HasPrefix(encryptedContent, omaSearchContentPrefix) {
+		return "", "", errors.New("missing or unsupported opaque payload")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(encryptedContent, omaSearchContentPrefix))
+	if err != nil {
+		return "", "", errors.New("invalid opaque payload encoding")
+	}
+	var decoded gatewayOpaqueSearchContent
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return "", "", errors.New("invalid opaque payload")
+	}
+	return decoded.Content, decoded.PublishedDate, nil
 }
 
 func serverGatewayToolUseID(upstreamID string) string {

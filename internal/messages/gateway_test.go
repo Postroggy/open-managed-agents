@@ -69,20 +69,248 @@ func TestGatewayWithoutProviderIsTransparent(t *testing.T) {
 	}
 }
 
-func TestGatewayToolLoopLimit(t *testing.T) {
-	upstream, requestCount := newSequencedUpstream(t, `{"type":"message","content":[{"type":"tool_use","id":"toolu_loop","name":"web_search","input":{"query":"query"}}],"stop_reason":"tool_use"}`)
-	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxToolLoops: 1}}
+func TestGatewayLiteralWebSearchTypeIsTransparent(t *testing.T) {
+	gateway := newGateway(config.Config{}, nil, &gatewayTestSearcher{}, nil)
+	_, handled, err := gateway.handle(context.Background(), []byte(`{"tools":[{"type":"web_search","name":"web_search"}]}`), "", nil)
+	if handled || err != nil {
+		t.Fatalf("handled = %v, err = %v; want undocumented literal type to pass through", handled, err)
+	}
+}
+
+func TestGatewayPauseContinuationRequiresCurrentSearchTool(t *testing.T) {
+	var requestCount atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requestCount.Add(1)
+	}))
+	defer upstream.Close()
 	searcher := &gatewayTestSearcher{}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte(`{"messages":[{"role":"user","content":"search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfcGF1c2U","name":"web_search","input":{"query":"query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfcGF1c2U","content":[]}]}]}`)
+	_, handled, err := gateway.handle(context.Background(), body, "", nil)
+	var requestErr *gatewayRequestError
+	if !handled || !errors.As(err, &requestErr) || !strings.Contains(err.Error(), "same web_search tool") {
+		t.Fatalf("handled = %v, err = %v; want invalid pause continuation error", handled, err)
+	}
+	if requestCount.Load() != 0 || len(searcher.requests) != 0 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 0 and 0", requestCount.Load(), len(searcher.requests))
+	}
+}
+
+func TestGatewayServerToolIterationLimitReturnsPauseTurn(t *testing.T) {
+	upstream, requestCount := newSequencedUpstream(t, `{"id":"msg_paused","type":"message","content":[{"type":"tool_use","id":"toolu_loop","name":"web_search","input":{"query":"query"}}],"stop_reason":"tool_use"}`)
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxServerToolIterations: 1}}
+	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
 	response, handled, err := gateway.handle(context.Background(), []byte("{\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\"}]}"), "", nil)
-	if !handled || err == nil || response.body != nil {
-		t.Fatalf("response = %#v, handled = %v, err = %v; want bounded loop error", response, handled, err)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v; want pause_turn response", response, handled, err)
 	}
 	if requestCount() != 1 {
 		t.Fatalf("upstream requests = %d, want exactly 1", requestCount())
 	}
-	if len(searcher.requests) != 0 {
-		t.Fatalf("search requests = %d, want 0 without continuation budget", len(searcher.requests))
+	if len(searcher.requests) != 1 {
+		t.Fatalf("search requests = %d, want completed search before pause", len(searcher.requests))
+	}
+	var decoded struct {
+		StopReason string            `json:"stop_reason"`
+		Content    []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(response.body, &decoded); err != nil {
+		t.Fatalf("decode pause response: %v", err)
+	}
+	if decoded.StopReason != "pause_turn" || len(decoded.Content) != 2 ||
+		!strings.Contains(string(decoded.Content[0]), `"type":"server_tool_use"`) ||
+		!strings.Contains(string(decoded.Content[1]), `"type":"web_search_tool_result"`) {
+		t.Fatalf("pause response = %s", response.body)
+	}
+}
+
+func TestGatewayPauseTurnContinuationReplaysCompletedSearch(t *testing.T) {
+	upstream, requestCount := newSequencedUpstream(t,
+		`{"id":"msg_paused","type":"message","content":[{"type":"tool_use","id":"toolu_pause","name":"web_search","input":{"query":"query"}}],"stop_reason":"tool_use"}`,
+		`{"id":"msg_final","type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`,
+	)
+	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxServerToolIterations: 1}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	tools := json.RawMessage(`[{"type":"web_search_20250305","name":"web_search","max_uses":1}]`)
+	firstBody, err := json.Marshal(map[string]any{
+		"messages": []map[string]any{{"role": "user", "content": "search"}},
+		"tools":    tools,
+	})
+	if err != nil {
+		t.Fatalf("encode first request: %v", err)
+	}
+	first, handled, err := gateway.handle(context.Background(), firstBody, "", nil)
+	if err != nil || !handled || first.statusCode != http.StatusOK {
+		t.Fatalf("first response = %#v, handled = %v, err = %v", first, handled, err)
+	}
+	var paused struct {
+		StopReason string            `json:"stop_reason"`
+		Content    []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(first.body, &paused); err != nil || paused.StopReason != "pause_turn" {
+		t.Fatalf("decode paused response: body=%s err=%v", first.body, err)
+	}
+	secondBody, err := json.Marshal(map[string]any{
+		"messages": []any{
+			map[string]any{"role": "user", "content": "search"},
+			map[string]any{"role": "assistant", "content": paused.Content},
+		},
+		"tools": tools,
+	})
+	if err != nil {
+		t.Fatalf("encode continuation request: %v", err)
+	}
+	second, handled, err := gateway.handle(context.Background(), secondBody, "", nil)
+	if err != nil || !handled || second.statusCode != http.StatusOK || !strings.Contains(string(second.body), `"text":"done"`) {
+		t.Fatalf("continuation response = %#v, handled = %v, err = %v", second, handled, err)
+	}
+	if requestCount() != 2 || len(searcher.requests) != 1 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 2 and 1", requestCount(), len(searcher.requests))
+	}
+}
+
+func TestGatewayServerResultUsesOfficialShapeAndRestoresBYOKContent(t *testing.T) {
+	execution := gatewayExecution{
+		call: gatewayToolCall{id: "toolu_search"},
+		results: websearch.SearchResponse{Results: []websearch.Result{{
+			Title: "Result", URL: "https://example.com", Snippet: "search snippet", PageAge: "July 28, 2026",
+		}}},
+	}
+	result, err := gatewayWebSearchResultBlock(execution)
+	if err != nil {
+		t.Fatalf("build server result: %v", err)
+	}
+	if !strings.Contains(string(result), `"encrypted_content":"`) ||
+		strings.Contains(string(result), `"content":"search snippet"`) {
+		t.Fatalf("server result does not use the official opaque content shape: %s", result)
+	}
+
+	var block gatewayProtocolBlock
+	if err := json.Unmarshal(result, &block); err != nil {
+		t.Fatalf("decode server result: %v", err)
+	}
+	projected, err := projectServerResultToClient(block)
+	if err != nil {
+		t.Fatalf("project server result: %v", err)
+	}
+	if !strings.Contains(string(projected), `"content":"search snippet"`) {
+		t.Fatalf("BYOK result lost restored search content: %s", projected)
+	}
+}
+
+func TestGatewayServerResultRejectsMissingOrModifiedOpaqueContent(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		content string
+	}{
+		{name: "missing", content: `[{"type":"web_search_result","title":"Result","url":"https://example.com"}]`},
+		{name: "modified", content: `[{"type":"web_search_result","title":"Result","url":"https://example.com","encrypted_content":"oma_search_v1_invalid"}]`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := projectServerResultToClient(gatewayProtocolBlock{
+				Type: "web_search_tool_result", ToolUseID: serverGatewayToolUseID("toolu_search"), Content: json.RawMessage(test.content),
+			})
+			if err == nil || !strings.Contains(err.Error(), "encrypted_content") {
+				t.Fatalf("project result error = %v, want encrypted_content validation error", err)
+			}
+		})
+	}
+}
+
+func TestGatewayPauseTurnContinuationExecutesPendingSearch(t *testing.T) {
+	upstream, requestCount := newSequencedUpstream(t,
+		`{"id":"msg_final","type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`,
+	)
+	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxServerToolIterations: 1}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte(`{"messages":[{"role":"user","content":"search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfcGF1c2U","name":"web_search","input":{"query":"query"}}]}],"tools":[{"type":"web_search_20250305","name":"web_search","max_uses":1}]}`)
+	response, handled, err := gateway.handle(context.Background(), body, "", nil)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
+	}
+	if requestCount() != 1 || len(searcher.requests) != 1 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 1 and 1", requestCount(), len(searcher.requests))
+	}
+	if !strings.Contains(string(response.body), `"tool_use_id":"srvtoolu_oma_dG9vbHVfcGF1c2U"`) ||
+		!strings.Contains(string(response.body), `"text":"done"`) {
+		t.Fatalf("pending pause continuation response = %s", response.body)
+	}
+}
+
+func TestGatewayPauseTurnCanRepeat(t *testing.T) {
+	upstream, requestCount := newSequencedUpstream(t,
+		`{"id":"msg_pause_1","type":"message","content":[{"type":"tool_use","id":"toolu_pause_1","name":"web_search","input":{"query":"first"}}],"stop_reason":"tool_use"}`,
+		`{"id":"msg_pause_2","type":"message","content":[{"type":"tool_use","id":"toolu_pause_2","name":"web_search","input":{"query":"second"}}],"stop_reason":"tool_use"}`,
+	)
+	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxServerToolIterations: 1}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	tools := json.RawMessage(`[{"type":"web_search_20250305","name":"web_search","max_uses":2}]`)
+	firstBody, err := json.Marshal(map[string]any{
+		"messages": []map[string]any{{"role": "user", "content": "search"}},
+		"tools":    tools,
+	})
+	if err != nil {
+		t.Fatalf("encode first request: %v", err)
+	}
+	first, handled, err := gateway.handle(context.Background(), firstBody, "", nil)
+	if err != nil || !handled || first.statusCode != http.StatusOK {
+		t.Fatalf("first response = %#v, handled = %v, err = %v", first, handled, err)
+	}
+	var firstPause struct {
+		StopReason string            `json:"stop_reason"`
+		Content    []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(first.body, &firstPause); err != nil || firstPause.StopReason != "pause_turn" {
+		t.Fatalf("decode first pause: body=%s err=%v", first.body, err)
+	}
+	secondBody, err := json.Marshal(map[string]any{
+		"messages": []any{
+			map[string]any{"role": "user", "content": "search"},
+			map[string]any{"role": "assistant", "content": firstPause.Content},
+		},
+		"tools": tools,
+	})
+	if err != nil {
+		t.Fatalf("encode second request: %v", err)
+	}
+	second, handled, err := gateway.handle(context.Background(), secondBody, "", nil)
+	if err != nil || !handled || second.statusCode != http.StatusOK {
+		t.Fatalf("second response = %#v, handled = %v, err = %v", second, handled, err)
+	}
+	var secondPause struct {
+		StopReason string `json:"stop_reason"`
+	}
+	if err := json.Unmarshal(second.body, &secondPause); err != nil || secondPause.StopReason != "pause_turn" {
+		t.Fatalf("decode second pause: body=%s err=%v", second.body, err)
+	}
+	if requestCount() != 2 || len(searcher.requests) != 2 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 2 and 2", requestCount(), len(searcher.requests))
+	}
+}
+
+func TestGatewayServerToolIterationLimitStreamsPauseTurn(t *testing.T) {
+	upstream, _ := newSequencedUpstream(t, `{"id":"msg_paused","type":"message","content":[{"type":"tool_use","id":"toolu_stream_pause","name":"web_search","input":{"query":"query"}}],"stop_reason":"tool_use","usage":{}}`)
+	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxServerToolIterations: 1}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	response, handled, err := gateway.handle(context.Background(), []byte(`{"stream":true,"messages":[],"tools":[{"type":"web_search_20250305"}]}`), "", nil)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
+	}
+	for _, want := range []string{
+		`"type":"server_tool_use"`,
+		`"type":"web_search_tool_result"`,
+		`"stop_reason":"pause_turn"`,
+		"event: message_stop",
+	} {
+		if !strings.Contains(string(response.body), want) {
+			t.Fatalf("pause stream missing %q: %s", want, response.body)
+		}
 	}
 }
 
@@ -195,6 +423,19 @@ func TestGatewayMixedContinuationRejectsDuplicateClientResults(t *testing.T) {
 	}
 }
 
+func TestGatewayMixedContinuationRejectsNonToolResultContent(t *testing.T) {
+	messages := []json.RawMessage{
+		json.RawMessage(`{"role":"user","content":"search and inspect"}`),
+		json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfc2VhcmNo","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
+		json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"},{"type":"text","text":"continue"}]}`),
+	}
+
+	_, err := findPendingGatewayTurn(messages)
+	if err == nil || !strings.Contains(err.Error(), "only tool_result blocks") {
+		t.Fatalf("find pending turn error = %v, want non-tool-result content error", err)
+	}
+}
+
 func TestGatewayClientToolUsePassesToClaudeCode(t *testing.T) {
 	upstream, requestCount := newSequencedUpstream(t,
 		`{"type":"message","content":[{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}],"stop_reason":"tool_use"}`,
@@ -258,8 +499,8 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 			t.Errorf("decode continuation results: %v", err)
 			return
 		}
-		if len(lastContent) != 5 {
-			t.Errorf("continuation results = %d, want 5", len(lastContent))
+		if len(lastContent) != 4 {
+			t.Errorf("continuation results = %d, want 4", len(lastContent))
 			return
 		}
 		if !strings.Contains(string(lastContent[0]), `"tool_use_id":"toolu_search_1"`) ||
@@ -271,10 +512,6 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 		}
 		if strings.Contains(string(lastContent[1]), `"is_error":true`) || strings.Contains(string(lastContent[3]), `"is_error":true`) {
 			t.Errorf("client tool results were replaced: %s", lastContent)
-			return
-		}
-		if !strings.Contains(string(lastContent[4]), `"text":"keep this context"`) {
-			t.Errorf("continuation text was dropped: %s", lastContent)
 			return
 		}
 		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`)
@@ -325,7 +562,7 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode assistant continuation: %v", err)
 	}
-	clientResult := json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","content":"readme"},{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"},{"type":"text","text":"keep this context"}]}`)
+	clientResult := json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","content":"readme"},{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}`)
 	followUp, err := json.Marshal(map[string]any{
 		"messages": []json.RawMessage{json.RawMessage(`{"role":"user","content":"search and inspect"}`), assistant, clientResult},
 		"tools":    tools,
@@ -391,7 +628,8 @@ func TestGatewayProjectsCompletedSearchHistoryBackToBYOK(t *testing.T) {
 	searcher := &gatewayTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[{"role":"user","content":"old search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","name":"web_search","input":{"query":"old query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","content":"old result"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[]}`)
+	encryptedContent := gatewayTestEncryptedContent(t, "old result")
+	body := []byte(`{"messages":[{"role":"user","content":"old search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","name":"web_search","input":{"query":"old query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","encrypted_content":"` + encryptedContent + `"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[]}`)
 	response, handled, err := gateway.handle(context.Background(), body, "", nil)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
@@ -448,7 +686,8 @@ func TestGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 	searcher := &gatewayTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[{"role":"user","content":"old mixed turn"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","name":"web_search","input":{"query":"old query"}},{"type":"tool_use","id":"toolu_history_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_history_bash","content":"/workspace"}]},{"role":"assistant","content":[{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","content":"old result"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
+	encryptedContent := gatewayTestEncryptedContent(t, "old result")
+	body := []byte(`{"messages":[{"role":"user","content":"old mixed turn"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","name":"web_search","input":{"query":"old query"}},{"type":"tool_use","id":"toolu_history_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_history_bash","content":"/workspace"}]},{"role":"assistant","content":[{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","encrypted_content":"` + encryptedContent + `"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
 	response, handled, err := gateway.handle(context.Background(), body, "", nil)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
@@ -456,6 +695,15 @@ func TestGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 	if len(searcher.requests) != 0 {
 		t.Fatalf("completed mixed history searches = %d, want 0", len(searcher.requests))
 	}
+}
+
+func gatewayTestEncryptedContent(t *testing.T, content string) string {
+	t.Helper()
+	encryptedContent, err := encodeGatewaySearchContent(content, "")
+	if err != nil {
+		t.Fatalf("encode test search content: %v", err)
+	}
+	return encryptedContent
 }
 
 func TestProjectCompletedGatewayContentUsesResolvedServerID(t *testing.T) {
@@ -584,6 +832,86 @@ func TestGatewayRejectsUnsupportedCallerLocation(t *testing.T) {
 	}
 }
 
+func TestGatewayRejectsUnsupportedSearchCallersBeforeUpstream(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		tool string
+	}{
+		{name: "legacy explicit code execution", tool: `{"type":"web_search_20250305","allowed_callers":["code_execution_20260120"]}`},
+		{name: "dynamic filtering default", tool: `{"type":"web_search_20260209"}`},
+		{name: "latest dynamic filtering default", tool: `{"type":"web_search_20260318"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var requestCount atomic.Int64
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requestCount.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"unexpected"}],"stop_reason":"end_turn"}`)
+			}))
+			defer upstream.Close()
+			cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+			gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{}, nil)
+			body := []byte(`{"messages":[],"tools":[` + test.tool + `]}`)
+			_, handled, err := gateway.handle(context.Background(), body, "", nil)
+			if !handled || err == nil || !strings.Contains(err.Error(), `allowed_callers must include "direct"`) {
+				t.Fatalf("handled = %v, err = %v; want direct-caller validation error", handled, err)
+			}
+			if requestCount.Load() != 0 {
+				t.Fatalf("upstream requests = %d, want 0", requestCount.Load())
+			}
+		})
+	}
+}
+
+func TestGatewayRejectsInvalidResponseInclusionBeforeUpstream(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		tool string
+	}{
+		{name: "unsupported version", tool: `{"type":"web_search_20260209","allowed_callers":["direct"],"response_inclusion":"excluded"}`},
+		{name: "unsupported value", tool: `{"type":"web_search_20260318","allowed_callers":["direct"],"response_inclusion":"summary"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var requestCount atomic.Int64
+			upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				requestCount.Add(1)
+			}))
+			defer upstream.Close()
+			cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+			gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{}, nil)
+			body := []byte(`{"messages":[],"tools":[` + test.tool + `]}`)
+			_, handled, err := gateway.handle(context.Background(), body, "", nil)
+			if !handled || err == nil || !strings.Contains(err.Error(), "response_inclusion") {
+				t.Fatalf("handled = %v, err = %v; want response_inclusion validation error", handled, err)
+			}
+			if requestCount.Load() != 0 {
+				t.Fatalf("upstream requests = %d, want 0", requestCount.Load())
+			}
+		})
+	}
+}
+
+func TestGatewayAcceptsDirectCallerForDynamicSearchVersion(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		tool string
+	}{
+		{name: "dynamic version", tool: `{"type":"web_search_20260209","allowed_callers":["direct"]}`},
+		{name: "latest direct exclusion is still full", tool: `{"type":"web_search_20260318","allowed_callers":["direct"],"response_inclusion":"excluded"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			upstream, requestCount := newSequencedUpstream(t, `{"type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`)
+			cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+			gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{}, nil)
+			body := []byte(`{"messages":[],"tools":[` + test.tool + `]}`)
+			response, handled, err := gateway.handle(context.Background(), body, "", nil)
+			if err != nil || !handled || response.statusCode != http.StatusOK || requestCount() != 1 {
+				t.Fatalf("response = %#v, handled = %v, err = %v, requests = %d", response, handled, err, requestCount())
+			}
+		})
+	}
+}
+
 func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 	var requests []map[string]any
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -604,8 +932,8 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 	cfg := config.Config{
 		AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"},
 		WebSearch: config.WebSearchConfig{
-			Provider:     "tavily",
-			MaxToolLoops: 2,
+			Provider:                "tavily",
+			MaxServerToolIterations: 2,
 			Providers: map[string]config.WebSearchProviderConfig{
 				"tavily": {APIKey: "tavily-key"},
 			},
@@ -663,7 +991,7 @@ func TestGatewaySSEResponse(t *testing.T) {
 		`{"id":"msg_final","type":"message","content":[{"type":"text","text":"answer"}],"stop_reason":"end_turn","usage":{}}`,
 	)
 	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Go", URL: "https://go.dev", Snippet: "release"}}}}
-	gateway := newGateway(config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}, WebSearch: config.WebSearchConfig{MaxToolLoops: 2}}, &http.Client{Timeout: time.Second}, searcher, nil)
+	gateway := newGateway(config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}, WebSearch: config.WebSearchConfig{MaxServerToolIterations: 2}}, &http.Client{Timeout: time.Second}, searcher, nil)
 	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"stream\":true,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
 	response, handled, err := gateway.handle(context.Background(), body, "", http.Header{})
 	if err != nil || !handled || !strings.Contains(string(response.body), "event: message_start") || !strings.Contains(string(response.body), "event: message_stop") {

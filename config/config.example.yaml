@@ -30,7 +30,9 @@ anthropic_upstream:
 web_search:
   provider: tavily
   timeout: 30s
-  max_tool_loops: 3
+  # Maximum server-tool sampling iterations per request. One iteration is one BYOK model request.
+  # This is independent of tools[].max_uses, which limits actual search executions.
+  max_server_tool_iterations: 10
   providers:
     tavily:
       endpoint: ""
@@ -53,5 +55,7 @@ web_search:
         units: metric
 
 e2b:
+  # For e2b-local, use an e2b_ prefix followed by lowercase hex because the
+  # client SDK validates the key before contacting a custom API URL.
   api_key: ""
   api_url: ""

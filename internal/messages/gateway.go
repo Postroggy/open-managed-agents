@@ -19,20 +19,20 @@ import (
 )
 
 const (
-	maxGatewayResponseBytes = 8 << 20
-	searchToolName          = "web_search"
-	defaultGatewayLoops     = 3
-	searchErrorUnavailable  = "unavailable"
-	searchErrorMaxUses      = "max_uses_exceeded"
+	maxGatewayResponseBytes     = 8 << 20
+	searchToolName              = "web_search"
+	defaultServerToolIterations = 10
+	searchErrorUnavailable      = "unavailable"
+	searchErrorMaxUses          = "max_uses_exceeded"
 )
 
 type gateway struct {
-	upstreamBaseURL string
-	upstreamAPIKey  string
-	maxToolLoops    int
-	client          *http.Client
-	searcher        websearch.Provider
-	logger          *slog.Logger
+	upstreamBaseURL         string
+	upstreamAPIKey          string
+	maxServerToolIterations int
+	client                  *http.Client
+	searcher                websearch.Provider
+	logger                  *slog.Logger
 }
 
 type gatewayResponse struct {
@@ -118,12 +118,13 @@ type gatewayToolResultBlock struct {
 }
 
 type gatewaySearchResultBlock struct {
-	Type          string `json:"type,omitempty"`
-	Title         string `json:"title"`
-	URL           string `json:"url"`
-	Content       string `json:"content"`
-	PublishedDate string `json:"published_date,omitempty"`
-	PageAge       string `json:"page_age,omitempty"`
+	Type             string `json:"type,omitempty"`
+	Title            string `json:"title"`
+	URL              string `json:"url"`
+	Content          string `json:"content,omitempty"`
+	EncryptedContent string `json:"encrypted_content,omitempty"`
+	PublishedDate    string `json:"published_date,omitempty"`
+	PageAge          string `json:"page_age,omitempty"`
 }
 
 func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provider, logger *slog.Logger) *gateway {
@@ -132,12 +133,12 @@ func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provi
 	}
 	logger = logging.LoggerOrDefault(logger)
 	return &gateway{
-		upstreamBaseURL: cfg.AnthropicUpstream.BaseURL,
-		upstreamAPIKey:  cfg.AnthropicUpstream.APIKey,
-		maxToolLoops:    cfg.WebSearch.MaxToolLoops,
-		client:          client,
-		searcher:        searcher,
-		logger:          logger,
+		upstreamBaseURL:         cfg.AnthropicUpstream.BaseURL,
+		upstreamAPIKey:          cfg.AnthropicUpstream.APIKey,
+		maxServerToolIterations: cfg.WebSearch.MaxServerToolIterations,
+		client:                  client,
+		searcher:                searcher,
+		logger:                  logger,
 	}
 }
 
@@ -153,8 +154,8 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 	searchUses := prepared.searchUses
 	searchEnabled := prepared.searchEnabled
 	searchPolicy := prepared.searchPolicy
-	loopLimit := gatewayLoopLimit(g)
-	for loop := 0; loop < loopLimit; loop++ {
+	iterationLimit := gatewayServerToolIterationLimit(g)
+	for iteration := 0; iteration < iterationLimit; iteration++ {
 		encodedMessages, err := json.Marshal(transcript)
 		if err != nil {
 			return gatewayResponse{}, true, fmt.Errorf("encode messages transcript: %w", err)
@@ -190,7 +191,7 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 		}
 		if len(searchCalls) == 0 {
 			projectedContent = append(projectedContent, content...)
-			response, err = finalizeGatewayResponse(response, projectedContent, request.stream)
+			response, err = finalizeGatewayResponse(response, projectedContent, request.stream, "")
 			return response, true, err
 		}
 		if len(searchCalls) != len(calls) {
@@ -199,11 +200,8 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 				return gatewayResponse{}, true, fmt.Errorf("project mixed tool response: %w", projectErr)
 			}
 			projectedContent = append(projectedContent, mixedContent...)
-			response, err = finalizeGatewayResponse(response, projectedContent, request.stream)
+			response, err = finalizeGatewayResponse(response, projectedContent, request.stream, "")
 			return response, true, err
-		}
-		if loop+1 >= loopLimit {
-			return gatewayResponse{}, true, errors.New("web search tool loop exceeded maximum iterations")
 		}
 		assistantMessage, err := assistantGatewayMessage(response.body)
 		if err != nil {
@@ -220,6 +218,10 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 		}
 		projectedContent = append(projectedContent, completedContent...)
 		searchUses = nextSearchUses
+		if iteration+1 >= iterationLimit {
+			response, err = finalizeGatewayResponse(response, projectedContent, request.stream, "pause_turn")
+			return response, true, err
+		}
 		userMessage, err := userGatewayMessage(results)
 		if err != nil {
 			return gatewayResponse{}, true, fmt.Errorf("encode user messages transcript: %w", err)
@@ -252,6 +254,11 @@ func (g *gateway) prepareRequest(ctx context.Context, body []byte) (gatewayPrepa
 		return gatewayPreparedRequest{}, false, nil
 	}
 	if !searchEnabled {
+		if isGatewayPauseContinuation(request.messages) {
+			return gatewayPreparedRequest{}, true, &gatewayRequestError{
+				cause: errors.New("pause_turn continuation requires the same web_search tool"),
+			}
+		}
 		pending, pendingErr := findPendingGatewayTurn(request.messages)
 		if pendingErr != nil {
 			return gatewayPreparedRequest{}, true, &gatewayRequestError{cause: pendingErr}
@@ -350,7 +357,7 @@ func hasWebSearchTool(raw json.RawMessage) bool {
 		if err := json.Unmarshal(rawTool, &tool); err != nil {
 			continue
 		}
-		if isWebSearchToolType(tool.Type) {
+		if isServerWebSearchToolType(tool.Type) {
 			return true
 		}
 	}
@@ -375,7 +382,7 @@ func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.Ra
 		if err := json.Unmarshal(rawTool, &tool); err != nil {
 			return nil, gatewaySearchPolicy{}, fmt.Errorf("decode tool: %w", err)
 		}
-		if isWebSearchToolType(tool.Type) {
+		if isServerWebSearchToolType(tool.Type) {
 			if foundSearchTool {
 				return nil, gatewaySearchPolicy{}, errors.New("multiple web search tools are unsupported")
 			}
@@ -399,14 +406,22 @@ func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.Ra
 }
 
 type gatewaySearchTool struct {
-	Type           string               `json:"type"`
-	MaxUses        *int                 `json:"max_uses,omitempty"`
-	AllowedDomains []string             `json:"allowed_domains,omitempty"`
-	BlockedDomains []string             `json:"blocked_domains,omitempty"`
-	UserLocation   *gatewayUserLocation `json:"user_location,omitempty"`
+	Type              string               `json:"type"`
+	MaxUses           *int                 `json:"max_uses,omitempty"`
+	AllowedDomains    []string             `json:"allowed_domains,omitempty"`
+	BlockedDomains    []string             `json:"blocked_domains,omitempty"`
+	AllowedCallers    []string             `json:"allowed_callers,omitempty"`
+	ResponseInclusion string               `json:"response_inclusion,omitempty"`
+	UserLocation      *gatewayUserLocation `json:"user_location,omitempty"`
 }
 
 func (t gatewaySearchTool) searchPolicy() (gatewaySearchPolicy, error) {
+	if err := t.validateDirectCaller(); err != nil {
+		return gatewaySearchPolicy{}, err
+	}
+	if err := t.validateResponseInclusion(); err != nil {
+		return gatewaySearchPolicy{}, err
+	}
 	if t.MaxUses != nil && *t.MaxUses <= 0 {
 		return gatewaySearchPolicy{}, errors.New("web search max_uses must be positive")
 	}
@@ -426,6 +441,42 @@ func (t gatewaySearchTool) searchPolicy() (gatewaySearchPolicy, error) {
 	return policy, nil
 }
 
+func (t gatewaySearchTool) validateDirectCaller() error {
+	if t.AllowedCallers == nil {
+		if t.Type == "web_search_20250305" {
+			return nil
+		}
+		return errors.New(`web search allowed_callers must include "direct" for the configured BYOK model`)
+	}
+	direct := false
+	for _, caller := range t.AllowedCallers {
+		switch caller {
+		case "direct":
+			direct = true
+		case "code_execution_20260120":
+		default:
+			return fmt.Errorf("unsupported web search allowed caller %q", caller)
+		}
+	}
+	if !direct {
+		return errors.New(`web search allowed_callers must include "direct" for the configured BYOK model`)
+	}
+	return nil
+}
+
+func (t gatewaySearchTool) validateResponseInclusion() error {
+	if t.ResponseInclusion == "" {
+		return nil
+	}
+	if t.Type != "web_search_20260318" {
+		return errors.New("web search response_inclusion requires web_search_20260318")
+	}
+	if t.ResponseInclusion != "full" && t.ResponseInclusion != "excluded" {
+		return fmt.Errorf("unsupported web search response_inclusion %q", t.ResponseInclusion)
+	}
+	return nil
+}
+
 func isServerWebSearchToolType(value string) bool {
 	switch value {
 	case "web_search_20250305", "web_search_20260209", "web_search_20260318":
@@ -433,10 +484,6 @@ func isServerWebSearchToolType(value string) bool {
 	default:
 		return false
 	}
-}
-
-func isWebSearchToolType(value string) bool {
-	return value == searchToolName || isServerWebSearchToolType(value)
 }
 
 func searchToolDefinition() json.RawMessage {
@@ -475,11 +522,11 @@ func (g *gateway) send(ctx context.Context, body []byte, rawQuery string, header
 	return gatewayResponse{statusCode: response.StatusCode, header: response.Header.Clone(), body: responseBody}, nil
 }
 
-func gatewayLoopLimit(g *gateway) int {
-	if g.maxToolLoops > 0 {
-		return g.maxToolLoops
+func gatewayServerToolIterationLimit(g *gateway) int {
+	if g.maxServerToolIterations > 0 {
+		return g.maxServerToolIterations
 	}
-	return defaultGatewayLoops
+	return defaultServerToolIterations
 }
 
 func (g *gateway) search(ctx context.Context, query string, policy gatewaySearchPolicy) (results websearch.SearchResponse, err error) {
@@ -623,6 +670,24 @@ func resultToContentItem(result websearch.Result, blockType string) gatewaySearc
 		PublishedDate: result.PublishedDate,
 		PageAge:       result.PageAge,
 	}
+}
+
+func resultToServerContentItem(result websearch.Result) (gatewaySearchResultBlock, error) {
+	content := result.Snippet
+	if result.Text != "" {
+		content = result.Text
+	}
+	encryptedContent, err := encodeGatewaySearchContent(content, result.PublishedDate)
+	if err != nil {
+		return gatewaySearchResultBlock{}, err
+	}
+	return gatewaySearchResultBlock{
+		Type:             "web_search_result",
+		Title:            result.Title,
+		URL:              result.URL,
+		EncryptedContent: encryptedContent,
+		PageAge:          result.PageAge,
+	}, nil
 }
 
 func encodeGatewaySSE(body []byte) ([]byte, error) {

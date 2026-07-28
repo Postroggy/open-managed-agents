@@ -64,10 +64,11 @@ type AnthropicUpstreamConfig struct {
 }
 
 type WebSearchConfig struct {
-	Provider     string                             `yaml:"provider"`
-	Timeout      time.Duration                      `yaml:"timeout"`
-	MaxToolLoops int                                `yaml:"max_tool_loops"`
-	Providers    map[string]WebSearchProviderConfig `yaml:"providers"`
+	Provider string        `yaml:"provider"`
+	Timeout  time.Duration `yaml:"timeout"`
+	// MaxServerToolIterations caps BYOK sampling calls per request; tools[].max_uses caps searches.
+	MaxServerToolIterations int                                `yaml:"max_server_tool_iterations"`
+	Providers               map[string]WebSearchProviderConfig `yaml:"providers"`
 }
 
 // WebSearchProviderConfig keeps provider payloads at the configuration boundary.
