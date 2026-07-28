@@ -33,6 +33,7 @@ type gatewayProjectedMessage struct {
 type gatewayPendingTurn struct {
 	orderedCalls  []gatewayToolCall
 	clientResults map[string]json.RawMessage
+	passthrough   []json.RawMessage
 }
 
 func hasGatewayWebSearchHistory(messages []json.RawMessage) bool {
@@ -211,7 +212,8 @@ func findPendingGatewayTurn(messages []json.RawMessage) (*gatewayPendingTurn, er
 			return nil, fmt.Errorf("decode client tool result: %w", err)
 		}
 		if block.Type != "tool_result" {
-			return nil, errors.New("mixed tool continuation must contain only tool_result blocks")
+			turn.passthrough = append(turn.passthrough, append(json.RawMessage(nil), rawBlock...))
+			continue
 		}
 		if _, ok := clientCalls[block.ToolUseID]; !ok {
 			return nil, fmt.Errorf("unexpected client tool result %q", block.ToolUseID)
@@ -273,7 +275,7 @@ func (t *gatewayPendingTurn) mergeResults(searchResults []json.RawMessage) ([]js
 		}
 		byID[result.ToolUseID] = rawResult
 	}
-	merged := make([]json.RawMessage, 0, len(t.orderedCalls))
+	merged := make([]json.RawMessage, 0, len(t.orderedCalls)+len(t.passthrough))
 	for _, call := range t.orderedCalls {
 		if call.search != nil {
 			result, ok := byID[call.id]
@@ -289,6 +291,7 @@ func (t *gatewayPendingTurn) mergeResults(searchResults []json.RawMessage) ([]js
 		}
 		merged = append(merged, result)
 	}
+	merged = append(merged, t.passthrough...)
 	return merged, nil
 }
 
@@ -559,7 +562,11 @@ func projectCompletedGatewayContent(content []json.RawMessage, executions []gate
 		if !ok {
 			return nil, fmt.Errorf("web search execution %q is missing", block.ID)
 		}
-		serverBlock, err := projectClientSearchCallToServer(rawBlock, execution.call.externalID)
+		externalID := execution.call.externalID
+		if externalID == "" {
+			externalID = serverGatewayToolUseID(execution.call.id)
+		}
+		serverBlock, err := projectClientSearchCallToServer(rawBlock, externalID)
 		if err != nil {
 			return nil, err
 		}

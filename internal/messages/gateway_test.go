@@ -163,9 +163,9 @@ func TestExtractGatewayToolCallsRejectsDuplicateIDs(t *testing.T) {
 }
 
 func TestGatewayMixedContinuationRequiresCurrentSearchTool(t *testing.T) {
-	requestCount := 0
+	var requestCount atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		requestCount++
+		requestCount.Add(1)
 	}))
 	defer upstream.Close()
 	searcher := &gatewayTestSearcher{}
@@ -177,8 +177,8 @@ func TestGatewayMixedContinuationRequiresCurrentSearchTool(t *testing.T) {
 	if !handled || !errors.As(err, &requestErr) || !strings.Contains(err.Error(), "same web_search tool") {
 		t.Fatalf("handled = %v, err = %v; want invalid continuation error", handled, err)
 	}
-	if requestCount != 0 || len(searcher.requests) != 0 {
-		t.Fatalf("BYOK requests = %d, searches = %d; want 0 and 0", requestCount, len(searcher.requests))
+	if requestCount.Load() != 0 || len(searcher.requests) != 0 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 0 and 0", requestCount.Load(), len(searcher.requests))
 	}
 }
 
@@ -215,11 +215,11 @@ func TestGatewayClientToolUsePassesToClaudeCode(t *testing.T) {
 	}
 }
 func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
-	requestCount := 0
+	var requestCount atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
+		requestNumber := requestCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		if requestCount == 1 {
+		if requestNumber == 1 {
 			_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"checking"},{"type":"tool_use","id":"toolu_search_1","name":"web_search","input":{"query":"first query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}},{"type":"tool_use","id":"toolu_search_2","name":"web_search","input":{"query":"second query"}},{"type":"tool_use","id":"toolu_read","name":"read_file","input":{"path":"README.md"}}],"stop_reason":"tool_use"}`)
 			return
 		}
@@ -230,15 +230,18 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 			} `json:"messages"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode continuation: %v", err)
+			t.Errorf("decode continuation: %v", err)
+			return
 		}
 		if len(request.Messages) != 3 {
-			t.Fatalf("continuation messages = %d, want 3", len(request.Messages))
+			t.Errorf("continuation messages = %d, want 3", len(request.Messages))
+			return
 		}
 		assistant := request.Messages[1]
 		var assistantContent []json.RawMessage
 		if err := json.Unmarshal(assistant.Content, &assistantContent); err != nil {
-			t.Fatalf("decode assistant content: %v", err)
+			t.Errorf("decode assistant content: %v", err)
+			return
 		}
 		if len(assistantContent) != 5 ||
 			!strings.Contains(string(assistantContent[1]), `"id":"toolu_search_1"`) ||
@@ -246,24 +249,33 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 			!strings.Contains(string(assistantContent[3]), `"id":"toolu_search_2"`) ||
 			!strings.Contains(string(assistantContent[4]), `"id":"toolu_read"`) ||
 			strings.Contains(string(assistant.Content), "server_tool_use") {
-			t.Fatalf("projected assistant message = %s", assistant.Content)
+			t.Errorf("projected assistant message = %s", assistant.Content)
+			return
 		}
 		last := request.Messages[2]
 		var lastContent []json.RawMessage
 		if err := json.Unmarshal(last.Content, &lastContent); err != nil {
-			t.Fatalf("decode continuation results: %v", err)
+			t.Errorf("decode continuation results: %v", err)
+			return
 		}
-		if len(lastContent) != 4 {
-			t.Fatalf("continuation results = %d, want 4", len(lastContent))
+		if len(lastContent) != 5 {
+			t.Errorf("continuation results = %d, want 5", len(lastContent))
+			return
 		}
 		if !strings.Contains(string(lastContent[0]), `"tool_use_id":"toolu_search_1"`) ||
 			!strings.Contains(string(lastContent[1]), `"tool_use_id":"toolu_bash"`) ||
 			!strings.Contains(string(lastContent[2]), `"tool_use_id":"toolu_search_2"`) ||
 			!strings.Contains(string(lastContent[3]), `"tool_use_id":"toolu_read"`) {
-			t.Fatalf("continuation results = %s", lastContent)
+			t.Errorf("continuation results = %s", lastContent)
+			return
 		}
 		if strings.Contains(string(lastContent[1]), `"is_error":true`) || strings.Contains(string(lastContent[3]), `"is_error":true`) {
-			t.Fatalf("client tool results were replaced: %s", lastContent)
+			t.Errorf("client tool results were replaced: %s", lastContent)
+			return
+		}
+		if !strings.Contains(string(lastContent[4]), `"text":"keep this context"`) {
+			t.Errorf("continuation text was dropped: %s", lastContent)
+			return
 		}
 		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`)
 	}))
@@ -274,8 +286,8 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 	tools := json.RawMessage(`[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}},{"name":"read_file","input_schema":{"type":"object"}}]`)
 	body := []byte(`{"messages":[{"role":"user","content":"search and inspect"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}},{"name":"read_file","input_schema":{"type":"object"}}]}`)
 	first, handled, err := gateway.handle(context.Background(), body, "", nil)
-	if err != nil || !handled || first.statusCode != http.StatusOK || requestCount != 1 {
-		t.Fatalf("first response = %#v, handled = %v, err = %v, requests = %d", first, handled, err, requestCount)
+	if err != nil || !handled || first.statusCode != http.StatusOK || requestCount.Load() != 1 {
+		t.Fatalf("first response = %#v, handled = %v, err = %v, requests = %d", first, handled, err, requestCount.Load())
 	}
 	if len(searcher.requests) != 0 {
 		t.Fatalf("searches before client result = %d, want 0", len(searcher.requests))
@@ -313,7 +325,7 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode assistant continuation: %v", err)
 	}
-	clientResult := json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","content":"readme"},{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}`)
+	clientResult := json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","content":"readme"},{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"},{"type":"text","text":"keep this context"}]}`)
 	followUp, err := json.Marshal(map[string]any{
 		"messages": []json.RawMessage{json.RawMessage(`{"role":"user","content":"search and inspect"}`), assistant, clientResult},
 		"tools":    tools,
@@ -322,8 +334,8 @@ func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 		t.Fatalf("encode follow-up request: %v", err)
 	}
 	second, handled, err := gateway.handle(context.Background(), followUp, "", nil)
-	if err != nil || !handled || second.statusCode != http.StatusOK || requestCount != 2 {
-		t.Fatalf("second response = %#v, handled = %v, err = %v, requests = %d", second, handled, err, requestCount)
+	if err != nil || !handled || second.statusCode != http.StatusOK || requestCount.Load() != 2 {
+		t.Fatalf("second response = %#v, handled = %v, err = %v, requests = %d", second, handled, err, requestCount.Load())
 	}
 	if len(searcher.requests) != 2 || searcher.requests[0].Query != "first query" || searcher.requests[1].Query != "second query" {
 		t.Fatalf("deferred search requests = %#v", searcher.requests)
@@ -351,21 +363,26 @@ func TestGatewayProjectsCompletedSearchHistoryBackToBYOK(t *testing.T) {
 			} `json:"messages"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			return
 		}
 		if len(request.Messages) != 5 {
-			t.Fatalf("projected history messages = %d, want 5", len(request.Messages))
+			t.Errorf("projected history messages = %d, want 5", len(request.Messages))
+			return
 		}
 		if request.Messages[1].Role != "assistant" || !strings.Contains(string(request.Messages[1].Content), `"type":"tool_use"`) ||
 			!strings.Contains(string(request.Messages[1].Content), `"id":"toolu_history"`) {
-			t.Fatalf("projected search call = %s", request.Messages[1].Content)
+			t.Errorf("projected search call = %s", request.Messages[1].Content)
+			return
 		}
 		if request.Messages[2].Role != "user" || !strings.Contains(string(request.Messages[2].Content), `"type":"tool_result"`) ||
 			!strings.Contains(string(request.Messages[2].Content), `"tool_use_id":"toolu_history"`) {
-			t.Fatalf("projected search result = %s", request.Messages[2].Content)
+			t.Errorf("projected search result = %s", request.Messages[2].Content)
+			return
 		}
 		if request.Messages[3].Role != "assistant" || !strings.Contains(string(request.Messages[3].Content), `"text":"old answer"`) {
-			t.Fatalf("projected final content = %s", request.Messages[3].Content)
+			t.Errorf("projected final content = %s", request.Messages[3].Content)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"new answer"}],"stop_reason":"end_turn"}`)
@@ -393,29 +410,36 @@ func TestGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 			} `json:"messages"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			return
 		}
 		if len(request.Messages) != 5 {
-			t.Fatalf("projected mixed history messages = %d, want 5", len(request.Messages))
+			t.Errorf("projected mixed history messages = %d, want 5", len(request.Messages))
+			return
 		}
 		var calls []json.RawMessage
 		if err := json.Unmarshal(request.Messages[1].Content, &calls); err != nil || len(calls) != 2 {
-			t.Fatalf("projected mixed calls = %s, err = %v", request.Messages[1].Content, err)
+			t.Errorf("projected mixed calls = %s, err = %v", request.Messages[1].Content, err)
+			return
 		}
 		if !strings.Contains(string(calls[0]), `"id":"toolu_history_search"`) ||
 			!strings.Contains(string(calls[1]), `"id":"toolu_history_bash"`) {
-			t.Fatalf("projected mixed calls = %s", calls)
+			t.Errorf("projected mixed calls = %s", calls)
+			return
 		}
 		var results []json.RawMessage
 		if err := json.Unmarshal(request.Messages[2].Content, &results); err != nil || len(results) != 2 {
-			t.Fatalf("projected mixed results = %s, err = %v", request.Messages[2].Content, err)
+			t.Errorf("projected mixed results = %s, err = %v", request.Messages[2].Content, err)
+			return
 		}
 		if !strings.Contains(string(results[0]), `"tool_use_id":"toolu_history_search"`) ||
 			!strings.Contains(string(results[1]), `"tool_use_id":"toolu_history_bash"`) {
-			t.Fatalf("projected mixed result order = %s", results)
+			t.Errorf("projected mixed result order = %s", results)
+			return
 		}
 		if request.Messages[3].Role != "assistant" || !strings.Contains(string(request.Messages[3].Content), `"text":"old answer"`) {
-			t.Fatalf("projected mixed answer = %s", request.Messages[3].Content)
+			t.Errorf("projected mixed answer = %s", request.Messages[3].Content)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"new answer"}],"stop_reason":"end_turn"}`)
@@ -431,6 +455,37 @@ func TestGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 	}
 	if len(searcher.requests) != 0 {
 		t.Fatalf("completed mixed history searches = %d, want 0", len(searcher.requests))
+	}
+}
+
+func TestProjectCompletedGatewayContentUsesResolvedServerID(t *testing.T) {
+	content := []json.RawMessage{
+		json.RawMessage(`{"type":"tool_use","id":"toolu_fallback","name":"web_search","input":{"query":"query"}}`),
+	}
+	executions := []gatewayExecution{{
+		call: gatewayToolCall{id: "toolu_fallback", name: searchToolName},
+		results: websearch.SearchResponse{Results: []websearch.Result{{
+			Title: "Result", URL: "https://example.com", Snippet: "snippet",
+		}}},
+	}}
+
+	projected, err := projectCompletedGatewayContent(content, executions)
+	if err != nil {
+		t.Fatalf("project completed content: %v", err)
+	}
+	if len(projected) != 2 {
+		t.Fatalf("projected blocks = %d, want 2", len(projected))
+	}
+	var serverUse, searchResult gatewayProtocolBlock
+	if err := json.Unmarshal(projected[0], &serverUse); err != nil {
+		t.Fatalf("decode server tool use: %v", err)
+	}
+	if err := json.Unmarshal(projected[1], &searchResult); err != nil {
+		t.Fatalf("decode search result: %v", err)
+	}
+	expectedID := serverGatewayToolUseID("toolu_fallback")
+	if serverUse.ID != expectedID || searchResult.ToolUseID != expectedID {
+		t.Fatalf("server use ID = %q, result ID = %q; want %q", serverUse.ID, searchResult.ToolUseID, expectedID)
 	}
 }
 

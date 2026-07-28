@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -271,43 +272,54 @@ func TestMessagesWebSearchGateway(t *testing.T) {
 	tavily := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode search request: %v", err)
+			t.Errorf("decode search request: %v", err)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
 		}
 		if request["query"] != "latest Go release" || r.Header.Get("Authorization") != "Bearer tavily-test-key" {
-			t.Fatalf("search request = %#v", request)
+			t.Errorf("search request = %#v", request)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"results":[{"title":"Go release notes","url":"https://go.dev/doc/devel/release","content":"release details"}]}`)
 	}))
 	defer tavily.Close()
 
-	upstreamCalls := 0
+	var upstreamCalls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		upstreamCalls++
+		requestNumber := upstreamCalls.Add(1)
 		var request map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode BYOK request: %v", err)
+			t.Errorf("decode BYOK request: %v", err)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
 		}
 		encoded, _ := json.Marshal(request)
 		if strings.Contains(string(encoded), "tavily-test-key") {
-			t.Fatal("search key reached BYOK")
+			t.Error("search key reached BYOK")
+			http.Error(w, "secret reached upstream", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if upstreamCalls == 1 {
+		if requestNumber == 1 {
 			tools := request["tools"].([]any)
 			tool := tools[0].(map[string]any)
 			if tool["name"] != "web_search" {
-				t.Fatalf("projected tool = %#v", tool)
+				t.Errorf("projected tool = %#v", tool)
+				return
 			}
 			if _, ok := tool["type"]; ok {
-				t.Fatalf("projected tool has type: %#v", tool)
+				t.Errorf("projected tool has type: %#v", tool)
+				return
 			}
 			_, _ = io.WriteString(w, `{"id":"msg_tool","type":"message","content":[{"type":"tool_use","id":"toolu_1","name":"web_search","input":{"query":"latest Go release"}}],"stop_reason":"tool_use"}`)
 			return
 		}
 		requestMessages := request["messages"].([]any)
 		if len(requestMessages) != 3 {
-			t.Fatalf("continuation messages = %#v", requestMessages)
+			t.Errorf("continuation messages = %#v", requestMessages)
+			return
 		}
 		_, _ = io.WriteString(w, `{"id":"msg_final","type":"message","content":[{"type":"text","text":"answer"}],"stop_reason":"end_turn"}`)
 	}))
@@ -335,65 +347,87 @@ func TestMessagesWebSearchGateway(t *testing.T) {
 	if content[0].(map[string]any)["type"] != "server_tool_use" || content[1].(map[string]any)["type"] != "web_search_tool_result" {
 		t.Fatalf("gateway response content = %#v", content)
 	}
-	if upstreamCalls != 2 {
-		t.Fatalf("BYOK calls = %d, want 2", upstreamCalls)
+	if upstreamCalls.Load() != 2 {
+		t.Fatalf("BYOK calls = %d, want 2", upstreamCalls.Load())
 	}
 }
 
 func TestMessagesWebSearchGatewayMixedToolContinuation(t *testing.T) {
-	searchCalls := 0
+	var searchCalls atomic.Int64
 	tavily := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		searchCalls++
+		searchCalls.Add(1)
 		var request map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode search request: %v", err)
+			t.Errorf("decode search request: %v", err)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
 		}
 		if request["query"] != "latest Go release" || r.Header.Get("Authorization") != "Bearer tavily-mixed-key" {
-			t.Fatalf("search request = %#v", request)
+			t.Errorf("search request = %#v", request)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"results":[{"title":"Go release notes","url":"https://go.dev/doc/devel/release","content":"release details"}]}`)
 	}))
 	defer tavily.Close()
 
-	upstreamCalls := 0
+	var upstreamCalls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		upstreamCalls++
+		requestNumber := upstreamCalls.Add(1)
+		requestBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read BYOK request: %v", err)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(string(requestBody), "tavily-mixed-key") {
+			t.Error("search key reached BYOK")
+			http.Error(w, "secret reached upstream", http.StatusBadRequest)
+			return
+		}
 		var request struct {
 			Messages []struct {
 				Role    string          `json:"role"`
 				Content json.RawMessage `json:"content"`
 			} `json:"messages"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode BYOK request: %v", err)
+		if err := json.Unmarshal(requestBody, &request); err != nil {
+			t.Errorf("decode BYOK request: %v", err)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if upstreamCalls == 1 {
+		if requestNumber == 1 {
 			_, _ = io.WriteString(w, `{"id":"msg_mixed","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_search","name":"web_search","input":{"query":"latest Go release"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"go version"}}],"stop_reason":"tool_use"}`)
 			return
 		}
 		if len(request.Messages) != 3 {
-			t.Fatalf("continuation messages = %d, want 3", len(request.Messages))
+			t.Errorf("continuation messages = %d, want 3", len(request.Messages))
+			return
 		}
 		var assistantContent []json.RawMessage
 		if err := json.Unmarshal(request.Messages[1].Content, &assistantContent); err != nil {
-			t.Fatalf("decode projected assistant content: %v", err)
+			t.Errorf("decode projected assistant content: %v", err)
+			return
 		}
 		if request.Messages[1].Role != "assistant" || len(assistantContent) != 2 ||
 			!strings.Contains(string(assistantContent[0]), `"id":"toolu_search"`) ||
 			!strings.Contains(string(assistantContent[1]), `"id":"toolu_bash"`) ||
 			strings.Contains(string(request.Messages[1].Content), "server_tool_use") {
-			t.Fatalf("projected assistant content = %s", request.Messages[1].Content)
+			t.Errorf("projected assistant content = %s", request.Messages[1].Content)
+			return
 		}
 		var resultContent []json.RawMessage
 		if err := json.Unmarshal(request.Messages[2].Content, &resultContent); err != nil {
-			t.Fatalf("decode merged tool results: %v", err)
+			t.Errorf("decode merged tool results: %v", err)
+			return
 		}
 		if request.Messages[2].Role != "user" || len(resultContent) != 2 ||
 			!strings.Contains(string(resultContent[0]), `"tool_use_id":"toolu_search"`) ||
 			!strings.Contains(string(resultContent[1]), `"tool_use_id":"toolu_bash"`) {
-			t.Fatalf("merged tool results = %s", request.Messages[2].Content)
+			t.Errorf("merged tool results = %s", request.Messages[2].Content)
+			return
 		}
 		_, _ = io.WriteString(w, `{"id":"msg_mixed_final","type":"message","role":"assistant","content":[{"type":"text","text":"Go is installed and the release notes are current."}],"stop_reason":"end_turn"}`)
 	}))
@@ -446,8 +480,8 @@ func TestMessagesWebSearchGatewayMixedToolContinuation(t *testing.T) {
 		t.Fatalf("decode pending search use: %v", err)
 	}
 	if searchUse.Type != "server_tool_use" || !strings.HasPrefix(searchUse.ID, "srvtoolu_") ||
-		!strings.Contains(string(firstBody.Content[1]), `"id":"toolu_bash"`) || searchCalls != 0 || upstreamCalls != 1 {
-		t.Fatalf("first mixed response content = %s, searches = %d, BYOK calls = %d", firstBody.Content, searchCalls, upstreamCalls)
+		!strings.Contains(string(firstBody.Content[1]), `"id":"toolu_bash"`) || searchCalls.Load() != 0 || upstreamCalls.Load() != 1 {
+		t.Fatalf("first mixed response content = %s, searches = %d, BYOK calls = %d", firstBody.Content, searchCalls.Load(), upstreamCalls.Load())
 	}
 
 	continuationMessages := []map[string]any{
@@ -466,8 +500,8 @@ func TestMessagesWebSearchGatewayMixedToolContinuation(t *testing.T) {
 	}
 	invalidResponse := doMessagesRequest(t, app, credential.Token, string(invalidPayload))
 	assertError(t, invalidResponse, http.StatusBadRequest, "invalid_request_error")
-	if searchCalls != 0 || upstreamCalls != 1 {
-		t.Fatalf("invalid continuation searches = %d, BYOK calls = %d; want 0 and 1", searchCalls, upstreamCalls)
+	if searchCalls.Load() != 0 || upstreamCalls.Load() != 1 {
+		t.Fatalf("invalid continuation searches = %d, BYOK calls = %d; want 0 and 1", searchCalls.Load(), upstreamCalls.Load())
 	}
 
 	secondPayload, err := json.Marshal(map[string]any{
@@ -492,8 +526,8 @@ func TestMessagesWebSearchGatewayMixedToolContinuation(t *testing.T) {
 		!strings.Contains(string(secondBody.Content[0]), `"type":"web_search_tool_result"`) ||
 		!strings.Contains(string(secondBody.Content[0]), `"tool_use_id":"`+searchUse.ID+`"`) ||
 		!strings.Contains(string(secondBody.Content[1]), `"text":"Go is installed`) ||
-		strings.Contains(string(secondPayload), "tavily-mixed-key") || searchCalls != 1 || upstreamCalls != 2 {
-		t.Fatalf("second mixed response content = %s, searches = %d, BYOK calls = %d", secondBody.Content, searchCalls, upstreamCalls)
+		searchCalls.Load() != 1 || upstreamCalls.Load() != 2 {
+		t.Fatalf("second mixed response content = %s, searches = %d, BYOK calls = %d", secondBody.Content, searchCalls.Load(), upstreamCalls.Load())
 	}
 }
 
