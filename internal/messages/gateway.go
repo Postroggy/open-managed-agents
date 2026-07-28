@@ -118,10 +118,11 @@ type gatewayToolResultBlock struct {
 }
 
 type gatewaySearchResultBlock struct {
-	Type             string `json:"type,omitempty"`
-	Title            string `json:"title"`
-	URL              string `json:"url"`
-	Content          string `json:"content,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Content string `json:"content,omitempty"`
+	// EncryptedContent is opaque provider data. OMA-managed search leaves it empty.
 	EncryptedContent string `json:"encrypted_content,omitempty"`
 	PublishedDate    string `json:"published_date,omitempty"`
 	PageAge          string `json:"page_age,omitempty"`
@@ -672,22 +673,13 @@ func resultToContentItem(result websearch.Result, blockType string) gatewaySearc
 	}
 }
 
-func resultToServerContentItem(result websearch.Result) (gatewaySearchResultBlock, error) {
-	content := result.Snippet
-	if result.Text != "" {
-		content = result.Text
-	}
-	encryptedContent, err := encodeGatewaySearchContent(content, result.PublishedDate)
-	if err != nil {
-		return gatewaySearchResultBlock{}, err
-	}
+func resultToServerContentItem(result websearch.Result) gatewaySearchResultBlock {
 	return gatewaySearchResultBlock{
-		Type:             "web_search_result",
-		Title:            result.Title,
-		URL:              result.URL,
-		EncryptedContent: encryptedContent,
-		PageAge:          result.PageAge,
-	}, nil
+		Type:    "web_search_result",
+		Title:   result.Title,
+		URL:     result.URL,
+		PageAge: result.PageAge,
+	}
 }
 
 func encodeGatewaySSE(body []byte) ([]byte, error) {

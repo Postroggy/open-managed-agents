@@ -65,7 +65,7 @@ sequenceDiagram
 
 内部 transcript 与 Claude Code transcript 通过双向投影保持一致。BYOK 的 ordinary `toolu_*` 会编码为带 `srvtoolu_` 前缀的可逆 server ID；该前缀只用于 OMA 生成的 response ID 与 BYOK ID 之间的可逆映射，工具所有权仍由 content block type 和 Web Search 定义决定。Claude Code 后续重放完整历史时，gateway 会把 `server_tool_use`/`web_search_tool_result` 展开回 BYOK 的 assistant `tool_use` 与下一条 user `tool_result`。mixed continuation 中 Claude Code 只返回自己拥有的 client results，每个 client `tool_use` 必须恰好对应一个 `tool_result`，该 user message 不得包含 text 或其他 block，并保留声明 pending search 的同一 Web Search tool；缺失、重复或未知 result、混入非 result content，以及缺少 pending search tool时返回 `400 invalid_request_error`，不会把 server block 透传给 BYOK。gateway 执行 pending search 后按原 tool call 顺序合并结果；普通 client tool 不由 OMA 伪造 error result。已完成的 search 历史即使后续请求不再声明 Web Search，也仍会反向投影，但不会允许 BYOK 发起新的搜索。
 
-对外合成的 `web_search_result` 使用官方字段 `title`、`url`、`encrypted_content` 与可选 `page_age`，不输出 provider 的明文 `content` 扩展。`encrypted_content` 承载 OMA 版本化的 opaque payload；客户端必须在后续 turn 原样回放，gateway 才能恢复 provider 正文并投影成 BYOK `tool_result`。缺失、修改或来自其他实现且 OMA 无法识别的 payload 返回 `400 invalid_request_error`。这是 OMA provider adapter 的可回放格式，不与 Anthropic 原生密文互通。当前 gateway 也不伪造 Anthropic 原生 citation location 或 server-tool usage 计量；BYOK 可基于结果 URL 生成普通文本引用，但不得把它表述为原生 citation block。
+对外合成的 `web_search_result` 使用 `type`、`title`、`url` 与可选 `page_age`，不输出 provider 的明文 `content` 扩展，也不伪造 Anthropic 原生 `encrypted_content`。Claude Code 将原生 provider 返回的 `encrypted_content` 视为 opaque 数据并在后续 turn 原样回放；OMA-managed search 当前不实现该加密恢复合同，历史投影仅把可见的标题、URL 与页面时间交给 BYOK。当前 gateway 也不伪造 Anthropic 原生 citation location 或 server-tool usage 计量；BYOK 可基于结果 URL 生成普通文本引用，但不得把它表述为原生 citation block。
 
 调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略。`max_uses` 统计每条入站 Messages 请求内实际尝试的搜索次数；同一请求的内部 BYOK continuation 不会重置计数，超限调用不访问 provider，并返回 `web_search_tool_result_error`/`max_uses_exceeded`。`web_search.max_server_tool_iterations` 是独立的 server-side sampling iteration 上限，默认与 Anthropic 的每请求 10 次对齐；一次 iteration 对应一次 BYOK Messages 请求并包含初始采样，不等同于一次搜索。最后一次允许的 BYOK 响应若仍要求搜索，gateway 先完成该搜索并生成配对的 `server_tool_use`/`web_search_tool_result`，再以 `stop_reason=pause_turn` 返回，而不是丢弃结果并返回 502。
 
@@ -77,7 +77,7 @@ sequenceDiagram
 
 - [Anthropic Server tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools)：server/client mixed turn、pending server result 与 `pause_turn` continuation；
 - [Anthropic Stop reasons and fallback](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons)：server-side sampling loop 默认每请求 10 iterations；
-- [Anthropic Web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)：`max_uses` 限制每请求实际搜索次数，`encrypted_content` 在多轮续传时必须原样回放。
+- [Anthropic Web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)：`max_uses` 限制每请求实际搜索次数；原生 provider 的 `encrypted_content` 在多轮续传时必须原样回放，OMA-managed search 不合成该字段。
 
 管理后台继续使用原平台路径 `POST /api/organizations/{orgUuid}/proxy/v1/messages`。该路由及其独立代理实现不作为 `/v1/messages` 的兼容别名，也不承载 Claude Code 的 session-scoped token。它在 `anthropic_upstream.model_mappings` 命中请求顶层 `model` 时把该逻辑模型 ID 替换为配置的上游模型 ID。Messages 的已知改写字段通过命名 DTO 解析；只有为保留第三方未知字段而使用的 request envelope 在该 HTTP 边界保留 `json.RawMessage`，不会把动态 JSON 结构传入内部领域模型。Quickstart Builder 返回的 Agent config 在前端的命名配置归一化边界解析模型字段，Agent 写入边界再执行防御性解析。未配置、未命中或请求体无法按 JSON object 解析时，请求体保持不变并交给上游处理。公共 `POST /v1/messages` 不应用该 Console 映射；code-session 请求的当前 tools 声明 Web Search，或 transcript 包含 gateway 生成的 Web Search server block 时进入 gateway，否则继续透明流式转发请求体。
 
@@ -142,7 +142,7 @@ sequenceDiagram
 - 上游地址或网络不可用：`502 api_error`；
 - 请求超过 32 MiB：`413 request_too_large`；
 - token 无效、session 终止、worker lease 过期或用在其他资源：`401 authentication_error`；
-- Web Search 参数无效、动态版本未允许 direct caller、mixed continuation 缺少 client result、混入非 result content、未保留 pending search tool，或 server result 的 opaque `encrypted_content` 缺失/损坏：`400 invalid_request_error`；
+- Web Search 参数无效、动态版本未允许 direct caller、mixed continuation 缺少 client result、混入非 result content，或未保留 pending search tool：`400 invalid_request_error`；
 - 上游返回的非 2xx 状态和 body：原样透传。
 
 所有本地生成的错误继续通过 `internal/httpapi.WriteError` 返回 Anthropic 兼容结构。

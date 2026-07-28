@@ -10,14 +10,8 @@ import (
 )
 
 const (
-	omaServerToolIDPrefix  = "srvtoolu_oma_"
-	omaSearchContentPrefix = "oma_search_v1_"
+	omaServerToolIDPrefix = "srvtoolu_oma_"
 )
-
-type gatewayOpaqueSearchContent struct {
-	Content       string `json:"content"`
-	PublishedDate string `json:"published_date,omitempty"`
-}
 
 type gatewayMessageEnvelope struct {
 	Role    string          `json:"role"`
@@ -587,14 +581,8 @@ func projectServerResultToClient(block gatewayProtocolBlock) (json.RawMessage, e
 		return nil, fmt.Errorf("decode web search result content: %w", err)
 	}
 	for index := range searchResults {
-		content, publishedDate, err := decodeGatewaySearchContent(searchResults[index].EncryptedContent)
-		if err != nil {
-			return nil, fmt.Errorf("decode web search encrypted_content: %w", err)
-		}
 		searchResults[index].Type = ""
-		searchResults[index].Content = content
 		searchResults[index].EncryptedContent = ""
-		searchResults[index].PublishedDate = publishedDate
 	}
 	content, err := json.Marshal(searchResults)
 	if err != nil {
@@ -741,11 +729,7 @@ func gatewayWebSearchResultBlock(execution gatewayExecution) (json.RawMessage, e
 	}
 	resultContent := make([]gatewaySearchResultBlock, 0, len(execution.results.Results))
 	for _, result := range execution.results.Results {
-		contentItem, err := resultToServerContentItem(result)
-		if err != nil {
-			return nil, fmt.Errorf("encode web search result content: %w", err)
-		}
-		resultContent = append(resultContent, contentItem)
+		resultContent = append(resultContent, resultToServerContentItem(result))
 	}
 	encodedContent, err := json.Marshal(resultContent)
 	if err != nil {
@@ -756,29 +740,6 @@ func gatewayWebSearchResultBlock(execution gatewayExecution) (json.RawMessage, e
 		ToolUseID string          `json:"tool_use_id"`
 		Content   json.RawMessage `json:"content"`
 	}{Type: "web_search_tool_result", ToolUseID: externalID, Content: encodedContent})
-}
-
-func encodeGatewaySearchContent(content, publishedDate string) (string, error) {
-	payload, err := json.Marshal(gatewayOpaqueSearchContent{Content: content, PublishedDate: publishedDate})
-	if err != nil {
-		return "", fmt.Errorf("marshal opaque web search content: %w", err)
-	}
-	return omaSearchContentPrefix + base64.RawURLEncoding.EncodeToString(payload), nil
-}
-
-func decodeGatewaySearchContent(encryptedContent string) (string, string, error) {
-	if !strings.HasPrefix(encryptedContent, omaSearchContentPrefix) {
-		return "", "", errors.New("missing or unsupported opaque payload")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(encryptedContent, omaSearchContentPrefix))
-	if err != nil {
-		return "", "", errors.New("invalid opaque payload encoding")
-	}
-	var decoded gatewayOpaqueSearchContent
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		return "", "", errors.New("invalid opaque payload")
-	}
-	return decoded.Content, decoded.PublishedDate, nil
 }
 
 func serverGatewayToolUseID(upstreamID string) string {

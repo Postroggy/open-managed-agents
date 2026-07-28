@@ -172,7 +172,7 @@ func TestGatewayPauseTurnContinuationReplaysCompletedSearch(t *testing.T) {
 	}
 }
 
-func TestGatewayServerResultUsesOfficialShapeAndRestoresBYOKContent(t *testing.T) {
+func TestGatewayServerResultOmitsEncryptedContentAndProjectsAvailableMetadata(t *testing.T) {
 	execution := gatewayExecution{
 		call: gatewayToolCall{id: "toolu_search"},
 		results: websearch.SearchResponse{Results: []websearch.Result{{
@@ -183,9 +183,9 @@ func TestGatewayServerResultUsesOfficialShapeAndRestoresBYOKContent(t *testing.T
 	if err != nil {
 		t.Fatalf("build server result: %v", err)
 	}
-	if !strings.Contains(string(result), `"encrypted_content":"`) ||
+	if strings.Contains(string(result), `"encrypted_content"`) ||
 		strings.Contains(string(result), `"content":"search snippet"`) {
-		t.Fatalf("server result does not use the official opaque content shape: %s", result)
+		t.Fatalf("OMA-managed server result leaked private replay content: %s", result)
 	}
 
 	var block gatewayProtocolBlock
@@ -196,27 +196,19 @@ func TestGatewayServerResultUsesOfficialShapeAndRestoresBYOKContent(t *testing.T
 	if err != nil {
 		t.Fatalf("project server result: %v", err)
 	}
-	if !strings.Contains(string(projected), `"content":"search snippet"`) {
-		t.Fatalf("BYOK result lost restored search content: %s", projected)
+	if !strings.Contains(string(projected), `"title":"Result"`) ||
+		!strings.Contains(string(projected), `"url":"https://example.com"`) ||
+		!strings.Contains(string(projected), `"page_age":"July 28, 2026"`) {
+		t.Fatalf("BYOK result lost available search metadata: %s", projected)
 	}
-}
 
-func TestGatewayServerResultRejectsMissingOrModifiedOpaqueContent(t *testing.T) {
-	for _, test := range []struct {
-		name    string
-		content string
-	}{
-		{name: "missing", content: `[{"type":"web_search_result","title":"Result","url":"https://example.com"}]`},
-		{name: "modified", content: `[{"type":"web_search_result","title":"Result","url":"https://example.com","encrypted_content":"oma_search_v1_invalid"}]`},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			_, err := projectServerResultToClient(gatewayProtocolBlock{
-				Type: "web_search_tool_result", ToolUseID: serverGatewayToolUseID("toolu_search"), Content: json.RawMessage(test.content),
-			})
-			if err == nil || !strings.Contains(err.Error(), "encrypted_content") {
-				t.Fatalf("project result error = %v, want encrypted_content validation error", err)
-			}
-		})
+	block.Content = json.RawMessage(`[{"type":"web_search_result","title":"Native","url":"https://example.org","encrypted_content":"provider-opaque"}]`)
+	projected, err = projectServerResultToClient(block)
+	if err != nil {
+		t.Fatalf("project provider-owned encrypted content: %v", err)
+	}
+	if strings.Contains(string(projected), `encrypted_content`) || !strings.Contains(string(projected), `"title":"Native"`) {
+		t.Fatalf("BYOK projection handled provider-owned opaque content incorrectly: %s", projected)
 	}
 }
 
@@ -628,8 +620,7 @@ func TestGatewayProjectsCompletedSearchHistoryBackToBYOK(t *testing.T) {
 	searcher := &gatewayTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	encryptedContent := gatewayTestEncryptedContent(t, "old result")
-	body := []byte(`{"messages":[{"role":"user","content":"old search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","name":"web_search","input":{"query":"old query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","encrypted_content":"` + encryptedContent + `"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[]}`)
+	body := []byte(`{"messages":[{"role":"user","content":"old search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","name":"web_search","input":{"query":"old query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","content":[{"type":"web_search_result","title":"Old","url":"https://example.com"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[]}`)
 	response, handled, err := gateway.handle(context.Background(), body, "", nil)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
@@ -686,8 +677,7 @@ func TestGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 	searcher := &gatewayTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	encryptedContent := gatewayTestEncryptedContent(t, "old result")
-	body := []byte(`{"messages":[{"role":"user","content":"old mixed turn"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","name":"web_search","input":{"query":"old query"}},{"type":"tool_use","id":"toolu_history_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_history_bash","content":"/workspace"}]},{"role":"assistant","content":[{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","encrypted_content":"` + encryptedContent + `"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
+	body := []byte(`{"messages":[{"role":"user","content":"old mixed turn"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","name":"web_search","input":{"query":"old query"}},{"type":"tool_use","id":"toolu_history_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_history_bash","content":"/workspace"}]},{"role":"assistant","content":[{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","content":[{"type":"web_search_result","title":"Old","url":"https://example.com"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
 	response, handled, err := gateway.handle(context.Background(), body, "", nil)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
@@ -695,15 +685,6 @@ func TestGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 	if len(searcher.requests) != 0 {
 		t.Fatalf("completed mixed history searches = %d, want 0", len(searcher.requests))
 	}
-}
-
-func gatewayTestEncryptedContent(t *testing.T, content string) string {
-	t.Helper()
-	encryptedContent, err := encodeGatewaySearchContent(content, "")
-	if err != nil {
-		t.Fatalf("encode test search content: %v", err)
-	}
-	return encryptedContent
 }
 
 func TestProjectCompletedGatewayContentUsesResolvedServerID(t *testing.T) {
