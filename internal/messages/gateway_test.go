@@ -72,13 +72,17 @@ func TestGatewayWithoutProviderIsTransparent(t *testing.T) {
 func TestGatewayToolLoopLimit(t *testing.T) {
 	upstream, requestCount := newSequencedUpstream(t, `{"type":"message","content":[{"type":"tool_use","id":"toolu_loop","name":"web_search","input":{"query":"query"}}],"stop_reason":"tool_use"}`)
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxToolLoops: 1}}
-	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, &gatewayTestSearcher{}, nil)
+	searcher := &gatewayTestSearcher{}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
 	response, handled, err := gateway.handle(context.Background(), []byte("{\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\"}]}"), "", nil)
 	if !handled || err == nil || response.body != nil {
 		t.Fatalf("response = %#v, handled = %v, err = %v; want bounded loop error", response, handled, err)
 	}
 	if requestCount() != 1 {
 		t.Fatalf("upstream requests = %d, want exactly 1", requestCount())
+	}
+	if len(searcher.requests) != 0 {
+		t.Fatalf("search requests = %d, want 0 without continuation budget", len(searcher.requests))
 	}
 }
 
@@ -149,34 +153,117 @@ func TestGatewayProviderPanicBecomesToolError(t *testing.T) {
 	}
 }
 
-func TestGatewayMixedToolUseReturnsUnsupportedToolResult(t *testing.T) {
+func TestExtractGatewayToolCallsRejectsDuplicateIDs(t *testing.T) {
+	body := []byte(`{"content":[{"type":"tool_use","id":"toolu_duplicate","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_duplicate","name":"bash","input":{"command":"pwd"}}]}`)
+
+	_, err := extractGatewayToolCalls(body)
+	if err == nil || !strings.Contains(err.Error(), `duplicate tool use id "toolu_duplicate"`) {
+		t.Fatalf("extract tool calls error = %v, want duplicate id error", err)
+	}
+}
+
+func TestGatewayMixedContinuationRequiresCurrentSearchTool(t *testing.T) {
+	requestCount := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requestCount++
+	}))
+	defer upstream.Close()
+	searcher := &gatewayTestSearcher{}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte(`{"messages":[{"role":"user","content":"search and inspect"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfc2VhcmNo","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}],"tools":[{"name":"bash","input_schema":{"type":"object"}}]}`)
+	_, handled, err := gateway.handle(context.Background(), body, "", nil)
+	var requestErr *gatewayRequestError
+	if !handled || !errors.As(err, &requestErr) || !strings.Contains(err.Error(), "same web_search tool") {
+		t.Fatalf("handled = %v, err = %v; want invalid continuation error", handled, err)
+	}
+	if requestCount != 0 || len(searcher.requests) != 0 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 0 and 0", requestCount, len(searcher.requests))
+	}
+}
+
+func TestGatewayMixedContinuationRejectsDuplicateClientResults(t *testing.T) {
+	messages := []json.RawMessage{
+		json.RawMessage(`{"role":"user","content":"search and inspect"}`),
+		json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfc2VhcmNo","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
+		json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"},{"type":"tool_result","tool_use_id":"toolu_bash","content":"duplicate"}]}`),
+	}
+
+	_, err := findPendingGatewayTurn(messages)
+	if err == nil || !strings.Contains(err.Error(), `duplicate client tool result "toolu_bash"`) {
+		t.Fatalf("find pending turn error = %v, want duplicate client result error", err)
+	}
+}
+
+func TestGatewayClientToolUsePassesToClaudeCode(t *testing.T) {
+	upstream, requestCount := newSequencedUpstream(t,
+		`{"type":"message","content":[{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}],"stop_reason":"tool_use"}`,
+	)
+	searcher := &gatewayTestSearcher{}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte(`{"messages":[],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
+	response, handled, err := gateway.handle(context.Background(), body, "", nil)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
+	}
+	if requestCount() != 1 || len(searcher.requests) != 0 {
+		t.Fatalf("upstream requests = %d, searches = %d; want 1 and 0", requestCount(), len(searcher.requests))
+	}
+	if !strings.Contains(string(response.body), `"id":"toolu_bash"`) || strings.Contains(string(response.body), "unsupported tool use") {
+		t.Fatalf("client tool response = %s", response.body)
+	}
+}
+func TestGatewayMixedToolUseDefersSearchUntilClientResults(t *testing.T) {
 	requestCount := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		if requestCount == 1 {
-			_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"tool_use","id":"toolu_search","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_other","name":"bash","input":{"command":"pwd"}}],"stop_reason":"tool_use"}`)
+			_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"checking"},{"type":"tool_use","id":"toolu_search_1","name":"web_search","input":{"query":"first query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}},{"type":"tool_use","id":"toolu_search_2","name":"web_search","input":{"query":"second query"}},{"type":"tool_use","id":"toolu_read","name":"read_file","input":{"path":"README.md"}}],"stop_reason":"tool_use"}`)
 			return
 		}
 		var request struct {
 			Messages []struct {
-				Role    string            `json:"role"`
-				Content []json.RawMessage `json:"content"`
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
 			} `json:"messages"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode continuation: %v", err)
 		}
-		last := request.Messages[len(request.Messages)-1]
-		if len(last.Content) != 2 {
-			t.Fatalf("continuation results = %d, want 2", len(last.Content))
+		if len(request.Messages) != 3 {
+			t.Fatalf("continuation messages = %d, want 3", len(request.Messages))
 		}
-		if !strings.Contains(string(last.Content[0]), `"tool_use_id":"toolu_search"`) ||
-			!strings.Contains(string(last.Content[1]), `"tool_use_id":"toolu_other"`) {
-			t.Fatalf("continuation results = %s", last.Content)
+		assistant := request.Messages[1]
+		var assistantContent []json.RawMessage
+		if err := json.Unmarshal(assistant.Content, &assistantContent); err != nil {
+			t.Fatalf("decode assistant content: %v", err)
 		}
-		if !strings.Contains(string(last.Content[1]), `"is_error":true`) {
-			t.Fatalf("unsupported tool result = %s, want is_error=true", last.Content[1])
+		if len(assistantContent) != 5 ||
+			!strings.Contains(string(assistantContent[1]), `"id":"toolu_search_1"`) ||
+			!strings.Contains(string(assistantContent[2]), `"id":"toolu_bash"`) ||
+			!strings.Contains(string(assistantContent[3]), `"id":"toolu_search_2"`) ||
+			!strings.Contains(string(assistantContent[4]), `"id":"toolu_read"`) ||
+			strings.Contains(string(assistant.Content), "server_tool_use") {
+			t.Fatalf("projected assistant message = %s", assistant.Content)
+		}
+		last := request.Messages[2]
+		var lastContent []json.RawMessage
+		if err := json.Unmarshal(last.Content, &lastContent); err != nil {
+			t.Fatalf("decode continuation results: %v", err)
+		}
+		if len(lastContent) != 4 {
+			t.Fatalf("continuation results = %d, want 4", len(lastContent))
+		}
+		if !strings.Contains(string(lastContent[0]), `"tool_use_id":"toolu_search_1"`) ||
+			!strings.Contains(string(lastContent[1]), `"tool_use_id":"toolu_bash"`) ||
+			!strings.Contains(string(lastContent[2]), `"tool_use_id":"toolu_search_2"`) ||
+			!strings.Contains(string(lastContent[3]), `"tool_use_id":"toolu_read"`) {
+			t.Fatalf("continuation results = %s", lastContent)
+		}
+		if strings.Contains(string(lastContent[1]), `"is_error":true`) || strings.Contains(string(lastContent[3]), `"is_error":true`) {
+			t.Fatalf("client tool results were replaced: %s", lastContent)
 		}
 		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`)
 	}))
@@ -184,10 +271,166 @@ func TestGatewayMixedToolUseReturnsUnsupportedToolResult(t *testing.T) {
 	searcher := &gatewayTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
+	tools := json.RawMessage(`[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}},{"name":"read_file","input_schema":{"type":"object"}}]`)
+	body := []byte(`{"messages":[{"role":"user","content":"search and inspect"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}},{"name":"read_file","input_schema":{"type":"object"}}]}`)
+	first, handled, err := gateway.handle(context.Background(), body, "", nil)
+	if err != nil || !handled || first.statusCode != http.StatusOK || requestCount != 1 {
+		t.Fatalf("first response = %#v, handled = %v, err = %v, requests = %d", first, handled, err, requestCount)
+	}
+	if len(searcher.requests) != 0 {
+		t.Fatalf("searches before client result = %d, want 0", len(searcher.requests))
+	}
+	var firstMessage struct {
+		Content    []json.RawMessage `json:"content"`
+		StopReason string            `json:"stop_reason"`
+	}
+	if err := json.Unmarshal(first.body, &firstMessage); err != nil {
+		t.Fatalf("decode first response: %v", err)
+	}
+	if firstMessage.StopReason != "tool_use" || len(firstMessage.Content) != 5 {
+		t.Fatalf("first response = %s", first.body)
+	}
+	serverCalls := make([]gatewayContentBlock, 0, 2)
+	for _, index := range []int{1, 3} {
+		var serverCall gatewayContentBlock
+		if err := json.Unmarshal(firstMessage.Content[index], &serverCall); err != nil {
+			t.Fatalf("decode server tool use %d: %v", index, err)
+		}
+		if serverCall.Type != "server_tool_use" || !strings.HasPrefix(serverCall.ID, "srvtoolu_") {
+			t.Fatalf("server tool use %d = %s", index, firstMessage.Content[index])
+		}
+		serverCalls = append(serverCalls, serverCall)
+	}
+	if !strings.Contains(string(firstMessage.Content[2]), `"id":"toolu_bash"`) ||
+		!strings.Contains(string(firstMessage.Content[4]), `"id":"toolu_read"`) ||
+		strings.Contains(string(first.body), "web_search_tool_result") {
+		t.Fatalf("mixed response = %s", first.body)
+	}
+	assistant, err := json.Marshal(struct {
+		Role    string            `json:"role"`
+		Content []json.RawMessage `json:"content"`
+	}{Role: "assistant", Content: firstMessage.Content})
+	if err != nil {
+		t.Fatalf("encode assistant continuation: %v", err)
+	}
+	clientResult := json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","content":"readme"},{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}`)
+	followUp, err := json.Marshal(map[string]any{
+		"messages": []json.RawMessage{json.RawMessage(`{"role":"user","content":"search and inspect"}`), assistant, clientResult},
+		"tools":    tools,
+	})
+	if err != nil {
+		t.Fatalf("encode follow-up request: %v", err)
+	}
+	second, handled, err := gateway.handle(context.Background(), followUp, "", nil)
+	if err != nil || !handled || second.statusCode != http.StatusOK || requestCount != 2 {
+		t.Fatalf("second response = %#v, handled = %v, err = %v, requests = %d", second, handled, err, requestCount)
+	}
+	if len(searcher.requests) != 2 || searcher.requests[0].Query != "first query" || searcher.requests[1].Query != "second query" {
+		t.Fatalf("deferred search requests = %#v", searcher.requests)
+	}
+	var secondMessage struct {
+		Content []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(second.body, &secondMessage); err != nil {
+		t.Fatalf("decode second response: %v", err)
+	}
+	if len(secondMessage.Content) != 3 || !strings.Contains(string(secondMessage.Content[0]), `"type":"web_search_tool_result"`) ||
+		!strings.Contains(string(secondMessage.Content[0]), `"tool_use_id":"`+serverCalls[0].ID+`"`) ||
+		!strings.Contains(string(secondMessage.Content[1]), `"tool_use_id":"`+serverCalls[1].ID+`"`) ||
+		strings.Contains(string(second.body), "server_tool_use") {
+		t.Fatalf("resumed mixed response = %s", second.body)
+	}
+}
+
+func TestGatewayProjectsCompletedSearchHistoryBackToBYOK(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(request.Messages) != 5 {
+			t.Fatalf("projected history messages = %d, want 5", len(request.Messages))
+		}
+		if request.Messages[1].Role != "assistant" || !strings.Contains(string(request.Messages[1].Content), `"type":"tool_use"`) ||
+			!strings.Contains(string(request.Messages[1].Content), `"id":"toolu_history"`) {
+			t.Fatalf("projected search call = %s", request.Messages[1].Content)
+		}
+		if request.Messages[2].Role != "user" || !strings.Contains(string(request.Messages[2].Content), `"type":"tool_result"`) ||
+			!strings.Contains(string(request.Messages[2].Content), `"tool_use_id":"toolu_history"`) {
+			t.Fatalf("projected search result = %s", request.Messages[2].Content)
+		}
+		if request.Messages[3].Role != "assistant" || !strings.Contains(string(request.Messages[3].Content), `"text":"old answer"`) {
+			t.Fatalf("projected final content = %s", request.Messages[3].Content)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"new answer"}],"stop_reason":"end_turn"}`)
+	}))
+	defer upstream.Close()
+	searcher := &gatewayTestSearcher{}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte(`{"messages":[{"role":"user","content":"old search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","name":"web_search","input":{"query":"old query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeQ","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","content":"old result"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[]}`)
 	response, handled, err := gateway.handle(context.Background(), body, "", nil)
-	if err != nil || !handled || response.statusCode != http.StatusOK || requestCount != 2 {
-		t.Fatalf("response = %#v, handled = %v, err = %v, requests = %d", response, handled, err, requestCount)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
+	}
+	if len(searcher.requests) != 0 {
+		t.Fatalf("history replay searches = %d, want 0", len(searcher.requests))
+	}
+}
+
+func TestGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(request.Messages) != 5 {
+			t.Fatalf("projected mixed history messages = %d, want 5", len(request.Messages))
+		}
+		var calls []json.RawMessage
+		if err := json.Unmarshal(request.Messages[1].Content, &calls); err != nil || len(calls) != 2 {
+			t.Fatalf("projected mixed calls = %s, err = %v", request.Messages[1].Content, err)
+		}
+		if !strings.Contains(string(calls[0]), `"id":"toolu_history_search"`) ||
+			!strings.Contains(string(calls[1]), `"id":"toolu_history_bash"`) {
+			t.Fatalf("projected mixed calls = %s", calls)
+		}
+		var results []json.RawMessage
+		if err := json.Unmarshal(request.Messages[2].Content, &results); err != nil || len(results) != 2 {
+			t.Fatalf("projected mixed results = %s, err = %v", request.Messages[2].Content, err)
+		}
+		if !strings.Contains(string(results[0]), `"tool_use_id":"toolu_history_search"`) ||
+			!strings.Contains(string(results[1]), `"tool_use_id":"toolu_history_bash"`) {
+			t.Fatalf("projected mixed result order = %s", results)
+		}
+		if request.Messages[3].Role != "assistant" || !strings.Contains(string(request.Messages[3].Content), `"text":"old answer"`) {
+			t.Fatalf("projected mixed answer = %s", request.Messages[3].Content)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"text","text":"new answer"}],"stop_reason":"end_turn"}`)
+	}))
+	defer upstream.Close()
+	searcher := &gatewayTestSearcher{}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte(`{"messages":[{"role":"user","content":"old mixed turn"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","name":"web_search","input":{"query":"old query"}},{"type":"tool_use","id":"toolu_history_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_history_bash","content":"/workspace"}]},{"role":"assistant","content":[{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_dG9vbHVfaGlzdG9yeV9zZWFyY2g","content":[{"type":"web_search_result","title":"Old","url":"https://example.com","content":"old result"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
+	response, handled, err := gateway.handle(context.Background(), body, "", nil)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
+	}
+	if len(searcher.requests) != 0 {
+		t.Fatalf("completed mixed history searches = %d, want 0", len(searcher.requests))
 	}
 }
 
@@ -207,8 +450,64 @@ func TestGatewayEnforcesCallerMaxUses(t *testing.T) {
 	if len(searcher.requests) != 1 || searcher.requests[0].Query != "first" {
 		t.Fatalf("provider requests = %#v, want only the first search", searcher.requests)
 	}
-	if !strings.Contains(string(response.body), "web_search_tool_result_error") {
-		t.Fatalf("max_uses response = %s, want an error result for the second call", response.body)
+	var decoded struct {
+		Content []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(response.body, &decoded); err != nil {
+		t.Fatalf("decode max_uses response: %v", err)
+	}
+	if len(decoded.Content) != 5 {
+		t.Fatalf("max_uses content = %s", response.body)
+	}
+	for _, index := range []int{0, 2} {
+		var call gatewayContentBlock
+		if err := json.Unmarshal(decoded.Content[index], &call); err != nil {
+			t.Fatalf("decode server call %d: %v", index, err)
+		}
+		if call.Type != "server_tool_use" || !strings.HasPrefix(call.ID, "srvtoolu_") {
+			t.Fatalf("server call %d = %s", index, decoded.Content[index])
+		}
+		var result gatewayProtocolBlock
+		if err := json.Unmarshal(decoded.Content[index+1], &result); err != nil {
+			t.Fatalf("decode server result %d: %v", index+1, err)
+		}
+		if result.ToolUseID != call.ID {
+			t.Fatalf("server call/result ids = %q/%q", call.ID, result.ToolUseID)
+		}
+	}
+	if !strings.Contains(string(decoded.Content[3]), `"error_code":"max_uses_exceeded"`) {
+		t.Fatalf("max_uses error = %s", decoded.Content[3])
+	}
+}
+
+func TestGatewayMaxUsesSpansInternalContinuations(t *testing.T) {
+	upstream, requestCount := newSequencedUpstream(t,
+		`{"type":"message","content":[{"type":"tool_use","id":"toolu_1","name":"web_search","input":{"query":"first"}}],"stop_reason":"tool_use"}`,
+		`{"type":"message","content":[{"type":"tool_use","id":"toolu_2","name":"web_search","input":{"query":"second"}}],"stop_reason":"tool_use"}`,
+		`{"type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`,
+	)
+	searcher := &gatewayTestSearcher{}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	gateway := newGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte(`{"messages":[],"tools":[{"type":"web_search_20250305","max_uses":1}]}`)
+	response, handled, err := gateway.handle(context.Background(), body, "", nil)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
+	}
+	if requestCount() != 3 {
+		t.Fatalf("BYOK requests = %d, want 3", requestCount())
+	}
+	if len(searcher.requests) != 1 || searcher.requests[0].Query != "first" {
+		t.Fatalf("provider requests = %#v, want only the first search", searcher.requests)
+	}
+	var decoded struct {
+		Content []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(response.body, &decoded); err != nil {
+		t.Fatalf("decode max_uses continuation response: %v", err)
+	}
+	if len(decoded.Content) != 5 || !strings.Contains(string(decoded.Content[3]), `"error_code":"max_uses_exceeded"`) {
+		t.Fatalf("max_uses continuation response = %s", response.body)
 	}
 }
 
@@ -240,7 +539,7 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 		requests = append(requests, request)
 		w.Header().Set("Content-Type", "application/json")
 		if len(requests) == 1 {
-			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"web_search\",\"input\":{\"query\":\"golang release\"}}],\"stop_reason\":\"tool_use\"}")
+			_, _ = io.WriteString(w, "{\"id\":\"msg_tool\",\"type\":\"message\",\"content\":[{\"type\":\"text\",\"text\":\"looking\"},{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"web_search\",\"input\":{\"query\":\"golang release\"}}],\"stop_reason\":\"tool_use\"}")
 			return
 		}
 		_, _ = io.WriteString(w, "{\"id\":\"msg_final\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}")
@@ -295,7 +594,10 @@ func TestGatewayToolLoopProjectsTranscript(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	content := final["content"].([]any)
-	if content[0].(map[string]any)["type"] != "server_tool_use" || content[1].(map[string]any)["type"] != "web_search_tool_result" {
+	if len(content) != 4 || content[0].(map[string]any)["text"] != "looking" ||
+		content[1].(map[string]any)["type"] != "server_tool_use" ||
+		content[2].(map[string]any)["type"] != "web_search_tool_result" ||
+		content[3].(map[string]any)["text"] != "answer" {
 		t.Fatalf("projected content = %#v", content)
 	}
 }
@@ -328,5 +630,8 @@ func TestGatewaySSEResponse(t *testing.T) {
 		if !strings.Contains(string(response.body), want) {
 			t.Fatalf("SSE response = %s, missing %q", response.body, want)
 		}
+	}
+	if !strings.Contains(string(response.body), `"type":"input_json_delta"`) || !strings.Contains(string(response.body), `"partial_json":"{\"query\":\"golang release\"}"`) {
+		t.Fatalf("SSE response missing server tool input delta: %s", response.body)
 	}
 }

@@ -25,7 +25,7 @@ POST /v1/messages
 
 对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在请求声明受支持的 Anthropic server tool（当前为 `web_search_20250305`、`web_search_20260209` 或 `web_search_20260318`）且本地 provider 已配置时启用 Web Search gateway。gateway 只依赖 provider-neutral 的 `Search` 接口；该接口使用结构化的 `SearchRequest`/`SearchResponse`，可保留分页和 provider request ID 等响应元数据，结果模型区分摘要、正文、highlights 和 summary。当前 registry 已支持 Tavily 和 Brave；`web_search.providers.<name>.endpoint` 为空时，各 provider 使用自己的默认 endpoint。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
 
-gateway 保留 Claude Code 的一次外部请求，但内部使用非流式 BYOK continuation loop：
+只有 BYOK 回合全部为 Web Search 调用时，gateway 才在同一条 Claude Code 外部请求内使用非流式 continuation loop。BYOK 只返回 Bash、Edit、MCP 等 client tool 时，gateway 原样交还 Claude Code 执行；同一回合混合 Web Search 与 client tool 时，gateway 按 Anthropic mixed server/client 协议暂停搜索并跨两条 Claude Code Messages 请求续传：
 
 ```mermaid
 sequenceDiagram
@@ -36,17 +36,33 @@ sequenceDiagram
 
     CC->>OMA: POST /v1/messages (web_search server tool)
     OMA->>BYOK: POST /v1/messages (web_search ordinary tool, stream=false)
-    BYOK-->>OMA: tool_use(web_search, query)
-    OMA->>Search: Search(query)
-    Search-->>OMA: results or provider error
-    OMA->>BYOK: assistant tool_use + user tool_result
-    BYOK-->>OMA: final message
-    OMA-->>CC: server_tool_use + web_search_tool_result + final content
+    alt 仅包含 Web Search tool_use
+        BYOK-->>OMA: tool_use(web_search, query)
+        OMA->>Search: Search(query)
+        Search-->>OMA: results or provider error
+        OMA->>BYOK: assistant tool_use + user tool_result
+        BYOK-->>OMA: final message
+        OMA-->>CC: server_tool_use + web_search_tool_result + final content
+    else 同时包含 Web Search 与 client tool_use
+        BYOK-->>OMA: tool_use(web_search) + tool_use(client)
+        OMA-->>CC: pending server_tool_use + client tool_use<br/>stop_reason=tool_use
+        CC->>CC: 执行 Bash/Edit/MCP
+        CC->>OMA: 新 Messages 请求，仅含 client tool_result<br/>保留同一 tools 数组
+        OMA->>Search: 执行 pending Search
+        Search-->>OMA: results or provider error
+        OMA->>BYOK: 同一 user message 中按原调用顺序放齐所有 tool_result
+        BYOK-->>OMA: final message
+        OMA-->>CC: pending web_search_tool_result + final content
+    end
 ```
 
-内部 transcript 与下游 transcript 分开维护；tool id 映射保持稳定。调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略：调用次数由 OMA 强制限制，域名约束直接传给搜索 provider，不交给 BYOK 模型生成或修改。当前 provider-neutral 合同无法表达 `user_location`，因此请求携带该字段时会在调用 BYOK 前明确报错，而不是静默忽略。provider 失败转为 `web_search_tool_result_error`，内部调用次数还有全局 loop 上限，最终按原请求的 `stream` 选项返回 JSON 或合成 SSE。gateway 暂不处理 `web_fetch`、BYOK 原生 web search 和 Batch Messages，也不修改 CCRv2 relay/MITM 协议。
+内部 transcript 与 Claude Code transcript 通过双向投影保持一致。BYOK 的 ordinary `toolu_*` 会编码为带 `srvtoolu_` 前缀的可逆 server ID；Claude Code 后续重放完整历史时，gateway 会把 `server_tool_use`/`web_search_tool_result` 展开回 BYOK 的 assistant `tool_use` 与下一条 user `tool_result`。mixed continuation 中 Claude Code 只返回自己拥有的 client results，每个 client `tool_use` 必须恰好对应一个 `tool_result`，并保留声明 pending search 的同一 Web Search tool；缺失、重复或未知 result，以及缺少 pending search tool 时返回 `400 invalid_request_error`，不会把 server block 透传给 BYOK。gateway 执行 pending search 后按原 tool call 顺序合并结果；普通 client tool 不由 OMA 伪造 error result。已完成的 search 历史即使后续请求不再声明 Web Search，也仍会反向投影，但不会允许 BYOK 发起新的搜索。
 
-管理后台继续使用原平台路径 `POST /api/organizations/{orgUuid}/proxy/v1/messages`。该路由及其独立代理实现不作为 `/v1/messages` 的兼容别名，也不承载 Claude Code 的 session-scoped token。它在 `anthropic_upstream.model_mappings` 命中请求顶层 `model` 时把该逻辑模型 ID 替换为配置的上游模型 ID。Messages 的已知改写字段通过命名 DTO 解析；只有为保留第三方未知字段而使用的 request envelope 在该 HTTP 边界保留 `json.RawMessage`，不会把动态 JSON 结构传入内部领域模型。Quickstart Builder 返回的 Agent config 在前端的命名配置归一化边界解析模型字段，Agent 写入边界再执行防御性解析。未配置、未命中或请求体无法按 JSON object 解析时，请求体保持不变并交给上游处理。公共 `POST /v1/messages` 不应用该 Console 映射；只有上述 code-session Web Search 条件命中时才进入 gateway，否则继续透明流式转发请求体。
+调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略。`max_uses` 统计每条入站 Messages 请求内实际尝试的搜索次数；同一请求的内部 BYOK continuation 不会重置计数，超限调用不访问 provider，并返回 `web_search_tool_result_error`/`max_uses_exceeded`。`web_search.max_tool_loops` 是独立的 BYOK 请求次数上限，包含初始请求；最后一次允许的 BYOK 响应若仍要求搜索，gateway 会在调用 provider 前终止，避免产生无法回传的搜索成本。域名约束直接传给搜索 provider，不交给 BYOK 模型生成或修改。
+
+当前 provider-neutral 合同无法表达 `user_location`，因此请求携带该字段时会在调用 BYOK 前明确报错，而不是静默忽略。provider 失败转为 `web_search_tool_result_error`/`unavailable`。最终按原请求的 `stream` 选项返回 JSON 或合成 SSE；合成的 client/server tool input 使用 `content_block_start` 空 input 加 `input_json_delta`。gateway 暂不处理 `web_fetch`、BYOK 原生 web search 和 Batch Messages，也不修改 CCRv2 relay/MITM 协议。
+
+管理后台继续使用原平台路径 `POST /api/organizations/{orgUuid}/proxy/v1/messages`。该路由及其独立代理实现不作为 `/v1/messages` 的兼容别名，也不承载 Claude Code 的 session-scoped token。它在 `anthropic_upstream.model_mappings` 命中请求顶层 `model` 时把该逻辑模型 ID 替换为配置的上游模型 ID。Messages 的已知改写字段通过命名 DTO 解析；只有为保留第三方未知字段而使用的 request envelope 在该 HTTP 边界保留 `json.RawMessage`，不会把动态 JSON 结构传入内部领域模型。Quickstart Builder 返回的 Agent config 在前端的命名配置归一化边界解析模型字段，Agent 写入边界再执行防御性解析。未配置、未命中或请求体无法按 JSON object 解析时，请求体保持不变并交给上游处理。公共 `POST /v1/messages` 不应用该 Console 映射；code-session 请求的当前 tools 声明 Web Search，或 transcript 包含 gateway 生成的 Web Search server block 时进入 gateway，否则继续透明流式转发请求体。
 
 服务端不提供 `/v1/code/sessions/{code_session_id}/bridge`。managed-agent 在创建 code session 时直接获得 OAuth FD、WebSocket FD 和初始 worker epoch；后续 worker 所有权切换统一使用 `/worker/register`。
 
@@ -109,14 +125,15 @@ sequenceDiagram
 - 上游地址或网络不可用：`502 api_error`；
 - 请求超过 32 MiB：`413 request_too_large`；
 - token 无效、session 终止、worker lease 过期或用在其他资源：`401 authentication_error`；
+- Web Search 参数无效、mixed continuation 缺少 client result 或未保留 pending search tool：`400 invalid_request_error`；
 - 上游返回的非 2xx 状态和 body：原样透传。
 
 所有本地生成的错误继续通过 `internal/httpapi.WriteError` 返回 Anthropic 兼容结构。
 
 ## 验收覆盖
 
-- `tests/messages_api_test.go`：缺少上游 key、跨资源使用、未 register、lease 过期、public session 终止、长时间运行、普通 API key、平台 cookie、header 清洗与响应 header 透传；
-- `internal/messages/gateway_test.go`：未知/空配置保持透明转发，provider failure 与 panic 转为 tool error（panic 日志包含 `request_id` 和 stack），混合 tool 的非搜索结果带 `is_error: true`，`max_uses` 与全局 loop 上限均有调用次数断言，unsupported `user_location` 在 BYOK 前拒绝，连续两轮 SSE 重建 `server_tool_use`、`web_search_tool_result` 和 `web_search_result`；
+- `tests/messages_api_test.go`：缺少上游 key、跨资源使用、未 register、lease 过期、public session 终止、长时间运行、普通 API key、平台 cookie、header 清洗与响应 header 透传，以及真实 handler/credential/provider 路径下的纯搜索闭环与 mixed tool 两请求续传；
+- `internal/messages/gateway_test.go`：未知/空配置保持透明转发，provider failure 与 panic 转为 tool error（panic 日志包含 `request_id` 和 stack），普通 client tool 透传，多个 search/client tool 交错时跨请求延迟搜索并按原序合并 results，pending tool 缺失拒绝，已完成 server/mixed history 可逆投影，`max_uses_exceeded` 精确错误码、跨 continuation 计数与无浪费的 loop 上限，unsupported `user_location` 在 BYOK 前拒绝，以及 SSE 的 `server_tool_use`、`web_search_tool_result`、`web_search_result` 与 `input_json_delta`；
 - `internal/websearch/*_test.go`：Tavily/Brave factory registry、provider-owned options 解码与校验、credential 不进入 upstream request，以及 Brave 不支持域名策略时显式报错；
 - `internal/config/config_test.go`：`web_search.providers.<name>` 的 endpoint/key/options 解析、未知 provider 字段拒绝和配置参考文件覆盖；
 - `tests/platform_proxy_directory_api_test.go`：管理后台原有独立路径的 JSON 与 SSE 转发；

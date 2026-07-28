@@ -22,6 +22,8 @@ const (
 	maxGatewayResponseBytes = 8 << 20
 	searchToolName          = "web_search"
 	defaultGatewayLoops     = 3
+	searchErrorUnavailable  = "unavailable"
+	searchErrorMaxUses      = "max_uses_exceeded"
 )
 
 type gateway struct {
@@ -39,23 +41,47 @@ type gatewayResponse struct {
 	body       []byte
 }
 
+type gatewayRequestError struct {
+	cause error
+}
+
+func (e *gatewayRequestError) Error() string {
+	return e.cause.Error()
+}
+
+func (e *gatewayRequestError) Unwrap() error {
+	return e.cause
+}
+
 type gatewayRequest struct {
 	fields   map[string]json.RawMessage
 	messages []json.RawMessage
 	stream   bool
 }
 
+type gatewayPreparedRequest struct {
+	request          gatewayRequest
+	upstreamFields   map[string]json.RawMessage
+	transcript       []json.RawMessage
+	projectedContent []json.RawMessage
+	searchUses       int
+	searchEnabled    bool
+	searchPolicy     gatewaySearchPolicy
+}
+
 type gatewayToolCall struct {
-	id     string
-	name   string
-	input  json.RawMessage
-	search *gatewaySearchInput
+	id         string
+	externalID string
+	name       string
+	input      json.RawMessage
+	search     *gatewaySearchInput
 }
 
 type gatewayExecution struct {
-	call    gatewayToolCall
-	results websearch.SearchResponse
-	err     error
+	call      gatewayToolCall
+	results   websearch.SearchResponse
+	err       error
+	errorCode string
 }
 
 type gatewaySearchInput struct {
@@ -116,36 +142,19 @@ func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provi
 }
 
 func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, headers http.Header) (gatewayResponse, bool, error) {
-	if g == nil {
-		return gatewayResponse{}, true, errors.New("messages web search gateway is not configured")
+	prepared, handled, err := g.prepareRequest(ctx, body)
+	if err != nil || !handled {
+		return gatewayResponse{}, handled, err
 	}
-	if int64(len(body)) > maxRequestBodyBytes {
-		return gatewayResponse{}, true, errors.New("request body exceeds maximum size")
-	}
-	if g.searcher == nil {
-		return gatewayResponse{}, false, nil
-	}
-	if g.client == nil {
-		return gatewayResponse{}, true, errors.New("messages upstream client is not configured")
-	}
-	request, err := parseGatewayRequest(body)
-	if err != nil {
-		return gatewayResponse{}, false, nil
-	}
-	if _, ok := request.fields["tools"]; !ok || !hasWebSearchTool(request.fields["tools"]) {
-		return gatewayResponse{}, false, nil
-	}
-	if strings.TrimSpace(g.upstreamAPIKey) == "" {
-		return gatewayResponse{}, true, errors.New("messages upstream key is required")
-	}
-	upstreamFields, searchPolicy, err := projectGatewayFields(request.fields)
-	if err != nil {
-		return gatewayResponse{}, true, fmt.Errorf("project messages request: %w", err)
-	}
-	transcript := append([]json.RawMessage{}, request.messages...)
-	executions := []gatewayExecution{}
-	searchUses := 0
-	for loop := 0; loop < gatewayLoopLimit(g); loop++ {
+	request := prepared.request
+	upstreamFields := prepared.upstreamFields
+	transcript := prepared.transcript
+	projectedContent := prepared.projectedContent
+	searchUses := prepared.searchUses
+	searchEnabled := prepared.searchEnabled
+	searchPolicy := prepared.searchPolicy
+	loopLimit := gatewayLoopLimit(g)
+	for loop := 0; loop < loopLimit; loop++ {
 		encodedMessages, err := json.Marshal(transcript)
 		if err != nil {
 			return gatewayResponse{}, true, fmt.Errorf("encode messages transcript: %w", err)
@@ -171,32 +180,45 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 		if err != nil {
 			return gatewayResponse{}, true, fmt.Errorf("decode upstream messages response: %w", err)
 		}
-		if len(calls) == 0 {
-			response.body, err = projectGatewayResponse(response.body, executions)
-			if err != nil {
-				return gatewayResponse{}, true, fmt.Errorf("project messages response: %w", err)
+		content, err := gatewayResponseContent(response.body)
+		if err != nil {
+			return gatewayResponse{}, true, fmt.Errorf("decode upstream messages content: %w", err)
+		}
+		searchCalls := gatewaySearchCalls(calls)
+		if !searchEnabled && len(searchCalls) > 0 {
+			return gatewayResponse{}, true, errors.New("messages upstream requested web search without a current tool definition")
+		}
+		if len(searchCalls) == 0 {
+			projectedContent = append(projectedContent, content...)
+			response, err = finalizeGatewayResponse(response, projectedContent, request.stream)
+			return response, true, err
+		}
+		if len(searchCalls) != len(calls) {
+			mixedContent, projectErr := projectPendingGatewayContent(content)
+			if projectErr != nil {
+				return gatewayResponse{}, true, fmt.Errorf("project mixed tool response: %w", projectErr)
 			}
-			if request.stream {
-				response.body, err = encodeGatewaySSE(response.body)
-				if err != nil {
-					return gatewayResponse{}, true, fmt.Errorf("encode messages stream: %w", err)
-				}
-				response.header.Set("Content-Type", "text/event-stream")
-				prepareResponseHeaders(response.header)
-			}
-			response.header.Del("Content-Length")
-			return response, true, nil
+			projectedContent = append(projectedContent, mixedContent...)
+			response, err = finalizeGatewayResponse(response, projectedContent, request.stream)
+			return response, true, err
+		}
+		if loop+1 >= loopLimit {
+			return gatewayResponse{}, true, errors.New("web search tool loop exceeded maximum iterations")
 		}
 		assistantMessage, err := assistantGatewayMessage(response.body)
 		if err != nil {
 			return gatewayResponse{}, true, fmt.Errorf("encode assistant messages transcript: %w", err)
 		}
 		transcript = append(transcript, assistantMessage)
-		results, newExecutions, nextSearchUses, err := g.executeToolCalls(ctx, calls, searchPolicy, searchUses)
+		results, executions, nextSearchUses, err := g.executeSearchCalls(ctx, searchCalls, searchPolicy, searchUses)
 		if err != nil {
 			return gatewayResponse{}, true, err
 		}
-		executions = append(executions, newExecutions...)
+		completedContent, err := projectCompletedGatewayContent(content, executions)
+		if err != nil {
+			return gatewayResponse{}, true, fmt.Errorf("project web search response: %w", err)
+		}
+		projectedContent = append(projectedContent, completedContent...)
 		searchUses = nextSearchUses
 		userMessage, err := userGatewayMessage(results)
 		if err != nil {
@@ -207,27 +229,87 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 	return gatewayResponse{}, true, errors.New("web search tool loop exceeded maximum iterations")
 }
 
-func (g *gateway) executeToolCalls(ctx context.Context, calls []gatewayToolCall, policy gatewaySearchPolicy, searchUses int) ([]json.RawMessage, []gatewayExecution, int, error) {
+func (g *gateway) prepareRequest(ctx context.Context, body []byte) (gatewayPreparedRequest, bool, error) {
+	if g == nil {
+		return gatewayPreparedRequest{}, true, errors.New("messages web search gateway is not configured")
+	}
+	if int64(len(body)) > maxRequestBodyBytes {
+		return gatewayPreparedRequest{}, true, errors.New("request body exceeds maximum size")
+	}
+	if g.searcher == nil {
+		return gatewayPreparedRequest{}, false, nil
+	}
+	if g.client == nil {
+		return gatewayPreparedRequest{}, true, errors.New("messages upstream client is not configured")
+	}
+	request, err := parseGatewayRequest(body)
+	if err != nil {
+		return gatewayPreparedRequest{}, false, nil
+	}
+	_, hasTools := request.fields["tools"]
+	searchEnabled := hasTools && hasWebSearchTool(request.fields["tools"])
+	if !searchEnabled && !hasGatewayWebSearchHistory(request.messages) {
+		return gatewayPreparedRequest{}, false, nil
+	}
+	if !searchEnabled {
+		pending, pendingErr := findPendingGatewayTurn(request.messages)
+		if pendingErr != nil {
+			return gatewayPreparedRequest{}, true, &gatewayRequestError{cause: pendingErr}
+		}
+		if pending != nil {
+			return gatewayPreparedRequest{}, true, &gatewayRequestError{
+				cause: errors.New("pending web search continuation requires the same web_search tool"),
+			}
+		}
+	}
+	if strings.TrimSpace(g.upstreamAPIKey) == "" {
+		return gatewayPreparedRequest{}, true, errors.New("messages upstream key is required")
+	}
+	upstreamFields, searchPolicy, err := projectGatewayFields(request.fields)
+	if err != nil {
+		return gatewayPreparedRequest{}, true, &gatewayRequestError{cause: fmt.Errorf("project messages request: %w", err)}
+	}
+	transcript, projectedContent, searchUses, err := g.prepareGatewayTranscript(ctx, request.messages, searchPolicy)
+	if err != nil {
+		return gatewayPreparedRequest{}, true, &gatewayRequestError{cause: fmt.Errorf("project messages transcript: %w", err)}
+	}
+	return gatewayPreparedRequest{
+		request:          request,
+		upstreamFields:   upstreamFields,
+		transcript:       transcript,
+		projectedContent: projectedContent,
+		searchUses:       searchUses,
+		searchEnabled:    searchEnabled,
+		searchPolicy:     searchPolicy,
+	}, true, nil
+}
+
+func (g *gateway) executeSearchCalls(ctx context.Context, calls []gatewayToolCall, policy gatewaySearchPolicy, searchUses int) ([]json.RawMessage, []gatewayExecution, int, error) {
 	results := make([]json.RawMessage, 0, len(calls))
 	executions := make([]gatewayExecution, 0, len(calls))
 	for _, call := range calls {
 		if call.search == nil {
-			result, err := unsupportedToolResult(call)
-			if err != nil {
-				return nil, nil, searchUses, fmt.Errorf("encode unsupported tool result: %w", err)
-			}
-			results = append(results, result)
-			continue
+			return nil, nil, searchUses, fmt.Errorf("tool %q is not owned by the web search gateway", call.name)
+		}
+		if call.externalID == "" {
+			call.externalID = serverGatewayToolUseID(call.id)
 		}
 		var searchErr error
+		var errorCode string
+		var result websearch.SearchResponse
 		if policy.MaxUses > 0 && searchUses >= policy.MaxUses {
 			searchErr = errors.New("web search max uses exceeded")
+			errorCode = searchErrorMaxUses
 		} else {
 			searchUses++
+			result, searchErr = g.search(ctx, call.search.Query, policy)
+			if searchErr != nil {
+				errorCode = searchErrorUnavailable
+			}
 		}
-		result, searchErr := g.search(ctx, call.search.Query, policy, searchErr)
-		executions = append(executions, gatewayExecution{call: call, results: result, err: searchErr})
-		toolResult, err := gatewayToolResult(call, result.Results, searchErr)
+		execution := gatewayExecution{call: call, results: result, err: searchErr, errorCode: errorCode}
+		executions = append(executions, execution)
+		toolResult, err := gatewayToolResult(execution)
 		if err != nil {
 			return nil, nil, searchUses, fmt.Errorf("encode web search tool result: %w", err)
 		}
@@ -277,8 +359,12 @@ func hasWebSearchTool(raw json.RawMessage) bool {
 
 func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.RawMessage, gatewaySearchPolicy, error) {
 	projected := cloneRawMap(fields)
+	rawTools, ok := fields["tools"]
+	if !ok {
+		return projected, gatewaySearchPolicy{}, nil
+	}
 	var tools []json.RawMessage
-	if err := json.Unmarshal(fields["tools"], &tools); err != nil {
+	if err := json.Unmarshal(rawTools, &tools); err != nil {
 		return nil, gatewaySearchPolicy{}, fmt.Errorf("tools must be an array: %w", err)
 	}
 	projectedTools := make([]json.RawMessage, 0, len(tools))
@@ -396,10 +482,7 @@ func gatewayLoopLimit(g *gateway) int {
 	return defaultGatewayLoops
 }
 
-func (g *gateway) search(ctx context.Context, query string, policy gatewaySearchPolicy, priorErr error) (results websearch.SearchResponse, err error) {
-	if priorErr != nil {
-		return results, priorErr
-	}
+func (g *gateway) search(ctx context.Context, query string, policy gatewaySearchPolicy) (results websearch.SearchResponse, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			g.logger.ErrorContext(ctx, "web search provider panic",
@@ -432,6 +515,7 @@ func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
 		return nil, errors.New("messages response content must be an array")
 	}
 	calls := []gatewayToolCall{}
+	seenIDs := make(map[string]struct{})
 	for _, rawBlock := range response.Content {
 		var block gatewayContentBlock
 		if err := json.Unmarshal(rawBlock, &block); err != nil {
@@ -443,6 +527,10 @@ func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
 		if strings.TrimSpace(block.ID) == "" {
 			return nil, errors.New("tool use id is required")
 		}
+		if _, duplicate := seenIDs[block.ID]; duplicate {
+			return nil, fmt.Errorf("duplicate tool use id %q", block.ID)
+		}
+		seenIDs[block.ID] = struct{}{}
 		call := gatewayToolCall{id: block.ID, name: block.Name, input: append(json.RawMessage(nil), block.Input...)}
 		if block.Name != searchToolName {
 			calls = append(calls, call)
@@ -492,29 +580,26 @@ func userGatewayMessage(results []json.RawMessage) (json.RawMessage, error) {
 	return encoded, nil
 }
 
-func gatewayToolResult(call gatewayToolCall, results []websearch.Result, searchErr error) (json.RawMessage, error) {
-	if searchErr != nil {
+func gatewayToolResult(execution gatewayExecution) (json.RawMessage, error) {
+	if execution.err != nil {
+		message := `"web search unavailable"`
+		if execution.errorCode == searchErrorMaxUses {
+			message = `"web search max uses exceeded"`
+		}
 		return marshalGatewayToolResult(gatewayToolResultBlock{
-			Type: "tool_result", ToolUseID: call.id, IsError: true,
-			Content: json.RawMessage(`"web search unavailable"`),
+			Type: "tool_result", ToolUseID: execution.call.id, IsError: true,
+			Content: json.RawMessage(message),
 		})
 	}
-	content := make([]gatewaySearchResultBlock, 0, len(results))
-	for _, result := range results {
+	content := make([]gatewaySearchResultBlock, 0, len(execution.results.Results))
+	for _, result := range execution.results.Results {
 		content = append(content, resultToContentItem(result, ""))
 	}
 	encoded, err := json.Marshal(content)
 	if err != nil {
 		return nil, fmt.Errorf("marshal web search results: %w", err)
 	}
-	return marshalGatewayToolResult(gatewayToolResultBlock{Type: "tool_result", ToolUseID: call.id, Content: encoded})
-}
-
-func unsupportedToolResult(call gatewayToolCall) (json.RawMessage, error) {
-	return marshalGatewayToolResult(gatewayToolResultBlock{
-		Type: "tool_result", ToolUseID: call.id, IsError: true,
-		Content: json.RawMessage(`"unsupported tool use"`),
-	})
+	return marshalGatewayToolResult(gatewayToolResultBlock{Type: "tool_result", ToolUseID: execution.call.id, Content: encoded})
 }
 
 func marshalGatewayToolResult(result gatewayToolResultBlock) (json.RawMessage, error) {
@@ -538,83 +623,6 @@ func resultToContentItem(result websearch.Result, blockType string) gatewaySearc
 		PublishedDate: result.PublishedDate,
 		PageAge:       result.PageAge,
 	}
-}
-
-func projectGatewayResponse(body []byte, executions []gatewayExecution) ([]byte, error) {
-	if len(executions) == 0 {
-		return body, nil
-	}
-	var response map[string]json.RawMessage
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, err
-	}
-	var content []json.RawMessage
-	if err := json.Unmarshal(response["content"], &content); err != nil {
-		return nil, errors.New("messages response content must be an array")
-	}
-	projected := make([]json.RawMessage, 0, len(content)+len(executions)*2)
-	for _, execution := range executions {
-		input := execution.call.input
-		if len(input) == 0 {
-			var err error
-			input, err = json.Marshal(execution.call.search)
-			if err != nil {
-				return nil, fmt.Errorf("marshal web search input: %w", err)
-			}
-		}
-		toolUse, err := json.Marshal(struct {
-			Type  string          `json:"type"`
-			ID    string          `json:"id"`
-			Name  string          `json:"name"`
-			Input json.RawMessage `json:"input"`
-		}{Type: "server_tool_use", ID: execution.call.id, Name: searchToolName, Input: input})
-		if err != nil {
-			return nil, fmt.Errorf("marshal server tool use: %w", err)
-		}
-		projected = append(projected, toolUse)
-		if execution.err != nil {
-			result, err := json.Marshal(struct {
-				Type      string `json:"type"`
-				ToolUseID string `json:"tool_use_id"`
-				Content   struct {
-					Type      string `json:"type"`
-					ErrorCode string `json:"error_code"`
-				} `json:"content"`
-			}{Type: "web_search_tool_result", ToolUseID: execution.call.id, Content: struct {
-				Type      string `json:"type"`
-				ErrorCode string `json:"error_code"`
-			}{Type: "web_search_tool_result_error", ErrorCode: "unavailable"}})
-			if err != nil {
-				return nil, fmt.Errorf("marshal web search error: %w", err)
-			}
-			projected = append(projected, result)
-			continue
-		}
-		resultContent := make([]gatewaySearchResultBlock, 0, len(execution.results.Results))
-		for _, result := range execution.results.Results {
-			resultContent = append(resultContent, resultToContentItem(result, "web_search_result"))
-		}
-		encodedContent, err := json.Marshal(resultContent)
-		if err != nil {
-			return nil, fmt.Errorf("marshal web search content: %w", err)
-		}
-		result, err := json.Marshal(struct {
-			Type      string          `json:"type"`
-			ToolUseID string          `json:"tool_use_id"`
-			Content   json.RawMessage `json:"content"`
-		}{Type: "web_search_tool_result", ToolUseID: execution.call.id, Content: encodedContent})
-		if err != nil {
-			return nil, fmt.Errorf("marshal web search result: %w", err)
-		}
-		projected = append(projected, result)
-	}
-	projected = append(projected, content...)
-	encodedContent, err := json.Marshal(projected)
-	if err != nil {
-		return nil, fmt.Errorf("marshal projected messages content: %w", err)
-	}
-	response["content"] = encodedContent
-	return json.Marshal(response)
 }
 
 func encodeGatewaySSE(body []byte) ([]byte, error) {
@@ -643,6 +651,7 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 			return nil, fmt.Errorf("decode messages content block: %w", err)
 		}
 		startBlock := append(json.RawMessage(nil), rawBlock...)
+		var toolInput json.RawMessage
 		if block.Type == "text" {
 			var fields map[string]json.RawMessage
 			if err := json.Unmarshal(rawBlock, &fields); err != nil {
@@ -653,6 +662,18 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 			startBlock, err = json.Marshal(fields)
 			if err != nil {
 				return nil, fmt.Errorf("marshal text content block: %w", err)
+			}
+		} else if block.Type == "tool_use" || block.Type == "server_tool_use" {
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(rawBlock, &fields); err != nil {
+				return nil, fmt.Errorf("decode tool content block: %w", err)
+			}
+			toolInput = append(json.RawMessage(nil), fields["input"]...)
+			fields["input"] = json.RawMessage(`{}`)
+			var err error
+			startBlock, err = json.Marshal(fields)
+			if err != nil {
+				return nil, fmt.Errorf("marshal tool content block: %w", err)
 			}
 		}
 		if err := writeGatewaySSE(&output, "content_block_start", struct {
@@ -674,6 +695,20 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 				Type string `json:"type"`
 				Text string `json:"text"`
 			}{Type: "text_delta", Text: block.Text}}); err != nil {
+				return nil, err
+			}
+		} else if len(toolInput) > 0 {
+			if err := writeGatewaySSE(&output, "content_block_delta", struct {
+				Type  string `json:"type"`
+				Index int    `json:"index"`
+				Delta struct {
+					Type        string `json:"type"`
+					PartialJSON string `json:"partial_json"`
+				} `json:"delta"`
+			}{Type: "content_block_delta", Index: index, Delta: struct {
+				Type        string `json:"type"`
+				PartialJSON string `json:"partial_json"`
+			}{Type: "input_json_delta", PartialJSON: string(toolInput)}}); err != nil {
 				return nil, err
 			}
 		}

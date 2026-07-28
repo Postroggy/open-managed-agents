@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
@@ -339,6 +340,163 @@ func TestMessagesWebSearchGateway(t *testing.T) {
 	}
 }
 
+func TestMessagesWebSearchGatewayMixedToolContinuation(t *testing.T) {
+	searchCalls := 0
+	tavily := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		searchCalls++
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode search request: %v", err)
+		}
+		if request["query"] != "latest Go release" || r.Header.Get("Authorization") != "Bearer tavily-mixed-key" {
+			t.Fatalf("search request = %#v", request)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[{"title":"Go release notes","url":"https://go.dev/doc/devel/release","content":"release details"}]}`)
+	}))
+	defer tavily.Close()
+
+	upstreamCalls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+		var request struct {
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode BYOK request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if upstreamCalls == 1 {
+			_, _ = io.WriteString(w, `{"id":"msg_mixed","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_search","name":"web_search","input":{"query":"latest Go release"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"go version"}}],"stop_reason":"tool_use"}`)
+			return
+		}
+		if len(request.Messages) != 3 {
+			t.Fatalf("continuation messages = %d, want 3", len(request.Messages))
+		}
+		var assistantContent []json.RawMessage
+		if err := json.Unmarshal(request.Messages[1].Content, &assistantContent); err != nil {
+			t.Fatalf("decode projected assistant content: %v", err)
+		}
+		if request.Messages[1].Role != "assistant" || len(assistantContent) != 2 ||
+			!strings.Contains(string(assistantContent[0]), `"id":"toolu_search"`) ||
+			!strings.Contains(string(assistantContent[1]), `"id":"toolu_bash"`) ||
+			strings.Contains(string(request.Messages[1].Content), "server_tool_use") {
+			t.Fatalf("projected assistant content = %s", request.Messages[1].Content)
+		}
+		var resultContent []json.RawMessage
+		if err := json.Unmarshal(request.Messages[2].Content, &resultContent); err != nil {
+			t.Fatalf("decode merged tool results: %v", err)
+		}
+		if request.Messages[2].Role != "user" || len(resultContent) != 2 ||
+			!strings.Contains(string(resultContent[0]), `"tool_use_id":"toolu_search"`) ||
+			!strings.Contains(string(resultContent[1]), `"tool_use_id":"toolu_bash"`) {
+			t.Fatalf("merged tool results = %s", request.Messages[2].Content)
+		}
+		_, _ = io.WriteString(w, `{"id":"msg_mixed_final","type":"message","role":"assistant","content":[{"type":"text","text":"Go is installed and the release notes are current."}],"stop_reason":"end_turn"}`)
+	}))
+	defer upstream.Close()
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	cfg.AnthropicUpstream.BaseURL = upstream.URL
+	cfg.AnthropicUpstream.APIKey = "messages-mixed-gateway-upstream"
+	cfg.WebSearch.Provider = "tavily"
+	cfg.WebSearch.Providers["tavily"] = config.WebSearchProviderConfig{Endpoint: tavily.URL, APIKey: "tavily-mixed-key"}
+	app := newTestAppWithStore(t, &cfg, newFakeStore("messages-mixed-web-search-gateway-bucket"))
+	defer app.close()
+
+	credential := createMessagesCodeSessionCredential(t, app, messagesTestModel)
+	registerCodeSessionWorker(t, app, credential.CodeSessionID)
+	tools := []map[string]any{
+		{"type": "web_search_20250305", "name": "web_search", "max_uses": 2},
+		{"name": "bash", "description": "Run a shell command", "input_schema": map[string]any{"type": "object"}},
+	}
+	firstPayload, err := json.Marshal(map[string]any{
+		"model":      messagesTestModel,
+		"max_tokens": 16,
+		"messages":   []map[string]any{{"role": "user", "content": "search and inspect"}},
+		"tools":      tools,
+	})
+	if err != nil {
+		t.Fatalf("encode first mixed request: %v", err)
+	}
+	firstResponse := doMessagesRequest(t, app, credential.Token, string(firstPayload))
+	defer firstResponse.Body.Close()
+	if firstResponse.StatusCode != http.StatusOK {
+		t.Fatalf("first mixed response status = %d", firstResponse.StatusCode)
+	}
+	var firstBody struct {
+		Content    []json.RawMessage `json:"content"`
+		StopReason string            `json:"stop_reason"`
+	}
+	decodeJSON(t, firstResponse.Body, &firstBody)
+	if firstBody.StopReason != "tool_use" || len(firstBody.Content) != 2 {
+		t.Fatalf("first mixed response = %#v", firstBody)
+	}
+	var searchUse struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	}
+	if err := json.Unmarshal(firstBody.Content[0], &searchUse); err != nil {
+		t.Fatalf("decode pending search use: %v", err)
+	}
+	if searchUse.Type != "server_tool_use" || !strings.HasPrefix(searchUse.ID, "srvtoolu_") ||
+		!strings.Contains(string(firstBody.Content[1]), `"id":"toolu_bash"`) || searchCalls != 0 || upstreamCalls != 1 {
+		t.Fatalf("first mixed response content = %s, searches = %d, BYOK calls = %d", firstBody.Content, searchCalls, upstreamCalls)
+	}
+
+	continuationMessages := []map[string]any{
+		{"role": "user", "content": "search and inspect"},
+		{"role": "assistant", "content": firstBody.Content},
+		{"role": "user", "content": []map[string]any{{"type": "tool_result", "tool_use_id": "toolu_bash", "content": "go version go1.25.0"}}},
+	}
+	invalidPayload, err := json.Marshal(map[string]any{
+		"model":      messagesTestModel,
+		"max_tokens": 16,
+		"messages":   continuationMessages,
+		"tools":      tools[1:],
+	})
+	if err != nil {
+		t.Fatalf("encode invalid mixed continuation: %v", err)
+	}
+	invalidResponse := doMessagesRequest(t, app, credential.Token, string(invalidPayload))
+	assertError(t, invalidResponse, http.StatusBadRequest, "invalid_request_error")
+	if searchCalls != 0 || upstreamCalls != 1 {
+		t.Fatalf("invalid continuation searches = %d, BYOK calls = %d; want 0 and 1", searchCalls, upstreamCalls)
+	}
+
+	secondPayload, err := json.Marshal(map[string]any{
+		"model":      messagesTestModel,
+		"max_tokens": 16,
+		"messages":   continuationMessages,
+		"tools":      tools,
+	})
+	if err != nil {
+		t.Fatalf("encode mixed continuation: %v", err)
+	}
+	secondResponse := doMessagesRequest(t, app, credential.Token, string(secondPayload))
+	defer secondResponse.Body.Close()
+	if secondResponse.StatusCode != http.StatusOK {
+		t.Fatalf("second mixed response status = %d", secondResponse.StatusCode)
+	}
+	var secondBody struct {
+		Content []json.RawMessage `json:"content"`
+	}
+	decodeJSON(t, secondResponse.Body, &secondBody)
+	if len(secondBody.Content) != 2 ||
+		!strings.Contains(string(secondBody.Content[0]), `"type":"web_search_tool_result"`) ||
+		!strings.Contains(string(secondBody.Content[0]), `"tool_use_id":"`+searchUse.ID+`"`) ||
+		!strings.Contains(string(secondBody.Content[1]), `"text":"Go is installed`) ||
+		strings.Contains(string(secondPayload), "tavily-mixed-key") || searchCalls != 1 || upstreamCalls != 2 {
+		t.Fatalf("second mixed response content = %s, searches = %d, BYOK calls = %d", secondBody.Content, searchCalls, upstreamCalls)
+	}
+}
+
 type messagesCodeSessionCredential struct {
 	Token           string
 	CodeSessionID   string
@@ -369,7 +527,24 @@ func createMessagesCodeSessionCredential(t *testing.T, app *testApp, model strin
 		where workspace_id = $1 and organization_id = $2 and deleted_at is null
 		order by id
 		limit 1
-	`, apiKey.WorkspaceID, apiKey.OrganizationID).Scan(&sessionID, &sessionExternalID); err != nil {
+	`, apiKey.WorkspaceID, apiKey.OrganizationID).Scan(&sessionID, &sessionExternalID); errors.Is(err, pgx.ErrNoRows) {
+		sessionExternalID, err = ids.New("session_messages_test_")
+		if err != nil {
+			t.Fatalf("generate Messages credential public session ID: %v", err)
+		}
+		err = app.db.Pool.QueryRow(context.Background(), `
+			insert into sessions (
+				external_id, organization_id, workspace_id, created_by_api_key_id,
+				environment_id, environment_external_id, agent_id, agent_external_id,
+				agent_version, agent_snapshot
+			) values ($1, $2, $3, $4, 1, $5, 1, $6, 1, '{}'::jsonb)
+			returning id
+		`, sessionExternalID, apiKey.OrganizationID, apiKey.WorkspaceID, apiKey.ID,
+			"environment_"+sessionExternalID, "agent_"+sessionExternalID).Scan(&sessionID)
+		if err != nil {
+			t.Fatalf("create Messages credential public session: %v", err)
+		}
+	} else if err != nil {
 		t.Fatalf("load Messages credential public session: %v", err)
 	}
 	now := time.Now().UTC()

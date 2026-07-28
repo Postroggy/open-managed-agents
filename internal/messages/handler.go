@@ -121,6 +121,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		if candidate {
 			response, handled, gatewayErr := h.gateway.handle(r.Context(), body, r.URL.RawQuery, r.Header)
 			if gatewayErr != nil {
+				var requestErr *gatewayRequestError
+				if errors.As(gatewayErr, &requestErr) {
+					httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadRequest, "invalid_request_error", requestErr.Error()))
+					return
+				}
 				httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadGateway, "api_error", "Messages web search gateway is unavailable"))
 				return
 			}
