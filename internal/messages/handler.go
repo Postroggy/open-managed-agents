@@ -53,10 +53,10 @@ var responseHeadersToRemove = map[string]struct{}{
 
 // Handler 将 Anthropic Messages 请求流式转发到真实上游，不解析或持久化请求正文。
 type Handler struct {
-	cfg     config.Config
-	client  *http.Client
-	gateway *gateway
-	logger  *slog.Logger
+	cfg              config.Config
+	client           *http.Client
+	webSearchGateway *webSearchGateway
+	logger           *slog.Logger
 }
 
 // flushingResponseWriter 在每次复制一块响应后主动 flush，避免 SSE 被 net/http 缓冲。
@@ -67,17 +67,16 @@ type flushingResponseWriter struct {
 
 // NewHandler 创建复用连接池的 Messages 代理 handler。
 func NewHandler(cfg config.Config, logger *slog.Logger) *Handler {
-	logger = logging.LoggerOrDefault(logger)
 	client := &http.Client{Transport: newProxyTransport()}
-	var gatewayHandler *gateway
+	logger = logging.LoggerOrDefault(logger)
+	var webSearchGatewayHandler *webSearchGateway
 	provider, err := websearch.NewProvider(cfg.WebSearch, client)
 	if err != nil {
 		logger.Error("configure messages web search provider", "error", err)
 	} else if provider != nil {
-		gatewayHandler = newGateway(cfg, client, provider, logger)
+		webSearchGatewayHandler = newWebSearchGateway(cfg, client, provider, logger)
 	}
-	return &Handler{cfg: cfg, client: client, gateway: gatewayHandler, logger: logger}
-}
+	return &Handler{cfg: cfg, client: client, webSearchGateway: webSearchGatewayHandler, logger: logger}
 }
 
 func newProxyTransport() http.RoundTripper {
@@ -107,8 +106,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		writeRequestTooLarge(w, r)
 		return
 	}
-	if h.gateway != nil && principal.CredentialType == auth.CredentialTypeCodeSessionOAuth {
-		body, candidate, err := readGatewayCandidate(w, r)
+	if h.webSearchGateway != nil && principal.CredentialType == auth.CredentialTypeCodeSessionOAuth {
+		body, candidate, err := readWebSearchGatewayCandidate(w, r)
 		if err != nil {
 			var maxBytesErr *http.MaxBytesError
 			if errors.As(err, &maxBytesErr) {
@@ -119,10 +118,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if candidate {
-			response, handled, gatewayErr := h.gateway.handle(r.Context(), body, r.URL.RawQuery, r.Header)
-			if gatewayErr != nil {
-				var requestErr *gatewayRequestError
-				if errors.As(gatewayErr, &requestErr) {
+			response, handled, webSearchGatewayErr := h.webSearchGateway.handle(r.Context(), body, r.URL.RawQuery, r.Header)
+			if webSearchGatewayErr != nil {
+				var requestErr *webSearchGatewayRequestError
+				if errors.As(webSearchGatewayErr, &requestErr) {
 					httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadRequest, "invalid_request_error", requestErr.Error()))
 					return
 				}
@@ -132,7 +131,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			if handled {
 				responseBody := &http.Response{StatusCode: response.statusCode, Header: response.header, Body: io.NopCloser(bytes.NewReader(response.body))}
 				if err := writeProxyResponse(w, responseBody); err != nil && r.Context().Err() == nil {
-					log.Printf("write Messages web search gateway response: %v", err)
+					h.logger.ErrorContext(r.Context(), "write Messages web search gateway response", "error", err)
 				}
 				return
 			}
@@ -179,7 +178,7 @@ func writeRequestTooLarge(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteError(w, r, httpapi.NewError(http.StatusRequestEntityTooLarge, "request_too_large", "Request body exceeds maximum size"))
 }
 
-func readGatewayCandidate(w http.ResponseWriter, r *http.Request) ([]byte, bool, error) {
+func readWebSearchGatewayCandidate(w http.ResponseWriter, r *http.Request) ([]byte, bool, error) {
 	body := http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	prefix := make([]byte, 0, 16)
 	for {

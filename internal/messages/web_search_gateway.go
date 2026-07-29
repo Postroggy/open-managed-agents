@@ -19,14 +19,14 @@ import (
 )
 
 const (
-	maxGatewayResponseBytes     = 8 << 20
+	maxWebSearchResponseBytes   = 8 << 20
 	searchToolName              = "web_search"
 	defaultServerToolIterations = 10
 	searchErrorUnavailable      = "unavailable"
 	searchErrorMaxUses          = "max_uses_exceeded"
 )
 
-type gateway struct {
+type webSearchGateway struct {
 	upstreamBaseURL         string
 	upstreamAPIKey          string
 	maxServerToolIterations int
@@ -35,66 +35,66 @@ type gateway struct {
 	logger                  *slog.Logger
 }
 
-type gatewayResponse struct {
+type webSearchGatewayResponse struct {
 	statusCode int
 	header     http.Header
 	body       []byte
 }
 
-type gatewayRequestError struct {
+type webSearchGatewayRequestError struct {
 	cause error
 }
 
-func (e *gatewayRequestError) Error() string {
+func (e *webSearchGatewayRequestError) Error() string {
 	return e.cause.Error()
 }
 
-func (e *gatewayRequestError) Unwrap() error {
+func (e *webSearchGatewayRequestError) Unwrap() error {
 	return e.cause
 }
 
-type gatewayRequest struct {
+type webSearchGatewayRequest struct {
 	fields   map[string]json.RawMessage
 	messages []json.RawMessage
 	stream   bool
 }
 
-type gatewayPreparedRequest struct {
-	request          gatewayRequest
+type webSearchPreparedRequest struct {
+	request          webSearchGatewayRequest
 	upstreamFields   map[string]json.RawMessage
 	transcript       []json.RawMessage
 	projectedContent []json.RawMessage
 	searchUses       int
 	searchEnabled    bool
-	searchPolicy     gatewaySearchPolicy
+	searchPolicy     webSearchPolicy
 }
 
-type gatewayToolCall struct {
+type webSearchToolCall struct {
 	id         string
 	externalID string
 	name       string
 	input      json.RawMessage
-	search     *gatewaySearchInput
+	search     *webSearchInput
 }
 
-type gatewayExecution struct {
-	call      gatewayToolCall
+type webSearchExecution struct {
+	call      webSearchToolCall
 	results   websearch.SearchResponse
 	err       error
 	errorCode string
 }
 
-type gatewaySearchInput struct {
+type webSearchInput struct {
 	Query string `json:"query"`
 }
 
-type gatewaySearchPolicy struct {
+type webSearchPolicy struct {
 	MaxUses        int
 	AllowedDomains []string
 	BlockedDomains []string
 }
 
-type gatewayUserLocation struct {
+type webSearchUserLocation struct {
 	Type     string `json:"type"`
 	City     string `json:"city,omitempty"`
 	Region   string `json:"region,omitempty"`
@@ -102,7 +102,7 @@ type gatewayUserLocation struct {
 	Timezone string `json:"timezone,omitempty"`
 }
 
-type gatewayContentBlock struct {
+type webSearchContentBlock struct {
 	Type  string          `json:"type"`
 	ID    string          `json:"id,omitempty"`
 	Name  string          `json:"name,omitempty"`
@@ -110,14 +110,14 @@ type gatewayContentBlock struct {
 	Text  string          `json:"text,omitempty"`
 }
 
-type gatewayToolResultBlock struct {
+type webSearchToolResultBlock struct {
 	Type      string          `json:"type"`
 	ToolUseID string          `json:"tool_use_id"`
 	IsError   bool            `json:"is_error,omitempty"`
 	Content   json.RawMessage `json:"content"`
 }
 
-type gatewaySearchResultBlock struct {
+type webSearchResultBlock struct {
 	Type    string `json:"type,omitempty"`
 	Title   string `json:"title"`
 	URL     string `json:"url"`
@@ -128,12 +128,12 @@ type gatewaySearchResultBlock struct {
 	PageAge          string `json:"page_age,omitempty"`
 }
 
-func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provider, logger *slog.Logger) *gateway {
+func newWebSearchGateway(cfg config.Config, client *http.Client, searcher websearch.Provider, logger *slog.Logger) *webSearchGateway {
 	if client == nil {
 		client = &http.Client{Transport: newProxyTransport()}
 	}
 	logger = logging.LoggerOrDefault(logger)
-	return &gateway{
+	return &webSearchGateway{
 		upstreamBaseURL:         cfg.AnthropicUpstream.BaseURL,
 		upstreamAPIKey:          cfg.AnthropicUpstream.APIKey,
 		maxServerToolIterations: cfg.WebSearch.MaxServerToolIterations,
@@ -143,10 +143,10 @@ func newGateway(cfg config.Config, client *http.Client, searcher websearch.Provi
 	}
 }
 
-func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, headers http.Header) (gatewayResponse, bool, error) {
+func (g *webSearchGateway) handle(ctx context.Context, body []byte, rawQuery string, headers http.Header) (webSearchGatewayResponse, bool, error) {
 	prepared, handled, err := g.prepareRequest(ctx, body)
 	if err != nil || !handled {
-		return gatewayResponse{}, handled, err
+		return webSearchGatewayResponse{}, handled, err
 	}
 	request := prepared.request
 	upstreamFields := prepared.upstreamFields
@@ -155,133 +155,133 @@ func (g *gateway) handle(ctx context.Context, body []byte, rawQuery string, head
 	searchUses := prepared.searchUses
 	searchEnabled := prepared.searchEnabled
 	searchPolicy := prepared.searchPolicy
-	iterationLimit := gatewayServerToolIterationLimit(g)
+	iterationLimit := webSearchServerToolIterationLimit(g)
 	for iteration := 0; iteration < iterationLimit; iteration++ {
 		encodedMessages, err := json.Marshal(transcript)
 		if err != nil {
-			return gatewayResponse{}, true, fmt.Errorf("encode messages transcript: %w", err)
+			return webSearchGatewayResponse{}, true, fmt.Errorf("encode messages transcript: %w", err)
 		}
 		upstreamFields["messages"] = encodedMessages
 		upstreamFields["stream"] = json.RawMessage("false")
 		payload, err := json.Marshal(upstreamFields)
 		if err != nil {
-			return gatewayResponse{}, true, fmt.Errorf("encode upstream messages request: %w", err)
+			return webSearchGatewayResponse{}, true, fmt.Errorf("encode upstream messages request: %w", err)
 		}
 		response, err := g.send(ctx, payload, rawQuery, headers)
 		if err != nil {
-			return gatewayResponse{}, true, err
+			return webSearchGatewayResponse{}, true, err
 		}
 		if response.statusCode < http.StatusOK || response.statusCode >= http.StatusMultipleChoices {
 			return response, true, nil
 		}
 		contentType := strings.ToLower(response.header.Get("Content-Type"))
 		if contentType != "" && !strings.Contains(contentType, "application/json") {
-			return gatewayResponse{}, true, errors.New("messages upstream returned a non-JSON response")
+			return webSearchGatewayResponse{}, true, errors.New("messages upstream returned a non-JSON response")
 		}
-		calls, err := extractGatewayToolCalls(response.body)
+		calls, err := extractWebSearchToolCalls(response.body)
 		if err != nil {
-			return gatewayResponse{}, true, fmt.Errorf("decode upstream messages response: %w", err)
+			return webSearchGatewayResponse{}, true, fmt.Errorf("decode upstream messages response: %w", err)
 		}
-		content, err := gatewayResponseContent(response.body)
+		content, err := webSearchResponseContent(response.body)
 		if err != nil {
-			return gatewayResponse{}, true, fmt.Errorf("decode upstream messages content: %w", err)
+			return webSearchGatewayResponse{}, true, fmt.Errorf("decode upstream messages content: %w", err)
 		}
-		searchCalls := gatewaySearchCalls(calls)
+		searchCalls := webSearchCalls(calls)
 		if !searchEnabled && len(searchCalls) > 0 {
-			return gatewayResponse{}, true, errors.New("messages upstream requested web search without a current tool definition")
+			return webSearchGatewayResponse{}, true, errors.New("messages upstream requested web search without a current tool definition")
 		}
 		if len(searchCalls) == 0 {
 			projectedContent = append(projectedContent, content...)
-			response, err = finalizeGatewayResponse(response, projectedContent, request.stream, "")
+			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "")
 			return response, true, err
 		}
 		if len(searchCalls) != len(calls) {
-			mixedContent, projectErr := projectPendingGatewayContent(content)
+			mixedContent, projectErr := projectPendingWebSearchContent(content)
 			if projectErr != nil {
-				return gatewayResponse{}, true, fmt.Errorf("project mixed tool response: %w", projectErr)
+				return webSearchGatewayResponse{}, true, fmt.Errorf("project mixed tool response: %w", projectErr)
 			}
 			projectedContent = append(projectedContent, mixedContent...)
-			response, err = finalizeGatewayResponse(response, projectedContent, request.stream, "")
+			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "")
 			return response, true, err
 		}
-		assistantMessage, err := assistantGatewayMessage(response.body)
+		assistantMessage, err := webSearchAssistantMessage(response.body)
 		if err != nil {
-			return gatewayResponse{}, true, fmt.Errorf("encode assistant messages transcript: %w", err)
+			return webSearchGatewayResponse{}, true, fmt.Errorf("encode assistant messages transcript: %w", err)
 		}
 		transcript = append(transcript, assistantMessage)
 		results, executions, nextSearchUses, err := g.executeSearchCalls(ctx, searchCalls, searchPolicy, searchUses)
 		if err != nil {
-			return gatewayResponse{}, true, err
+			return webSearchGatewayResponse{}, true, err
 		}
-		completedContent, err := projectCompletedGatewayContent(content, executions)
+		completedContent, err := projectCompletedWebSearchContent(content, executions)
 		if err != nil {
-			return gatewayResponse{}, true, fmt.Errorf("project web search response: %w", err)
+			return webSearchGatewayResponse{}, true, fmt.Errorf("project web search response: %w", err)
 		}
 		projectedContent = append(projectedContent, completedContent...)
 		searchUses = nextSearchUses
 		if iteration+1 >= iterationLimit {
-			response, err = finalizeGatewayResponse(response, projectedContent, request.stream, "pause_turn")
+			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "pause_turn")
 			return response, true, err
 		}
-		userMessage, err := userGatewayMessage(results)
+		userMessage, err := webSearchUserMessage(results)
 		if err != nil {
-			return gatewayResponse{}, true, fmt.Errorf("encode user messages transcript: %w", err)
+			return webSearchGatewayResponse{}, true, fmt.Errorf("encode user messages transcript: %w", err)
 		}
 		transcript = append(transcript, userMessage)
 	}
-	return gatewayResponse{}, true, errors.New("web search tool loop exceeded maximum iterations")
+	return webSearchGatewayResponse{}, true, errors.New("web search tool loop exceeded maximum iterations")
 }
 
-func (g *gateway) prepareRequest(ctx context.Context, body []byte) (gatewayPreparedRequest, bool, error) {
+func (g *webSearchGateway) prepareRequest(ctx context.Context, body []byte) (webSearchPreparedRequest, bool, error) {
 	if g == nil {
-		return gatewayPreparedRequest{}, true, errors.New("messages web search gateway is not configured")
+		return webSearchPreparedRequest{}, true, errors.New("messages web search gateway is not configured")
 	}
 	if int64(len(body)) > maxRequestBodyBytes {
-		return gatewayPreparedRequest{}, true, errors.New("request body exceeds maximum size")
+		return webSearchPreparedRequest{}, true, errors.New("request body exceeds maximum size")
 	}
 	if g.searcher == nil {
-		return gatewayPreparedRequest{}, false, nil
+		return webSearchPreparedRequest{}, false, nil
 	}
 	if g.client == nil {
-		return gatewayPreparedRequest{}, true, errors.New("messages upstream client is not configured")
+		return webSearchPreparedRequest{}, true, errors.New("messages upstream client is not configured")
 	}
-	request, err := parseGatewayRequest(body)
+	request, err := parseWebSearchRequest(body)
 	if err != nil {
-		return gatewayPreparedRequest{}, false, nil
+		return webSearchPreparedRequest{}, false, nil
 	}
 	_, hasTools := request.fields["tools"]
 	searchEnabled := hasTools && hasWebSearchTool(request.fields["tools"])
-	if !searchEnabled && !hasGatewayWebSearchHistory(request.messages) {
-		return gatewayPreparedRequest{}, false, nil
+	if !searchEnabled && !hasWebSearchHistory(request.messages) {
+		return webSearchPreparedRequest{}, false, nil
 	}
 	if !searchEnabled {
-		if isGatewayPauseContinuation(request.messages) {
-			return gatewayPreparedRequest{}, true, &gatewayRequestError{
+		if isWebSearchPauseContinuation(request.messages) {
+			return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{
 				cause: errors.New("pause_turn continuation requires the same web_search tool"),
 			}
 		}
-		pending, pendingErr := findPendingGatewayTurn(request.messages)
+		pending, pendingErr := findPendingWebSearchTurn(request.messages)
 		if pendingErr != nil {
-			return gatewayPreparedRequest{}, true, &gatewayRequestError{cause: pendingErr}
+			return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{cause: pendingErr}
 		}
 		if pending != nil {
-			return gatewayPreparedRequest{}, true, &gatewayRequestError{
+			return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{
 				cause: errors.New("pending web search continuation requires the same web_search tool"),
 			}
 		}
 	}
 	if strings.TrimSpace(g.upstreamAPIKey) == "" {
-		return gatewayPreparedRequest{}, true, errors.New("messages upstream key is required")
+		return webSearchPreparedRequest{}, true, errors.New("messages upstream key is required")
 	}
-	upstreamFields, searchPolicy, err := projectGatewayFields(request.fields)
+	upstreamFields, searchPolicy, err := projectWebSearchFields(request.fields)
 	if err != nil {
-		return gatewayPreparedRequest{}, true, &gatewayRequestError{cause: fmt.Errorf("project messages request: %w", err)}
+		return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{cause: fmt.Errorf("project messages request: %w", err)}
 	}
-	transcript, projectedContent, searchUses, err := g.prepareGatewayTranscript(ctx, request.messages, searchPolicy)
+	transcript, projectedContent, searchUses, err := g.prepareWebSearchTranscript(ctx, request.messages, searchPolicy)
 	if err != nil {
-		return gatewayPreparedRequest{}, true, &gatewayRequestError{cause: fmt.Errorf("project messages transcript: %w", err)}
+		return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{cause: fmt.Errorf("project messages transcript: %w", err)}
 	}
-	return gatewayPreparedRequest{
+	return webSearchPreparedRequest{
 		request:          request,
 		upstreamFields:   upstreamFields,
 		transcript:       transcript,
@@ -292,15 +292,15 @@ func (g *gateway) prepareRequest(ctx context.Context, body []byte) (gatewayPrepa
 	}, true, nil
 }
 
-func (g *gateway) executeSearchCalls(ctx context.Context, calls []gatewayToolCall, policy gatewaySearchPolicy, searchUses int) ([]json.RawMessage, []gatewayExecution, int, error) {
+func (g *webSearchGateway) executeSearchCalls(ctx context.Context, calls []webSearchToolCall, policy webSearchPolicy, searchUses int) ([]json.RawMessage, []webSearchExecution, int, error) {
 	results := make([]json.RawMessage, 0, len(calls))
-	executions := make([]gatewayExecution, 0, len(calls))
+	executions := make([]webSearchExecution, 0, len(calls))
 	for _, call := range calls {
 		if call.search == nil {
 			return nil, nil, searchUses, fmt.Errorf("tool %q is not owned by the web search gateway", call.name)
 		}
 		if call.externalID == "" {
-			call.externalID = serverGatewayToolUseID(call.id)
+			call.externalID = serverWebSearchToolUseID(call.id)
 		}
 		var searchErr error
 		var errorCode string
@@ -315,9 +315,9 @@ func (g *gateway) executeSearchCalls(ctx context.Context, calls []gatewayToolCal
 				errorCode = searchErrorUnavailable
 			}
 		}
-		execution := gatewayExecution{call: call, results: result, err: searchErr, errorCode: errorCode}
+		execution := webSearchExecution{call: call, results: result, err: searchErr, errorCode: errorCode}
 		executions = append(executions, execution)
-		toolResult, err := gatewayToolResult(execution)
+		toolResult, err := webSearchToolResult(execution)
 		if err != nil {
 			return nil, nil, searchUses, fmt.Errorf("encode web search tool result: %w", err)
 		}
@@ -326,24 +326,24 @@ func (g *gateway) executeSearchCalls(ctx context.Context, calls []gatewayToolCal
 	return results, executions, searchUses, nil
 }
 
-func parseGatewayRequest(body []byte) (gatewayRequest, error) {
+func parseWebSearchRequest(body []byte) (webSearchGatewayRequest, error) {
 	fields := map[string]json.RawMessage{}
 	if err := json.Unmarshal(body, &fields); err != nil {
-		return gatewayRequest{}, fmt.Errorf("invalid JSON request body: %w", err)
+		return webSearchGatewayRequest{}, fmt.Errorf("invalid JSON request body: %w", err)
 	}
 	var messages []json.RawMessage
 	if raw := fields["messages"]; len(raw) > 0 {
 		if err := json.Unmarshal(raw, &messages); err != nil {
-			return gatewayRequest{}, fmt.Errorf("messages must be an array: %w", err)
+			return webSearchGatewayRequest{}, fmt.Errorf("messages must be an array: %w", err)
 		}
 	}
 	var stream bool
 	if raw := fields["stream"]; len(raw) > 0 {
 		if err := json.Unmarshal(raw, &stream); err != nil {
-			return gatewayRequest{}, fmt.Errorf("stream must be a boolean: %w", err)
+			return webSearchGatewayRequest{}, fmt.Errorf("stream must be a boolean: %w", err)
 		}
 	}
-	return gatewayRequest{fields: fields, messages: messages, stream: stream}, nil
+	return webSearchGatewayRequest{fields: fields, messages: messages, stream: stream}, nil
 }
 
 func hasWebSearchTool(raw json.RawMessage) bool {
@@ -365,32 +365,32 @@ func hasWebSearchTool(raw json.RawMessage) bool {
 	return false
 }
 
-func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.RawMessage, gatewaySearchPolicy, error) {
+func projectWebSearchFields(fields map[string]json.RawMessage) (map[string]json.RawMessage, webSearchPolicy, error) {
 	projected := cloneRawMap(fields)
 	rawTools, ok := fields["tools"]
 	if !ok {
-		return projected, gatewaySearchPolicy{}, nil
+		return projected, webSearchPolicy{}, nil
 	}
 	var tools []json.RawMessage
 	if err := json.Unmarshal(rawTools, &tools); err != nil {
-		return nil, gatewaySearchPolicy{}, fmt.Errorf("tools must be an array: %w", err)
+		return nil, webSearchPolicy{}, fmt.Errorf("tools must be an array: %w", err)
 	}
 	projectedTools := make([]json.RawMessage, 0, len(tools))
-	var searchPolicy gatewaySearchPolicy
+	var searchPolicy webSearchPolicy
 	foundSearchTool := false
 	for _, rawTool := range tools {
-		var tool gatewaySearchTool
+		var tool webSearchTool
 		if err := json.Unmarshal(rawTool, &tool); err != nil {
-			return nil, gatewaySearchPolicy{}, fmt.Errorf("decode tool: %w", err)
+			return nil, webSearchPolicy{}, fmt.Errorf("decode tool: %w", err)
 		}
 		if isServerWebSearchToolType(tool.Type) {
 			if foundSearchTool {
-				return nil, gatewaySearchPolicy{}, errors.New("multiple web search tools are unsupported")
+				return nil, webSearchPolicy{}, errors.New("multiple web search tools are unsupported")
 			}
 			var err error
 			searchPolicy, err = tool.searchPolicy()
 			if err != nil {
-				return nil, gatewaySearchPolicy{}, err
+				return nil, webSearchPolicy{}, err
 			}
 			foundSearchTool = true
 			projectedTools = append(projectedTools, searchToolDefinition())
@@ -400,39 +400,39 @@ func projectGatewayFields(fields map[string]json.RawMessage) (map[string]json.Ra
 	}
 	encodedTools, err := json.Marshal(projectedTools)
 	if err != nil {
-		return nil, gatewaySearchPolicy{}, fmt.Errorf("encode tools: %w", err)
+		return nil, webSearchPolicy{}, fmt.Errorf("encode tools: %w", err)
 	}
 	projected["tools"] = encodedTools
 	return projected, searchPolicy, nil
 }
 
-type gatewaySearchTool struct {
-	Type              string               `json:"type"`
-	MaxUses           *int                 `json:"max_uses,omitempty"`
-	AllowedDomains    []string             `json:"allowed_domains,omitempty"`
-	BlockedDomains    []string             `json:"blocked_domains,omitempty"`
-	AllowedCallers    []string             `json:"allowed_callers,omitempty"`
-	ResponseInclusion string               `json:"response_inclusion,omitempty"`
-	UserLocation      *gatewayUserLocation `json:"user_location,omitempty"`
+type webSearchTool struct {
+	Type              string                 `json:"type"`
+	MaxUses           *int                   `json:"max_uses,omitempty"`
+	AllowedDomains    []string               `json:"allowed_domains,omitempty"`
+	BlockedDomains    []string               `json:"blocked_domains,omitempty"`
+	AllowedCallers    []string               `json:"allowed_callers,omitempty"`
+	ResponseInclusion string                 `json:"response_inclusion,omitempty"`
+	UserLocation      *webSearchUserLocation `json:"user_location,omitempty"`
 }
 
-func (t gatewaySearchTool) searchPolicy() (gatewaySearchPolicy, error) {
+func (t webSearchTool) searchPolicy() (webSearchPolicy, error) {
 	if err := t.validateDirectCaller(); err != nil {
-		return gatewaySearchPolicy{}, err
+		return webSearchPolicy{}, err
 	}
 	if err := t.validateResponseInclusion(); err != nil {
-		return gatewaySearchPolicy{}, err
+		return webSearchPolicy{}, err
 	}
 	if t.MaxUses != nil && *t.MaxUses <= 0 {
-		return gatewaySearchPolicy{}, errors.New("web search max_uses must be positive")
+		return webSearchPolicy{}, errors.New("web search max_uses must be positive")
 	}
 	if len(t.AllowedDomains) > 0 && len(t.BlockedDomains) > 0 {
-		return gatewaySearchPolicy{}, errors.New("web search cannot include both allowed_domains and blocked_domains")
+		return webSearchPolicy{}, errors.New("web search cannot include both allowed_domains and blocked_domains")
 	}
 	if t.UserLocation != nil {
-		return gatewaySearchPolicy{}, errors.New("web search user_location is unsupported by the configured provider")
+		return webSearchPolicy{}, errors.New("web search user_location is unsupported by the configured provider")
 	}
-	policy := gatewaySearchPolicy{
+	policy := webSearchPolicy{
 		AllowedDomains: append([]string(nil), t.AllowedDomains...),
 		BlockedDomains: append([]string(nil), t.BlockedDomains...),
 	}
@@ -442,7 +442,7 @@ func (t gatewaySearchTool) searchPolicy() (gatewaySearchPolicy, error) {
 	return policy, nil
 }
 
-func (t gatewaySearchTool) validateDirectCaller() error {
+func (t webSearchTool) validateDirectCaller() error {
 	if t.AllowedCallers == nil {
 		if t.Type == "web_search_20250305" {
 			return nil
@@ -465,7 +465,7 @@ func (t gatewaySearchTool) validateDirectCaller() error {
 	return nil
 }
 
-func (t gatewaySearchTool) validateResponseInclusion() error {
+func (t webSearchTool) validateResponseInclusion() error {
 	if t.ResponseInclusion == "" {
 		return nil
 	}
@@ -491,14 +491,14 @@ func searchToolDefinition() json.RawMessage {
 	return json.RawMessage(`{"name":"web_search","description":"Search the public web and return relevant results.","input_schema":{"type":"object","properties":{"query":{"type":"string","description":"The web search query"}},"required":["query"]}}`)
 }
 
-func (g *gateway) send(ctx context.Context, body []byte, rawQuery string, headers http.Header) (gatewayResponse, error) {
+func (g *webSearchGateway) send(ctx context.Context, body []byte, rawQuery string, headers http.Header) (webSearchGatewayResponse, error) {
 	target, err := messagesEndpoint(g.upstreamBaseURL, rawQuery)
 	if err != nil {
-		return gatewayResponse{}, fmt.Errorf("build messages upstream endpoint: %w", err)
+		return webSearchGatewayResponse{}, fmt.Errorf("build messages upstream endpoint: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
 	if err != nil {
-		return gatewayResponse{}, fmt.Errorf("build messages upstream request: %w", err)
+		return webSearchGatewayResponse{}, fmt.Errorf("build messages upstream request: %w", err)
 	}
 	request.Header = sanitizedRequestHeaders(headers)
 	if request.Header == nil {
@@ -510,27 +510,27 @@ func (g *gateway) send(ctx context.Context, body []byte, rawQuery string, header
 	}
 	response, err := g.client.Do(request)
 	if err != nil {
-		return gatewayResponse{}, fmt.Errorf("send messages upstream request: %w", err)
+		return webSearchGatewayResponse{}, fmt.Errorf("send messages upstream request: %w", err)
 	}
 	defer response.Body.Close()
-	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxGatewayResponseBytes+1))
+	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxWebSearchResponseBytes+1))
 	if err != nil {
-		return gatewayResponse{}, fmt.Errorf("read messages upstream response: %w", err)
+		return webSearchGatewayResponse{}, fmt.Errorf("read messages upstream response: %w", err)
 	}
-	if len(responseBody) > maxGatewayResponseBytes {
-		return gatewayResponse{}, errors.New("messages upstream response exceeds maximum size")
+	if len(responseBody) > maxWebSearchResponseBytes {
+		return webSearchGatewayResponse{}, errors.New("messages upstream response exceeds maximum size")
 	}
-	return gatewayResponse{statusCode: response.StatusCode, header: response.Header.Clone(), body: responseBody}, nil
+	return webSearchGatewayResponse{statusCode: response.StatusCode, header: response.Header.Clone(), body: responseBody}, nil
 }
 
-func gatewayServerToolIterationLimit(g *gateway) int {
+func webSearchServerToolIterationLimit(g *webSearchGateway) int {
 	if g.maxServerToolIterations > 0 {
 		return g.maxServerToolIterations
 	}
 	return defaultServerToolIterations
 }
 
-func (g *gateway) search(ctx context.Context, query string, policy gatewaySearchPolicy) (results websearch.SearchResponse, err error) {
+func (g *webSearchGateway) search(ctx context.Context, query string, policy webSearchPolicy) (results websearch.SearchResponse, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			g.logger.ErrorContext(ctx, "web search provider panic",
@@ -552,7 +552,7 @@ func (g *gateway) search(ctx context.Context, query string, policy gatewaySearch
 	})
 }
 
-func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
+func extractWebSearchToolCalls(body []byte) ([]webSearchToolCall, error) {
 	var response struct {
 		Content []json.RawMessage `json:"content"`
 	}
@@ -562,10 +562,10 @@ func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
 	if response.Content == nil {
 		return nil, errors.New("messages response content must be an array")
 	}
-	calls := []gatewayToolCall{}
+	calls := []webSearchToolCall{}
 	seenIDs := make(map[string]struct{})
 	for _, rawBlock := range response.Content {
-		var block gatewayContentBlock
+		var block webSearchContentBlock
 		if err := json.Unmarshal(rawBlock, &block); err != nil {
 			return nil, fmt.Errorf("decode messages content block: %w", err)
 		}
@@ -579,12 +579,12 @@ func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
 			return nil, fmt.Errorf("duplicate tool use id %q", block.ID)
 		}
 		seenIDs[block.ID] = struct{}{}
-		call := gatewayToolCall{id: block.ID, name: block.Name, input: append(json.RawMessage(nil), block.Input...)}
+		call := webSearchToolCall{id: block.ID, name: block.Name, input: append(json.RawMessage(nil), block.Input...)}
 		if block.Name != searchToolName {
 			calls = append(calls, call)
 			continue
 		}
-		var input gatewaySearchInput
+		var input webSearchInput
 		if len(block.Input) == 0 || json.Unmarshal(block.Input, &input) != nil {
 			return nil, errors.New("web search tool input must be an object")
 		}
@@ -598,7 +598,7 @@ func extractGatewayToolCalls(body []byte) ([]gatewayToolCall, error) {
 	return calls, nil
 }
 
-func assistantGatewayMessage(body []byte) (json.RawMessage, error) {
+func webSearchAssistantMessage(body []byte) (json.RawMessage, error) {
 	var response struct {
 		Content []json.RawMessage `json:"content"`
 	}
@@ -616,7 +616,7 @@ func assistantGatewayMessage(body []byte) (json.RawMessage, error) {
 	return encoded, nil
 }
 
-func userGatewayMessage(results []json.RawMessage) (json.RawMessage, error) {
+func webSearchUserMessage(results []json.RawMessage) (json.RawMessage, error) {
 	message := struct {
 		Role    string            `json:"role"`
 		Content []json.RawMessage `json:"content"`
@@ -628,18 +628,18 @@ func userGatewayMessage(results []json.RawMessage) (json.RawMessage, error) {
 	return encoded, nil
 }
 
-func gatewayToolResult(execution gatewayExecution) (json.RawMessage, error) {
+func webSearchToolResult(execution webSearchExecution) (json.RawMessage, error) {
 	if execution.err != nil {
 		message := `"web search unavailable"`
 		if execution.errorCode == searchErrorMaxUses {
 			message = `"web search max uses exceeded"`
 		}
-		return marshalGatewayToolResult(gatewayToolResultBlock{
+		return marshalWebSearchToolResult(webSearchToolResultBlock{
 			Type: "tool_result", ToolUseID: execution.call.id, IsError: true,
 			Content: json.RawMessage(message),
 		})
 	}
-	content := make([]gatewaySearchResultBlock, 0, len(execution.results.Results))
+	content := make([]webSearchResultBlock, 0, len(execution.results.Results))
 	for _, result := range execution.results.Results {
 		content = append(content, resultToContentItem(result, ""))
 	}
@@ -647,10 +647,10 @@ func gatewayToolResult(execution gatewayExecution) (json.RawMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal web search results: %w", err)
 	}
-	return marshalGatewayToolResult(gatewayToolResultBlock{Type: "tool_result", ToolUseID: execution.call.id, Content: encoded})
+	return marshalWebSearchToolResult(webSearchToolResultBlock{Type: "tool_result", ToolUseID: execution.call.id, Content: encoded})
 }
 
-func marshalGatewayToolResult(result gatewayToolResultBlock) (json.RawMessage, error) {
+func marshalWebSearchToolResult(result webSearchToolResultBlock) (json.RawMessage, error) {
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return nil, fmt.Errorf("marshal tool result: %w", err)
@@ -658,12 +658,12 @@ func marshalGatewayToolResult(result gatewayToolResultBlock) (json.RawMessage, e
 	return encoded, nil
 }
 
-func resultToContentItem(result websearch.Result, blockType string) gatewaySearchResultBlock {
+func resultToContentItem(result websearch.Result, blockType string) webSearchResultBlock {
 	content := result.Snippet
 	if result.Text != "" {
 		content = result.Text
 	}
-	return gatewaySearchResultBlock{
+	return webSearchResultBlock{
 		Type:          blockType,
 		Title:         result.Title,
 		URL:           result.URL,
@@ -673,8 +673,8 @@ func resultToContentItem(result websearch.Result, blockType string) gatewaySearc
 	}
 }
 
-func resultToServerContentItem(result websearch.Result) gatewaySearchResultBlock {
-	return gatewaySearchResultBlock{
+func resultToServerContentItem(result websearch.Result) webSearchResultBlock {
+	return webSearchResultBlock{
 		Type:    "web_search_result",
 		Title:   result.Title,
 		URL:     result.URL,
@@ -682,7 +682,7 @@ func resultToServerContentItem(result websearch.Result) gatewaySearchResultBlock
 	}
 }
 
-func encodeGatewaySSE(body []byte) ([]byte, error) {
+func encodeWebSearchSSE(body []byte) ([]byte, error) {
 	var message map[string]json.RawMessage
 	if err := json.Unmarshal(body, &message); err != nil {
 		return nil, err
@@ -696,14 +696,14 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 	messageStart["stop_reason"] = json.RawMessage("null")
 	messageStart["stop_sequence"] = json.RawMessage("null")
 	var output bytes.Buffer
-	if err := writeGatewaySSE(&output, "message_start", struct {
+	if err := writeWebSearchSSE(&output, "message_start", struct {
 		Type    string                     `json:"type"`
 		Message map[string]json.RawMessage `json:"message"`
 	}{Type: "message_start", Message: messageStart}); err != nil {
 		return nil, err
 	}
 	for index, rawBlock := range content {
-		var block gatewayContentBlock
+		var block webSearchContentBlock
 		if err := json.Unmarshal(rawBlock, &block); err != nil {
 			return nil, fmt.Errorf("decode messages content block: %w", err)
 		}
@@ -733,7 +733,7 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 				return nil, fmt.Errorf("marshal tool content block: %w", err)
 			}
 		}
-		if err := writeGatewaySSE(&output, "content_block_start", struct {
+		if err := writeWebSearchSSE(&output, "content_block_start", struct {
 			Type         string          `json:"type"`
 			Index        int             `json:"index"`
 			ContentBlock json.RawMessage `json:"content_block"`
@@ -741,7 +741,7 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 			return nil, err
 		}
 		if block.Text != "" {
-			if err := writeGatewaySSE(&output, "content_block_delta", struct {
+			if err := writeWebSearchSSE(&output, "content_block_delta", struct {
 				Type  string `json:"type"`
 				Index int    `json:"index"`
 				Delta struct {
@@ -755,7 +755,7 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 				return nil, err
 			}
 		} else if len(toolInput) > 0 {
-			if err := writeGatewaySSE(&output, "content_block_delta", struct {
+			if err := writeWebSearchSSE(&output, "content_block_delta", struct {
 				Type  string `json:"type"`
 				Index int    `json:"index"`
 				Delta struct {
@@ -769,14 +769,14 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 				return nil, err
 			}
 		}
-		if err := writeGatewaySSE(&output, "content_block_stop", struct {
+		if err := writeWebSearchSSE(&output, "content_block_stop", struct {
 			Type  string `json:"type"`
 			Index int    `json:"index"`
 		}{Type: "content_block_stop", Index: index}); err != nil {
 			return nil, err
 		}
 	}
-	if err := writeGatewaySSE(&output, "message_delta", struct {
+	if err := writeWebSearchSSE(&output, "message_delta", struct {
 		Type  string `json:"type"`
 		Delta struct {
 			StopReason   json.RawMessage `json:"stop_reason"`
@@ -789,7 +789,7 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 	}{StopReason: message["stop_reason"], StopSequence: message["stop_sequence"]}, Usage: message["usage"]}); err != nil {
 		return nil, err
 	}
-	if err := writeGatewaySSE(&output, "message_stop", struct {
+	if err := writeWebSearchSSE(&output, "message_stop", struct {
 		Type string `json:"type"`
 	}{Type: "message_stop"}); err != nil {
 		return nil, err
@@ -797,7 +797,7 @@ func encodeGatewaySSE(body []byte) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-func writeGatewaySSE(output *bytes.Buffer, event string, value any) error {
+func writeWebSearchSSE(output *bytes.Buffer, event string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("marshal %s event: %w", event, err)
