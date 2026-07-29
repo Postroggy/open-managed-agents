@@ -9,11 +9,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"runtime/debug"
 	"strings"
 
 	"github.com/superduck-ai/open-managed-agents/internal/config"
-	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	"github.com/superduck-ai/open-managed-agents/internal/websearch"
 )
@@ -530,18 +528,7 @@ func webSearchServerToolIterationLimit(g *webSearchGateway) int {
 	return defaultServerToolIterations
 }
 
-func (g *webSearchGateway) search(ctx context.Context, query string, policy webSearchPolicy) (results websearch.SearchResponse, err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			g.logger.ErrorContext(ctx, "web search provider panic",
-				"request_id", httpapi.RequestID(ctx),
-				"panic_type", fmt.Sprintf("%T", recovered),
-				"stack", string(debug.Stack()),
-			)
-			results = websearch.SearchResponse{}
-			err = errors.New("web search provider panicked")
-		}
-	}()
+func (g *webSearchGateway) search(ctx context.Context, query string, policy webSearchPolicy) (websearch.SearchResponse, error) {
 	return g.searcher.Search(ctx, websearch.SearchRequest{
 		Query: query,
 		Options: websearch.SearchOptions{
