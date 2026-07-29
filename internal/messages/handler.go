@@ -122,9 +122,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			if webSearchGatewayErr != nil {
 				var requestErr *webSearchGatewayRequestError
 				if errors.As(webSearchGatewayErr, &requestErr) {
+					h.logger.WarnContext(r.Context(), "reject Messages web search gateway request", "error", webSearchGatewayErr)
 					httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadRequest, "invalid_request_error", requestErr.Error()))
 					return
 				}
+				h.logger.ErrorContext(r.Context(), "handle Messages web search gateway request", "error", webSearchGatewayErr)
 				httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadGateway, "api_error", "Messages web search gateway is unavailable"))
 				return
 			}

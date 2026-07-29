@@ -84,7 +84,83 @@ func webSearchCalls(calls []webSearchToolCall) []webSearchToolCall {
 	return searchCalls
 }
 
-func finalizeWebSearchResponse(response webSearchGatewayResponse, content []json.RawMessage, stream bool, stopReason string) (webSearchGatewayResponse, error) {
+// webSearchUsageAccumulator 汇总同一条入站请求内所有 BYOK 采样的 token 计量。
+// gateway 会为一次外部请求发起多次 BYOK 采样，只保留最后一次响应的 usage 会少报
+// 前几次迭代消耗的 token。
+//
+// Anthropic usage 的顶层数值字段都是可累加的 token 计数，因此按 JSON 数值类型判定
+// 累加对象即可覆盖后续新增的计数器；字符串和嵌套对象（service_tier、cache_creation、
+// server_tool_use）保留最后一次采样的值。
+type webSearchUsageAccumulator struct {
+	totals  map[string]int64
+	last    map[string]json.RawMessage
+	samples int
+}
+
+// add 累加一次 BYOK 响应的 usage；响应不携带 usage 时不计入采样。
+func (u *webSearchUsageAccumulator) add(body []byte) error {
+	var response struct {
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return fmt.Errorf("decode messages usage: %w", err)
+	}
+	if len(response.Usage) == 0 {
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(response.Usage, &fields); err != nil {
+		return fmt.Errorf("decode messages usage: %w", err)
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	if u.totals == nil {
+		u.totals = make(map[string]int64, len(fields))
+	}
+	for name, value := range fields {
+		if count, ok := webSearchUsageCount(value); ok {
+			u.totals[name] += count
+		}
+	}
+	u.last = fields
+	u.samples++
+	return nil
+}
+
+// merge 生成跨迭代累计后的 usage；只采样到一次时返回 false，保持上游 usage 原样透传。
+func (u *webSearchUsageAccumulator) merge() (json.RawMessage, bool, error) {
+	if u == nil || u.samples < 2 {
+		return nil, false, nil
+	}
+	merged := cloneRawMap(u.last)
+	for name, total := range u.totals {
+		encoded, err := json.Marshal(total)
+		if err != nil {
+			return nil, false, fmt.Errorf("encode messages usage %q: %w", name, err)
+		}
+		merged[name] = encoded
+	}
+	encoded, err := json.Marshal(merged)
+	if err != nil {
+		return nil, false, fmt.Errorf("encode messages usage: %w", err)
+	}
+	return encoded, true, nil
+}
+
+func webSearchUsageCount(value json.RawMessage) (int64, bool) {
+	var number json.Number
+	if err := json.Unmarshal(value, &number); err != nil {
+		return 0, false
+	}
+	count, err := number.Int64()
+	if err != nil {
+		return 0, false
+	}
+	return count, true
+}
+
+func finalizeWebSearchResponse(response webSearchGatewayResponse, content []json.RawMessage, stream bool, stopReason string, usage *webSearchUsageAccumulator) (webSearchGatewayResponse, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(response.body, &fields); err != nil {
 		return webSearchGatewayResponse{}, fmt.Errorf("decode messages response: %w", err)
@@ -100,6 +176,13 @@ func finalizeWebSearchResponse(response webSearchGatewayResponse, content []json
 			return webSearchGatewayResponse{}, fmt.Errorf("encode messages stop reason: %w", err)
 		}
 		fields["stop_reason"] = encodedStopReason
+	}
+	mergedUsage, merged, err := usage.merge()
+	if err != nil {
+		return webSearchGatewayResponse{}, err
+	}
+	if merged {
+		fields["usage"] = mergedUsage
 	}
 	response.body, err = json.Marshal(fields)
 	if err != nil {

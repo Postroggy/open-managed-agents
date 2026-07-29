@@ -2,6 +2,7 @@ package messages
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -385,9 +386,12 @@ func TestWebSearchGatewayProviderFailureBecomesToolError(t *testing.T) {
 	)
 	searcher := &webSearchTestSearcher{err: errors.New("provider unavailable")}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
-	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, logger)
 	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
-	response, handled, err := webSearchGateway.handle(context.Background(), body, "", http.Header{})
+	ctx := httpapi.WithRequestID(context.Background(), "req_gateway_degraded")
+	response, handled, err := webSearchGateway.handle(ctx, body, "", http.Header{})
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
 	}
@@ -400,32 +404,111 @@ func TestWebSearchGatewayProviderFailureBecomesToolError(t *testing.T) {
 	if result["type"] != "web_search_tool_result" || !strings.Contains(string(response.body), "unavailable") {
 		t.Fatalf("provider error response = %s", response.body)
 	}
+	if !strings.Contains(logs.String(), `"request_id":"req_gateway_degraded"`) ||
+		!strings.Contains(logs.String(), `"error_code":"unavailable"`) ||
+		!strings.Contains(logs.String(), `"level":"WARN"`) {
+		t.Fatalf("degraded search log = %s", logs.String())
+	}
 }
 
-func TestWebSearchGatewayProviderPanicBecomesToolError(t *testing.T) {
+// panic recovery 属于 HTTP 边界的 recoverMiddleware，gateway 不吞 provider panic。
+func TestWebSearchGatewayProviderPanicPropagatesToHTTPBoundary(t *testing.T) {
 	upstream, requestCount := newSequencedUpstream(t,
 		`{"id":"msg_tool","type":"message","content":[{"type":"tool_use","id":"toolu_1","name":"web_search","input":{"query":"query"}}],"stop_reason":"tool_use"}`,
-		`{"id":"msg_final","type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`,
 	)
 	searcher := &webSearchTestSearcher{panic: true}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
-	var logs bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&logs, nil))
-	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, logger)
+	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
 	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
-	ctx := httpapi.WithRequestID(context.Background(), "req_gateway_panic")
-	response, handled, err := webSearchGateway.handle(ctx, body, "", http.Header{})
+
+	recovered := func() (value any) {
+		defer func() { value = recover() }()
+		_, _, _ = webSearchGateway.handle(context.Background(), body, "", http.Header{})
+		return nil
+	}()
+
+	if recovered == nil {
+		t.Fatal("provider panic was swallowed by the gateway; recovery must stay at the HTTP boundary")
+	}
+	if requestCount() != 1 {
+		t.Fatalf("upstream requests = %d, want 1", requestCount())
+	}
+}
+
+func TestWebSearchGatewayAccumulatesUsageAcrossIterations(t *testing.T) {
+	upstream, _ := newSequencedUpstream(t,
+		`{"id":"msg_tool","type":"message","content":[{"type":"tool_use","id":"toolu_1","name":"web_search","input":{"query":"query"}}],"stop_reason":"tool_use","usage":{"input_tokens":1000,"output_tokens":50,"service_tier":"standard"}}`,
+		`{"id":"msg_final","type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":1200,"output_tokens":80,"service_tier":"standard"}}`,
+	)
+	searcher := &webSearchTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "title", URL: "https://example.test"}}}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
+	response, handled, err := webSearchGateway.handle(context.Background(), body, "", http.Header{})
+	if err != nil || !handled {
+		t.Fatalf("handled = %v, err = %v", handled, err)
+	}
+	var decoded struct {
+		Usage struct {
+			InputTokens  int64  `json:"input_tokens"`
+			OutputTokens int64  `json:"output_tokens"`
+			ServiceTier  string `json:"service_tier"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(response.body, &decoded); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if decoded.Usage.InputTokens != 2200 || decoded.Usage.OutputTokens != 130 {
+		t.Fatalf("usage = %#v, want input_tokens 2200 and output_tokens 130", decoded.Usage)
+	}
+	if decoded.Usage.ServiceTier != "standard" {
+		t.Fatalf("usage.service_tier = %q, want standard", decoded.Usage.ServiceTier)
+	}
+}
+
+func TestWebSearchGatewaySingleIterationPreservesUpstreamUsage(t *testing.T) {
+	upstream, _ := newSequencedUpstream(t,
+		`{"id":"msg_final","type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":11,"output_tokens":7}}`,
+	)
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, &webSearchTestSearcher{}, nil)
+	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
+	response, handled, err := webSearchGateway.handle(context.Background(), body, "", http.Header{})
+	if err != nil || !handled {
+		t.Fatalf("handled = %v, err = %v", handled, err)
+	}
+	if !strings.Contains(string(response.body), `"usage":{"input_tokens":11,"output_tokens":7}`) {
+		t.Fatalf("single-iteration usage = %s", response.body)
+	}
+}
+
+func TestWebSearchGatewayStripsClientAcceptEncoding(t *testing.T) {
+	var upstreamAcceptEncoding string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamAcceptEncoding = r.Header.Get("Accept-Encoding")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		compressed := gzip.NewWriter(w)
+		defer compressed.Close()
+		_, _ = io.WriteString(compressed, `{"id":"msg_final","type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`)
+	}))
+	t.Cleanup(upstream.Close)
+
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
+	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Transport: newProxyTransport(), Timeout: time.Second}, &webSearchTestSearcher{}, nil)
+	body := []byte("{\"model\":\"model\",\"max_tokens\":32,\"messages\":[],\"tools\":[{\"type\":\"web_search_20250305\",\"name\":\"web_search\"}]}")
+	headers := http.Header{}
+	headers.Set("Accept-Encoding", "gzip, deflate, br")
+
+	response, handled, err := webSearchGateway.handle(context.Background(), body, "", headers)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
 	}
-	if requestCount() != 2 {
-		t.Fatalf("upstream requests = %d, want 2", requestCount())
+	if upstreamAcceptEncoding != "gzip" {
+		t.Fatalf("upstream Accept-Encoding = %q, want the Transport-negotiated %q", upstreamAcceptEncoding, "gzip")
 	}
-	if !strings.Contains(string(response.body), "web_search_tool_result_error") {
-		t.Fatalf("panic response = %s", response.body)
-	}
-	if !strings.Contains(logs.String(), `"request_id":"req_gateway_panic"`) || !strings.Contains(logs.String(), `"stack"`) {
-		t.Fatalf("panic log = %s", logs.String())
+	if !strings.Contains(string(response.body), `"text":"done"`) {
+		t.Fatalf("gateway response = %s", response.body)
 	}
 }
 

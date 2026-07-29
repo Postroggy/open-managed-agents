@@ -67,11 +67,15 @@ sequenceDiagram
 
 对外合成的 `web_search_result` 使用 `type`、`title`、`url` 与可选 `page_age`，不输出 provider 的明文 `content` 扩展，也不伪造 Anthropic 原生 `encrypted_content`。Anthropic 协议要求客户端把原生 provider 返回的 `encrypted_content` 视为 opaque 数据并在后续 turn 原样回放；OMA-managed search 当前不实现该加密恢复合同，历史投影仅把可见的标题、URL 与页面时间交给 BYOK。当前 gateway 也不伪造 Anthropic 原生 citation location 或 server-tool usage 计量；BYOK 可基于结果 URL 生成普通文本引用，但不得把它表述为原生 citation block。
 
+一次入站请求内的多次 BYOK 采样会累加为单个 `usage`：gateway 逐次收集上游 `usage`，把其中的整数 token 计数按字段名求和，`service_tier` 等非数值字段保留最后一次采样的值，避免只回显最后一次采样导致少报前几轮消耗。只发生一次采样时原样透传上游 `usage`。gateway 自身的搜索调用不计入 token 计量。
+
+gateway 发往 BYOK 的请求会删除调用方的 `Accept-Encoding`，交由 `http.Transport` 自行协商压缩并透明解压；保留调用方值会关闭透明解压，使 gateway 拿到未解压的响应字节而无法解析上游 JSON。透明转发路径不解析 body，因此保持调用方的内容编码协商不变。
+
 调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略。`max_uses` 统计每条入站 Messages 请求内实际尝试的搜索次数；同一请求的内部 BYOK continuation 不会重置计数，超限调用不访问 provider，并返回 `web_search_tool_result_error`/`max_uses_exceeded`。`web_search.max_server_tool_iterations` 是独立的 server-side sampling iteration 上限，默认与 Anthropic 的每请求 10 次对齐；一次 iteration 对应一次 BYOK Messages 请求并包含初始采样，不等同于一次搜索。最后一次允许的 BYOK 响应若仍要求搜索，gateway 先完成该搜索并生成配对的 `server_tool_use`/`web_search_tool_result`，再以 `stop_reason=pause_turn` 返回，而不是丢弃结果并返回 502。
 
 通用 Messages 客户端可按 Anthropic 合同把 paused content 原样作为 assistant message、保留对应的 Web Search tool 并再次续传；同一逻辑 turn 可以连续返回多次 `pause_turn`。如果 paused content 以尚未完成的 `server_tool_use` 结尾，gateway 会先执行该搜索，把 provider result 作为 BYOK client `tool_result` 恢复内部 transcript，并让下一响应以匹配的 `web_search_tool_result` 开头。如果 paused search 已经带有配对结果，gateway 直接回放完成记录，避免重复搜索。由于 Messages 历史不携带上一请求的完整 tools 定义，stateless gateway 能校验当前请求仍声明对应 Web Search tool，但不能逐字段证明定义与上一请求相同。Claude Code 2.1.120 的内置 WebSearch 已在真实 E2E 中直接接受完成搜索后返回的 `pause_turn` 结果。域名约束直接传给搜索 provider，不交给 BYOK 模型生成或修改。
 
-当前 provider-neutral 合同无法表达 `user_location`，因此请求携带该字段时会在调用 BYOK 前明确报错，而不是静默忽略。BYOK 模型只支持 direct client-tool calling：`web_search_20260209` 与 `web_search_20260318` 默认使用 code execution dynamic filtering，因此必须显式声明 `allowed_callers:["direct"]`；其他不包含 direct 的 caller 配置也会在 BYOK 前被拒绝。`response_inclusion` 仅在 `web_search_20260318` 校验 `full`/`excluded`；官方规定 direct calls 始终返回完整结果，因此不会静默删除结果。provider 失败转为 `web_search_tool_result_error`/`unavailable`。最终按原请求的 `stream` 选项返回 JSON 或合成 SSE；合成的 client/server tool input 使用 `content_block_start` 空 input 加 `input_json_delta`。gateway 暂不处理 `web_fetch`、BYOK 原生 web search 和 Batch Messages，也不修改 CCRv2 relay/MITM 协议。
+当前 provider-neutral 合同无法表达 `user_location`，因此请求携带该字段时会在调用 BYOK 前明确报错，而不是静默忽略。BYOK 模型只支持 direct client-tool calling：`web_search_20260209` 与 `web_search_20260318` 默认使用 code execution dynamic filtering，因此必须显式声明 `allowed_callers:["direct"]`；其他不包含 direct 的 caller 配置也会在 BYOK 前被拒绝。`response_inclusion` 仅在 `web_search_20260318` 校验 `full`/`excluded`；官方规定 direct calls 始终返回完整结果，因此不会静默删除结果。provider 失败转为 `web_search_tool_result_error`/`unavailable`，并在 gateway 记录一条含 `request_id` 与 `error_code` 的 `WARN`（不记录 query 等请求内容）；provider panic 不在 gateway 内恢复，由 API 层的 recover 中间件统一处理为 `500` 并记录 stack。gateway 内部的非 request 类错误在 handler 边界记录一次 `ERROR` 后返回 `502`，请求类错误记录 `WARN` 后返回 `400`。最终按原请求的 `stream` 选项返回 JSON 或合成 SSE；合成的 client/server tool input 使用 `content_block_start` 空 input 加 `input_json_delta`。gateway 暂不处理 `web_fetch`、BYOK 原生 web search 和 Batch Messages，也不修改 CCRv2 relay/MITM 协议。
 
 协议依据：
 
@@ -150,7 +154,8 @@ sequenceDiagram
 ## 验收覆盖
 
 - `tests/messages_api_test.go`：缺少上游 key、跨资源使用、未 register、lease 过期、public session 终止、长时间运行、普通 API key、平台 cookie、header 清洗与响应 header 透传，以及真实 handler/credential/provider 路径下的纯搜索闭环与 mixed tool 两请求续传；
-- `internal/messages/gateway_test.go`：未知/空配置和字面量 `type=web_search` 保持透明转发，provider failure 与 panic 转为 tool error（panic 日志包含 `request_id` 和 stack），普通 client tool 透传，多个 search/client tool 交错时跨请求延迟搜索并按原序合并 results，pending tool 缺失拒绝，已完成 server/mixed history 可逆投影，`max_uses_exceeded` 精确错误码、JSON/SSE `pause_turn` 与 paused content 续传，unsupported `user_location`、`allowed_callers` 和 `response_inclusion` 在 BYOK 前拒绝，以及 SSE 的 `server_tool_use`、`web_search_tool_result`、`web_search_result` 与 `input_json_delta`；
+- `internal/messages/web_search_gateway_test.go`：未知/空配置和字面量 `type=web_search` 保持透明转发，provider failure 降级为 tool error 并记一条 `WARN`，provider panic 不被 gateway 吞掉而交给 HTTP 边界的 recover 中间件，删除调用方 `Accept-Encoding` 后能解析 gzip 上游响应，多次 BYOK 采样的 `usage` 累加且单次采样原样透传，普通 client tool 透传，多个 search/client tool 交错时跨请求延迟搜索并按原序合并 results，pending tool 缺失拒绝，已完成 server/mixed history 可逆投影，`max_uses_exceeded` 精确错误码、JSON/SSE `pause_turn` 与 paused content 续传，unsupported `user_location`、`allowed_callers` 和 `response_inclusion` 在 BYOK 前拒绝，以及 SSE 的 `server_tool_use`、`web_search_tool_result`、`web_search_result` 与 `input_json_delta`；
+- `internal/messages/handler_test.go`：gateway 的 502 与 400 分支分别记录 `ERROR` 和 `WARN` 结构化日志；
 - `internal/websearch/*_test.go`：Tavily/Brave factory registry、provider-owned options 解码与校验、credential 不进入 upstream request，以及 Brave 不支持域名策略时显式报错；
 - `internal/config/config_test.go`：`web_search.providers.<name>` 的 endpoint/key/options 解析、未知 provider 字段拒绝和配置参考文件覆盖；
 - `tests/platform_proxy_directory_api_test.go`：管理后台原有独立路径的 JSON 与 SSE 转发；

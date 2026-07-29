@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	"github.com/superduck-ai/open-managed-agents/internal/websearch"
 )
@@ -154,6 +155,7 @@ func (g *webSearchGateway) handle(ctx context.Context, body []byte, rawQuery str
 	searchEnabled := prepared.searchEnabled
 	searchPolicy := prepared.searchPolicy
 	iterationLimit := webSearchServerToolIterationLimit(g)
+	usage := &webSearchUsageAccumulator{}
 	for iteration := 0; iteration < iterationLimit; iteration++ {
 		encodedMessages, err := json.Marshal(transcript)
 		if err != nil {
@@ -184,13 +186,16 @@ func (g *webSearchGateway) handle(ctx context.Context, body []byte, rawQuery str
 		if err != nil {
 			return webSearchGatewayResponse{}, true, fmt.Errorf("decode upstream messages content: %w", err)
 		}
+		if err := usage.add(response.body); err != nil {
+			return webSearchGatewayResponse{}, true, err
+		}
 		searchCalls := webSearchCalls(calls)
 		if !searchEnabled && len(searchCalls) > 0 {
 			return webSearchGatewayResponse{}, true, errors.New("messages upstream requested web search without a current tool definition")
 		}
 		if len(searchCalls) == 0 {
 			projectedContent = append(projectedContent, content...)
-			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "")
+			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "", usage)
 			return response, true, err
 		}
 		if len(searchCalls) != len(calls) {
@@ -199,7 +204,7 @@ func (g *webSearchGateway) handle(ctx context.Context, body []byte, rawQuery str
 				return webSearchGatewayResponse{}, true, fmt.Errorf("project mixed tool response: %w", projectErr)
 			}
 			projectedContent = append(projectedContent, mixedContent...)
-			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "")
+			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "", usage)
 			return response, true, err
 		}
 		assistantMessage, err := webSearchAssistantMessage(response.body)
@@ -218,7 +223,7 @@ func (g *webSearchGateway) handle(ctx context.Context, body []byte, rawQuery str
 		projectedContent = append(projectedContent, completedContent...)
 		searchUses = nextSearchUses
 		if iteration+1 >= iterationLimit {
-			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "pause_turn")
+			response, err = finalizeWebSearchResponse(response, projectedContent, request.stream, "pause_turn", usage)
 			return response, true, err
 		}
 		userMessage, err := webSearchUserMessage(results)
@@ -312,6 +317,15 @@ func (g *webSearchGateway) executeSearchCalls(ctx context.Context, calls []webSe
 			if searchErr != nil {
 				errorCode = searchErrorUnavailable
 			}
+		}
+		if searchErr != nil {
+			// 搜索失败会降级为 web_search_tool_result_error 继续本回合，调用方只看到
+			// error_code；这里记录唯一一次可诊断的原因，不记录 query 等请求内容。
+			g.logger.WarnContext(ctx, "web search execution degraded",
+				"request_id", httpapi.RequestID(ctx),
+				"error_code", errorCode,
+				"error", searchErr,
+			)
 		}
 		execution := webSearchExecution{call: call, results: result, err: searchErr, errorCode: errorCode}
 		executions = append(executions, execution)
@@ -506,6 +520,9 @@ func (g *webSearchGateway) send(ctx context.Context, body []byte, rawQuery strin
 	if request.Header.Get("Content-Type") == "" {
 		request.Header.Set("Content-Type", "application/json")
 	}
+	// 透传调用方的 Accept-Encoding 会关闭 Transport 的透明解压，使 gateway 拿到未解压的
+	// gzip 字节并在解析上游 JSON 时失败；这里交回 Transport 自行协商并解压。
+	request.Header.Del("Accept-Encoding")
 	response, err := g.client.Do(request)
 	if err != nil {
 		return webSearchGatewayResponse{}, fmt.Errorf("send messages upstream request: %w", err)
