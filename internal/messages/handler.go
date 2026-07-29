@@ -178,6 +178,9 @@ func writeRequestTooLarge(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteError(w, r, httpapi.NewError(http.StatusRequestEntityTooLarge, "request_too_large", "Request body exceeds maximum size"))
 }
 
+// readWebSearchGatewayCandidate 逐字节探测请求体是否以 JSON 开头，避免非 JSON
+// 请求（如 multipart）被 json.Decoder 消费后无法回退到直通代理路径。探测为 JSON
+// 时返回完整 body，否则将已读字节重新注入 r.Body 实现零拷贝回退。
 func readWebSearchGatewayCandidate(w http.ResponseWriter, r *http.Request) ([]byte, bool, error) {
 	body := http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	prefix := make([]byte, 0, 16)
