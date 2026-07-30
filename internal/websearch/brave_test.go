@@ -50,6 +50,18 @@ func TestBraveClientFailures(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
+	t.Run("oversized error page keeps the status code", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, strings.Repeat("x", braveMaxResponseSize+1))
+		}))
+		defer server.Close()
+		client := NewBraveClient(BraveClientConfig{Endpoint: server.URL, APIKey: "key", Timeout: 5 * time.Second}, nil)
+		_, err := client.Search(context.Background(), SearchRequest{Query: "query"})
+		if err == nil || !strings.Contains(err.Error(), "HTTP 429") {
+			t.Fatalf("error = %v, want the status code rather than a size error", err)
+		}
+	})
 	t.Run("invalid json", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

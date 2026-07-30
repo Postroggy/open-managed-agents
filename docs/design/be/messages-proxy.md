@@ -35,7 +35,7 @@ sequenceDiagram
     participant Search as Web search provider
 
     CC->>OMA: POST /v1/messages (web_search server tool)
-    OMA->>BYOK: POST /v1/messages (web_search ordinary tool, stream=false)
+    OMA->>BYOK: POST /v1/messages (oma_web_search ordinary tool, stream=false)
     alt 仅包含 Web Search tool_use
         BYOK-->>OMA: tool_use(web_search, query)
         OMA->>Search: Search(query)
@@ -63,15 +63,17 @@ sequenceDiagram
     end
 ```
 
-内部 transcript 与 Claude Code transcript 通过双向投影保持一致。BYOK 的 ordinary `toolu_*` 会编码为带 `srvtoolu_` 前缀的可逆 server ID；该前缀只用于 OMA 生成的 response ID 与 BYOK ID 之间的可逆映射，工具所有权仍由 content block type 和 Web Search 定义决定。Claude Code 后续重放完整历史时，gateway 会把 `server_tool_use`/`web_search_tool_result` 展开回 BYOK 的 assistant `tool_use` 与下一条 user `tool_result`。mixed continuation 中 Claude Code 只返回自己拥有的 client results，每个 client `tool_use` 必须恰好对应一个 `tool_result`，该 user message 不得包含 text 或其他 block，并保留声明 pending search 的同一 Web Search tool；缺失、重复或未知 result、混入非 result content，以及缺少 pending search tool时返回 `400 invalid_request_error`，不会把 server block 透传给 BYOK。gateway 执行 pending search 后按原 tool call 顺序合并结果；普通 client tool 不由 OMA 伪造 error result。已完成的 search 历史即使后续请求不再声明 Web Search，也仍会反向投影，但不会允许 BYOK 发起新的搜索。
+内部 transcript 与 Claude Code transcript 通过双向投影保持一致。gateway 声明给 BYOK 的是名为 `oma_web_search` 的 ordinary tool：调用方可以合法地声明自己的 `web_search` 工具，复用 Anthropic 协议名会让同一请求出现两个同名 tool，也无法再按名字判断 `tool_use` 归属。投影只在这两个名字之间双向替换；当顶层 `tool_choice` 强制 `web_search` 时，也只在发给 BYOK 的请求里改为 `oma_web_search`。调用方看到的响应、历史和续传请求始终使用协议名 `web_search`；调用方自有的同名工具按普通 client tool 交还调用方，不由 gateway 执行。BYOK 的 ordinary `toolu_*` 与面向调用方的 `srvtoolu_*` 之间只做前缀替换，因此映射是双射；不引入自定义编码可以避免同一上游 ID 存在多种外部表示、进而在同一条 assistant message 里产生重复 `tool_use` ID。反向解析只接受 gateway 自己铸造的 `srvtoolu_` 形状，其余形状一律拒绝，避免调用方伪造上游 ID。Claude Code 后续重放完整历史时，gateway 会把 `server_tool_use`/`web_search_tool_result` 展开回 BYOK 的 assistant `tool_use` 与下一条 user `tool_result`。mixed continuation 中 Claude Code 只返回自己拥有的 client results，每个 client `tool_use` 必须恰好对应一个 `tool_result`，该 user message 不得包含 text 或其他 block，并保留声明 pending search 的同一 Web Search tool；缺失、重复或未知 result、混入非 result content，以及缺少 pending search tool时返回 `400 invalid_request_error`，不会把 server block 透传给 BYOK。gateway 执行 pending search 后按原 tool call 顺序合并结果。该排序只为可读性：Anthropic 按 `tool_use_id` 匹配 result 而非按位置，也不区分 server/client tool 的 result 先后。真正的硬约束是配对完整性——每个 `tool_use` 必须恰好有一个 result，缺失会触发 `tool_use ids were found without tool_result blocks immediately after`，因此合并时即使出现重复 ID 也不丢弃任何一条 result。普通 client tool 不由 OMA 伪造 error result。已完成的 search 历史即使后续请求不再声明 Web Search，也仍会反向投影，但不会允许 BYOK 发起新的搜索。
 
-对外合成的 `web_search_result` 使用 `type`、`title`、`url` 与可选 `page_age`，不输出 provider 的明文 `content` 扩展，也不伪造 Anthropic 原生 `encrypted_content`。Anthropic 协议要求客户端把原生 provider 返回的 `encrypted_content` 视为 opaque 数据并在后续 turn 原样回放；OMA-managed search 当前不实现该加密恢复合同，历史投影仅把可见的标题、URL 与页面时间交给 BYOK。当前 gateway 也不伪造 Anthropic 原生 citation location 或 server-tool usage 计量；BYOK 可基于结果 URL 生成普通文本引用，但不得把它表述为原生 citation block。
+对外合成的 `web_search_result` 使用 `type`、`title`、`url` 与可选 `page_age`，不输出 provider 的明文 `content` 扩展，也不伪造 Anthropic 原生 `encrypted_content`。Anthropic 协议要求客户端把原生 provider 返回的 `encrypted_content` 视为 opaque 数据并在后续 turn 原样回放；OMA-managed search 当前不实现该加密恢复合同，历史投影仅把可见的标题、URL 与页面时间交给 BYOK。当前 gateway 也不伪造 Anthropic 原生 citation location；BYOK 可基于结果 URL 生成普通文本引用，但不得把它表述为原生 citation block。
 
-一次入站请求内的多次 BYOK 采样会累加为单个 `usage`：gateway 逐次收集上游 `usage`，把其中的整数 token 计数按字段名求和，`service_tier` 等非数值字段保留最后一次采样的值，避免只回显最后一次采样导致少报前几轮消耗。只发生一次采样时原样透传上游 `usage`。gateway 自身的搜索调用不计入 token 计量。
+一次入站请求内的多次 BYOK 采样会累加为单个 `usage`：gateway 逐次收集上游 `usage`，把其中的整数 token 计数按字段名求和，`service_tier` 等非数值字段保留最后一次采样的值，避免只回显最后一次采样导致少报前几轮消耗。只发生一次采样且本请求没有搜索时原样透传上游 `usage`。
+
+搜索次数按 Anthropic 合同写入 `usage.server_tool_use.web_search_requests`。BYOK 只看到 ordinary tool，不会上报该字段，因此由 gateway 补齐；上游 `server_tool_use` 里的其他计量字段保留不覆盖。官方规定「每次搜索计一次，与返回结果数无关」且「搜索出错不计费」，因此只统计生成了结果列表的 `web_search_tool_result`，`max_uses_exceeded` 与 provider 失败对应的 `web_search_tool_result_error` 都不计入。gateway 自身的搜索调用不计入 token 计量。
 
 gateway 发往 BYOK 的请求会删除调用方的 `Accept-Encoding`，交由 `http.Transport` 自行协商压缩并透明解压；保留调用方值会关闭透明解压，使 gateway 拿到未解压的响应字节而无法解析上游 JSON。透明转发路径不解析 body，因此保持调用方的内容编码协商不变。
 
-调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略。`max_uses` 统计每条入站 Messages 请求内实际尝试的搜索次数；同一请求的内部 BYOK continuation 不会重置计数，超限调用不访问 provider，并返回 `web_search_tool_result_error`/`max_uses_exceeded`。`web_search.max_server_tool_iterations` 是独立的 server-side sampling iteration 上限，默认与 Anthropic 的每请求 10 次对齐；一次 iteration 对应一次 BYOK Messages 请求并包含初始采样，不等同于一次搜索。最后一次允许的 BYOK 响应若仍要求搜索，gateway 先完成该搜索并生成配对的 `server_tool_use`/`web_search_tool_result`，再以 `stop_reason=pause_turn` 返回，而不是丢弃结果并返回 502。
+调用方声明的 `max_uses`、`allowed_domains` 与 `blocked_domains` 由 gateway 解析为请求策略。`max_uses` 与 Anthropic 官方语义一致，是 per-request 上限（"limits the number of searches performed" per request）：统计每条入站 Messages 请求内实际尝试的搜索次数。同一请求的内部 BYOK continuation 不会重置计数；`pause_turn` 与 mixed continuation 是新的入站请求，按官方语义重新获得完整额度，gateway 不从回放历史里累加已用次数。超限调用不访问 provider，并返回 `web_search_tool_result_error`/`max_uses_exceeded`。`web_search.max_server_tool_iterations` 是独立的 server-side sampling iteration 上限，留空或为 0 时使用与 Anthropic 对齐的每请求 10 次默认值，负值在启动时报错；一次 iteration 对应一次 BYOK Messages 请求并包含初始采样，不等同于一次搜索。最后一次允许的 BYOK 响应若仍要求搜索，gateway 先完成该搜索并生成配对的 `server_tool_use`/`web_search_tool_result`，再以 `stop_reason=pause_turn` 返回，而不是丢弃结果并返回 502。
 
 通用 Messages 客户端可按 Anthropic 合同把 paused content 原样作为 assistant message、保留对应的 Web Search tool 并再次续传；同一逻辑 turn 可以连续返回多次 `pause_turn`。如果 paused content 以尚未完成的 `server_tool_use` 结尾，gateway 会先执行该搜索，把 provider result 作为 BYOK client `tool_result` 恢复内部 transcript，并让下一响应以匹配的 `web_search_tool_result` 开头。如果 paused search 已经带有配对结果，gateway 直接回放完成记录，避免重复搜索。由于 Messages 历史不携带上一请求的完整 tools 定义，stateless gateway 能校验当前请求仍声明对应 Web Search tool，但不能逐字段证明定义与上一请求相同。Claude Code 2.1.120 的内置 WebSearch 已在真实 E2E 中直接接受完成搜索后返回的 `pause_turn` 结果。域名约束直接传给搜索 provider，不交给 BYOK 模型生成或修改。
 
@@ -79,9 +81,11 @@ gateway 发往 BYOK 的请求会删除调用方的 `Accept-Encoding`，交由 `h
 
 协议依据：
 
-- [Anthropic Server tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools)：server/client mixed turn、pending server result 与 `pause_turn` continuation；
+- [Anthropic Server tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools)：server/client mixed turn、pending server result 与 `pause_turn` continuation。官方规定 mixed turn 里 API「does not run the server tool. It returns immediately so that you can run the client tool first」，随后在下一条请求上「runs the deferred server tool」；因此「client tool 先执行、server tool 后执行」是跨请求的时序约束，不是单条 user message 内部的 block 排序约束。同一文档还规定 `server_tool_use` 与其 result「pair up by `tool_use_id`, not by position」；
+- [Anthropic Parallel tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/parallel-tool-use)：「The API doesn't prescribe an execution order」，执行策略由实现决定；但所有 `tool_result` 必须「all together in a single user message」，一个 result 一条 tool call；
+- [Anthropic Handle tool calls](https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls)：「Tool result blocks must immediately follow their corresponding tool use blocks」，缺失配对会返回 `tool_use ids were found without tool_result blocks immediately after`。因此 result 顺序只影响可读性，配对完整性才是硬约束；
 - [Anthropic Stop reasons and fallback](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons)：server-side sampling loop 默认每请求 10 iterations；
-- [Anthropic Web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)：`max_uses` 限制每请求实际搜索次数；原生 provider 的 `encrypted_content` 在多轮续传时必须原样回放，OMA-managed search 不合成该字段。
+- [Anthropic Web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)：`max_uses`「limits the number of searches performed」，官方在 triggering 一节明确它是「for each request」的硬约束，且 `pause_turn` 示例在续传请求里重新声明同一 `max_uses`，因此该额度是 per-request 而非 per-turn 累计；`usage.server_tool_use.web_search_requests` 上报搜索次数，「Each web search counts as one use, regardless of the number of results returned」「If an error occurs during web search, the web search will not be billed」；原生 provider 的 `encrypted_content` 在多轮续传时必须原样回放，OMA-managed search 不合成该字段。
 
 管理后台继续使用原平台路径 `POST /api/organizations/{orgUuid}/proxy/v1/messages`。该路由及其独立代理实现不作为 `/v1/messages` 的兼容别名，也不承载 Claude Code 的 session-scoped token。它在 `anthropic_upstream.model_mappings` 命中请求顶层 `model` 时把该逻辑模型 ID 替换为配置的上游模型 ID。Messages 的已知改写字段通过命名 DTO 解析；只有为保留第三方未知字段而使用的 request envelope 在该 HTTP 边界保留 `json.RawMessage`，不会把动态 JSON 结构传入内部领域模型。Quickstart Builder 返回的 Agent config 在前端的命名配置归一化边界解析模型字段，Agent 写入边界再执行防御性解析。未配置、未命中或请求体无法按 JSON object 解析时，请求体保持不变并交给上游处理。公共 `POST /v1/messages` 不应用该 Console 映射；code-session 请求的当前 tools 声明 Web Search，或 transcript 包含 gateway 生成的 Web Search server block 时进入 gateway，否则继续透明流式转发请求体。
 
@@ -154,10 +158,10 @@ sequenceDiagram
 ## 验收覆盖
 
 - `tests/messages_api_test.go`：缺少上游 key、跨资源使用、未 register、lease 过期、public session 终止、长时间运行、普通 API key、平台 cookie、header 清洗与响应 header 透传，以及真实 handler/credential/provider 路径下的纯搜索闭环与 mixed tool 两请求续传；
-- `internal/messages/web_search_gateway_test.go`：未知/空配置和字面量 `type=web_search` 保持透明转发，provider failure 降级为 tool error 并记一条 `WARN`，provider panic 不被 gateway 吞掉而交给 HTTP 边界的 recover 中间件，删除调用方 `Accept-Encoding` 后能解析 gzip 上游响应，多次 BYOK 采样的 `usage` 累加且单次采样原样透传，普通 client tool 透传，多个 search/client tool 交错时跨请求延迟搜索并按原序合并 results，pending tool 缺失拒绝，已完成 server/mixed history 可逆投影，`max_uses_exceeded` 精确错误码、JSON/SSE `pause_turn` 与 paused content 续传，unsupported `user_location`、`allowed_callers` 和 `response_inclusion` 在 BYOK 前拒绝，以及 SSE 的 `server_tool_use`、`web_search_tool_result`、`web_search_result` 与 `input_json_delta`；
+- `internal/messages/web_search_gateway_test.go`：未知/空配置和字面量 `type=web_search` 保持透明转发，调用方自有的 `web_search` 工具不被 gateway 劫持且投影后不与 `oma_web_search` 撞名，`srvtoolu_*`/`toolu_*` 前缀映射双向无碰撞且拒绝外来形状，provider failure 降级为 tool error 并记一条 `WARN`，provider panic 不被 gateway 吞掉而交给 HTTP 边界的 recover 中间件，删除调用方 `Accept-Encoding` 后能解析 gzip 上游响应，多次 BYOK 采样的 `usage` 累加且单次采样原样透传，普通 client tool 透传，多个 search/client tool 交错时跨请求延迟搜索并按原序合并 results，pending tool 缺失拒绝，已完成 server/mixed history 可逆投影，`max_uses` 跨同一请求的内部 continuation 不重置且在新的入站请求上按 per-request 语义重置、`max_uses_exceeded` 精确错误码、`usage.server_tool_use.web_search_requests` 只统计计费搜索且保留上游其他 server tool 计量、result 合并在 ID 重复时不丢弃、JSON/SSE `pause_turn` 与 paused content 续传，unsupported `user_location`、`allowed_callers` 和 `response_inclusion` 在 BYOK 前拒绝，以及 SSE 的 `server_tool_use`、`web_search_tool_result`、`web_search_result` 与 `input_json_delta`；
 - `internal/messages/handler_test.go`：gateway 的 502 与 400 分支分别记录 `ERROR` 和 `WARN` 结构化日志；
-- `internal/websearch/*_test.go`：Tavily/Brave factory registry、provider-owned options 解码与校验、credential 不进入 upstream request，以及 Brave 不支持域名策略时显式报错；
-- `internal/config/config_test.go`：`web_search.providers.<name>` 的 endpoint/key/options 解析、未知 provider 字段拒绝和配置参考文件覆盖；
+- `internal/websearch/*_test.go`：Tavily/Brave factory registry、provider-owned options 解码与校验、credential 不进入 upstream request、超限错误页仍保留 provider 状态码，以及 Brave 不支持域名策略时显式报错；
+- `internal/config/config_test.go`：`web_search.providers.<name>` 的 endpoint/key/options 解析、未知 provider 字段拒绝、provider 名归一化与大小写重复拒绝、`timeout` 与 `max_server_tool_iterations` 的负值拒绝和零值放行，以及配置参考文件覆盖；
 - `tests/platform_proxy_directory_api_test.go`：管理后台原有独立路径的 JSON 与 SSE 转发；
 - `internal/environments/environment_manager_test.go`：沙箱 payload 不含上游 key 或 Claude 凭证环境变量，api base URL 和 lifecycle-bound token auth 正确，启动 payload 会被删除；
 - `tests/environments_runner_cloud_test.go`：真实 runner 组装出的 runtime payload 使用 session-scoped token。

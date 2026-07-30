@@ -305,7 +305,7 @@ func TestMessagesWebSearchGateway(t *testing.T) {
 		if requestNumber == 1 {
 			tools := request["tools"].([]any)
 			tool := tools[0].(map[string]any)
-			if tool["name"] != "web_search" {
+			if tool["name"] != "oma_web_search" {
 				t.Errorf("projected tool = %#v", tool)
 				return
 			}
@@ -313,7 +313,7 @@ func TestMessagesWebSearchGateway(t *testing.T) {
 				t.Errorf("projected tool has type: %#v", tool)
 				return
 			}
-			_, _ = io.WriteString(w, `{"id":"msg_tool","type":"message","content":[{"type":"tool_use","id":"toolu_1","name":"web_search","input":{"query":"latest Go release"}}],"stop_reason":"tool_use"}`)
+			_, _ = io.WriteString(w, `{"id":"msg_tool","type":"message","content":[{"type":"tool_use","id":"toolu_1","name":"oma_web_search","input":{"query":"latest Go release"}}],"stop_reason":"tool_use"}`)
 			return
 		}
 		requestMessages := request["messages"].([]any)
@@ -399,7 +399,7 @@ func TestMessagesWebSearchGatewayMixedToolContinuation(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if requestNumber == 1 {
-			_, _ = io.WriteString(w, `{"id":"msg_mixed","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_search","name":"web_search","input":{"query":"latest Go release"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"go version"}}],"stop_reason":"tool_use"}`)
+			_, _ = io.WriteString(w, `{"id":"msg_mixed","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_search","name":"oma_web_search","input":{"query":"latest Go release"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"go version"}}],"stop_reason":"tool_use"}`)
 			return
 		}
 		if len(request.Messages) != 3 {

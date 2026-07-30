@@ -2,7 +2,6 @@ package messages
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,10 @@ import (
 )
 
 const (
-	omaServerToolIDPrefix = "srvtoolu_oma_"
+	// serverToolUseIDPrefix 是 Anthropic server tool 的 ID 前缀，upstreamToolUseIDPrefix
+	// 是 ordinary tool 的前缀；gateway 只在两者之间做前缀替换。
+	serverToolUseIDPrefix   = "srvtoolu_"
+	upstreamToolUseIDPrefix = "toolu_"
 )
 
 type webSearchMessageEnvelope struct {
@@ -128,24 +130,91 @@ func (u *webSearchUsageAccumulator) add(body []byte) error {
 	return nil
 }
 
-// merge 生成跨迭代累计后的 usage；只采样到一次时返回 false，保持上游 usage 原样透传。
-func (u *webSearchUsageAccumulator) merge() (json.RawMessage, bool, error) {
-	if u == nil || u.samples < 2 {
-		return nil, false, nil
+// merge 生成跨迭代累计后的 token 计量。只采样到一次时返回 false，让调用方保持上游
+// usage 原样透传。
+func (u *webSearchUsageAccumulator) merge() (map[string]json.RawMessage, bool) {
+	if u == nil || u.samples == 0 {
+		return nil, false
 	}
 	merged := cloneRawMap(u.last)
+	if u.samples < 2 {
+		return merged, false
+	}
 	for name, total := range u.totals {
 		encoded, err := json.Marshal(total)
 		if err != nil {
-			return nil, false, fmt.Errorf("encode messages usage %q: %w", name, err)
+			// int64 序列化不会失败；保留最后一次采样的原值而不是让整个响应失败。
+			continue
 		}
 		merged[name] = encoded
+	}
+	return merged, true
+}
+
+// webSearchUsage 生成最终响应的 usage：先按字段名累加多次 BYOK 采样的 token 计数，再写入
+// gateway 自己执行的搜索次数。返回 false 表示无需改写上游 usage。
+//
+// Anthropic 用 usage.server_tool_use.web_search_requests 上报搜索次数，而 BYOK 只看到
+// ordinary tool，不会上报该字段，因此这里由 gateway 补齐。
+func (u *webSearchUsageAccumulator) webSearchUsage(searchRequests int) (json.RawMessage, bool, error) {
+	merged, changed := u.merge()
+	if searchRequests > 0 {
+		if merged == nil {
+			merged = make(map[string]json.RawMessage, 1)
+		}
+		serverToolUse, err := webSearchServerToolUsage(merged["server_tool_use"], searchRequests)
+		if err != nil {
+			return nil, false, err
+		}
+		merged["server_tool_use"] = serverToolUse
+		changed = true
+	}
+	if !changed {
+		return nil, false, nil
 	}
 	encoded, err := json.Marshal(merged)
 	if err != nil {
 		return nil, false, fmt.Errorf("encode messages usage: %w", err)
 	}
 	return encoded, true, nil
+}
+
+// webSearchServerToolUsage 在保留上游其他 server tool 计量的前提下写入搜索次数。
+func webSearchServerToolUsage(existing json.RawMessage, searchRequests int) (json.RawMessage, error) {
+	fields := map[string]json.RawMessage{}
+	if len(existing) > 0 {
+		if err := json.Unmarshal(existing, &fields); err != nil {
+			return nil, fmt.Errorf("decode messages server tool usage: %w", err)
+		}
+	}
+	encodedRequests, err := json.Marshal(searchRequests)
+	if err != nil {
+		return nil, fmt.Errorf("encode web search request count: %w", err)
+	}
+	fields["web_search_requests"] = encodedRequests
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("encode messages server tool usage: %w", err)
+	}
+	return encoded, nil
+}
+
+// countBillableWebSearchRequests 统计本次响应内容里计费的搜索次数。Anthropic 规定每次
+// 搜索计一次、失败的搜索不计费，因此只统计带结果的 web_search_tool_result；
+// max_uses_exceeded 与 provider 失败都以 web_search_tool_result_error 呈现，不计入。
+func countBillableWebSearchRequests(content []json.RawMessage) int {
+	requests := 0
+	for _, rawBlock := range content {
+		var block webSearchProtocolBlock
+		if json.Unmarshal(rawBlock, &block) != nil || block.Type != "web_search_tool_result" {
+			continue
+		}
+		if webSearchResultErrorCode(block.Content) != "" {
+			continue
+		}
+		requests++
+	}
+	return requests
 }
 
 func webSearchUsageCount(value json.RawMessage) (int64, bool) {
@@ -177,11 +246,11 @@ func finalizeWebSearchResponse(response webSearchGatewayResponse, content []json
 		}
 		fields["stop_reason"] = encodedStopReason
 	}
-	mergedUsage, merged, err := usage.merge()
+	mergedUsage, changed, err := usage.webSearchUsage(countBillableWebSearchRequests(content))
 	if err != nil {
 		return webSearchGatewayResponse{}, err
 	}
-	if merged {
+	if changed {
 		fields["usage"] = mergedUsage
 	}
 	response.body, err = json.Marshal(fields)
@@ -213,6 +282,10 @@ func (g *webSearchGateway) prepareWebSearchTranscript(ctx context.Context, messa
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	// max_uses 是 per-request 上限，与 Anthropic 官方语义一致（"limits the number of
+	// searches performed" per request，每条请求独立计数）。同一请求内的 BYOK
+	// continuation 不重置计数；pause_turn 与 mixed continuation 是新的入站请求，因此
+	// 按官方语义重新获得完整额度，gateway 不从历史里累加。
 	if pending == nil && paused == nil {
 		return transcript, nil, 0, nil
 	}
@@ -239,6 +312,17 @@ func (g *webSearchGateway) prepareWebSearchTranscript(ctx context.Context, messa
 		return nil, nil, 0, err
 	}
 	return transcript, prefix, searchUses, nil
+}
+
+func webSearchResultErrorCode(content json.RawMessage) string {
+	var resultError struct {
+		Type      string `json:"type"`
+		ErrorCode string `json:"error_code"`
+	}
+	if json.Unmarshal(content, &resultError) != nil || resultError.Type != "web_search_tool_result_error" {
+		return ""
+	}
+	return resultError.ErrorCode
 }
 
 func (g *webSearchGateway) resumePausedWebSearchTurn(ctx context.Context, transcript []json.RawMessage, pending *webSearchPendingTurn, policy webSearchPolicy) ([]json.RawMessage, []json.RawMessage, int, error) {
@@ -433,7 +517,7 @@ func pendingWebSearchCall(block webSearchProtocolBlock) (webSearchToolCall, erro
 	return webSearchToolCall{
 		id:         upstreamID,
 		externalID: block.ID,
-		name:       searchToolName,
+		name:       upstreamSearchToolName,
 		input:      append(json.RawMessage(nil), block.Input...),
 		search:     &input,
 	}, nil
@@ -593,36 +677,41 @@ func orderWebSearchToolResults(rawAssistant json.RawMessage, results []json.RawM
 	if json.Unmarshal(assistant.Content, &blocks) != nil {
 		return results
 	}
-	byID := make(map[string]json.RawMessage, len(results))
-	for _, rawResult := range results {
+	// Anthropic 按 tool_use_id 匹配 result，不依赖 result 在 user message 里的顺序，
+	// 因此这里只做与 tool_use 一致的可读性排序。按 ID 排队而不是按 ID 建立唯一索引，
+	// 是为了让重复 ID 的 result 也全部保留：丢弃 result 会让对应的 tool_use 失去配对。
+	pendingByID := make(map[string][]int, len(results))
+	for index, rawResult := range results {
 		var result webSearchProtocolBlock
 		if json.Unmarshal(rawResult, &result) == nil {
-			byID[result.ToolUseID] = rawResult
+			pendingByID[result.ToolUseID] = append(pendingByID[result.ToolUseID], index)
 		}
 	}
 	ordered := make([]json.RawMessage, 0, len(results))
+	emitted := make([]bool, len(results))
 	for _, rawBlock := range blocks {
 		var block webSearchProtocolBlock
 		if json.Unmarshal(rawBlock, &block) != nil || block.Type != "tool_use" {
 			continue
 		}
-		if result, ok := byID[block.ID]; ok {
-			ordered = append(ordered, result)
-			delete(byID, block.ID)
+		queue := pendingByID[block.ID]
+		if len(queue) == 0 {
+			continue
 		}
+		pendingByID[block.ID] = queue[1:]
+		ordered = append(ordered, results[queue[0]])
+		emitted[queue[0]] = true
 	}
-	for _, rawResult := range results {
-		var result webSearchProtocolBlock
-		if json.Unmarshal(rawResult, &result) == nil {
-			if _, ok := byID[result.ToolUseID]; ok {
-				ordered = append(ordered, rawResult)
-				delete(byID, result.ToolUseID)
-			}
+	for index, rawResult := range results {
+		if !emitted[index] {
+			ordered = append(ordered, rawResult)
 		}
 	}
 	return ordered
 }
 
+// projectServerToolUseToClient 把历史里的 server_tool_use 还原为 BYOK 的 ordinary
+// tool_use，同时把协议名换成 gateway 实际声明给 BYOK 的独占工具名。
 func projectServerToolUseToClient(rawBlock json.RawMessage, block webSearchProtocolBlock) (json.RawMessage, error) {
 	upstreamID, err := upstreamWebSearchToolUseID(block.ID)
 	if err != nil {
@@ -638,6 +727,11 @@ func projectServerToolUseToClient(rawBlock json.RawMessage, block webSearchProto
 		return nil, err
 	}
 	fields["id"] = encodedID
+	encodedName, err := json.Marshal(upstreamSearchToolName)
+	if err != nil {
+		return nil, err
+	}
+	fields["name"] = encodedName
 	return json.Marshal(fields)
 }
 
@@ -646,13 +740,9 @@ func projectServerResultToClient(block webSearchProtocolBlock) (json.RawMessage,
 	if err != nil {
 		return nil, err
 	}
-	var resultError struct {
-		Type      string `json:"type"`
-		ErrorCode string `json:"error_code"`
-	}
-	if json.Unmarshal(block.Content, &resultError) == nil && resultError.Type == "web_search_tool_result_error" {
+	if errorCode := webSearchResultErrorCode(block.Content); errorCode != "" {
 		message := `"web search unavailable"`
-		if resultError.ErrorCode == searchErrorMaxUses {
+		if errorCode == searchErrorMaxUses {
 			message = `"web search max uses exceeded"`
 		}
 		return marshalWebSearchToolResult(webSearchToolResultBlock{
@@ -713,8 +803,12 @@ func projectPendingWebSearchContent(content []json.RawMessage) ([]json.RawMessag
 		if err := json.Unmarshal(rawBlock, &block); err != nil {
 			return nil, fmt.Errorf("decode mixed tool content block: %w", err)
 		}
-		if block.Type == "tool_use" && block.Name == searchToolName {
-			serverBlock, err := projectClientSearchCallToServer(rawBlock, serverWebSearchToolUseID(block.ID))
+		if block.Type == "tool_use" && block.Name == upstreamSearchToolName {
+			externalID, err := serverWebSearchToolUseID(block.ID)
+			if err != nil {
+				return nil, err
+			}
+			serverBlock, err := projectClientSearchCallToServer(rawBlock, externalID)
 			if err != nil {
 				return nil, err
 			}
@@ -737,7 +831,7 @@ func projectCompletedWebSearchContent(content []json.RawMessage, executions []we
 		if err := json.Unmarshal(rawBlock, &block); err != nil {
 			return nil, fmt.Errorf("decode web search content block: %w", err)
 		}
-		if block.Type != "tool_use" || block.Name != searchToolName {
+		if block.Type != "tool_use" || block.Name != upstreamSearchToolName {
 			projected = append(projected, append(json.RawMessage(nil), rawBlock...))
 			continue
 		}
@@ -745,9 +839,9 @@ func projectCompletedWebSearchContent(content []json.RawMessage, executions []we
 		if !ok {
 			return nil, fmt.Errorf("web search execution %q is missing", block.ID)
 		}
-		externalID := execution.call.externalID
-		if externalID == "" {
-			externalID = serverWebSearchToolUseID(execution.call.id)
+		externalID, err := execution.serverToolUseID()
+		if err != nil {
+			return nil, err
 		}
 		serverBlock, err := projectClientSearchCallToServer(rawBlock, externalID)
 		if err != nil {
@@ -762,6 +856,8 @@ func projectCompletedWebSearchContent(content []json.RawMessage, executions []we
 	return projected, nil
 }
 
+// projectClientSearchCallToServer 把 BYOK 的 ordinary tool_use 投影为面向调用方的
+// server_tool_use，并把独占工具名换回 Anthropic 协议名，避免内部名字泄漏给调用方。
 func projectClientSearchCallToServer(rawBlock json.RawMessage, externalID string) (json.RawMessage, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(rawBlock, &fields); err != nil {
@@ -773,6 +869,11 @@ func projectClientSearchCallToServer(rawBlock json.RawMessage, externalID string
 		return nil, err
 	}
 	fields["id"] = encodedID
+	encodedName, err := json.Marshal(searchToolName)
+	if err != nil {
+		return nil, err
+	}
+	fields["name"] = encodedName
 	return json.Marshal(fields)
 }
 
@@ -789,9 +890,9 @@ func webSearchExecutionResultBlocks(executions []webSearchExecution) ([]json.Raw
 }
 
 func webSearchServerResultBlock(execution webSearchExecution) (json.RawMessage, error) {
-	externalID := execution.call.externalID
-	if externalID == "" {
-		externalID = serverWebSearchToolUseID(execution.call.id)
+	externalID, err := execution.serverToolUseID()
+	if err != nil {
+		return nil, err
 	}
 	if execution.err != nil {
 		errorCode := execution.errorCode
@@ -825,23 +926,23 @@ func webSearchServerResultBlock(execution webSearchExecution) (json.RawMessage, 
 	}{Type: "web_search_tool_result", ToolUseID: externalID, Content: encodedContent})
 }
 
-func serverWebSearchToolUseID(upstreamID string) string {
-	return omaServerToolIDPrefix + base64.RawURLEncoding.EncodeToString([]byte(upstreamID))
+// serverWebSearchToolUseID 把 BYOK 的 ordinary tool_use ID 映射为面向调用方的 server
+// tool ID。映射只是把 Anthropic 的 toolu_ 前缀换成 srvtoolu_，因此是双向唯一的；不引入
+// 自定义编码可以避免同一上游 ID 存在多种外部表示、进而在同一条消息里产生重复 ID。
+func serverWebSearchToolUseID(upstreamID string) (string, error) {
+	suffix, ok := strings.CutPrefix(upstreamID, upstreamToolUseIDPrefix)
+	if !ok || suffix == "" {
+		return "", fmt.Errorf("unsupported upstream tool use id %q", upstreamID)
+	}
+	return serverToolUseIDPrefix + suffix, nil
 }
 
+// upstreamWebSearchToolUseID 是 serverWebSearchToolUseID 的逆映射。只接受 gateway 自己
+// 生成的形状：这三个调用点处理的都是 OMA 铸造的 ID，放宽前缀只会让调用方伪造上游 ID。
 func upstreamWebSearchToolUseID(externalID string) (string, error) {
-	if strings.HasPrefix(externalID, omaServerToolIDPrefix) {
-		decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(externalID, omaServerToolIDPrefix))
-		if err != nil || len(decoded) == 0 {
-			return "", fmt.Errorf("invalid OMA server tool use id %q", externalID)
-		}
-		return string(decoded), nil
+	suffix, ok := strings.CutPrefix(externalID, serverToolUseIDPrefix)
+	if !ok || suffix == "" {
+		return "", fmt.Errorf("invalid server tool use id %q", externalID)
 	}
-	if strings.HasPrefix(externalID, "srvtoolu_") {
-		return "toolu_" + strings.TrimPrefix(externalID, "srvtoolu_"), nil
-	}
-	if strings.HasPrefix(externalID, "toolu_") {
-		return externalID, nil
-	}
-	return "", fmt.Errorf("invalid server tool use id %q", externalID)
+	return upstreamToolUseIDPrefix + suffix, nil
 }

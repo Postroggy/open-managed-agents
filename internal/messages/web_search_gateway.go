@@ -18,8 +18,14 @@ import (
 )
 
 const (
-	maxWebSearchResponseBytes   = 8 << 20
-	searchToolName              = "web_search"
+	maxWebSearchResponseBytes = 8 << 20
+	// searchToolName 是 Anthropic server tool 的协议名，只出现在面向调用方的
+	// server_tool_use / web_search_tool_result block 中。
+	searchToolName = "web_search"
+	// upstreamSearchToolName 是 gateway 投影给 BYOK 的 ordinary tool 名。使用 OMA
+	// 独占前缀是因为调用方可以合法地声明自己的 web_search 工具，复用该名字会让同一
+	// 请求出现两个同名 tool，且无法再按名字判断 tool_use 归属。
+	upstreamSearchToolName      = "oma_web_search"
 	defaultServerToolIterations = 10
 	searchErrorUnavailable      = "unavailable"
 	searchErrorMaxUses          = "max_uses_exceeded"
@@ -81,6 +87,15 @@ type webSearchExecution struct {
 	results   websearch.SearchResponse
 	err       error
 	errorCode string
+}
+
+// serverToolUseID 返回该次执行面向调用方的 server tool ID。续传路径已带上调用方原始
+// ID，首轮执行则从 BYOK 的 ordinary ID 铸造。
+func (e webSearchExecution) serverToolUseID() (string, error) {
+	if e.call.externalID != "" {
+		return e.call.externalID, nil
+	}
+	return serverWebSearchToolUseID(e.call.id)
 }
 
 type webSearchInput struct {
@@ -154,9 +169,10 @@ func (g *webSearchGateway) handle(ctx context.Context, body []byte, rawQuery str
 	searchUses := prepared.searchUses
 	searchEnabled := prepared.searchEnabled
 	searchPolicy := prepared.searchPolicy
-	iterationLimit := webSearchServerToolIterationLimit(g)
+	iterationLimit := g.serverToolIterationLimit()
 	usage := &webSearchUsageAccumulator{}
-	for iteration := 0; iteration < iterationLimit; iteration++ {
+	// iterationLimit 恒为正数，循环由下面的 pause_turn 分支退出，因此不需要循环条件。
+	for iteration := 0; ; iteration++ {
 		encodedMessages, err := json.Marshal(transcript)
 		if err != nil {
 			return webSearchGatewayResponse{}, true, fmt.Errorf("encode messages transcript: %w", err)
@@ -232,7 +248,6 @@ func (g *webSearchGateway) handle(ctx context.Context, body []byte, rawQuery str
 		}
 		transcript = append(transcript, userMessage)
 	}
-	return webSearchGatewayResponse{}, true, errors.New("web search tool loop exceeded maximum iterations")
 }
 
 func (g *webSearchGateway) prepareRequest(ctx context.Context, body []byte) (webSearchPreparedRequest, bool, error) {
@@ -303,7 +318,11 @@ func (g *webSearchGateway) executeSearchCalls(ctx context.Context, calls []webSe
 			return nil, nil, searchUses, fmt.Errorf("tool %q is not owned by the web search gateway", call.name)
 		}
 		if call.externalID == "" {
-			call.externalID = serverWebSearchToolUseID(call.id)
+			externalID, err := serverWebSearchToolUseID(call.id)
+			if err != nil {
+				return nil, nil, searchUses, err
+			}
+			call.externalID = externalID
 		}
 		var searchErr error
 		var errorCode string
@@ -415,7 +434,43 @@ func projectWebSearchFields(fields map[string]json.RawMessage) (map[string]json.
 		return nil, webSearchPolicy{}, fmt.Errorf("encode tools: %w", err)
 	}
 	projected["tools"] = encodedTools
+	if foundSearchTool {
+		if err := projectWebSearchToolChoice(projected); err != nil {
+			return nil, webSearchPolicy{}, err
+		}
+	}
 	return projected, searchPolicy, nil
+}
+
+// projectWebSearchToolChoice keeps a forced server Web Search call aligned with
+// the gateway-owned name sent to BYOK. Other tool_choice variants remain opaque.
+func projectWebSearchToolChoice(fields map[string]json.RawMessage) error {
+	rawChoice, ok := fields["tool_choice"]
+	if !ok {
+		return nil
+	}
+	var choice map[string]json.RawMessage
+	if err := json.Unmarshal(rawChoice, &choice); err != nil {
+		return nil
+	}
+	var choiceType, name string
+	if json.Unmarshal(choice["type"], &choiceType) != nil || json.Unmarshal(choice["name"], &name) != nil {
+		return nil
+	}
+	if choiceType != "tool" || name != searchToolName {
+		return nil
+	}
+	encodedName, err := json.Marshal(upstreamSearchToolName)
+	if err != nil {
+		return fmt.Errorf("encode projected tool choice name: %w", err)
+	}
+	choice["name"] = encodedName
+	encodedChoice, err := json.Marshal(choice)
+	if err != nil {
+		return fmt.Errorf("encode projected tool choice: %w", err)
+	}
+	fields["tool_choice"] = encodedChoice
+	return nil
 }
 
 type webSearchTool struct {
@@ -500,7 +555,7 @@ func isServerWebSearchToolType(value string) bool {
 }
 
 func searchToolDefinition() json.RawMessage {
-	return json.RawMessage(`{"name":"web_search","description":"Search the public web and return relevant results.","input_schema":{"type":"object","properties":{"query":{"type":"string","description":"The web search query"}},"required":["query"]}}`)
+	return json.RawMessage(`{"name":"` + upstreamSearchToolName + `","description":"Search the public web and return relevant results.","input_schema":{"type":"object","properties":{"query":{"type":"string","description":"The web search query"}},"required":["query"]}}`)
 }
 
 func (g *webSearchGateway) send(ctx context.Context, body []byte, rawQuery string, headers http.Header) (webSearchGatewayResponse, error) {
@@ -538,7 +593,9 @@ func (g *webSearchGateway) send(ctx context.Context, body []byte, rawQuery strin
 	return webSearchGatewayResponse{statusCode: response.StatusCode, header: response.Header.Clone(), body: responseBody}, nil
 }
 
-func webSearchServerToolIterationLimit(g *webSearchGateway) int {
+// serverToolIterationLimit 返回每条入站请求允许的 BYOK 采样次数，未配置时回落到与
+// Anthropic 对齐的默认值。返回值恒为正数。
+func (g *webSearchGateway) serverToolIterationLimit() int {
 	if g.maxServerToolIterations > 0 {
 		return g.maxServerToolIterations
 	}
@@ -584,7 +641,7 @@ func extractWebSearchToolCalls(body []byte) ([]webSearchToolCall, error) {
 		}
 		seenIDs[block.ID] = struct{}{}
 		call := webSearchToolCall{id: block.ID, name: block.Name, input: append(json.RawMessage(nil), block.Input...)}
-		if block.Name != searchToolName {
+		if block.Name != upstreamSearchToolName {
 			calls = append(calls, call)
 			continue
 		}
@@ -645,7 +702,7 @@ func webSearchToolResult(execution webSearchExecution) (json.RawMessage, error) 
 	}
 	content := make([]webSearchResultBlock, 0, len(execution.results.Results))
 	for _, result := range execution.results.Results {
-		content = append(content, resultToContentItem(result, ""))
+		content = append(content, resultToUpstreamContentItem(result))
 	}
 	encoded, err := json.Marshal(content)
 	if err != nil {
@@ -662,13 +719,14 @@ func marshalWebSearchToolResult(result webSearchToolResultBlock) (json.RawMessag
 	return encoded, nil
 }
 
-func resultToContentItem(result websearch.Result, blockType string) webSearchResultBlock {
+// resultToUpstreamContentItem 生成发给 BYOK 的 tool_result 条目。BYOK 侧是 ordinary
+// tool，条目不带 Anthropic 的 web_search_result 类型标记，但保留正文供模型引用。
+func resultToUpstreamContentItem(result websearch.Result) webSearchResultBlock {
 	content := result.Snippet
 	if result.Text != "" {
 		content = result.Text
 	}
 	return webSearchResultBlock{
-		Type:          blockType,
 		Title:         result.Title,
 		URL:           result.URL,
 		Content:       content,
@@ -677,6 +735,8 @@ func resultToContentItem(result websearch.Result, blockType string) webSearchRes
 	}
 }
 
+// resultToServerContentItem 生成面向调用方的 web_search_result 条目，只暴露标题、URL
+// 与页面时间。
 func resultToServerContentItem(result websearch.Result) webSearchResultBlock {
 	return webSearchResultBlock{
 		Type:    "web_search_result",

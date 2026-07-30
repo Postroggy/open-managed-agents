@@ -3,6 +3,9 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"maps"
+	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -178,6 +181,59 @@ func (input yamlConfig) resolve() Config {
 		setDefaultSeedAPIKeys(&cfg)
 	}
 	return cfg
+}
+
+// UnmarshalYAML 把 provider 名归一化为小写，使配置键与 web_search.provider 的匹配不
+// 依赖书写大小写。默认配置已预置小写键，而 YAML 的 map 解码是合并而非替换，因此不归一化
+// 时用户写成 Brave 会同时留下空的 brave 与真实的 Brave 两个条目，读取侧只能靠 map 遍历
+// 顺序随机命中其中一个，表现为 web search 时开时关。
+func (cfg *WebSearchConfig) UnmarshalYAML(node *yaml.Node) error {
+	input := struct {
+		Provider                string        `yaml:"provider"`
+		Timeout                 time.Duration `yaml:"timeout"`
+		MaxServerToolIterations int           `yaml:"max_server_tool_iterations"`
+		// Providers 故意不预置默认值：先单独解析调用方写下的键，才能把大小写重复和
+		// 默认条目区分开。
+		Providers map[string]WebSearchProviderConfig `yaml:"providers"`
+	}{
+		Provider:                cfg.Provider,
+		Timeout:                 cfg.Timeout,
+		MaxServerToolIterations: cfg.MaxServerToolIterations,
+	}
+	if err := node.Decode(&input); err != nil {
+		return err
+	}
+	providers, err := normalizeWebSearchProviders(cfg.Providers, input.Providers)
+	if err != nil {
+		return err
+	}
+	*cfg = WebSearchConfig{
+		Provider:                input.Provider,
+		Timeout:                 input.Timeout,
+		MaxServerToolIterations: input.MaxServerToolIterations,
+		Providers:               providers,
+	}
+	return nil
+}
+
+func normalizeWebSearchProviders(defaults, configured map[string]WebSearchProviderConfig) (map[string]WebSearchProviderConfig, error) {
+	providers := maps.Clone(defaults)
+	if providers == nil {
+		providers = make(map[string]WebSearchProviderConfig, len(configured))
+	}
+	seen := make(map[string]string, len(configured))
+	for name, provider := range configured {
+		normalized := strings.ToLower(strings.TrimSpace(name))
+		if normalized == "" {
+			return nil, errors.New("web_search.providers name is required")
+		}
+		if previous, duplicate := seen[normalized]; duplicate {
+			return nil, fmt.Errorf("web_search.providers %q and %q name the same provider", previous, name)
+		}
+		seen[normalized] = name
+		providers[normalized] = provider
+	}
+	return providers, nil
 }
 
 func (cfg *WebSearchProviderConfig) UnmarshalYAML(node *yaml.Node) error {

@@ -378,6 +378,65 @@ func TestLoadYAMLRejectsNullAndNonPositiveValues(t *testing.T) {
 	})
 }
 
+func TestLoadRejectsNegativeWebSearchValues(t *testing.T) {
+	negativeCases := []struct {
+		name      string
+		overrides string
+		wantField string
+	}{
+		{name: "timeout", overrides: "web_search:\n  timeout: -1s\n", wantField: "web_search.timeout"},
+		{
+			name:      "server tool iterations",
+			overrides: "web_search:\n  max_server_tool_iterations: -5\n",
+			wantField: "web_search.max_server_tool_iterations",
+		},
+	}
+	for _, testCase := range negativeCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			prepareLoadTest(t)
+			_, err := loadConfigTestYAML(t, testCase.overrides)
+			if err == nil || !strings.Contains(err.Error(), testCase.wantField+" must not be negative") {
+				t.Fatalf("Load() error = %v, want negative-value error for %s", err, testCase.wantField)
+			}
+		})
+	}
+
+	t.Run("zero uses built-in defaults", func(t *testing.T) {
+		prepareLoadTest(t)
+		cfg, err := loadConfigTestYAML(t, "web_search:\n  timeout: 0s\n  max_server_tool_iterations: 0\n")
+		if err != nil {
+			t.Fatalf("Load() error = %v, want zero values accepted", err)
+		}
+		if cfg.WebSearch.Timeout != 0 || cfg.WebSearch.MaxServerToolIterations != 0 {
+			t.Fatalf("web search config = %#v, want zero values preserved", cfg.WebSearch)
+		}
+	})
+}
+
+func TestLoadNormalizesWebSearchProviderNames(t *testing.T) {
+	t.Run("rejects names differing only by case", func(t *testing.T) {
+		prepareLoadTest(t)
+		_, err := loadConfigTestYAML(t, "web_search:\n  providers:\n    brave:\n      api_key: first\n    Brave:\n      api_key: second\n")
+		if err == nil || !strings.Contains(err.Error(), "name the same provider") {
+			t.Fatalf("Load() error = %v, want duplicate provider name error", err)
+		}
+	})
+
+	t.Run("success lowercases the configured name", func(t *testing.T) {
+		prepareLoadTest(t)
+		cfg, err := loadConfigTestYAML(t, "web_search:\n  provider: Brave\n  providers:\n    Brave:\n      api_key: brave-key\n")
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if _, unnormalized := cfg.WebSearch.Providers["Brave"]; unnormalized {
+			t.Fatalf("web search providers = %#v, want the configured name lowercased", cfg.WebSearch.Providers)
+		}
+		if cfg.WebSearch.Providers["brave"].APIKey != "brave-key" {
+			t.Fatalf("web search providers = %#v, want brave to keep the configured key", cfg.WebSearch.Providers)
+		}
+	})
+}
+
 func TestLoadYAMLSeedAPIKeyPresence(t *testing.T) {
 	t.Run("omitted uses derived defaults", func(t *testing.T) {
 		prepareLoadTest(t)
