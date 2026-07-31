@@ -2,7 +2,7 @@
 
 > 调研范围：仅使用 Brave Search API 与 Exa 官方文档，核对搜索请求模式、搜索模式与参数、分页、内容获取、结果字段和鉴权方式，并评估当前 internal/websearch 抽象。
 > 调研日期：2026-07-22。
-> 实现状态：provider-neutral 类型已落地到 `internal/websearch/types.go`，并已接入 Tavily 与 Brave。Brave 当前支持 Web Search 的通用请求参数、结果映射和页式分页；Exa 的 provider-specific 参数和内容抓取尚未实现。
+> 实现状态：provider-neutral 类型已落地到 `internal/websearch/types.go`，并已接入 Tavily 与 Brave。Brave 当前支持 Web Search 的通用请求参数、结果映射和页式分页，但不支持调用方 `allowed_domains`/`blocked_domains`；gateway 会在 BYOK 前拒绝该组合。Exa 的 provider-specific 参数和内容抓取尚未实现。
 
 ## 结论
 
@@ -10,7 +10,7 @@
 
 具体判断如下：
 
-- Provider.Search(context.Context, SearchRequest) (SearchResponse, error) 的调用形状适合两家 API：两者都能被适配成一次非流式搜索调用，并返回统一结果列表及响应元数据。
+- Provider.Search(context.Context, SearchRequest) (SearchResponse, error) 的调用形状适合两家 API：两者都能被适配成一次非流式搜索调用，并返回统一结果列表及响应元数据。独立的 ValidateOptions(SearchOptions) 让 gateway 在调用 BYOK 前检查当前 provider 是否能兑现调用方声明的策略。
 - 当前公共 SearchOptions 只覆盖 MaxResults、IncludeDomains、ExcludeDomains 和 opaque PageToken；Brave 的语言、地区、新鲜度、安全搜索、结果模块、Goggles 等选项属于 Brave adapter 的 typed options，不是 provider-neutral 合同。Exa 的 provider-specific 模式和内容选项仍由后续适配器决定。
 - 当前 Result 已将摘要与正文分成 Snippet/Text，并支持 PublishedDate、PageAge、ID、Author、Favicon、Highlights、Summary 和 ExtraSnippets 等字段；不能被 provider-neutral 模型表达的 provider-specific 结果类型仍应在适配器中降级或另设能力接口。
 - SearchResponse 现在可以表达分页是否还有结果：Brave 返回 query.more_results_available，Exa Search 官方 /search 文档没有公开页码、offset 或 next-cursor 字段；Exa 的 numResults 是单次请求数量，不等同于可遍历分页。
@@ -25,6 +25,7 @@ provider.go 声明：
 ```go
 type Provider interface {
     Search(context.Context, SearchRequest) (SearchResponse, error)
+    ValidateOptions(SearchOptions) error
 }
 ```
 
@@ -61,7 +62,7 @@ type SearchResponse struct {
 }
 ```
 
-NewProvider 当前通过 provider factory registry 注册 Tavily 和 Brave；每个 adapter 自己声明名称、解码配置和构造 client。`config.WebSearchProviderConfig` 只承载 endpoint、credential 和 opaque options，Brave 的 `country`、`search_language`、`ui_language`、`freshness`、`start_published_at`、`end_published_at`、`safe_search`、`spellcheck`、`result_filter`、`goggles`、`extra_snippets`、`units` 等字段只在 Brave adapter 的 `BraveOptions` 中解析，并将 credential 保留在 OMA 服务端 provider client 中。
+NewProvider 通过 `provider.go` 中静态、可审查的 built-in factory 表选择 Tavily 或 Brave；新增 provider 必须显式修改该表，重复名称会在 map literal 中编译失败。每个 adapter 只负责解码配置、校验 provider-specific options 和构造 client。`config.WebSearchProviderConfig` 只承载 endpoint、credential 和 opaque options，Brave 的 `country`、`search_language`、`ui_language`、`freshness`、`start_published_at`、`end_published_at`、`safe_search`、`spellcheck`、`result_filter`、`goggles`、`extra_snippets`、`units` 等字段只在 Brave adapter 的 `BraveOptions` 中解析，并将 credential 保留在 OMA 服务端 provider client 中。
 
 ## 请求模式与鉴权对比
 
@@ -213,7 +214,7 @@ Exa 官方示例的 SearchResultOutput 明确展示 title、url、publishedDate�
 
 Provider 的最小依赖方向是合理的：调用方只关心查询和 provider-neutral 结果，不需要知道 Brave 的 query string 或 Exa 的 JSON body。对当前 messages gateway 这种“取少量结果后拼成 tool result”的路径，保留 Search 方法是合适的。
 
-Title、URL 和一个明确命名的短文本字段适合作为跨 provider 核心字段。Brave 最大 Web page size 为 20，适配器会裁剪更大的 MaxResults；Exa 接入时应按自身上限处理。IncludeDomains 和 ExcludeDomains 当前仍是通用模型中的预留能力，Brave Web Search 没有同名参数，不应在适配器中伪造无损映射。
+Title、URL 和一个明确命名的短文本字段适合作为跨 provider 核心字段。Brave 最大 Web page size 为 20，适配器会裁剪更大的 MaxResults；Exa 接入时应按自身上限处理。IncludeDomains 和 ExcludeDomains 当前仍是通用模型中的预留能力：Tavily 可以直接执行，Brave Web Search 没有同名参数，因此 Brave 的 ValidateOptions 会在 BYOK 前拒绝，绝不伪造无损映射。
 
 ### Exa 接入边界
 

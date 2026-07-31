@@ -39,6 +39,7 @@ anthropic_upstream:
   model_mappings: {}
 
 web_search:
+  # Built-in providers are tavily and brave. Leaving the selected api_key empty disables the gateway.
   provider: tavily
   timeout: 30s
   # Maximum server-tool sampling iterations per request. One iteration is one BYOK model request.
@@ -46,9 +47,11 @@ web_search:
   max_server_tool_iterations: 10
   providers:
     tavily:
+      # Tavily supports allowed_domains and blocked_domains from the Anthropic tool declaration.
       endpoint: ""
       api_key: ""
     brave:
+      # Brave does not support those domain filters; such a request is rejected before BYOK.
       endpoint: ""
       api_key: ""
       options:
