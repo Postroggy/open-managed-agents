@@ -37,7 +37,7 @@ sequenceDiagram
     CC->>OMA: POST /v1/messages (web_search server tool)
     OMA->>BYOK: POST /v1/messages (oma_web_search ordinary tool, stream=false)
     alt 仅包含 Web Search tool_use
-        BYOK-->>OMA: tool_use(web_search, query)
+        BYOK-->>OMA: tool_use(oma_web_search, query)
         OMA->>Search: Search(query)
         Search-->>OMA: results or provider error
         alt 单批次仍有 BYOK loop 预算
@@ -51,7 +51,7 @@ sequenceDiagram
             end
         end
     else 同时包含 Web Search 与 client tool_use
-        BYOK-->>OMA: tool_use(web_search) + tool_use(client)
+        BYOK-->>OMA: tool_use(oma_web_search) + tool_use(client)
         OMA-->>CC: pending server_tool_use + client tool_use<br/>stop_reason=tool_use
         CC->>CC: 执行 Bash/Edit/MCP
         CC->>OMA: 新 Messages 请求，仅包含全部 client tool_result<br/>并保留同一 tools 数组

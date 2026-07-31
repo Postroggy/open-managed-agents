@@ -385,6 +385,7 @@ func findPausedWebSearchTurn(messages []json.RawMessage) (*webSearchPendingTurn,
 		}
 	}
 	turn := &webSearchPendingTurn{clientResults: make(map[string]json.RawMessage)}
+	serverToolUses := make(map[string]struct{})
 	for _, rawBlock := range blocks {
 		var block webSearchProtocolBlock
 		if err := json.Unmarshal(rawBlock, &block); err != nil {
@@ -396,6 +397,10 @@ func findPausedWebSearchTurn(messages []json.RawMessage) (*webSearchPendingTurn,
 		if block.Type != "server_tool_use" || block.Name != searchToolName {
 			continue
 		}
+		if _, duplicate := serverToolUses[block.ID]; duplicate {
+			return nil, fmt.Errorf("duplicate server web search tool use id %q", block.ID)
+		}
+		serverToolUses[block.ID] = struct{}{}
 		if _, complete := completedSearches[block.ID]; complete {
 			continue
 		}
@@ -439,6 +444,7 @@ func findPendingWebSearchTurn(messages []json.RawMessage) (*webSearchPendingTurn
 	}
 	turn := &webSearchPendingTurn{clientResults: make(map[string]json.RawMessage)}
 	clientCalls := make(map[string]struct{})
+	serverToolUses := make(map[string]struct{})
 	pendingSearches := 0
 	for _, rawBlock := range assistantBlocks {
 		var block webSearchProtocolBlock
@@ -447,6 +453,10 @@ func findPendingWebSearchTurn(messages []json.RawMessage) (*webSearchPendingTurn
 		}
 		switch {
 		case block.Type == "server_tool_use" && block.Name == searchToolName:
+			if _, duplicate := serverToolUses[block.ID]; duplicate {
+				return nil, fmt.Errorf("duplicate server web search tool use id %q", block.ID)
+			}
+			serverToolUses[block.ID] = struct{}{}
 			if _, complete := completedSearches[block.ID]; complete {
 				continue
 			}

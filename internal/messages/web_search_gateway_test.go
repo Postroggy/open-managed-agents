@@ -22,11 +22,12 @@ import (
 )
 
 type webSearchTestSearcher struct {
-	queries  []string
-	requests []websearch.SearchRequest
-	results  websearch.SearchResponse
-	err      error
-	panic    bool
+	queries     []string
+	requests    []websearch.SearchRequest
+	results     websearch.SearchResponse
+	err         error
+	validateErr error
+	panic       bool
 }
 
 func (s *webSearchTestSearcher) Search(_ context.Context, request websearch.SearchRequest) (websearch.SearchResponse, error) {
@@ -36,6 +37,10 @@ func (s *webSearchTestSearcher) Search(_ context.Context, request websearch.Sear
 		panic("provider failure")
 	}
 	return s.results, s.err
+}
+
+func (s *webSearchTestSearcher) ValidateOptions(websearch.SearchOptions) error {
+	return s.validateErr
 }
 
 func newSequencedUpstream(t *testing.T, responses ...string) (*httptest.Server, func() int) {
@@ -68,6 +73,26 @@ func TestWebSearchGatewayWithoutProviderIsTransparent(t *testing.T) {
 	_, handled, err := webSearchGateway.handle(context.Background(), []byte("{\"tools\":[{\"type\":\"web_search_20250305\"}]}"), "", nil)
 	if handled || err != nil {
 		t.Fatalf("handled = %v, err = %v; want transparent fallback", handled, err)
+	}
+}
+
+func TestWebSearchGatewayRejectsUnsupportedProviderOptionsBeforeUpstream(t *testing.T) {
+	upstream, requestCount := newSequencedUpstream(t, `{"type":"message","content":[{"type":"text","text":"unexpected"}],"stop_reason":"end_turn"}`)
+	searcher := &webSearchTestSearcher{validateErr: errors.New("brave web search does not support domain restrictions")}
+	webSearchGateway := newWebSearchGateway(config.Config{
+		AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"},
+	}, &http.Client{Timeout: time.Second}, searcher, nil)
+
+	_, handled, err := webSearchGateway.handle(context.Background(), []byte(`{
+		"messages": [],
+		"tools": [{"type":"web_search_20250305","allowed_domains":["example.test"]}]
+	}`), "", nil)
+	var requestErr *webSearchGatewayRequestError
+	if !handled || !errors.As(err, &requestErr) || !strings.Contains(err.Error(), "does not support domain restrictions") {
+		t.Fatalf("handled = %v, err = %v; want provider option validation error", handled, err)
+	}
+	if requestCount() != 0 || len(searcher.requests) != 0 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 0 and 0", requestCount(), len(searcher.requests))
 	}
 }
 
@@ -770,6 +795,33 @@ func TestWebSearchGatewayMixedContinuationRejectsDuplicateClientResults(t *testi
 	if err == nil || !strings.Contains(err.Error(), `duplicate client tool result "toolu_bash"`) {
 		t.Fatalf("find pending turn error = %v, want duplicate client result error", err)
 	}
+}
+
+func TestWebSearchGatewayRejectsDuplicateServerToolUsesInReplayedHistory(t *testing.T) {
+	t.Run("mixed continuation", func(t *testing.T) {
+		messages := []json.RawMessage{
+			json.RawMessage(`{"role":"user","content":"search and inspect"}`),
+			json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"first"}},{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"second"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
+			json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}`),
+		}
+
+		_, err := findPendingWebSearchTurn(messages)
+		if err == nil || !strings.Contains(err.Error(), `duplicate server web search tool use id "srvtoolu_search"`) {
+			t.Fatalf("find pending turn error = %v, want duplicate server tool use error", err)
+		}
+	})
+
+	t.Run("paused continuation", func(t *testing.T) {
+		messages := []json.RawMessage{
+			json.RawMessage(`{"role":"user","content":"search"}`),
+			json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"first"}},{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"second"}}]}`),
+		}
+
+		_, err := findPausedWebSearchTurn(messages)
+		if err == nil || !strings.Contains(err.Error(), `duplicate server web search tool use id "srvtoolu_search"`) {
+			t.Fatalf("find paused turn error = %v, want duplicate server tool use error", err)
+		}
+	})
 }
 
 func TestWebSearchGatewayMixedContinuationRejectsNonToolResultContent(t *testing.T) {

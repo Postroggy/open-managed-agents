@@ -295,6 +295,11 @@ func (g *webSearchGateway) prepareRequest(ctx context.Context, body []byte) (web
 	if err != nil {
 		return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{cause: fmt.Errorf("project messages request: %w", err)}
 	}
+	if searchEnabled {
+		if err := g.searcher.ValidateOptions(webSearchOptions(searchPolicy)); err != nil {
+			return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{cause: fmt.Errorf("validate web search provider options: %w", err)}
+		}
+	}
 	transcript, projectedContent, searchUses, err := g.prepareWebSearchTranscript(ctx, request.messages, searchPolicy)
 	if err != nil {
 		return webSearchPreparedRequest{}, true, &webSearchGatewayRequestError{cause: fmt.Errorf("project messages transcript: %w", err)}
@@ -604,13 +609,17 @@ func (g *webSearchGateway) serverToolIterationLimit() int {
 
 func (g *webSearchGateway) search(ctx context.Context, query string, policy webSearchPolicy) (websearch.SearchResponse, error) {
 	return g.searcher.Search(ctx, websearch.SearchRequest{
-		Query: query,
-		Options: websearch.SearchOptions{
-			MaxResults:     5,
-			IncludeDomains: append([]string(nil), policy.AllowedDomains...),
-			ExcludeDomains: append([]string(nil), policy.BlockedDomains...),
-		},
+		Query:   query,
+		Options: webSearchOptions(policy),
 	})
+}
+
+func webSearchOptions(policy webSearchPolicy) websearch.SearchOptions {
+	return websearch.SearchOptions{
+		MaxResults:     5,
+		IncludeDomains: append([]string(nil), policy.AllowedDomains...),
+		ExcludeDomains: append([]string(nil), policy.BlockedDomains...),
+	}
 }
 
 func extractWebSearchToolCalls(body []byte) ([]webSearchToolCall, error) {

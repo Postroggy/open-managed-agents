@@ -69,6 +69,10 @@ func NewTavilyClient(endpoint, apiKey string, timeout time.Duration, client *htt
 	return &TavilyClient{endpoint: strings.TrimRight(strings.TrimSpace(endpoint), "/"), apiKey: strings.TrimSpace(apiKey), client: &configured}
 }
 
+func (*TavilyClient) ValidateOptions(SearchOptions) error {
+	return nil
+}
+
 func (c *TavilyClient) Search(ctx context.Context, request SearchRequest) (SearchResponse, error) {
 	query := strings.TrimSpace(request.Query)
 	if query == "" {

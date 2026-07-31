@@ -118,6 +118,13 @@ func NewBraveClient(cfg BraveClientConfig, client *http.Client) *BraveClient {
 	}
 }
 
+func (*BraveClient) ValidateOptions(options SearchOptions) error {
+	if len(options.IncludeDomains) > 0 || len(options.ExcludeDomains) > 0 {
+		return errors.New("brave web search does not support domain restrictions")
+	}
+	return nil
+}
+
 func (c *BraveClient) Search(ctx context.Context, request SearchRequest) (SearchResponse, error) {
 	if c == nil || c.apiKey == "" {
 		return SearchResponse{}, errors.New("web search provider is not configured")
@@ -126,8 +133,8 @@ func (c *BraveClient) Search(ctx context.Context, request SearchRequest) (Search
 	if query == "" {
 		return SearchResponse{}, errors.New("web search query is required")
 	}
-	if len(request.Options.IncludeDomains) > 0 || len(request.Options.ExcludeDomains) > 0 {
-		return SearchResponse{}, errors.New("brave web search does not support domain restrictions")
+	if err := c.ValidateOptions(request.Options); err != nil {
+		return SearchResponse{}, err
 	}
 	endpoint, err := c.searchURL(query, request.Options)
 	if err != nil {

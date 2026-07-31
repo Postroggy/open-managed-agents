@@ -14,6 +14,7 @@ import (
 
 type Provider interface {
 	Search(context.Context, SearchRequest) (SearchResponse, error)
+	ValidateOptions(SearchOptions) error
 }
 
 type providerFactory interface {
