@@ -79,6 +79,20 @@ gateway 发往 BYOK 的请求会删除调用方的 `Accept-Encoding`，交由 `h
 
 当前 provider-neutral 合同无法表达 `user_location`，因此请求携带该字段时会在调用 BYOK 前明确报错，而不是静默忽略。BYOK 模型只支持 direct client-tool calling：`web_search_20260209` 与 `web_search_20260318` 默认使用 code execution dynamic filtering，因此必须显式声明 `allowed_callers:["direct"]`；其他不包含 direct 的 caller 配置也会在 BYOK 前被拒绝。`response_inclusion` 仅在 `web_search_20260318` 校验 `full`/`excluded`；官方规定 direct calls 始终返回完整结果，因此不会静默删除结果。provider 失败转为 `web_search_tool_result_error`/`unavailable`，并在 gateway 记录一条含 `request_id` 与 `error_code` 的 `WARN`（不记录 query 等请求内容）；provider panic 不在 gateway 内恢复，由 API 层的 recover 中间件统一处理为 `500` 并记录 stack。gateway 内部的非 request 类错误在 handler 边界记录一次 `ERROR` 后返回 `502`，请求类错误记录 `WARN` 后返回 `400`。最终按原请求的 `stream` 选项返回 JSON 或合成 SSE；合成的 client/server tool input 使用 `content_block_start` 空 input 加 `input_json_delta`。gateway 暂不处理 `web_fetch`、BYOK 原生 web search 和 Batch Messages，也不修改 CCRv2 relay/MITM 协议。
 
+## Web Search 代码职责与依赖边界
+
+Web Search 实现保持在 `internal/messages` 的同一 package 内，以便复用 Anthropic payload 的内部 DTO；文件拆分表达的是职责边界，不是新的跨 package 抽象，也没有通用 server-tool framework。当前只有 Web Search 一个 concrete family，未来 Issue #185 如引入第二个实际受管 family，才在已验证的共性上抽取 catalog/adapter 边界。
+
+| 文件 | 职责 | 不负责的事项 |
+| --- | --- | --- |
+| `handler.go` | 在 HTTP 边界决定是否交给 gateway，并把 request error 映射为 `400`、其他 gateway error 映射为 `502` | 不解析 Web Search 协议，不执行 provider 搜索 |
+| `web_search_request.go` | 解析入站 JSON envelope；精确识别受支持的 `tools[].type`；校验 `allowed_callers`、`response_inclusion`、`max_uses` 等 Web Search 合同；将 server tool 和强制 `tool_choice` 投影为 BYOK 的 `oma_web_search` | 不调用 BYOK 或搜索 provider，不处理历史或响应 |
+| `web_search_gateway.go` | 编排一次请求的 BYOK 采样、provider 执行、`max_uses`/iteration 预算与 mixed/pause continuation；持有 HTTP client、provider 和 logger 等运行时依赖 | 不承担历史 block 的逐项投影，也不编码最终 JSON/SSE 响应 |
+| `web_search_protocol.go` | 识别、校验和双向投影 Web Search 历史；按 `tool_use_id` 配对 pending server search 与 client result，并构造供 gateway 执行的 pending call | 不持有 `*webSearchGateway`，不触发 BYOK 或 provider I/O，不合成 usage/SSE |
+| `web_search_response.go` | 将搜索执行结果映射为上游 `tool_result` 和对外 server-tool block；合成 token/search usage；编码最终 JSON 或 SSE | 不决定是否启用 gateway，不解析或执行历史 continuation |
+
+运行时依赖由 `handler.go` 进入 `webSearchGateway`。gateway 调用 request、protocol 和 response 投影，并通过 `internal/websearch.Provider` 执行搜索；protocol 与 response 只处理数据投影。共享类型仍使用明确的 `webSearch*` 名称，避免把当前特有的 Anthropic Web Search 语义伪装为可复用的通用 server-tool 类型。
+
 协议依据：
 
 - [Anthropic Server tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools)：server/client mixed turn、pending server result 与 `pause_turn` continuation。官方规定 mixed turn 里 API「does not run the server tool. It returns immediately so that you can run the client tool first」，随后在下一条请求上「runs the deferred server tool」；因此「client tool 先执行、server tool 后执行」是跨请求的时序约束，不是单条 user message 内部的 block 排序约束。同一文档还规定 `server_tool_use` 与其 result「pair up by `tool_use_id`, not by position」；
