@@ -1,7 +1,6 @@
 package messages
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +14,8 @@ const (
 	upstreamToolUseIDPrefix = "toolu_"
 )
 
+// The declarations below project persisted Anthropic message history between
+// public server-tool blocks and the ordinary BYOK tool transcript.
 type webSearchMessageEnvelope struct {
 	Role    string          `json:"role"`
 	Content json.RawMessage `json:"content"`
@@ -63,19 +64,6 @@ func hasWebSearchHistory(messages []json.RawMessage) bool {
 	return false
 }
 
-func webSearchResponseContent(body []byte) ([]json.RawMessage, error) {
-	var response struct {
-		Content []json.RawMessage `json:"content"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, err
-	}
-	if response.Content == nil {
-		return nil, errors.New("messages response content must be an array")
-	}
-	return response.Content, nil
-}
-
 func webSearchCalls(calls []webSearchToolCall) []webSearchToolCall {
 	searchCalls := make([]webSearchToolCall, 0, len(calls))
 	for _, call := range calls {
@@ -84,262 +72,6 @@ func webSearchCalls(calls []webSearchToolCall) []webSearchToolCall {
 		}
 	}
 	return searchCalls
-}
-
-// webSearchUsageAccumulator 汇总同一条入站请求内所有 BYOK 采样的 token 计量。
-// gateway 会为一次外部请求发起多次 BYOK 采样，只保留最后一次响应的 usage 会少报
-// 前几次迭代消耗的 token。
-//
-// Anthropic usage 的顶层数值字段都是可累加的 token 计数，因此按 JSON 数值类型判定
-// 累加对象即可覆盖后续新增的计数器；字符串和嵌套对象（service_tier、cache_creation、
-// server_tool_use）保留最后一次采样的值。
-type webSearchUsageAccumulator struct {
-	totals  map[string]int64
-	last    map[string]json.RawMessage
-	samples int
-}
-
-// add 累加一次 BYOK 响应的 usage；响应不携带 usage 时不计入采样。
-func (u *webSearchUsageAccumulator) add(body []byte) error {
-	var response struct {
-		Usage json.RawMessage `json:"usage"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return fmt.Errorf("decode messages usage: %w", err)
-	}
-	if len(response.Usage) == 0 {
-		return nil
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(response.Usage, &fields); err != nil {
-		return fmt.Errorf("decode messages usage: %w", err)
-	}
-	if len(fields) == 0 {
-		return nil
-	}
-	if u.totals == nil {
-		u.totals = make(map[string]int64, len(fields))
-	}
-	for name, value := range fields {
-		if count, ok := webSearchUsageCount(value); ok {
-			u.totals[name] += count
-		}
-	}
-	u.last = fields
-	u.samples++
-	return nil
-}
-
-// merge 生成跨迭代累计后的 token 计量。只采样到一次时返回 false，让调用方保持上游
-// usage 原样透传。
-func (u *webSearchUsageAccumulator) merge() (map[string]json.RawMessage, bool) {
-	if u == nil || u.samples == 0 {
-		return nil, false
-	}
-	merged := cloneRawMap(u.last)
-	if u.samples < 2 {
-		return merged, false
-	}
-	for name, total := range u.totals {
-		encoded, err := json.Marshal(total)
-		if err != nil {
-			// int64 序列化不会失败；保留最后一次采样的原值而不是让整个响应失败。
-			continue
-		}
-		merged[name] = encoded
-	}
-	return merged, true
-}
-
-// webSearchUsage 生成最终响应的 usage：先按字段名累加多次 BYOK 采样的 token 计数，再写入
-// gateway 自己执行的搜索次数。返回 false 表示无需改写上游 usage。
-//
-// Anthropic 用 usage.server_tool_use.web_search_requests 上报搜索次数，而 BYOK 只看到
-// ordinary tool，不会上报该字段，因此这里由 gateway 补齐。
-func (u *webSearchUsageAccumulator) webSearchUsage(searchRequests int) (json.RawMessage, bool, error) {
-	merged, changed := u.merge()
-	if searchRequests > 0 {
-		if merged == nil {
-			merged = make(map[string]json.RawMessage, 1)
-		}
-		serverToolUse, err := webSearchServerToolUsage(merged["server_tool_use"], searchRequests)
-		if err != nil {
-			return nil, false, err
-		}
-		merged["server_tool_use"] = serverToolUse
-		changed = true
-	}
-	if !changed {
-		return nil, false, nil
-	}
-	encoded, err := json.Marshal(merged)
-	if err != nil {
-		return nil, false, fmt.Errorf("encode messages usage: %w", err)
-	}
-	return encoded, true, nil
-}
-
-// webSearchServerToolUsage 在保留上游其他 server tool 计量的前提下写入搜索次数。
-func webSearchServerToolUsage(existing json.RawMessage, searchRequests int) (json.RawMessage, error) {
-	fields := map[string]json.RawMessage{}
-	if len(existing) > 0 {
-		if err := json.Unmarshal(existing, &fields); err != nil {
-			return nil, fmt.Errorf("decode messages server tool usage: %w", err)
-		}
-	}
-	encodedRequests, err := json.Marshal(searchRequests)
-	if err != nil {
-		return nil, fmt.Errorf("encode web search request count: %w", err)
-	}
-	fields["web_search_requests"] = encodedRequests
-	encoded, err := json.Marshal(fields)
-	if err != nil {
-		return nil, fmt.Errorf("encode messages server tool usage: %w", err)
-	}
-	return encoded, nil
-}
-
-// countBillableWebSearchRequests 统计本次响应内容里计费的搜索次数。Anthropic 规定每次
-// 搜索计一次、失败的搜索不计费，因此只统计带结果的 web_search_tool_result；
-// max_uses_exceeded 与 provider 失败都以 web_search_tool_result_error 呈现，不计入。
-func countBillableWebSearchRequests(content []json.RawMessage) int {
-	requests := 0
-	for _, rawBlock := range content {
-		var block webSearchProtocolBlock
-		if json.Unmarshal(rawBlock, &block) != nil || block.Type != "web_search_tool_result" {
-			continue
-		}
-		if webSearchResultErrorCode(block.Content) != "" {
-			continue
-		}
-		requests++
-	}
-	return requests
-}
-
-func webSearchUsageCount(value json.RawMessage) (int64, bool) {
-	var number json.Number
-	if err := json.Unmarshal(value, &number); err != nil {
-		return 0, false
-	}
-	count, err := number.Int64()
-	if err != nil {
-		return 0, false
-	}
-	return count, true
-}
-
-func finalizeWebSearchResponse(response webSearchGatewayResponse, content []json.RawMessage, stream bool, stopReason string, usage *webSearchUsageAccumulator) (webSearchGatewayResponse, error) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(response.body, &fields); err != nil {
-		return webSearchGatewayResponse{}, fmt.Errorf("decode messages response: %w", err)
-	}
-	encodedContent, err := json.Marshal(content)
-	if err != nil {
-		return webSearchGatewayResponse{}, fmt.Errorf("encode messages response content: %w", err)
-	}
-	fields["content"] = encodedContent
-	if stopReason != "" {
-		encodedStopReason, err := json.Marshal(stopReason)
-		if err != nil {
-			return webSearchGatewayResponse{}, fmt.Errorf("encode messages stop reason: %w", err)
-		}
-		fields["stop_reason"] = encodedStopReason
-	}
-	mergedUsage, changed, err := usage.webSearchUsage(countBillableWebSearchRequests(content))
-	if err != nil {
-		return webSearchGatewayResponse{}, err
-	}
-	if changed {
-		fields["usage"] = mergedUsage
-	}
-	response.body, err = json.Marshal(fields)
-	if err != nil {
-		return webSearchGatewayResponse{}, fmt.Errorf("encode messages response: %w", err)
-	}
-	if stream {
-		response.body, err = encodeWebSearchSSE(response.body)
-		if err != nil {
-			return webSearchGatewayResponse{}, fmt.Errorf("encode messages stream: %w", err)
-		}
-		response.header.Set("Content-Type", "text/event-stream")
-		prepareResponseHeaders(response.header)
-	}
-	response.header.Del("Content-Length")
-	return response, nil
-}
-
-func (g *webSearchGateway) prepareWebSearchTranscript(ctx context.Context, messages []json.RawMessage, policy webSearchPolicy) ([]json.RawMessage, []json.RawMessage, int, error) {
-	pending, err := findPendingWebSearchTurn(messages)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	paused, err := findPausedWebSearchTurn(messages)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	transcript, err := projectWebSearchTranscript(messages)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	// max_uses 是 per-request 上限，与 Anthropic 官方语义一致（"limits the number of
-	// searches performed" per request，每条请求独立计数）。同一请求内的 BYOK
-	// continuation 不重置计数；pause_turn 与 mixed continuation 是新的入站请求，因此
-	// 按官方语义重新获得完整额度，gateway 不从历史里累加。
-	if pending == nil && paused == nil {
-		return transcript, nil, 0, nil
-	}
-	if paused != nil {
-		return g.resumePausedWebSearchTurn(ctx, transcript, paused, policy)
-	}
-	searchResults, executions, searchUses, err := g.executeSearchCalls(ctx, pending.searchCalls(), policy, 0)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	mergedResults, err := pending.mergeResults(searchResults)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	if len(transcript) == 0 {
-		return nil, nil, 0, errors.New("pending web search continuation has no transcript")
-	}
-	transcript[len(transcript)-1], err = replaceWebSearchMessageContent(transcript[len(transcript)-1], mergedResults)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	prefix, err := webSearchExecutionResultBlocks(executions)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	return transcript, prefix, searchUses, nil
-}
-
-func webSearchResultErrorCode(content json.RawMessage) string {
-	var resultError struct {
-		Type      string `json:"type"`
-		ErrorCode string `json:"error_code"`
-	}
-	if json.Unmarshal(content, &resultError) != nil || resultError.Type != "web_search_tool_result_error" {
-		return ""
-	}
-	return resultError.ErrorCode
-}
-
-func (g *webSearchGateway) resumePausedWebSearchTurn(ctx context.Context, transcript []json.RawMessage, pending *webSearchPendingTurn, policy webSearchPolicy) ([]json.RawMessage, []json.RawMessage, int, error) {
-	searchResults, executions, searchUses, err := g.executeSearchCalls(ctx, pending.searchCalls(), policy, 0)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	resultMessage, err := webSearchUserMessage(searchResults)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	transcript = append(transcript, resultMessage)
-	prefix, err := webSearchExecutionResultBlocks(executions)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	return transcript, prefix, searchUses, nil
 }
 
 func isWebSearchPauseContinuation(messages []json.RawMessage) bool {

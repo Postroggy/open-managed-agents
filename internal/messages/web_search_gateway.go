@@ -31,6 +31,7 @@ const (
 	searchErrorMaxUses          = "max_uses_exceeded"
 )
 
+// webSearchGateway coordinates BYOK sampling and managed provider execution.
 type webSearchGateway struct {
 	upstreamBaseURL         string
 	upstreamAPIKey          string
@@ -38,12 +39,6 @@ type webSearchGateway struct {
 	client                  *http.Client
 	searcher                websearch.Provider
 	logger                  *slog.Logger
-}
-
-type webSearchGatewayResponse struct {
-	statusCode int
-	header     http.Header
-	body       []byte
 }
 
 type webSearchGatewayRequestError struct {
@@ -56,12 +51,6 @@ func (e *webSearchGatewayRequestError) Error() string {
 
 func (e *webSearchGatewayRequestError) Unwrap() error {
 	return e.cause
-}
-
-type webSearchGatewayRequest struct {
-	fields   map[string]json.RawMessage
-	messages []json.RawMessage
-	stream   bool
 }
 
 type webSearchPreparedRequest struct {
@@ -100,46 +89,6 @@ func (e webSearchExecution) serverToolUseID() (string, error) {
 
 type webSearchInput struct {
 	Query string `json:"query"`
-}
-
-type webSearchPolicy struct {
-	MaxUses        int
-	AllowedDomains []string
-	BlockedDomains []string
-}
-
-type webSearchUserLocation struct {
-	Type     string `json:"type"`
-	City     string `json:"city,omitempty"`
-	Region   string `json:"region,omitempty"`
-	Country  string `json:"country,omitempty"`
-	Timezone string `json:"timezone,omitempty"`
-}
-
-type webSearchContentBlock struct {
-	Type  string          `json:"type"`
-	ID    string          `json:"id,omitempty"`
-	Name  string          `json:"name,omitempty"`
-	Input json.RawMessage `json:"input,omitempty"`
-	Text  string          `json:"text,omitempty"`
-}
-
-type webSearchToolResultBlock struct {
-	Type      string          `json:"type"`
-	ToolUseID string          `json:"tool_use_id"`
-	IsError   bool            `json:"is_error,omitempty"`
-	Content   json.RawMessage `json:"content"`
-}
-
-type webSearchResultBlock struct {
-	Type    string `json:"type,omitempty"`
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	Content string `json:"content,omitempty"`
-	// EncryptedContent is opaque provider data. OMA-managed search leaves it empty.
-	EncryptedContent string `json:"encrypted_content,omitempty"`
-	PublishedDate    string `json:"published_date,omitempty"`
-	PageAge          string `json:"page_age,omitempty"`
 }
 
 func newWebSearchGateway(cfg config.Config, client *http.Client, searcher websearch.Provider, logger *slog.Logger) *webSearchGateway {
@@ -362,205 +311,65 @@ func (g *webSearchGateway) executeSearchCalls(ctx context.Context, calls []webSe
 	return results, executions, searchUses, nil
 }
 
-func parseWebSearchRequest(body []byte) (webSearchGatewayRequest, error) {
-	fields := map[string]json.RawMessage{}
-	if err := json.Unmarshal(body, &fields); err != nil {
-		return webSearchGatewayRequest{}, fmt.Errorf("invalid JSON request body: %w", err)
-	}
-	var messages []json.RawMessage
-	if raw := fields["messages"]; len(raw) > 0 {
-		if err := json.Unmarshal(raw, &messages); err != nil {
-			return webSearchGatewayRequest{}, fmt.Errorf("messages must be an array: %w", err)
-		}
-	}
-	var stream bool
-	if raw := fields["stream"]; len(raw) > 0 {
-		if err := json.Unmarshal(raw, &stream); err != nil {
-			return webSearchGatewayRequest{}, fmt.Errorf("stream must be a boolean: %w", err)
-		}
-	}
-	return webSearchGatewayRequest{fields: fields, messages: messages, stream: stream}, nil
-}
-
-func hasWebSearchTool(raw json.RawMessage) bool {
-	var tools []json.RawMessage
-	if json.Unmarshal(raw, &tools) != nil {
-		return false
-	}
-	for _, rawTool := range tools {
-		var tool struct {
-			Type string `json:"type"`
-		}
-		if err := json.Unmarshal(rawTool, &tool); err != nil {
-			continue
-		}
-		if isServerWebSearchToolType(tool.Type) {
-			return true
-		}
-	}
-	return false
-}
-
-func projectWebSearchFields(fields map[string]json.RawMessage) (map[string]json.RawMessage, webSearchPolicy, error) {
-	projected := cloneRawMap(fields)
-	rawTools, ok := fields["tools"]
-	if !ok {
-		return projected, webSearchPolicy{}, nil
-	}
-	var tools []json.RawMessage
-	if err := json.Unmarshal(rawTools, &tools); err != nil {
-		return nil, webSearchPolicy{}, fmt.Errorf("tools must be an array: %w", err)
-	}
-	projectedTools := make([]json.RawMessage, 0, len(tools))
-	var searchPolicy webSearchPolicy
-	foundSearchTool := false
-	for _, rawTool := range tools {
-		var tool webSearchTool
-		if err := json.Unmarshal(rawTool, &tool); err != nil {
-			return nil, webSearchPolicy{}, fmt.Errorf("decode tool: %w", err)
-		}
-		if isServerWebSearchToolType(tool.Type) {
-			if foundSearchTool {
-				return nil, webSearchPolicy{}, errors.New("multiple web search tools are unsupported")
-			}
-			var err error
-			searchPolicy, err = tool.searchPolicy()
-			if err != nil {
-				return nil, webSearchPolicy{}, err
-			}
-			foundSearchTool = true
-			projectedTools = append(projectedTools, searchToolDefinition())
-			continue
-		}
-		projectedTools = append(projectedTools, rawTool)
-	}
-	encodedTools, err := json.Marshal(projectedTools)
+func (g *webSearchGateway) prepareWebSearchTranscript(ctx context.Context, messages []json.RawMessage, policy webSearchPolicy) ([]json.RawMessage, []json.RawMessage, int, error) {
+	pending, err := findPendingWebSearchTurn(messages)
 	if err != nil {
-		return nil, webSearchPolicy{}, fmt.Errorf("encode tools: %w", err)
+		return nil, nil, 0, err
 	}
-	projected["tools"] = encodedTools
-	if foundSearchTool {
-		if err := projectWebSearchToolChoice(projected); err != nil {
-			return nil, webSearchPolicy{}, err
-		}
-	}
-	return projected, searchPolicy, nil
-}
-
-// projectWebSearchToolChoice keeps a forced server Web Search call aligned with
-// the gateway-owned name sent to BYOK. Other tool_choice variants remain opaque.
-func projectWebSearchToolChoice(fields map[string]json.RawMessage) error {
-	rawChoice, ok := fields["tool_choice"]
-	if !ok {
-		return nil
-	}
-	var choice map[string]json.RawMessage
-	if err := json.Unmarshal(rawChoice, &choice); err != nil {
-		return nil
-	}
-	var choiceType, name string
-	if json.Unmarshal(choice["type"], &choiceType) != nil || json.Unmarshal(choice["name"], &name) != nil {
-		return nil
-	}
-	if choiceType != "tool" || name != searchToolName {
-		return nil
-	}
-	encodedName, err := json.Marshal(upstreamSearchToolName)
+	paused, err := findPausedWebSearchTurn(messages)
 	if err != nil {
-		return fmt.Errorf("encode projected tool choice name: %w", err)
+		return nil, nil, 0, err
 	}
-	choice["name"] = encodedName
-	encodedChoice, err := json.Marshal(choice)
+	transcript, err := projectWebSearchTranscript(messages)
 	if err != nil {
-		return fmt.Errorf("encode projected tool choice: %w", err)
+		return nil, nil, 0, err
 	}
-	fields["tool_choice"] = encodedChoice
-	return nil
+	// max_uses is a per-request limit. BYOK continuations in this request share
+	// the same count; pause_turn and mixed continuations are new requests and
+	// therefore receive their full configured allowance.
+	if pending == nil && paused == nil {
+		return transcript, nil, 0, nil
+	}
+	if paused != nil {
+		return g.resumePausedWebSearchTurn(ctx, transcript, paused, policy)
+	}
+	searchResults, executions, searchUses, err := g.executeSearchCalls(ctx, pending.searchCalls(), policy, 0)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	mergedResults, err := pending.mergeResults(searchResults)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if len(transcript) == 0 {
+		return nil, nil, 0, errors.New("pending web search continuation has no transcript")
+	}
+	transcript[len(transcript)-1], err = replaceWebSearchMessageContent(transcript[len(transcript)-1], mergedResults)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	prefix, err := webSearchExecutionResultBlocks(executions)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return transcript, prefix, searchUses, nil
 }
 
-type webSearchTool struct {
-	Type              string                 `json:"type"`
-	MaxUses           *int                   `json:"max_uses,omitempty"`
-	AllowedDomains    []string               `json:"allowed_domains,omitempty"`
-	BlockedDomains    []string               `json:"blocked_domains,omitempty"`
-	AllowedCallers    []string               `json:"allowed_callers,omitempty"`
-	ResponseInclusion string                 `json:"response_inclusion,omitempty"`
-	UserLocation      *webSearchUserLocation `json:"user_location,omitempty"`
-}
-
-func (t webSearchTool) searchPolicy() (webSearchPolicy, error) {
-	if err := t.validateDirectCaller(); err != nil {
-		return webSearchPolicy{}, err
+func (g *webSearchGateway) resumePausedWebSearchTurn(ctx context.Context, transcript []json.RawMessage, pending *webSearchPendingTurn, policy webSearchPolicy) ([]json.RawMessage, []json.RawMessage, int, error) {
+	searchResults, executions, searchUses, err := g.executeSearchCalls(ctx, pending.searchCalls(), policy, 0)
+	if err != nil {
+		return nil, nil, 0, err
 	}
-	if err := t.validateResponseInclusion(); err != nil {
-		return webSearchPolicy{}, err
+	resultMessage, err := webSearchUserMessage(searchResults)
+	if err != nil {
+		return nil, nil, 0, err
 	}
-	if t.MaxUses != nil && *t.MaxUses <= 0 {
-		return webSearchPolicy{}, errors.New("web search max_uses must be positive")
+	transcript = append(transcript, resultMessage)
+	prefix, err := webSearchExecutionResultBlocks(executions)
+	if err != nil {
+		return nil, nil, 0, err
 	}
-	if len(t.AllowedDomains) > 0 && len(t.BlockedDomains) > 0 {
-		return webSearchPolicy{}, errors.New("web search cannot include both allowed_domains and blocked_domains")
-	}
-	if t.UserLocation != nil {
-		return webSearchPolicy{}, errors.New("web search user_location is unsupported by the configured provider")
-	}
-	policy := webSearchPolicy{
-		AllowedDomains: append([]string(nil), t.AllowedDomains...),
-		BlockedDomains: append([]string(nil), t.BlockedDomains...),
-	}
-	if t.MaxUses != nil {
-		policy.MaxUses = *t.MaxUses
-	}
-	return policy, nil
-}
-
-func (t webSearchTool) validateDirectCaller() error {
-	if t.AllowedCallers == nil {
-		if t.Type == "web_search_20250305" {
-			return nil
-		}
-		return errors.New(`web search allowed_callers must include "direct" for the configured BYOK model`)
-	}
-	direct := false
-	for _, caller := range t.AllowedCallers {
-		switch caller {
-		case "direct":
-			direct = true
-		case "code_execution_20260120":
-		default:
-			return fmt.Errorf("unsupported web search allowed caller %q", caller)
-		}
-	}
-	if !direct {
-		return errors.New(`web search allowed_callers must include "direct" for the configured BYOK model`)
-	}
-	return nil
-}
-
-func (t webSearchTool) validateResponseInclusion() error {
-	if t.ResponseInclusion == "" {
-		return nil
-	}
-	if t.Type != "web_search_20260318" {
-		return errors.New("web search response_inclusion requires web_search_20260318")
-	}
-	if t.ResponseInclusion != "full" && t.ResponseInclusion != "excluded" {
-		return fmt.Errorf("unsupported web search response_inclusion %q", t.ResponseInclusion)
-	}
-	return nil
-}
-
-func isServerWebSearchToolType(value string) bool {
-	switch value {
-	case "web_search_20250305", "web_search_20260209", "web_search_20260318":
-		return true
-	default:
-		return false
-	}
-}
-
-func searchToolDefinition() json.RawMessage {
-	return json.RawMessage(`{"name":"` + upstreamSearchToolName + `","description":"Search the public web and return relevant results.","input_schema":{"type":"object","properties":{"query":{"type":"string","description":"The web search query"}},"required":["query"]}}`)
+	return transcript, prefix, searchUses, nil
 }
 
 func (g *webSearchGateway) send(ctx context.Context, body []byte, rawQuery string, headers http.Header) (webSearchGatewayResponse, error) {
@@ -666,226 +475,4 @@ func extractWebSearchToolCalls(body []byte) ([]webSearchToolCall, error) {
 		calls = append(calls, call)
 	}
 	return calls, nil
-}
-
-func webSearchAssistantMessage(body []byte) (json.RawMessage, error) {
-	var response struct {
-		Content []json.RawMessage `json:"content"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("decode assistant message: %w", err)
-	}
-	message := struct {
-		Role    string            `json:"role"`
-		Content []json.RawMessage `json:"content"`
-	}{Role: "assistant", Content: response.Content}
-	encoded, err := json.Marshal(message)
-	if err != nil {
-		return nil, fmt.Errorf("marshal assistant message: %w", err)
-	}
-	return encoded, nil
-}
-
-func webSearchUserMessage(results []json.RawMessage) (json.RawMessage, error) {
-	message := struct {
-		Role    string            `json:"role"`
-		Content []json.RawMessage `json:"content"`
-	}{Role: "user", Content: results}
-	encoded, err := json.Marshal(message)
-	if err != nil {
-		return nil, fmt.Errorf("marshal user message: %w", err)
-	}
-	return encoded, nil
-}
-
-func webSearchToolResult(execution webSearchExecution) (json.RawMessage, error) {
-	if execution.err != nil {
-		message := `"web search unavailable"`
-		if execution.errorCode == searchErrorMaxUses {
-			message = `"web search max uses exceeded"`
-		}
-		return marshalWebSearchToolResult(webSearchToolResultBlock{
-			Type: "tool_result", ToolUseID: execution.call.id, IsError: true,
-			Content: json.RawMessage(message),
-		})
-	}
-	content := make([]webSearchResultBlock, 0, len(execution.results.Results))
-	for _, result := range execution.results.Results {
-		content = append(content, resultToUpstreamContentItem(result))
-	}
-	encoded, err := json.Marshal(content)
-	if err != nil {
-		return nil, fmt.Errorf("marshal web search results: %w", err)
-	}
-	return marshalWebSearchToolResult(webSearchToolResultBlock{Type: "tool_result", ToolUseID: execution.call.id, Content: encoded})
-}
-
-func marshalWebSearchToolResult(result webSearchToolResultBlock) (json.RawMessage, error) {
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal tool result: %w", err)
-	}
-	return encoded, nil
-}
-
-// resultToUpstreamContentItem 生成发给 BYOK 的 tool_result 条目。BYOK 侧是 ordinary
-// tool，条目不带 Anthropic 的 web_search_result 类型标记，但保留正文供模型引用。
-func resultToUpstreamContentItem(result websearch.Result) webSearchResultBlock {
-	content := result.Snippet
-	if result.Text != "" {
-		content = result.Text
-	}
-	return webSearchResultBlock{
-		Title:         result.Title,
-		URL:           result.URL,
-		Content:       content,
-		PublishedDate: result.PublishedDate,
-		PageAge:       result.PageAge,
-	}
-}
-
-// resultToServerContentItem 生成面向调用方的 web_search_result 条目，只暴露标题、URL
-// 与页面时间。
-func resultToServerContentItem(result websearch.Result) webSearchResultBlock {
-	return webSearchResultBlock{
-		Type:    "web_search_result",
-		Title:   result.Title,
-		URL:     result.URL,
-		PageAge: result.PageAge,
-	}
-}
-
-func encodeWebSearchSSE(body []byte) ([]byte, error) {
-	var message map[string]json.RawMessage
-	if err := json.Unmarshal(body, &message); err != nil {
-		return nil, err
-	}
-	var content []json.RawMessage
-	if err := json.Unmarshal(message["content"], &content); err != nil {
-		return nil, errors.New("messages response content must be an array")
-	}
-	messageStart := cloneRawMap(message)
-	messageStart["content"] = json.RawMessage("[]")
-	messageStart["stop_reason"] = json.RawMessage("null")
-	messageStart["stop_sequence"] = json.RawMessage("null")
-	var output bytes.Buffer
-	if err := writeWebSearchSSE(&output, "message_start", struct {
-		Type    string                     `json:"type"`
-		Message map[string]json.RawMessage `json:"message"`
-	}{Type: "message_start", Message: messageStart}); err != nil {
-		return nil, err
-	}
-	for index, rawBlock := range content {
-		var block webSearchContentBlock
-		if err := json.Unmarshal(rawBlock, &block); err != nil {
-			return nil, fmt.Errorf("decode messages content block: %w", err)
-		}
-		startBlock := append(json.RawMessage(nil), rawBlock...)
-		var toolInput json.RawMessage
-		if block.Type == "text" {
-			var fields map[string]json.RawMessage
-			if err := json.Unmarshal(rawBlock, &fields); err != nil {
-				return nil, fmt.Errorf("decode text content block: %w", err)
-			}
-			fields["text"] = json.RawMessage(`""`)
-			var err error
-			startBlock, err = json.Marshal(fields)
-			if err != nil {
-				return nil, fmt.Errorf("marshal text content block: %w", err)
-			}
-		} else if block.Type == "tool_use" || block.Type == "server_tool_use" {
-			var fields map[string]json.RawMessage
-			if err := json.Unmarshal(rawBlock, &fields); err != nil {
-				return nil, fmt.Errorf("decode tool content block: %w", err)
-			}
-			toolInput = append(json.RawMessage(nil), fields["input"]...)
-			fields["input"] = json.RawMessage(`{}`)
-			var err error
-			startBlock, err = json.Marshal(fields)
-			if err != nil {
-				return nil, fmt.Errorf("marshal tool content block: %w", err)
-			}
-		}
-		if err := writeWebSearchSSE(&output, "content_block_start", struct {
-			Type         string          `json:"type"`
-			Index        int             `json:"index"`
-			ContentBlock json.RawMessage `json:"content_block"`
-		}{Type: "content_block_start", Index: index, ContentBlock: startBlock}); err != nil {
-			return nil, err
-		}
-		if block.Text != "" {
-			if err := writeWebSearchSSE(&output, "content_block_delta", struct {
-				Type  string `json:"type"`
-				Index int    `json:"index"`
-				Delta struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"delta"`
-			}{Type: "content_block_delta", Index: index, Delta: struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			}{Type: "text_delta", Text: block.Text}}); err != nil {
-				return nil, err
-			}
-		} else if len(toolInput) > 0 {
-			if err := writeWebSearchSSE(&output, "content_block_delta", struct {
-				Type  string `json:"type"`
-				Index int    `json:"index"`
-				Delta struct {
-					Type        string `json:"type"`
-					PartialJSON string `json:"partial_json"`
-				} `json:"delta"`
-			}{Type: "content_block_delta", Index: index, Delta: struct {
-				Type        string `json:"type"`
-				PartialJSON string `json:"partial_json"`
-			}{Type: "input_json_delta", PartialJSON: string(toolInput)}}); err != nil {
-				return nil, err
-			}
-		}
-		if err := writeWebSearchSSE(&output, "content_block_stop", struct {
-			Type  string `json:"type"`
-			Index int    `json:"index"`
-		}{Type: "content_block_stop", Index: index}); err != nil {
-			return nil, err
-		}
-	}
-	if err := writeWebSearchSSE(&output, "message_delta", struct {
-		Type  string `json:"type"`
-		Delta struct {
-			StopReason   json.RawMessage `json:"stop_reason"`
-			StopSequence json.RawMessage `json:"stop_sequence"`
-		} `json:"delta"`
-		Usage json.RawMessage `json:"usage"`
-	}{Type: "message_delta", Delta: struct {
-		StopReason   json.RawMessage `json:"stop_reason"`
-		StopSequence json.RawMessage `json:"stop_sequence"`
-	}{StopReason: message["stop_reason"], StopSequence: message["stop_sequence"]}, Usage: message["usage"]}); err != nil {
-		return nil, err
-	}
-	if err := writeWebSearchSSE(&output, "message_stop", struct {
-		Type string `json:"type"`
-	}{Type: "message_stop"}); err != nil {
-		return nil, err
-	}
-	return output.Bytes(), nil
-}
-
-func writeWebSearchSSE(output *bytes.Buffer, event string, value any) error {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return fmt.Errorf("marshal %s event: %w", event, err)
-	}
-	output.WriteString("event: " + event + "\n")
-	output.WriteString("data: ")
-	output.Write(data)
-	output.WriteString("\n\n")
-	return nil
-}
-
-func cloneRawMap(source map[string]json.RawMessage) map[string]json.RawMessage {
-	clone := make(map[string]json.RawMessage, len(source))
-	for key, value := range source {
-		clone[key] = append(json.RawMessage(nil), value...)
-	}
-	return clone
 }
