@@ -123,9 +123,10 @@ func run(logger *slog.Logger) error {
 		logger.With("component", "batches"),
 	).Start(ctx)
 	environmentLogger := logger.With("component", "environment_runner")
+	sandboxProvider := e2bruntime.NewProvider(cfg.E2B)
 	environmentRunner, err := environments.NewRunner(environments.RunnerDependencies{
 		DB:              database,
-		Provider:        e2bruntime.NewProvider(cfg.E2B),
+		Provider:        sandboxProvider,
 		Config:          cfg,
 		CodeSessions:    codesessions.NewServiceWithCredentials(database, codeSessionCredentials, environmentLogger),
 		Skills:          skillsapi.NewRuntimeResolver(database),
@@ -148,6 +149,7 @@ func run(logger *slog.Logger) error {
 			ModelCatalog:           catalog,
 			PlatformStore:          platformSessions,
 			CodeSessionCredentials: codeSessionCredentials,
+			SandboxTimeoutExtender: sandboxProvider,
 			FilestoreCredentials:   filestoreCredentials,
 			FilestoreService:       filestoreService,
 		}),

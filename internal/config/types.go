@@ -91,11 +91,12 @@ type E2BConfig struct {
 }
 
 type EnvironmentRunnerConfig struct {
-	Enabled            bool   `yaml:"enabled"`
-	Concurrency        int    `yaml:"concurrency"`
-	ManagerPath        string `yaml:"manager_path"`
-	ClaudeAgentVersion string `yaml:"claude_agent_version"`
-	ClaudePath         string `yaml:"claude_path"`
+	Enabled                 bool          `yaml:"enabled"`
+	Concurrency             int           `yaml:"concurrency"`
+	PackageProvisionTimeout time.Duration `yaml:"package_provision_timeout"`
+	ManagerPath             string        `yaml:"manager_path"`
+	ClaudeAgentVersion      string        `yaml:"claude_agent_version"`
+	ClaudePath              string        `yaml:"claude_path"`
 }
 
 type CodeSessionConfig struct {
@@ -124,13 +125,12 @@ type WebhookConfig struct {
 }
 
 type BootstrapConfig struct {
-	SeedAPIKeys            []SeedAPIKey `yaml:"seed_api_keys"`
-	WorkspaceName          string       `yaml:"workspace_name"`
-	OrganizationName       string       `yaml:"organization_name"`
-	OrganizationExternalID string       `yaml:"organization_external_id"`
-	WorkspaceExternalID    string       `yaml:"workspace_external_id"`
-	UserExternalID         string       `yaml:"user_external_id"`
-	APIKeyExternalID       string       `yaml:"api_key_external_id"`
+	SeedAPIKeys         []SeedAPIKey `yaml:"seed_api_keys"`
+	WorkspaceName       string       `yaml:"workspace_name"`
+	OrganizationName    string       `yaml:"organization_name"`
+	WorkspaceExternalID string       `yaml:"workspace_external_id"`
+	UserExternalID      string       `yaml:"user_external_id"`
+	APIKeyExternalID    string       `yaml:"api_key_external_id"`
 }
 
 type SDKFixtureConfig struct {

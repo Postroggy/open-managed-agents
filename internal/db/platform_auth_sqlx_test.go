@@ -3,6 +3,8 @@ package db
 import (
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestPlatformAuthQueriesUseSQLXNamedParameters(t *testing.T) {
@@ -10,7 +12,7 @@ func TestPlatformAuthQueriesUseSQLXNamedParameters(t *testing.T) {
 		if _, _, err := bindNamed(postgresRebinder{}, resolvePlatformSessionIdentityQuery, map[string]any{
 			"org_uuid": "org_test",
 		}); err == nil {
-			t.Fatal("bindNamed() error = nil, want missing user_uuid error")
+			t.Fatal("bindNamed() error = nil, want missing user identity error")
 		}
 	})
 
@@ -31,9 +33,10 @@ func TestPlatformAuthQueriesUseSQLXNamedParameters(t *testing.T) {
 			query: resolvePlatformSessionIdentityQuery,
 			arguments: map[string]any{
 				"org_uuid":  "org_test",
+				"user_id":   "user_test",
 				"user_uuid": "user_test",
 			},
-			wantArgCount: 5,
+			wantArgCount: 4,
 		},
 	}
 
@@ -58,21 +61,20 @@ func TestPlatformAuthQueriesUseSQLXNamedParameters(t *testing.T) {
 
 func TestPlatformSessionIdentityRowMapping(t *testing.T) {
 	row := platformSessionIdentityRow{
-		OrganizationID:         1,
-		OrganizationUUID:       "org-uuid",
-		OrganizationExternalID: "org_test",
-		WorkspaceID:            2,
-		WorkspaceUUID:          "workspace-uuid",
-		WorkspaceExternalID:    "workspace_test",
-		UserID:                 3,
-		UserExternalID:         "user_test",
-		APIKeyID:               4,
-		APIKeyExternalID:       "api_key_test",
+		OrganizationUUID:    uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		WorkspaceUUID:       uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+		WorkspaceExternalID: "workspace_test",
+		UserUUID:            uuid.MustParse("00000000-0000-0000-0000-000000000003"),
+		UserExternalID:      "user_test",
+		APIKeyUUID:          uuid.MustParse("00000000-0000-0000-0000-000000000004"),
+		APIKeyExternalID:    "api_key_test",
 	}
 
 	session := row.session()
-	if session.OrganizationID != row.OrganizationID ||
+	if session.OrganizationUUID != row.OrganizationUUID.String() ||
 		session.WorkspaceExternalID != row.WorkspaceExternalID ||
+		session.UserUUID != row.UserUUID.String() ||
+		session.APIKeyUUID != row.APIKeyUUID.String() ||
 		session.APIKeyExternalID != row.APIKeyExternalID {
 		t.Fatalf("session = %#v, want values from row %#v", session, row)
 	}

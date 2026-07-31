@@ -661,10 +661,11 @@ func TestCreateWorkbenchPromptReusesCapturedDefaultPrompt(t *testing.T) {
 	store := &fakeWorkbenchPersistenceStore{
 		prompts: map[string]WorkbenchPromptRecord{
 			fakeWorkbenchPersistenceKey(orgUUID, workbenchDefaultPromptID): {
-				OrgUUID:     orgUUID,
-				PromptUUID:  workbenchDefaultPromptID,
-				WorkspaceID: "wrkspc_previous",
-				Name:        "Existing prompt",
+				OrgUUID:            orgUUID,
+				PromptUUID:         workbenchDefaultPromptID,
+				WorkspaceUUID:      fakeWorkbenchWorkspaceUUID("wrkspc_previous"),
+				WorkspaceDisplayID: "wrkspc_previous",
+				Name:               "Existing prompt",
 			},
 		},
 	}
@@ -743,10 +744,11 @@ func TestDeleteCapturedDefaultWorkbenchPromptResetsInsteadOfHidingIt(t *testing.
 	store := &fakeWorkbenchPersistenceStore{
 		prompts: map[string]WorkbenchPromptRecord{
 			fakeWorkbenchPersistenceKey(orgUUID, workbenchDefaultPromptID): {
-				OrgUUID:     orgUUID,
-				PromptUUID:  workbenchDefaultPromptID,
-				WorkspaceID: "default",
-				Name:        "Prompt to reset",
+				OrgUUID:            orgUUID,
+				PromptUUID:         workbenchDefaultPromptID,
+				WorkspaceUUID:      fakeWorkbenchWorkspaceUUID("default"),
+				WorkspaceDisplayID: "default",
+				Name:               "Prompt to reset",
 			},
 		},
 	}
@@ -788,16 +790,18 @@ func TestListWorkbenchPromptsIncludesCurrentWorkspacePrompts(t *testing.T) {
 	store := &fakeWorkbenchPersistenceStore{
 		prompts: map[string]WorkbenchPromptRecord{
 			fakeWorkbenchPersistenceKey(orgUUID, "prompt_current"): {
-				OrgUUID:     orgUUID,
-				PromptUUID:  "prompt_current",
-				WorkspaceID: "default",
-				Name:        "Current workspace prompt",
+				OrgUUID:            orgUUID,
+				PromptUUID:         "prompt_current",
+				WorkspaceUUID:      fakeWorkbenchWorkspaceUUID("default"),
+				WorkspaceDisplayID: "default",
+				Name:               "Current workspace prompt",
 			},
 			fakeWorkbenchPersistenceKey(orgUUID, "prompt_other_workspace"): {
-				OrgUUID:     orgUUID,
-				PromptUUID:  "prompt_other_workspace",
-				WorkspaceID: "wrkspc_other",
-				Name:        "Other workspace prompt",
+				OrgUUID:            orgUUID,
+				PromptUUID:         "prompt_other_workspace",
+				WorkspaceUUID:      fakeWorkbenchWorkspaceUUID("wrkspc_other"),
+				WorkspaceDisplayID: "wrkspc_other",
+				Name:               "Other workspace prompt",
 			},
 		},
 	}
@@ -957,7 +961,7 @@ type workbenchModelCatalogUserTestStore struct {
 	err  error
 }
 
-func (s workbenchModelCatalogUserTestStore) GetAdminUser(context.Context, int64, string) (db.AdminUser, error) {
+func (s workbenchModelCatalogUserTestStore) GetAdminUser(context.Context, string, string) (db.AdminUser, error) {
 	return db.AdminUser{Role: s.role}, s.err
 }
 
@@ -966,7 +970,6 @@ func workbenchModelCatalogRefreshRequest(role string) *http.Request {
 	req := workbenchPostTestRequest(orgUUID, "/api/organizations/"+orgUUID+"/models/refresh", `{}`)
 	principal := auth.Principal{
 		CredentialType:            auth.CredentialTypePlatformSession,
-		OrganizationID:            1,
 		OrganizationUUID:          orgUUID,
 		UserExternalID:            "user_default",
 		PlatformSessionExternalID: "platform_session_test",
@@ -1041,6 +1044,59 @@ func fakeWorkbenchPersistenceKey(orgUUID string, promptUUID string) string {
 	return strings.TrimSpace(orgUUID) + "\x00" + strings.TrimSpace(promptUUID)
 }
 
+func fakeWorkbenchWorkspaceUUID(displayID string) string {
+	switch strings.TrimSpace(displayID) {
+	case "default":
+		return "00000000-0000-4000-8000-000000000001"
+	case "wrkspc_previous":
+		return "00000000-0000-4000-8000-000000000002"
+	case "wrkspc_other":
+		return "00000000-0000-4000-8000-000000000003"
+	default:
+		return "00000000-0000-4000-8000-000000000004"
+	}
+}
+
+func (s *fakeWorkbenchPersistenceStore) ListConsoleWorkspaces(
+	_ context.Context,
+	_ string,
+	_ bool,
+) ([]ConsoleWorkspace, error) {
+	workspaces := map[string]ConsoleWorkspace{
+		"default": {
+			UUID:       fakeWorkbenchWorkspaceUUID("default"),
+			ExternalID: "workspace_default",
+			Name:       "Default",
+		},
+		"wrkspc_previous": {
+			UUID:       fakeWorkbenchWorkspaceUUID("wrkspc_previous"),
+			ExternalID: "wrkspc_previous",
+			Name:       "Previous",
+		},
+		"wrkspc_other": {
+			UUID:       fakeWorkbenchWorkspaceUUID("wrkspc_other"),
+			ExternalID: "wrkspc_other",
+			Name:       "Other",
+		},
+	}
+	for _, record := range s.prompts {
+		displayID := strings.TrimSpace(record.WorkspaceDisplayID)
+		if displayID == "" || displayID == "default" {
+			continue
+		}
+		workspaces[displayID] = ConsoleWorkspace{
+			UUID:       fakeWorkbenchWorkspaceUUID(displayID),
+			ExternalID: displayID,
+			Name:       displayID,
+		}
+	}
+	result := make([]ConsoleWorkspace, 0, len(workspaces))
+	for _, workspace := range workspaces {
+		result = append(result, workspace)
+	}
+	return result, nil
+}
+
 func (s *fakeWorkbenchPersistenceStore) GetWorkbenchPrompt(_ context.Context, orgUUID string, promptUUID string) (*WorkbenchPromptRecord, error) {
 	record, ok := s.prompts[fakeWorkbenchPersistenceKey(orgUUID, promptUUID)]
 	if !ok {
@@ -1049,16 +1105,13 @@ func (s *fakeWorkbenchPersistenceStore) GetWorkbenchPrompt(_ context.Context, or
 	return &record, nil
 }
 
-func (s *fakeWorkbenchPersistenceStore) ListWorkbenchPrompts(_ context.Context, orgUUID string, workspaceID string) ([]WorkbenchPromptRecord, error) {
-	if strings.TrimSpace(workspaceID) == "" {
-		workspaceID = "default"
-	}
+func (s *fakeWorkbenchPersistenceStore) ListWorkbenchPrompts(_ context.Context, orgUUID string, workspaceUUID string) ([]WorkbenchPromptRecord, error) {
 	records := []WorkbenchPromptRecord{}
 	for _, record := range s.prompts {
 		if strings.TrimSpace(record.OrgUUID) != strings.TrimSpace(orgUUID) {
 			continue
 		}
-		if strings.TrimSpace(record.WorkspaceID) != strings.TrimSpace(workspaceID) {
+		if strings.TrimSpace(record.WorkspaceUUID) != strings.TrimSpace(workspaceUUID) {
 			continue
 		}
 		if record.DeletedAt != nil {
@@ -1075,9 +1128,10 @@ func (s *fakeWorkbenchPersistenceStore) UpsertWorkbenchPrompt(_ context.Context,
 	}
 	record.OrgUUID = strings.TrimSpace(record.OrgUUID)
 	record.PromptUUID = strings.TrimSpace(record.PromptUUID)
-	record.WorkspaceID = strings.TrimSpace(record.WorkspaceID)
-	if record.WorkspaceID == "" {
-		record.WorkspaceID = "default"
+	record.WorkspaceUUID = strings.TrimSpace(record.WorkspaceUUID)
+	record.WorkspaceDisplayID = strings.TrimSpace(record.WorkspaceDisplayID)
+	if record.WorkspaceDisplayID == "" {
+		record.WorkspaceDisplayID = record.WorkspaceUUID
 	}
 	now := time.Now().UTC()
 	if record.CreatedAt.IsZero() {
@@ -1088,10 +1142,21 @@ func (s *fakeWorkbenchPersistenceStore) UpsertWorkbenchPrompt(_ context.Context,
 	return record, nil
 }
 
-func (s *fakeWorkbenchPersistenceStore) DeleteWorkbenchPromptState(_ context.Context, orgUUID string, promptUUID string) error {
+func (s *fakeWorkbenchPersistenceStore) DeleteWorkbenchPromptState(
+	_ context.Context,
+	orgUUID string,
+	promptUUID string,
+	workspaceUUID string,
+	workspaceDisplayID string,
+) error {
 	record, ok := s.prompts[fakeWorkbenchPersistenceKey(orgUUID, promptUUID)]
 	if !ok {
-		record = WorkbenchPromptRecord{OrgUUID: strings.TrimSpace(orgUUID), PromptUUID: strings.TrimSpace(promptUUID), WorkspaceID: "default"}
+		record = WorkbenchPromptRecord{
+			OrgUUID:            strings.TrimSpace(orgUUID),
+			PromptUUID:         strings.TrimSpace(promptUUID),
+			WorkspaceUUID:      strings.TrimSpace(workspaceUUID),
+			WorkspaceDisplayID: strings.TrimSpace(workspaceDisplayID),
+		}
 	}
 	now := time.Now().UTC()
 	record.DeletedAt = &now

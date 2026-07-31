@@ -109,8 +109,8 @@ func agentCatalogRequest(body string) *http.Request {
 	request := httptest.NewRequest(http.MethodPost, "/?beta=true", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	return request.WithContext(auth.WithPrincipal(request.Context(), auth.Principal{
-		APIKeyID:    1,
-		WorkspaceID: 1,
+		APIKeyUUID:    "57e49f4a-34e4-485b-8d12-81c59843c50c",
+		WorkspaceUUID: "364d0c46-e879-4431-bd5b-d6df639a1aa2",
 	}))
 }
 

@@ -26,7 +26,7 @@ func handleBootstrap(store OrganizationStore, catalog modelcatalog.Reader) http.
 		if principal, ok := auth.PrincipalFromContext(r.Context()); ok {
 			userExternalID = strings.TrimSpace(principal.UserExternalID)
 			if orgUUID == "" {
-				orgUUID = firstNonEmpty(principal.OrganizationUUID, principal.OrganizationExternalID)
+				orgUUID = principal.OrganizationUUID
 			}
 		}
 

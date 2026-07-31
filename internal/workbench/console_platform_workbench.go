@@ -76,31 +76,7 @@ type workbenchModelCatalogContextKey struct{}
 type workbenchModelCatalogUserStoreContextKey struct{}
 
 type workbenchModelCatalogUserStore interface {
-	GetAdminUser(context.Context, int64, string) (db.AdminUser, error)
-}
-
-type workbenchPersistenceStore interface {
-	GetWorkbenchPrompt(ctx context.Context, orgUUID string, promptUUID string) (*WorkbenchPromptRecord, error)
-	ListWorkbenchPrompts(ctx context.Context, orgUUID string, workspaceID string) ([]WorkbenchPromptRecord, error)
-	UpsertWorkbenchPrompt(ctx context.Context, record WorkbenchPromptRecord) (WorkbenchPromptRecord, error)
-	DeleteWorkbenchPromptState(ctx context.Context, orgUUID string, promptUUID string) error
-	GetWorkbenchRevision(ctx context.Context, orgUUID string, promptUUID string, revisionUUID string) (*WorkbenchRevisionRecord, error)
-	UpsertWorkbenchRevision(ctx context.Context, record WorkbenchRevisionRecord) error
-	ListWorkbenchEvaluationRevisionIDs(ctx context.Context, orgUUID string) ([]string, error)
-	GetWorkbenchKV(ctx context.Context, orgUUID string, promptUUID string, key string) (*WorkbenchKVRecord, error)
-	UpsertWorkbenchKV(ctx context.Context, record WorkbenchKVRecord) error
-	DeleteWorkbenchKV(ctx context.Context, orgUUID string, promptUUID string, key string) error
-	ListWorkbenchEvaluations(ctx context.Context, orgUUID string, revisionUUID string) ([]WorkbenchEvaluationRecord, error)
-	GetWorkbenchEvaluation(ctx context.Context, orgUUID string, evaluationUUID string) (*WorkbenchEvaluationRecord, error)
-	UpsertWorkbenchEvaluation(ctx context.Context, record WorkbenchEvaluationRecord) error
-	DeleteWorkbenchEvaluation(ctx context.Context, orgUUID string, evaluationUUID string) (*WorkbenchEvaluationRecord, error)
-	AppendWorkbenchGeneratedTestCase(ctx context.Context, orgUUID string, values map[string]any) error
-	TakeWorkbenchGeneratedTestCase(ctx context.Context, orgUUID string, requested map[string]any) (map[string]any, bool, error)
-}
-
-func workbenchPersistenceFromStore(store OrganizationStore) workbenchPersistenceStore {
-	persistence, _ := store.(workbenchPersistenceStore)
-	return persistence
+	GetAdminUser(context.Context, string, string) (db.AdminUser, error)
 }
 
 func withWorkbenchDependenciesAndCatalog(
@@ -177,7 +153,11 @@ func (h *workbenchHandler) handleListWorkbenchPrompts(w http.ResponseWriter, r *
 		seen[workbenchDefaultPromptID] = true
 	}
 	if store := h.store; store != nil {
-		records, err := store.ListWorkbenchPrompts(r.Context(), workbenchOrgUUID(r), workspaceID)
+		workspaceScope, err := h.resolveWorkspaceScope(r, workspaceID)
+		if workbenchWritePersistenceError(w, err) {
+			return
+		}
+		records, err := store.ListWorkbenchPrompts(r.Context(), workbenchOrgUUID(r), workspaceScope.UUID)
 		if workbenchWritePersistenceError(w, err) {
 			return
 		}
@@ -186,7 +166,7 @@ func (h *workbenchHandler) handleListWorkbenchPrompts(w http.ResponseWriter, r *
 			if promptID == "" || seen[promptID] || record.DeletedAt != nil {
 				continue
 			}
-			prompts = append(prompts, h.promptSummary(r, promptID, record.WorkspaceID, record.Name))
+			prompts = append(prompts, h.promptSummary(r, promptID, record.WorkspaceDisplayID, record.Name))
 			seen[promptID] = true
 		}
 	}
@@ -215,7 +195,11 @@ func (h *workbenchHandler) handleListWorkbenchWorkspacePrompts(w http.ResponseWr
 		}
 	}
 	if store := h.store; store != nil {
-		records, err := store.ListWorkbenchPrompts(r.Context(), workbenchOrgUUID(r), workspaceID)
+		workspaceScope, err := h.resolveWorkspaceScope(r, workspaceID)
+		if workbenchWritePersistenceError(w, err) {
+			return
+		}
+		records, err := store.ListWorkbenchPrompts(r.Context(), workbenchOrgUUID(r), workspaceScope.UUID)
 		if workbenchWritePersistenceError(w, err) {
 			return
 		}
@@ -224,7 +208,7 @@ func (h *workbenchHandler) handleListWorkbenchWorkspacePrompts(w http.ResponseWr
 			if promptID == "" || seen[promptID] || record.DeletedAt != nil {
 				continue
 			}
-			prompts = append(prompts, h.promptSummary(r, promptID, record.WorkspaceID, record.Name))
+			prompts = append(prompts, h.promptSummary(r, promptID, record.WorkspaceDisplayID, record.Name))
 			seen[promptID] = true
 		}
 	}
@@ -606,13 +590,13 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "model_catalog_refresh_unavailable"})
 		return
 	}
-	user, err := userStore.GetAdminUser(r.Context(), principal.OrganizationID, principal.UserExternalID)
+	user, err := userStore.GetAdminUser(r.Context(), principal.OrganizationUUID, principal.UserExternalID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
 			return
 		}
-		slog.Default().ErrorContext(r.Context(), "authorize model catalog refresh", "organization_id", principal.OrganizationID, "error", err)
+		slog.Default().ErrorContext(r.Context(), "authorize model catalog refresh", "organization_uuid", principal.OrganizationUUID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "model_catalog_refresh_authorization_failed"})
 		return
 	}
@@ -1892,8 +1876,8 @@ func (h *workbenchHandler) promptSummary(r *http.Request, promptID string, works
 	updatedAt := workbenchDefaultCreatedAt
 	isShared := workbenchPromptShared(r, promptID)
 	if record, ok := h.storedPromptRecord(r, promptID); ok {
-		if strings.TrimSpace(record.WorkspaceID) != "" {
-			workspaceID = record.WorkspaceID
+		if strings.TrimSpace(record.WorkspaceDisplayID) != "" {
+			workspaceID = record.WorkspaceDisplayID
 		}
 		if strings.TrimSpace(name) == "" {
 			name = record.Name
@@ -2134,6 +2118,17 @@ func workbenchOrgUUID(r *http.Request) string {
 	return strings.TrimSpace(chi.URLParam(r, "orgUuid"))
 }
 
+func (h *workbenchHandler) resolveWorkspaceScope(r *http.Request, reference string) (WorkspaceScope, error) {
+	if h.workspaces == nil {
+		return WorkspaceScope{}, ErrNotFound
+	}
+	workspaces, err := h.workspaces.ListConsoleWorkspaces(r.Context(), workbenchOrgUUID(r), false)
+	if err != nil {
+		return WorkspaceScope{}, err
+	}
+	return ResolveWorkspaceScope(reference, workspaces)
+}
+
 func (h *workbenchHandler) storedPromptRecord(r *http.Request, promptID string) (*WorkbenchPromptRecord, bool) {
 	store := h.store
 	if store == nil {
@@ -2153,10 +2148,9 @@ func (h *workbenchHandler) promptRecordForUpsert(r *http.Request, promptID strin
 		workspaceID = "default"
 	}
 	record := WorkbenchPromptRecord{
-		OrgUUID:     workbenchOrgUUID(r),
-		PromptUUID:  promptID,
-		WorkspaceID: workspaceID,
-		Name:        workbenchPromptName(r, promptID, ""),
+		OrgUUID:    workbenchOrgUUID(r),
+		PromptUUID: promptID,
+		Name:       workbenchPromptName(r, promptID, ""),
 	}
 	if workbenchPromptShared(r, promptID) {
 		record.IsSharedWithWorkspace = true
@@ -2170,15 +2164,20 @@ func (h *workbenchHandler) promptRecordForUpsert(r *http.Request, promptID strin
 		current, err := store.GetWorkbenchPrompt(r.Context(), record.OrgUUID, promptID)
 		if err == nil && current != nil {
 			record = *current
-			if strings.TrimSpace(record.WorkspaceID) == "" {
-				record.WorkspaceID = workspaceID
+			if strings.TrimSpace(record.WorkspaceUUID) != "" {
+				return record, nil
 			}
-			return record, nil
 		}
 		if err != nil && !errors.Is(err, ErrNotFound) {
 			return WorkbenchPromptRecord{}, err
 		}
 	}
+	workspaceScope, err := h.resolveWorkspaceScope(r, workspaceID)
+	if err != nil {
+		return WorkbenchPromptRecord{}, err
+	}
+	record.WorkspaceUUID = workspaceScope.UUID
+	record.WorkspaceDisplayID = workspaceScope.DisplayID
 	return record, nil
 }
 
@@ -2199,7 +2198,17 @@ func (h *workbenchHandler) promptDeleted(r *http.Request, promptID string) (bool
 func (h *workbenchHandler) deletePrompt(r *http.Request, promptID string) error {
 	promptID = strings.TrimSpace(promptID)
 	if store := h.store; store != nil {
-		if err := store.DeleteWorkbenchPromptState(r.Context(), workbenchOrgUUID(r), promptID); err != nil {
+		workspaceScope, err := h.resolveWorkspaceScope(r, "default")
+		if err != nil {
+			return err
+		}
+		if err := store.DeleteWorkbenchPromptState(
+			r.Context(),
+			workbenchOrgUUID(r),
+			promptID,
+			workspaceScope.UUID,
+			workspaceScope.DisplayID,
+		); err != nil {
 			return err
 		}
 	}
@@ -2228,7 +2237,12 @@ func (h *workbenchHandler) undeletePrompt(r *http.Request, promptID string, work
 		if err != nil {
 			return err
 		}
-		record.WorkspaceID = workspaceID
+		workspaceScope, err := h.resolveWorkspaceScope(r, workspaceID)
+		if err != nil {
+			return err
+		}
+		record.WorkspaceUUID = workspaceScope.UUID
+		record.WorkspaceDisplayID = workspaceScope.DisplayID
 		record.DeletedAt = nil
 		if _, err := store.UpsertWorkbenchPrompt(r.Context(), record); err != nil {
 			return err

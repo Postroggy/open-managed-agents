@@ -192,7 +192,7 @@ func (h *Handler) handleCodeSessionWorkerInternalEvents(w http.ResponseWriter, r
 		return
 	}
 	events, hasMore, err := h.db.ListCodeSessionInternalEventsPage(r.Context(), db.ListCodeSessionInternalEventsPageParams{
-		WorkspaceID:           record.WorkspaceID,
+		WorkspaceUUID:         record.WorkspaceUUID,
 		CodeSessionExternalID: codeSessionID,
 		Subagents:             strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("subagents")), "true"),
 		AfterSequence:         cursor,
@@ -476,7 +476,32 @@ func (h *Handler) handleCodeSessionWorkerHeartbeat(w http.ResponseWriter, r *htt
 		httpapi.WriteError(w, r, httpapi.NewError(http.StatusInternalServerError, "api_error", "Could not record code session worker heartbeat"))
 		return
 	}
+	if err := h.extendCodeSessionSandboxTimeout(r.Context(), codeSessionID); err != nil {
+		h.logger.ErrorContext(r.Context(), "extend code session sandbox timeout", "code_session_id", codeSessionID, "error", err)
+		httpapi.WriteError(w, r, httpapi.NewError(http.StatusServiceUnavailable, "api_error", "Could not extend code session sandbox timeout"))
+		return
+	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "worker_lease_expires_at": expiresAt.Format(time.RFC3339Nano)})
+}
+
+func (h *Handler) extendCodeSessionSandboxTimeout(ctx context.Context, codeSessionID string) error {
+	sandbox, err := h.db.GetRenewableEnvironmentSandboxForCodeSession(ctx, codeSessionID)
+	if errors.Is(err, db.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve active sandbox: %w", err)
+	}
+	if h.sandboxTimeoutExtender == nil {
+		return errors.New("sandbox timeout extender is not configured")
+	}
+	if sandbox.ProviderSandboxID == nil || strings.TrimSpace(*sandbox.ProviderSandboxID) == "" {
+		return errors.New("active sandbox is missing provider sandbox id")
+	}
+	if err := h.sandboxTimeoutExtender.SetTimeout(ctx, *sandbox.ProviderSandboxID, h.cfg.E2B.SandboxTimeout); err != nil {
+		return fmt.Errorf("set provider sandbox timeout: %w", err)
+	}
+	return nil
 }
 
 func (h *Handler) handleCodeSessionWorkerOTLP(w http.ResponseWriter, r *http.Request) {
@@ -499,9 +524,17 @@ func (h *Handler) handleCodeSessionWorkerOTLP(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if !found {
-		err := errors.New("worker epoch is required")
-		h.logCodeSessionWorkerOTLPRequest(r, codeSessionID, body, 0, false, "", "", "missing_epoch", err)
-		httpapi.WriteError(w, r, httpapi.NewError(http.StatusBadRequest, "invalid_request_error", err.Error()))
+		// environment-manager 自身会在 worker register 之前通过标准 OTLP exporter
+		// 上报启动与安装指标；该 exporter 只携带 session bearer token。无 epoch
+		// telemetry 只确认 session 仍存在，不刷新 worker activity 或 lease，避免旧
+		// exporter 借遥测请求维持已经失效的 worker 所有权。
+		if _, err := h.db.GetCodeSession(r.Context(), codeSessionID); err != nil {
+			h.logCodeSessionWorkerOTLPRequest(r, codeSessionID, body, 0, false, "", "", "session_load_error", err)
+			h.writeIngressLoadError(w, r, err)
+			return
+		}
+		h.recordCodeSessionWorkerOTLP(r, codeSessionID, body, false, "", "")
+		writeOTLPSuccess(w, r)
 		return
 	}
 	if err := h.db.TouchCodeSessionWorkerActivityForActiveLease(r.Context(), codeSessionID, epoch); err != nil {
