@@ -13,7 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/google/uuid"
+
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
@@ -55,8 +56,8 @@ func TestMessagesAPIFailures(t *testing.T) {
 		credential := createMessagesCodeSessionCredential(t, app, messagesTestModel)
 		_, err := app.db.GetCodeSessionCredentialContextForIssue(
 			context.Background(),
-			credential.OrganizationID+1,
-			credential.WorkspaceID,
+			uuid.NewString(),
+			credential.WorkspaceUUID,
 			credential.CodeSessionID,
 		)
 		if !errors.Is(err, db.ErrNotFound) {
@@ -64,8 +65,8 @@ func TestMessagesAPIFailures(t *testing.T) {
 		}
 		_, err = app.db.GetCodeSessionCredentialContextForIssue(
 			context.Background(),
-			credential.OrganizationID,
-			credential.WorkspaceID+1,
+			credential.OrganizationUUID,
+			uuid.NewString(),
 			credential.CodeSessionID,
 		)
 		if !errors.Is(err, db.ErrNotFound) {
@@ -114,13 +115,13 @@ func TestMessagesAPIFailures(t *testing.T) {
 		credential := createMessagesCodeSessionCredential(t, app, messagesTestModel)
 		registerCodeSessionWorker(t, app, credential.CodeSessionID)
 		var previousStatus string
-		if err := app.db.Pool.QueryRow(context.Background(), `select status from sessions where id = $1`, credential.PublicSessionID).Scan(&previousStatus); err != nil {
+		if err := app.db.Pool.QueryRow(context.Background(), `select status from sessions where uuid = $1`, credential.PublicSessionUUID).Scan(&previousStatus); err != nil {
 			t.Fatalf("load public session status: %v", err)
 		}
 		t.Cleanup(func() {
-			_, _ = app.db.Pool.Exec(context.Background(), `update sessions set status = $2 where id = $1`, credential.PublicSessionID, previousStatus)
+			_, _ = app.db.Pool.Exec(context.Background(), `update sessions set status = $2 where uuid = $1`, credential.PublicSessionUUID, previousStatus)
 		})
-		if _, err := app.db.Pool.Exec(context.Background(), `update sessions set status = 'terminated' where id = $1`, credential.PublicSessionID); err != nil {
+		if _, err := app.db.Pool.Exec(context.Background(), `update sessions set status = 'terminated' where uuid = $1`, credential.PublicSessionUUID); err != nil {
 			t.Fatalf("terminate public session: %v", err)
 		}
 		resp := doMessagesRequest(t, app, credential.Token, `{"model":"`+messagesTestModel+`","max_tokens":16,"messages":[]}`)
@@ -532,11 +533,11 @@ func TestMessagesWebSearchGatewayMixedToolContinuation(t *testing.T) {
 }
 
 type messagesCodeSessionCredential struct {
-	Token           string
-	CodeSessionID   string
-	PublicSessionID int64
-	OrganizationID  int64
-	WorkspaceID     int64
+	Token             string
+	CodeSessionID     string
+	PublicSessionUUID string
+	OrganizationUUID  string
+	WorkspaceUUID     string
 }
 
 func createMessagesCodeSessionCredential(t *testing.T, app *testApp, model string) messagesCodeSessionCredential {
@@ -553,42 +554,23 @@ func createMessagesCodeSessionCredential(t *testing.T, app *testApp, model strin
 	if err != nil {
 		t.Fatalf("generate code session ID: %v", err)
 	}
-	var sessionID int64
-	var sessionExternalID string
+	var sessionUUID, sessionExternalID, environmentUUID string
 	if err := app.db.Pool.QueryRow(context.Background(), `
-		select id, external_id
+		select uuid::text, external_id, environment_uuid::text
 		from sessions
-		where workspace_id = $1 and organization_id = $2 and deleted_at is null
-		order by id
-		limit 1
-	`, apiKey.WorkspaceID, apiKey.OrganizationID).Scan(&sessionID, &sessionExternalID); errors.Is(err, pgx.ErrNoRows) {
-		sessionExternalID, err = ids.New("session_messages_test_")
-		if err != nil {
-			t.Fatalf("generate Messages credential public session ID: %v", err)
-		}
-		err = app.db.Pool.QueryRow(context.Background(), `
-			insert into sessions (
-				external_id, organization_id, workspace_id, created_by_api_key_id,
-				environment_id, environment_external_id, agent_id, agent_external_id,
-				agent_version, agent_snapshot
-			) values ($1, $2, $3, $4, 1, $5, 1, $6, 1, '{}'::jsonb)
-			returning id
-		`, sessionExternalID, apiKey.OrganizationID, apiKey.WorkspaceID, apiKey.ID,
-			"environment_"+sessionExternalID, "agent_"+sessionExternalID).Scan(&sessionID)
-		if err != nil {
-			t.Fatalf("create Messages credential public session: %v", err)
-		}
-	} else if err != nil {
+		where workspace_uuid = $1 and organization_uuid = $2 and deleted_at is null
+		order by uuid
+	`, apiKey.WorkspaceUUID, apiKey.OrganizationUUID).Scan(&sessionUUID, &sessionExternalID, &environmentUUID); err != nil {
 		t.Fatalf("load Messages credential public session: %v", err)
 	}
 	now := time.Now().UTC()
 	_, err = app.db.CreateCodeSession(context.Background(), db.CreateCodeSessionInput{
 		ExternalID:            codeSessionID,
-		OrganizationID:        apiKey.OrganizationID,
-		WorkspaceID:           apiKey.WorkspaceID,
-		SessionID:             sessionID,
+		OrganizationUUID:      apiKey.OrganizationUUID,
+		WorkspaceUUID:         apiKey.WorkspaceUUID,
+		SessionUUID:           sessionUUID,
 		SessionExternalID:     sessionExternalID,
-		EnvironmentID:         1,
+		EnvironmentUUID:       environmentUUID,
 		EnvironmentExternalID: "environment_" + codeSessionID,
 		PermissionMode:        "bypassPermissions",
 		Model:                 model,
@@ -601,11 +583,11 @@ func createMessagesCodeSessionCredential(t *testing.T, app *testApp, model strin
 		t.Fatalf("create code session: %v", err)
 	}
 	return messagesCodeSessionCredential{
-		Token:           token,
-		CodeSessionID:   codeSessionID,
-		PublicSessionID: sessionID,
-		OrganizationID:  apiKey.OrganizationID,
-		WorkspaceID:     apiKey.WorkspaceID,
+		Token:             token,
+		CodeSessionID:     codeSessionID,
+		PublicSessionUUID: sessionUUID,
+		OrganizationUUID:  apiKey.OrganizationUUID,
+		WorkspaceUUID:     apiKey.WorkspaceUUID,
 	}
 }
 
