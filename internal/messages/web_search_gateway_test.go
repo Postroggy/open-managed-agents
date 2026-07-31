@@ -256,6 +256,33 @@ func TestWebSearchGatewayServerToolIterationLimitReturnsPauseTurn(t *testing.T) 
 	}
 }
 
+func TestWebSearchGatewayExecutesOpaqueUpstreamSearchToolUse(t *testing.T) {
+	const upstreamToolUseID = "call_00_wT6ANzoJQ7K6RCEELrbz7636"
+	upstream, requestCount := newSequencedUpstream(t,
+		`{"id":"msg_tool","type":"message","content":[{"type":"tool_use","id":"`+upstreamToolUseID+`","name":"oma_web_search","input":{"query":"query"}}],"stop_reason":"tool_use"}`,
+		`{"id":"msg_final","type":"message","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}`,
+	)
+	searcher := &webSearchTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
+	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}}
+	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
+
+	response, handled, err := webSearchGateway.handle(context.Background(), []byte(`{"messages":[],"tools":[{"type":"web_search_20250305"}]}`), "", nil)
+	if err != nil || !handled || response.statusCode != http.StatusOK {
+		t.Fatalf("response = %#v, handled = %v, err = %v; want completed search response", response, handled, err)
+	}
+	if requestCount() != 2 || len(searcher.requests) != 1 {
+		t.Fatalf("BYOK requests = %d, searches = %d; want 2 and 1", requestCount(), len(searcher.requests))
+	}
+	externalID, err := serverWebSearchToolUseID(upstreamToolUseID)
+	if err != nil {
+		t.Fatalf("mint expected server tool use ID: %v", err)
+	}
+	if !strings.Contains(string(response.body), `"id":"`+externalID+`"`) ||
+		!strings.Contains(string(response.body), `"text":"done"`) {
+		t.Fatalf("opaque tool-use response = %s", response.body)
+	}
+}
+
 func TestWebSearchGatewayPauseTurnContinuationReplaysCompletedSearch(t *testing.T) {
 	upstream, requestCount := newSequencedUpstream(t,
 		`{"id":"msg_paused","type":"message","content":[{"type":"tool_use","id":"toolu_pause","name":"oma_web_search","input":{"query":"query"}}],"stop_reason":"tool_use"}`,
@@ -676,16 +703,37 @@ func TestWebSearchToolUseIDMappingIsReversible(t *testing.T) {
 	}
 }
 
-// 只接受 gateway 自己铸造的形状，避免同一上游 ID 存在多种外部表示而在同一条消息里
-// 产生重复 tool_use ID。
-func TestWebSearchToolUseIDMappingRejectsForeignShapes(t *testing.T) {
+func TestWebSearchToolUseIDMappingSupportsOpaqueUpstreamIDs(t *testing.T) {
+	upstreamIDs := []string{
+		"call_00_wT6ANzoJQ7K6RCEELrbz7636",
+		"toolu_oma_encoded_abc",
+		"srvtoolu_provider_owned",
+	}
+	seen := make(map[string]string, len(upstreamIDs))
+	for _, upstreamID := range upstreamIDs {
+		serverID, err := serverWebSearchToolUseID(upstreamID)
+		if err != nil {
+			t.Fatalf("mint server tool use ID for %q: %v", upstreamID, err)
+		}
+		if previous, collision := seen[serverID]; collision {
+			t.Fatalf("upstream IDs %q and %q both map to %q", previous, upstreamID, serverID)
+		}
+		seen[serverID] = upstreamID
+		resolved, err := upstreamWebSearchToolUseID(serverID)
+		if err != nil || resolved != upstreamID {
+			t.Fatalf("round trip of %q = %q, err = %v", upstreamID, resolved, err)
+		}
+	}
+}
+
+func TestWebSearchToolUseIDMappingRejectsInvalidShapes(t *testing.T) {
 	serverCases := []string{"toolu_abc", "srvtoolu_", "abc", ""}
 	for _, externalID := range serverCases {
 		if _, err := upstreamWebSearchToolUseID(externalID); err == nil {
 			t.Fatalf("upstreamWebSearchToolUseID(%q) error = nil, want rejection", externalID)
 		}
 	}
-	upstreamCases := []string{"srvtoolu_abc", "toolu_", "abc", ""}
+	upstreamCases := []string{"", "   "}
 	for _, upstreamID := range upstreamCases {
 		if _, err := serverWebSearchToolUseID(upstreamID); err == nil {
 			t.Fatalf("serverWebSearchToolUseID(%q) error = nil, want rejection", upstreamID)

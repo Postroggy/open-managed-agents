@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,10 +9,11 @@ import (
 )
 
 const (
-	// serverToolUseIDPrefix 是 Anthropic server tool 的 ID 前缀，upstreamToolUseIDPrefix
-	// 是 ordinary tool 的前缀；gateway 只在两者之间做前缀替换。
-	serverToolUseIDPrefix   = "srvtoolu_"
-	upstreamToolUseIDPrefix = "toolu_"
+	// serverToolUseIDPrefix 是 Anthropic server tool 的 ID 前缀。toolu_ 是 Anthropic
+	// ordinary tool ID 的惯用前缀；BYOK provider 也可以使用自己的 opaque ID。
+	serverToolUseIDPrefix          = "srvtoolu_"
+	upstreamToolUseIDPrefix        = "toolu_"
+	encodedUpstreamToolUseIDPrefix = "oma_encoded_"
 )
 
 // The declarations below project persisted Anthropic message history between
@@ -669,22 +671,32 @@ func webSearchServerResultBlock(execution webSearchExecution) (json.RawMessage, 
 }
 
 // serverWebSearchToolUseID 把 BYOK 的 ordinary tool_use ID 映射为面向调用方的 server
-// tool ID。映射只是把 Anthropic 的 toolu_ 前缀换成 srvtoolu_，因此是双向唯一的；不引入
-// 自定义编码可以避免同一上游 ID 存在多种外部表示、进而在同一条消息里产生重复 ID。
+// tool ID。既有 toolu_* ID 保持前缀替换，以便回放已保存的历史；其他 provider-owned
+// opaque ID 用带版本标记的 URL-safe 编码保存，保证历史回放能恢复原始 ID。
 func serverWebSearchToolUseID(upstreamID string) (string, error) {
 	suffix, ok := strings.CutPrefix(upstreamID, upstreamToolUseIDPrefix)
-	if !ok || suffix == "" {
-		return "", fmt.Errorf("unsupported upstream tool use id %q", upstreamID)
+	if ok && suffix != "" && !strings.HasPrefix(suffix, encodedUpstreamToolUseIDPrefix) {
+		return serverToolUseIDPrefix + suffix, nil
 	}
-	return serverToolUseIDPrefix + suffix, nil
+	if strings.TrimSpace(upstreamID) == "" {
+		return "", errors.New("upstream tool use id is required")
+	}
+	return serverToolUseIDPrefix + encodedUpstreamToolUseIDPrefix + base64.RawURLEncoding.EncodeToString([]byte(upstreamID)), nil
 }
 
-// upstreamWebSearchToolUseID 是 serverWebSearchToolUseID 的逆映射。只接受 gateway 自己
-// 生成的形状：这三个调用点处理的都是 OMA 铸造的 ID，放宽前缀只会让调用方伪造上游 ID。
+// upstreamWebSearchToolUseID 是 serverWebSearchToolUseID 的逆映射。它兼容旧的
+// srvtoolu_<suffix> 历史，并识别当前 gateway 铸造的 opaque-ID 编码。
 func upstreamWebSearchToolUseID(externalID string) (string, error) {
 	suffix, ok := strings.CutPrefix(externalID, serverToolUseIDPrefix)
 	if !ok || suffix == "" {
 		return "", fmt.Errorf("invalid server tool use id %q", externalID)
+	}
+	if encoded, ok := strings.CutPrefix(suffix, encodedUpstreamToolUseIDPrefix); ok {
+		upstreamID, err := base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil || strings.TrimSpace(string(upstreamID)) == "" {
+			return "", fmt.Errorf("invalid encoded server tool use id %q", externalID)
+		}
+		return string(upstreamID), nil
 	}
 	return upstreamToolUseIDPrefix + suffix, nil
 }
