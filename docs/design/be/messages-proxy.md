@@ -23,7 +23,7 @@ POST /v1/messages
 - SSE 响应逐块 flush，并关闭代理缓冲；
 - 请求 body 上限为 32 MiB。
 
-对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在请求声明受支持的 Anthropic server tool（当前为 `web_search_20250305`、`web_search_20260209` 或 `web_search_20260318`）且本地 provider 已配置时启用 Web Search gateway。识别依据是 `tools[].type` 的完整版本值；未记录的字面量 `type=web_search` 不进入 gateway。gateway 只依赖 provider-neutral 的 `Search` 接口；该接口使用结构化的 `SearchRequest`/`SearchResponse`，可保留分页和 provider request ID 等响应元数据，结果模型区分摘要、正文、highlights 和 summary。当前 registry 已支持 Tavily 和 Brave；`web_search.providers.<name>.endpoint` 为空时，各 provider 使用自己的默认 endpoint。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
+对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在请求声明受支持的 Anthropic server tool（当前为 `web_search_20250305`、`web_search_20260209` 或 `web_search_20260318`）且本地 provider 已配置时启用 Web Search gateway。gateway 只精确匹配这三个 `tools[].type` 值，不按 `name` 或 type 前缀识别；例如字面量 `type=web_search` 不进入 gateway。gateway 只依赖 provider-neutral 的 `Search` 接口；该接口使用结构化的 `SearchRequest`/`SearchResponse`，可保留分页和 provider request ID 等响应元数据，结果模型区分摘要、正文、highlights 和 summary。当前 registry 已支持 Tavily 和 Brave；`web_search.providers.<name>.endpoint` 为空时，各 provider 使用自己的默认 endpoint。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
 
 只有 BYOK 回合全部为 Web Search 调用时，gateway 才在同一条 Claude Code 外部请求内使用非流式 continuation loop。BYOK 只返回 Bash、Edit、MCP 等 client tool 时，gateway 原样交还 Claude Code 执行；同一回合混合 Web Search 与 client tool 时，gateway 按 Anthropic mixed server/client 协议暂停搜索并跨两条 Claude Code Messages 请求续传：
 
