@@ -54,10 +54,6 @@ type BraveOptions struct {
 
 type braveFactory struct{}
 
-func (braveFactory) Name() string {
-	return "brave"
-}
-
 func (braveFactory) New(cfg config.WebSearchProviderConfig, timeout time.Duration, client *http.Client) (Provider, error) {
 	var options BraveOptions
 	if err := decodeProviderOptions(cfg.Options, &options); err != nil {
@@ -92,10 +88,6 @@ func (options BraveOptions) validate() error {
 		return err
 	}
 	return nil
-}
-
-func init() {
-	registerProviderFactory(braveFactory{})
 }
 
 func NewBraveClient(cfg BraveClientConfig, client *http.Client) *BraveClient {

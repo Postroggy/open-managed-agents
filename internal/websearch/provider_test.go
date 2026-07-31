@@ -75,7 +75,18 @@ func TestNewProviderRejectsInvalidConfiguration(t *testing.T) {
 	}
 }
 
-func TestNewProviderUsesProviderFactoryRegistry(t *testing.T) {
+func TestBuiltInProviderFactories(t *testing.T) {
+	if len(builtInProviderFactories) != 2 {
+		t.Fatalf("built-in factory count = %d, want 2", len(builtInProviderFactories))
+	}
+	for _, name := range []string{"brave", "tavily"} {
+		if _, ok := builtInProviderFactories[name]; !ok {
+			t.Fatalf("built-in factory %q is missing", name)
+		}
+	}
+}
+
+func TestNewProviderUsesBuiltInProviderFactory(t *testing.T) {
 	provider, err := NewProvider(config.WebSearchConfig{
 		Provider: "TAVILY",
 		Providers: map[string]config.WebSearchProviderConfig{

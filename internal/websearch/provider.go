@@ -18,14 +18,14 @@ type Provider interface {
 }
 
 type providerFactory interface {
-	Name() string
 	New(config.WebSearchProviderConfig, time.Duration, *http.Client) (Provider, error)
 }
 
-var providerFactories = map[string]providerFactory{}
-
-func registerProviderFactory(factory providerFactory) {
-	providerFactories[strings.ToLower(strings.TrimSpace(factory.Name()))] = factory
+// builtInProviderFactories is deliberately static: adding a provider requires an
+// explicit, reviewable change here, and duplicate names fail at compile time.
+var builtInProviderFactories = map[string]providerFactory{
+	"brave":  braveFactory{},
+	"tavily": tavilyFactory{},
 }
 
 func NewProvider(cfg config.WebSearchConfig, client *http.Client) (Provider, error) {
@@ -33,7 +33,7 @@ func NewProvider(cfg config.WebSearchConfig, client *http.Client) (Provider, err
 	if name == "" {
 		return nil, nil
 	}
-	factory, ok := providerFactories[name]
+	factory, ok := builtInProviderFactories[name]
 	if !ok {
 		return nil, fmt.Errorf("web search provider %q is unsupported", cfg.Provider)
 	}
