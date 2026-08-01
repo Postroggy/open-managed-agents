@@ -219,6 +219,30 @@ func TestServiceRefreshBoundsFailurePersistenceWithRefreshTimeout(t *testing.T) 
 	}
 }
 
+func TestServiceRecordsFailureAfterUpstreamTimeout(t *testing.T) {
+	t.Parallel()
+	store := &fakeStore{}
+	service, err := NewService(
+		context.Background(),
+		store,
+		timeoutUpstream{},
+		Options{RefreshTimeout: 5 * time.Millisecond},
+	)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	if err := service.Refresh(context.Background()); err == nil {
+		t.Fatal("Refresh() error = nil, want upstream timeout")
+	}
+	if store.failureContextExpired {
+		t.Fatal("RecordFailure() received an expired context")
+	}
+	if store.snapshot.LastAttemptAt == nil || store.snapshot.LastError != "upstream_timeout" {
+		t.Fatalf("failure snapshot = %#v, want persisted timeout metadata", store.snapshot)
+	}
+}
+
 func TestServiceRefreshDeduplicatesEffectiveModelIDsAcrossPages(t *testing.T) {
 	t.Parallel()
 	store := &fakeStore{}
@@ -470,14 +494,15 @@ func modelIDs(models []Model) []string {
 }
 
 type fakeStore struct {
-	exists             bool
-	snapshot           StoredSnapshot
-	successes          int
-	failures           int
-	saveErr            error
-	failureErr         error
-	saveHadDeadline    bool
-	failureHadDeadline bool
+	exists                bool
+	snapshot              StoredSnapshot
+	successes             int
+	failures              int
+	saveErr               error
+	failureErr            error
+	saveHadDeadline       bool
+	failureHadDeadline    bool
+	failureContextExpired bool
 }
 
 type lockedFakeStore struct {
@@ -557,6 +582,7 @@ func (s *fakeStore) SaveSuccess(ctx context.Context, snapshot StoredSnapshot) er
 
 func (s *fakeStore) RecordFailure(ctx context.Context, attemptedAt time.Time, failure string) error {
 	_, s.failureHadDeadline = ctx.Deadline()
+	s.failureContextExpired = ctx.Err() != nil
 	if s.failureErr != nil {
 		return s.failureErr
 	}
@@ -565,6 +591,13 @@ func (s *fakeStore) RecordFailure(ctx context.Context, attemptedAt time.Time, fa
 	s.exists = true
 	s.failures++
 	return nil
+}
+
+type timeoutUpstream struct{}
+
+func (timeoutUpstream) List(ctx context.Context, _ string) (Page, error) {
+	<-ctx.Done()
+	return Page{}, ctx.Err()
 }
 
 type fakeUpstream struct {

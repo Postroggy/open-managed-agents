@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { loadModelCatalog, refreshModelCatalog } from './api';
+import { loadModelCatalog, refreshModelCatalog } from '../../shared/api/model-catalog';
 import { catalogModelIDs, resolveCatalogDefaultModelID } from './model';
 
 export function modelCatalogQueryKey(orgUuid?: string) {

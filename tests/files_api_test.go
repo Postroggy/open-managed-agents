@@ -1098,10 +1098,10 @@ func (testModelCatalog) Snapshot(context.Context) (modelcatalog.Snapshot, error)
 }
 
 func (testModelCatalog) ValidateModel(_ context.Context, modelID string) error {
-	if strings.TrimSpace(modelID) == "" {
-		return modelcatalog.ErrUnknownModel
+	if strings.TrimSpace(modelID) == "test/model" {
+		return nil
 	}
-	return nil
+	return modelcatalog.ErrUnknownModel
 }
 
 func (a *testApp) close() {

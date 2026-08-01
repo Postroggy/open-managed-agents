@@ -12,6 +12,7 @@ import (
 const (
 	defaultRefreshInterval     = 5 * time.Minute
 	defaultRefreshTimeout      = 15 * time.Second
+	failurePersistenceTimeout  = 5 * time.Second
 	sharedSnapshotPollInterval = 100 * time.Millisecond
 	maxPagesPerRefresh         = 1000
 )
@@ -118,7 +119,7 @@ func (s *Service) refresh(ctx context.Context, waitForSharedSnapshot bool) error
 
 	models, err := s.fetchAll(refreshCtx)
 	if err != nil {
-		if recordErr := s.recordFailure(refreshCtx, failureCategory(err)); recordErr != nil {
+		if recordErr := s.recordFailureAfterRefresh(ctx, failureCategory(err)); recordErr != nil {
 			return errors.Join(err, recordErr)
 		}
 		return err
@@ -132,7 +133,7 @@ func (s *Service) refresh(ctx context.Context, waitForSharedSnapshot bool) error
 	}
 	if err := s.store.SaveSuccess(refreshCtx, stored); err != nil {
 		persistErr := fmt.Errorf("persist successful model catalog refresh: %w", err)
-		if recordErr := s.recordFailure(refreshCtx, "persistence_unavailable"); recordErr != nil {
+		if recordErr := s.recordFailureAfterRefresh(ctx, "persistence_unavailable"); recordErr != nil {
 			return errors.Join(persistErr, recordErr)
 		}
 		return persistErr
@@ -143,6 +144,12 @@ func (s *Service) refresh(ctx context.Context, waitForSharedSnapshot bool) error
 	s.exists = true
 	s.mu.Unlock()
 	return nil
+}
+
+func (s *Service) recordFailureAfterRefresh(ctx context.Context, failure string) error {
+	failureCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failurePersistenceTimeout)
+	defer cancel()
+	return s.recordFailure(failureCtx, failure)
 }
 
 func (s *Service) hasSuccessfulSnapshot() bool {
