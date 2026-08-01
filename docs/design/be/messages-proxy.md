@@ -23,7 +23,7 @@ POST /v1/messages
 - SSE 响应逐块 flush，并关闭代理缓冲；
 - 请求 body 上限为 32 MiB。
 
-对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在请求声明受支持的 Anthropic server tool（当前为 `web_search_20250305`、`web_search_20260209` 或 `web_search_20260318`）且本地 provider 已配置时启用 Web Search gateway。gateway 只精确匹配这三个 `tools[].type` 值，不按 `name` 或 type 前缀识别；例如字面量 `type=web_search` 不进入 gateway。gateway 依赖 provider-neutral 的 `Search` 与 `ValidateOptions` 合同：前者使用结构化的 `SearchRequest`/`SearchResponse`，可保留分页和 provider request ID 等响应元数据，后者在发出首个 BYOK 请求前确认 provider 能执行调用方声明的搜索策略。结果模型区分摘要、正文、highlights 和 summary。当前静态 built-in factory 已支持 Tavily 和 Brave；`web_search.providers.<name>.endpoint` 为空时，各 provider 使用自己的默认 endpoint。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
+对于 code-session OAuth-compatible token 的 Claude Code Messages 请求，OMA 会在请求声明受支持的 Anthropic server tool（当前为 `web_search_20250305`、`web_search_20260209` 或 `web_search_20260318`）且本地 provider 已配置时启用 Web Search gateway。入口是否拦截只精确匹配这三个 `tools[].type` 值，不按 `tools[].name` 或 type 前缀识别；例如字面量 `type=web_search` 不进入 gateway。请求被投影到 BYOK 后，BYOK 返回的 ordinary `tool_use` 再按 `name=oma_web_search` 识别为需要由 gateway 执行的搜索调用；对外响应则投影回 `server_tool_use` 且使用协议名 `name=web_search`。这两个 `name` 判断属于调用块投影阶段，不改变入口按 `tools[].type` 的拦截规则。gateway 依赖 provider-neutral 的 `Search` 与 `ValidateOptions` 合同：前者使用结构化的 `SearchRequest`/`SearchResponse`，可保留分页和 provider request ID 等响应元数据，后者在发出首个 BYOK 请求前确认 provider 能执行调用方声明的搜索策略。结果模型区分摘要、正文、highlights 和 summary。当前静态 built-in factory 已支持 Tavily 和 Brave；`web_search.providers.<name>.endpoint` 为空时，各 provider 使用自己的默认 endpoint。provider credential 只在 OMA 服务端使用，不会发送给 BYOK 或写入 sandbox。
 
 只有 BYOK 回合全部为 Web Search 调用时，gateway 才在同一条 Claude Code 外部请求内使用非流式 continuation loop。BYOK 只返回 Bash、Edit、MCP 等 client tool 时，gateway 原样交还 Claude Code 执行；同一回合混合 Web Search 与 client tool 时，gateway 按 Anthropic mixed server/client 协议暂停搜索并跨两条 Claude Code Messages 请求续传：
 
@@ -63,13 +63,13 @@ sequenceDiagram
     end
 ```
 
-内部 transcript 与 Claude Code transcript 通过双向投影保持一致。gateway 声明给 BYOK 的是名为 `oma_web_search` 的 ordinary tool：调用方可以合法地声明自己的 `web_search` 工具，复用 Anthropic 协议名会让同一请求出现两个同名 tool，也无法再按名字判断 `tool_use` 归属。投影只在这两个名字之间双向替换；当顶层 `tool_choice` 强制 `web_search` 时，也只在发给 BYOK 的请求里改为 `oma_web_search`。调用方看到的响应、历史和续传请求始终使用协议名 `web_search`；调用方自有的同名工具按普通 client tool 交还调用方，不由 gateway 执行。
+内部 transcript 与 Claude Code transcript 通过双向投影保持一致。gateway 声明给 BYOK 的是名为 `oma_web_search` 的 ordinary tool：调用方可以合法地声明自己的 `web_search` 工具，因此不能把 Anthropic 的协议名直接复用为 BYOK 工具名，否则 BYOK 返回的 `tool_use` 无法按名称区分归属。投影只在这两个名字之间双向替换；当顶层 `tool_choice` 强制 `web_search` 时，也只在发给 BYOK 的请求里改为 `oma_web_search`。调用方看到的响应、历史和续传请求始终使用协议名 `web_search`；调用方自有的同名工具按普通 client tool 交还调用方，不由 gateway 执行。
 
-BYOK tool ID 映射有两条无损路径：既有 ordinary `toolu_*` 与面向调用方的 `srvtoolu_*` 之间保持前缀替换；provider-owned 的其他 opaque ID 则使用带版本标记的 URL-safe 编码铸造 `srvtoolu_oma_encoded_<base64>`。反向解析只接受 gateway 自己铸造的 `srvtoolu_` 形状，其余形状一律拒绝，避免调用方伪造上游 ID 或同一上游 ID 存在多种外部表示、进而在同一条 assistant message 里产生重复 `tool_use` ID。
+BYOK tool ID 映射只有一条路径：所有 provider-owned 的 ordinary tool ID（包括 Anthropic 常见的 `toolu_*`）都按 opaque 字符串使用带版本标记的 URL-safe 编码，铸造 `srvtoolu_oma_encoded_<base64>`。反向解析只接受 gateway 自己铸造的编码形状，其余形状一律拒绝，避免调用方伪造上游 ID 或同一上游 ID 存在多种外部表示、进而在同一条 assistant message 里产生重复 `tool_use` ID。
 
 Claude Code 后续重放完整历史时，gateway 会把 `server_tool_use`/`web_search_tool_result` 展开回 BYOK 的 assistant `tool_use` 与下一条 user `tool_result`。mixed continuation 中 Claude Code 只返回自己拥有的 client results，每个 client `tool_use` 必须恰好对应一个 `tool_result`，该 user message 不得包含 text 或其他 block，并保留声明 pending search 的同一 Web Search tool；缺失、重复或未知 result、混入非 result content，以及缺少 pending search tool时返回 `400 invalid_request_error`，不会把 server block 透传给 BYOK。gateway 执行 pending search 后按原 tool call 顺序合并结果。该排序只为可读性：Anthropic 按 `tool_use_id` 匹配 result 而非按位置，也不区分 server/client tool 的 result 先后。真正的硬约束是配对完整性——每个 `tool_use` 必须恰好有一个 result，缺失会触发 `tool_use ids were found without tool_result blocks immediately after`，因此合并时即使出现重复 ID 也不丢弃任何一条 result。普通 client tool 不由 OMA 伪造 error result。已完成的 search 历史即使后续请求不再声明 Web Search，也仍会反向投影，但不会允许 BYOK 发起新的搜索。
 
-上段的 `toolu_*` 前缀替换是对既有历史的兼容路径。当前 gateway 同时接受 provider-owned 的任意非空 opaque tool ID：非 `toolu_*` ID（例如 `call_00_*`）会以带版本标记的 URL-safe 编码铸造 `srvtoolu_*`，而以该标记开头的 `toolu_*` 也采用编码，避免两个不同的上游 ID 映射到同一个 server ID。回放时 gateway 无损恢复原始上游 ID。
+gateway 对 provider-owned ID 不做格式识别；任意非空 ID 都使用同一套编码，回放时无损恢复原始上游 ID。Anthropic 的 `toolu_*` 只是该 opaque ID 合同的一个输入实例，并不进入单独的兼容分支。
 
 对外合成的 `web_search_result` 使用 `type`、`title`、`url` 与可选 `page_age`，不输出 provider 的明文 `content` 扩展，也不伪造 Anthropic 原生 `encrypted_content`。Anthropic 协议要求客户端把原生 provider 返回的 `encrypted_content` 视为 opaque 数据并在后续 turn 原样回放；OMA-managed search 当前不实现该加密恢复合同，历史投影仅把可见的标题、URL 与页面时间交给 BYOK。当前 gateway 也不伪造 Anthropic 原生 citation location；BYOK 可基于结果 URL 生成普通文本引用，但不得把它表述为原生 citation block。
 

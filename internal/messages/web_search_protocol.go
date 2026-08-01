@@ -9,10 +9,9 @@ import (
 )
 
 const (
-	// serverToolUseIDPrefix 是 Anthropic server tool 的 ID 前缀。toolu_ 是 Anthropic
-	// ordinary tool ID 的惯用前缀；BYOK provider 也可以使用自己的 opaque ID。
+	// serverToolUseIDPrefix 是 Anthropic server tool 的 ID 前缀。所有上游 tool ID
+	// 都按 opaque 字符串编码，避免依赖 provider 的 ID 格式。
 	serverToolUseIDPrefix          = "srvtoolu_"
-	upstreamToolUseIDPrefix        = "toolu_"
 	encodedUpstreamToolUseIDPrefix = "oma_encoded_"
 )
 
@@ -671,21 +670,17 @@ func webSearchServerResultBlock(execution webSearchExecution) (json.RawMessage, 
 }
 
 // serverWebSearchToolUseID 把 BYOK 的 ordinary tool_use ID 映射为面向调用方的 server
-// tool ID。既有 toolu_* ID 保持前缀替换，以便回放已保存的历史；其他 provider-owned
-// opaque ID 用带版本标记的 URL-safe 编码保存，保证历史回放能恢复原始 ID。
+// tool ID。所有 provider-owned ID 都用带版本标记的 URL-safe 编码保存，保证映射唯一
+// 且回放时能无损恢复原始 ID。
 func serverWebSearchToolUseID(upstreamID string) (string, error) {
-	suffix, ok := strings.CutPrefix(upstreamID, upstreamToolUseIDPrefix)
-	if ok && suffix != "" && !strings.HasPrefix(suffix, encodedUpstreamToolUseIDPrefix) {
-		return serverToolUseIDPrefix + suffix, nil
-	}
 	if strings.TrimSpace(upstreamID) == "" {
 		return "", errors.New("upstream tool use id is required")
 	}
 	return serverToolUseIDPrefix + encodedUpstreamToolUseIDPrefix + base64.RawURLEncoding.EncodeToString([]byte(upstreamID)), nil
 }
 
-// upstreamWebSearchToolUseID 是 serverWebSearchToolUseID 的逆映射。它兼容旧的
-// srvtoolu_<suffix> 历史，并识别当前 gateway 铸造的 opaque-ID 编码。
+// upstreamWebSearchToolUseID 是 serverWebSearchToolUseID 的逆映射，只接受当前 gateway
+// 铸造的带版本标记的 opaque-ID 编码。
 func upstreamWebSearchToolUseID(externalID string) (string, error) {
 	suffix, ok := strings.CutPrefix(externalID, serverToolUseIDPrefix)
 	if !ok || suffix == "" {
@@ -698,5 +693,5 @@ func upstreamWebSearchToolUseID(externalID string) (string, error) {
 		}
 		return string(upstreamID), nil
 	}
-	return upstreamToolUseIDPrefix + suffix, nil
+	return "", fmt.Errorf("invalid encoded server tool use id %q", externalID)
 }

@@ -216,7 +216,7 @@ func TestWebSearchGatewayPauseContinuationRequiresCurrentSearchTool(t *testing.T
 	searcher := &webSearchTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[{"role":"user","content":"search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_pause","name":"web_search","input":{"query":"query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_pause","content":[]}]}]}`)
+	body := []byte(`{"messages":[{"role":"user","content":"search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_cGF1c2U","name":"web_search","input":{"query":"query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_encoded_cGF1c2U","content":[]}]}]}`)
 	_, handled, err := webSearchGateway.handle(context.Background(), body, "", nil)
 	var requestErr *webSearchGatewayRequestError
 	if !handled || !errors.As(err, &requestErr) || !strings.Contains(err.Error(), "same web_search tool") {
@@ -376,7 +376,7 @@ func TestWebSearchGatewayPauseTurnContinuationExecutesPendingSearch(t *testing.T
 	searcher := &webSearchTestSearcher{results: websearch.SearchResponse{Results: []websearch.Result{{Title: "Result", URL: "https://example.com", Snippet: "snippet"}}}}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "upstream-key"}, WebSearch: config.WebSearchConfig{MaxServerToolIterations: 1}}
 	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[{"role":"user","content":"search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_pause","name":"web_search","input":{"query":"query"}}]}],"tools":[{"type":"web_search_20250305","name":"web_search","max_uses":1}]}`)
+	body := []byte(`{"messages":[{"role":"user","content":"search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_cGF1c2U","name":"web_search","input":{"query":"query"}}]}],"tools":[{"type":"web_search_20250305","name":"web_search","max_uses":1}]}`)
 	response, handled, err := webSearchGateway.handle(context.Background(), body, "", nil)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
@@ -384,7 +384,7 @@ func TestWebSearchGatewayPauseTurnContinuationExecutesPendingSearch(t *testing.T
 	if requestCount() != 1 || len(searcher.requests) != 1 {
 		t.Fatalf("BYOK requests = %d, searches = %d; want 1 and 1", requestCount(), len(searcher.requests))
 	}
-	if !strings.Contains(string(response.body), `"tool_use_id":"srvtoolu_pause"`) ||
+	if !strings.Contains(string(response.body), `"tool_use_id":"srvtoolu_oma_encoded_cGF1c2U"`) ||
 		!strings.Contains(string(response.body), `"text":"done"`) {
 		t.Fatalf("pending pause continuation response = %s", response.body)
 	}
@@ -691,8 +691,8 @@ func TestWebSearchToolUseIDMappingIsReversible(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mint server tool use ID: %v", err)
 	}
-	if serverID != "srvtoolu_abc" {
-		t.Fatalf("server tool use ID = %q, want srvtoolu_abc", serverID)
+	if serverID != "srvtoolu_oma_encoded_dG9vbHVfYWJj" {
+		t.Fatalf("server tool use ID = %q, want encoded tool ID", serverID)
 	}
 	upstreamID, err := upstreamWebSearchToolUseID(serverID)
 	if err != nil {
@@ -727,7 +727,7 @@ func TestWebSearchToolUseIDMappingSupportsOpaqueUpstreamIDs(t *testing.T) {
 }
 
 func TestWebSearchToolUseIDMappingRejectsInvalidShapes(t *testing.T) {
-	serverCases := []string{"toolu_abc", "srvtoolu_", "abc", ""}
+	serverCases := []string{"srvtoolu_abc", "srvtoolu_", "abc", ""}
 	for _, externalID := range serverCases {
 		if _, err := upstreamWebSearchToolUseID(externalID); err == nil {
 			t.Fatalf("upstreamWebSearchToolUseID(%q) error = nil, want rejection", externalID)
@@ -741,7 +741,7 @@ func TestWebSearchToolUseIDMappingRejectsInvalidShapes(t *testing.T) {
 	}
 }
 
-// 前缀替换是双射：任意两个不同的上游 ID 不能映射到同一个 server ID，否则投影后的同一条
+// opaque 编码是双射：任意两个不同的上游 ID 不能映射到同一个 server ID，否则投影后的同一条
 // assistant message 会出现重复 tool_use ID。
 func TestWebSearchToolUseIDMappingHasNoCollisions(t *testing.T) {
 	upstreamIDs := []string{"toolu_abc", "toolu_oma_abc", "toolu_srvtoolu_abc", "toolu_1"}
@@ -821,7 +821,7 @@ func TestWebSearchGatewayMixedContinuationRequiresCurrentSearchTool(t *testing.T
 	searcher := &webSearchTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[{"role":"user","content":"search and inspect"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}],"tools":[{"name":"bash","input_schema":{"type":"object"}}]}`)
+	body := []byte(`{"messages":[{"role":"user","content":"search and inspect"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_c2VhcmNo","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}],"tools":[{"name":"bash","input_schema":{"type":"object"}}]}`)
 	_, handled, err := webSearchGateway.handle(context.Background(), body, "", nil)
 	var requestErr *webSearchGatewayRequestError
 	if !handled || !errors.As(err, &requestErr) || !strings.Contains(err.Error(), "same web_search tool") {
@@ -835,7 +835,7 @@ func TestWebSearchGatewayMixedContinuationRequiresCurrentSearchTool(t *testing.T
 func TestWebSearchGatewayMixedContinuationRejectsDuplicateClientResults(t *testing.T) {
 	messages := []json.RawMessage{
 		json.RawMessage(`{"role":"user","content":"search and inspect"}`),
-		json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
+		json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_c2VhcmNo","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
 		json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"},{"type":"tool_result","tool_use_id":"toolu_bash","content":"duplicate"}]}`),
 	}
 
@@ -849,12 +849,12 @@ func TestWebSearchGatewayRejectsDuplicateServerToolUsesInReplayedHistory(t *test
 	t.Run("mixed continuation", func(t *testing.T) {
 		messages := []json.RawMessage{
 			json.RawMessage(`{"role":"user","content":"search and inspect"}`),
-			json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"first"}},{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"second"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
+			json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_c2VhcmNo","name":"web_search","input":{"query":"first"}},{"type":"server_tool_use","id":"srvtoolu_oma_encoded_c2VhcmNo","name":"web_search","input":{"query":"second"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
 			json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"}]}`),
 		}
 
 		_, err := findPendingWebSearchTurn(messages)
-		if err == nil || !strings.Contains(err.Error(), `duplicate server web search tool use id "srvtoolu_search"`) {
+		if err == nil || !strings.Contains(err.Error(), `duplicate server web search tool use id "srvtoolu_oma_encoded_c2VhcmNo"`) {
 			t.Fatalf("find pending turn error = %v, want duplicate server tool use error", err)
 		}
 	})
@@ -862,11 +862,11 @@ func TestWebSearchGatewayRejectsDuplicateServerToolUsesInReplayedHistory(t *test
 	t.Run("paused continuation", func(t *testing.T) {
 		messages := []json.RawMessage{
 			json.RawMessage(`{"role":"user","content":"search"}`),
-			json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"first"}},{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"second"}}]}`),
+			json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_c2VhcmNo","name":"web_search","input":{"query":"first"}},{"type":"server_tool_use","id":"srvtoolu_oma_encoded_c2VhcmNo","name":"web_search","input":{"query":"second"}}]}`),
 		}
 
 		_, err := findPausedWebSearchTurn(messages)
-		if err == nil || !strings.Contains(err.Error(), `duplicate server web search tool use id "srvtoolu_search"`) {
+		if err == nil || !strings.Contains(err.Error(), `duplicate server web search tool use id "srvtoolu_oma_encoded_c2VhcmNo"`) {
 			t.Fatalf("find paused turn error = %v, want duplicate server tool use error", err)
 		}
 	})
@@ -875,7 +875,7 @@ func TestWebSearchGatewayRejectsDuplicateServerToolUsesInReplayedHistory(t *test
 func TestWebSearchGatewayMixedContinuationRejectsNonToolResultContent(t *testing.T) {
 	messages := []json.RawMessage{
 		json.RawMessage(`{"role":"user","content":"search and inspect"}`),
-		json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_search","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
+		json.RawMessage(`{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_c2VhcmNo","name":"web_search","input":{"query":"query"}},{"type":"tool_use","id":"toolu_bash","name":"bash","input":{"command":"pwd"}}]}`),
 		json.RawMessage(`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_bash","content":"/workspace"},{"type":"text","text":"continue"}]}`),
 	}
 
@@ -1062,12 +1062,12 @@ func TestWebSearchGatewayProjectsCompletedSearchHistoryBackToBYOK(t *testing.T) 
 			return
 		}
 		if request.Messages[1].Role != "assistant" || !strings.Contains(string(request.Messages[1].Content), `"type":"tool_use"`) ||
-			!strings.Contains(string(request.Messages[1].Content), `"id":"toolu_history"`) {
+			!strings.Contains(string(request.Messages[1].Content), `"id":"history"`) {
 			t.Errorf("projected search call = %s", request.Messages[1].Content)
 			return
 		}
 		if request.Messages[2].Role != "user" || !strings.Contains(string(request.Messages[2].Content), `"type":"tool_result"`) ||
-			!strings.Contains(string(request.Messages[2].Content), `"tool_use_id":"toolu_history"`) {
+			!strings.Contains(string(request.Messages[2].Content), `"tool_use_id":"history"`) {
 			t.Errorf("projected search result = %s", request.Messages[2].Content)
 			return
 		}
@@ -1082,7 +1082,7 @@ func TestWebSearchGatewayProjectsCompletedSearchHistoryBackToBYOK(t *testing.T) 
 	searcher := &webSearchTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[{"role":"user","content":"old search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_history","name":"web_search","input":{"query":"old query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_history","content":[{"type":"web_search_result","title":"Old","url":"https://example.com"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[]}`)
+	body := []byte(`{"messages":[{"role":"user","content":"old search"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_aGlzdG9yeQ","name":"web_search","input":{"query":"old query"}},{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_encoded_aGlzdG9yeQ","content":[{"type":"web_search_result","title":"Old","url":"https://example.com"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[]}`)
 	response, handled, err := webSearchGateway.handle(context.Background(), body, "", nil)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
@@ -1113,7 +1113,7 @@ func TestWebSearchGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 			t.Errorf("projected mixed calls = %s, err = %v", request.Messages[1].Content, err)
 			return
 		}
-		if !strings.Contains(string(calls[0]), `"id":"toolu_history_search"`) ||
+		if !strings.Contains(string(calls[0]), `"id":"history_search"`) ||
 			!strings.Contains(string(calls[1]), `"id":"toolu_history_bash"`) {
 			t.Errorf("projected mixed calls = %s", calls)
 			return
@@ -1123,7 +1123,7 @@ func TestWebSearchGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 			t.Errorf("projected mixed results = %s, err = %v", request.Messages[2].Content, err)
 			return
 		}
-		if !strings.Contains(string(results[0]), `"tool_use_id":"toolu_history_search"`) ||
+		if !strings.Contains(string(results[0]), `"tool_use_id":"history_search"`) ||
 			!strings.Contains(string(results[1]), `"tool_use_id":"toolu_history_bash"`) {
 			t.Errorf("projected mixed result order = %s", results)
 			return
@@ -1139,7 +1139,7 @@ func TestWebSearchGatewayProjectsCompletedMixedHistoryBackToBYOK(t *testing.T) {
 	searcher := &webSearchTestSearcher{}
 	cfg := config.Config{AnthropicUpstream: config.AnthropicUpstreamConfig{BaseURL: upstream.URL, APIKey: "key"}}
 	webSearchGateway := newWebSearchGateway(cfg, &http.Client{Timeout: time.Second}, searcher, nil)
-	body := []byte(`{"messages":[{"role":"user","content":"old mixed turn"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_history_search","name":"web_search","input":{"query":"old query"}},{"type":"tool_use","id":"toolu_history_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_history_bash","content":"/workspace"}]},{"role":"assistant","content":[{"type":"web_search_tool_result","tool_use_id":"srvtoolu_history_search","content":[{"type":"web_search_result","title":"Old","url":"https://example.com"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
+	body := []byte(`{"messages":[{"role":"user","content":"old mixed turn"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_oma_encoded_aGlzdG9yeV9zZWFyY2g","name":"web_search","input":{"query":"old query"}},{"type":"tool_use","id":"toolu_history_bash","name":"bash","input":{"command":"pwd"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_history_bash","content":"/workspace"}]},{"role":"assistant","content":[{"type":"web_search_tool_result","tool_use_id":"srvtoolu_oma_encoded_aGlzdG9yeV9zZWFyY2g","content":[{"type":"web_search_result","title":"Old","url":"https://example.com"}]},{"type":"text","text":"old answer"}]},{"role":"user","content":"new question"}],"tools":[{"type":"web_search_20250305"},{"name":"bash","input_schema":{"type":"object"}}]}`)
 	response, handled, err := webSearchGateway.handle(context.Background(), body, "", nil)
 	if err != nil || !handled || response.statusCode != http.StatusOK {
 		t.Fatalf("response = %#v, handled = %v, err = %v", response, handled, err)
