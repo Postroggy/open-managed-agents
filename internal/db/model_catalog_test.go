@@ -1,10 +1,15 @@
 package db
 
 import (
+	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/superduck-ai/open-managed-agents/internal/config"
 )
 
 func TestModelCatalogQueriesUseNamedPostgreSQLBindings(t *testing.T) {
@@ -65,3 +70,93 @@ func TestModelCatalogQueriesUseNamedPostgreSQLBindings(t *testing.T) {
 }
 
 const modelCatalogTestKey = "default"
+
+func TestModelCatalogSnapshotSQLXRoundTripAndFailurePreservesSuccess(t *testing.T) {
+	ctx := context.Background()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Skipf("PostgreSQL integration test requires config: %v", err)
+	}
+	database, err := Open(ctx, cfg)
+	if err != nil {
+		t.Skipf("PostgreSQL integration test requires database: %v", err)
+	}
+	defer database.Close()
+
+	key := "model_catalog_test_" + uuid.NewString()
+	defer func() {
+		_, _ = database.sql.ExecContext(ctx, `delete from model_catalog_snapshots where catalog_key = $1`, key)
+	}()
+
+	successAt := time.Date(2026, time.July, 24, 1, 2, 3, 0, time.UTC)
+	models := json.RawMessage(`[{"id":"provider/model","capabilities":{"thinking":{"supported":true}}}]`)
+	if err := database.SaveModelCatalogSuccess(ctx, ModelCatalogSnapshot{
+		CatalogKey:    key,
+		Models:        models,
+		LastAttemptAt: &successAt,
+		LastSuccessAt: &successAt,
+	}); err != nil {
+		t.Fatalf("SaveModelCatalogSuccess() error = %v", err)
+	}
+
+	record, exists, err := database.GetModelCatalogSnapshot(ctx, key)
+	if err != nil || !exists {
+		t.Fatalf("GetModelCatalogSnapshot() = (%+v, %t, %v), want stored row", record, exists, err)
+	}
+	if !jsonEqual(record.Models, models) || record.LastSuccessAt == nil || !record.LastSuccessAt.Equal(successAt) {
+		t.Fatalf("stored snapshot = %+v, want JSON and nullable timestamp round-trip", record)
+	}
+
+	attemptedAt := successAt.Add(time.Minute)
+	if err := database.RecordModelCatalogFailure(ctx, key, attemptedAt, "upstream_timeout"); err != nil {
+		t.Fatalf("RecordModelCatalogFailure() error = %v", err)
+	}
+	record, exists, err = database.GetModelCatalogSnapshot(ctx, key)
+	if err != nil || !exists || record.LastError != "upstream_timeout" {
+		t.Fatalf("failure snapshot = (%+v, %t, %v), want failure metadata", record, exists, err)
+	}
+	if !jsonEqual(record.Models, models) || record.LastSuccessAt == nil || !record.LastSuccessAt.Equal(successAt) {
+		t.Fatalf("failure snapshot lost successful data = %+v", record)
+	}
+}
+
+func jsonEqual(got, want json.RawMessage) bool {
+	var gotValue, wantValue any
+	if json.Unmarshal(got, &gotValue) != nil || json.Unmarshal(want, &wantValue) != nil {
+		return false
+	}
+	return reflect.DeepEqual(gotValue, wantValue)
+}
+
+func TestTryAcquireAdvisoryLockUsesOneSessionAndReleasesIt(t *testing.T) {
+	ctx := context.Background()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Skipf("PostgreSQL integration test requires config: %v", err)
+	}
+	database, err := Open(ctx, cfg)
+	if err != nil {
+		t.Skipf("PostgreSQL integration test requires database: %v", err)
+	}
+	defer database.Close()
+
+	lockID := time.Now().UnixNano()
+	release, acquired, err := database.TryAcquireAdvisoryLock(ctx, lockID)
+	if err != nil || !acquired {
+		t.Fatalf("first TryAcquireAdvisoryLock() = (%t, %v), want acquired", acquired, err)
+	}
+	defer release()
+
+	secondRelease, acquired, err := database.TryAcquireAdvisoryLock(ctx, lockID)
+	if err != nil || acquired {
+		t.Fatalf("second TryAcquireAdvisoryLock() = (%t, %v), want lock contention", acquired, err)
+	}
+	secondRelease()
+
+	release()
+	thirdRelease, acquired, err := database.TryAcquireAdvisoryLock(ctx, lockID)
+	if err != nil || !acquired {
+		t.Fatalf("third TryAcquireAdvisoryLock() = (%t, %v), want released lock", acquired, err)
+	}
+	thirdRelease()
+}

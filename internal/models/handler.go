@@ -2,12 +2,13 @@ package models
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
+	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
 
 	"github.com/go-chi/chi/v5"
@@ -16,6 +17,7 @@ import (
 type Handler struct {
 	router  chi.Router
 	catalog modelcatalog.Reader
+	logger  *slog.Logger
 }
 
 type listResponse struct {
@@ -41,8 +43,8 @@ type listParams struct {
 	Limit    int
 }
 
-func NewHandler(catalog modelcatalog.Reader) *Handler {
-	h := &Handler{catalog: catalog}
+func NewHandler(catalog modelcatalog.Reader, logger *slog.Logger) *Handler {
+	h := &Handler{catalog: catalog, logger: logging.LoggerOrDefault(logger)}
 	router := chi.NewRouter()
 	router.NotFound(notFound)
 	router.MethodNotAllowed(notFound)
@@ -111,13 +113,13 @@ func (h *Handler) retrieve(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) loadSnapshot(w http.ResponseWriter, r *http.Request) (modelcatalog.Snapshot, bool) {
 	if h.catalog == nil {
-		log.Print("models: model catalog is not configured")
+		h.logger.WarnContext(r.Context(), "model catalog is not configured")
 		writeCatalogUnavailable(w, r)
 		return modelcatalog.Snapshot{}, false
 	}
 	snapshot, err := h.catalog.Snapshot(r.Context())
 	if err != nil {
-		log.Printf("models: load model catalog snapshot: %v", err)
+		h.logger.ErrorContext(r.Context(), "load model catalog snapshot", "error", err)
 		writeCatalogUnavailable(w, r)
 		return modelcatalog.Snapshot{}, false
 	}

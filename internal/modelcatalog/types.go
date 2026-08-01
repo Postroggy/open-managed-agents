@@ -17,7 +17,137 @@ var (
 	ErrRefreshInProgress = errors.New("model catalog refresh is already in progress")
 )
 
-type Capabilities map[string]json.RawMessage
+type capabilityValueKind uint8
+
+const (
+	capabilityNullKind capabilityValueKind = iota
+	capabilityObjectKind
+	capabilityArrayKind
+	capabilityStringKind
+	capabilityNumberKind
+	capabilityBooleanKind
+)
+
+// CapabilityValue is a structured JSON value used to preserve Gateway
+// capability extensions without leaking json.RawMessage into the domain model.
+type CapabilityValue struct {
+	kind    capabilityValueKind
+	object  map[string]CapabilityValue
+	array   []CapabilityValue
+	string  string
+	number  json.Number
+	boolean bool
+}
+
+type Capabilities map[string]CapabilityValue
+
+func (v *CapabilityValue) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if bytes.Equal(trimmed, []byte("null")) {
+		*v = CapabilityValue{kind: capabilityNullKind}
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	parsed, err := capabilityValueFromAny(value)
+	if err != nil {
+		return err
+	}
+	*v = parsed
+	return nil
+}
+
+func (v CapabilityValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(v.any())
+}
+
+func (v CapabilityValue) any() any {
+	switch v.kind {
+	case capabilityObjectKind:
+		fields := make(map[string]any, len(v.object))
+		for name, value := range v.object {
+			fields[name] = value.any()
+		}
+		return fields
+	case capabilityArrayKind:
+		values := make([]any, 0, len(v.array))
+		for _, value := range v.array {
+			values = append(values, value.any())
+		}
+		return values
+	case capabilityStringKind:
+		return v.string
+	case capabilityNumberKind:
+		return v.number
+	case capabilityBooleanKind:
+		return v.boolean
+	default:
+		return nil
+	}
+}
+
+func capabilityValueFromAny(value any) (CapabilityValue, error) {
+	switch typed := value.(type) {
+	case nil:
+		return CapabilityValue{kind: capabilityNullKind}, nil
+	case map[string]any:
+		fields := make(map[string]CapabilityValue, len(typed))
+		for name, item := range typed {
+			parsed, err := capabilityValueFromAny(item)
+			if err != nil {
+				return CapabilityValue{}, err
+			}
+			fields[name] = parsed
+		}
+		return CapabilityValue{kind: capabilityObjectKind, object: fields}, nil
+	case []any:
+		values := make([]CapabilityValue, 0, len(typed))
+		for _, item := range typed {
+			parsed, err := capabilityValueFromAny(item)
+			if err != nil {
+				return CapabilityValue{}, err
+			}
+			values = append(values, parsed)
+		}
+		return CapabilityValue{kind: capabilityArrayKind, array: values}, nil
+	case string:
+		return CapabilityValue{kind: capabilityStringKind, string: typed}, nil
+	case json.Number:
+		return CapabilityValue{kind: capabilityNumberKind, number: typed}, nil
+	case bool:
+		return CapabilityValue{kind: capabilityBooleanKind, boolean: typed}, nil
+	default:
+		return CapabilityValue{}, fmt.Errorf("unsupported capability value %T", value)
+	}
+}
+
+func capabilityObjectValue(value CapabilityValue) map[string]CapabilityValue {
+	if value.kind != capabilityObjectKind || value.object == nil {
+		return make(map[string]CapabilityValue)
+	}
+	return value.object
+}
+
+func cloneCapabilityValue(value CapabilityValue) CapabilityValue {
+	cloned := value
+	if value.object != nil {
+		cloned.object = make(map[string]CapabilityValue, len(value.object))
+		for name, item := range value.object {
+			cloned.object[name] = cloneCapabilityValue(item)
+		}
+	}
+	if value.array != nil {
+		cloned.array = make([]CapabilityValue, len(value.array))
+		for index, item := range value.array {
+			cloned.array[index] = cloneCapabilityValue(item)
+		}
+	}
+	return cloned
+}
 
 type KnownCapabilities struct {
 	Batch             *bool
@@ -42,25 +172,20 @@ type KnownCapabilities struct {
 	ToolUse           *bool
 }
 
-type capabilityPayload struct {
-	Supported *bool                      `json:"supported"`
-	Types     map[string]json.RawMessage `json:"types"`
-}
-
 func (c *Capabilities) UnmarshalJSON(data []byte) error {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 		*c = nil
 		return nil
 	}
-	var fields map[string]json.RawMessage
+	var fields map[string]CapabilityValue
 	if err := json.Unmarshal(trimmed, &fields); err != nil {
 		return fmt.Errorf("capabilities must be an object: %w", err)
 	}
 	if err := validateKnownCapabilities(fields); err != nil {
 		return err
 	}
-	*c = Capabilities(cloneCapabilityFields(fields))
+	*c = Capabilities(cloneCapabilityValues(fields))
 	return nil
 }
 
@@ -71,7 +196,9 @@ func (c *Capabilities) setSupported(name string, supported *bool) {
 	if *c == nil {
 		*c = make(Capabilities)
 	}
-	(*c)[name] = mergeSupportedCapability((*c)[name], supported)
+	fields := capabilityObjectValue((*c)[name])
+	fields["supported"] = CapabilityValue{kind: capabilityBooleanKind, boolean: *supported}
+	(*c)[name] = CapabilityValue{kind: capabilityObjectKind, object: fields}
 }
 
 func (c Capabilities) Known() KnownCapabilities {
@@ -103,7 +230,7 @@ func (c Capabilities) Known() KnownCapabilities {
 	}
 }
 
-func validateKnownCapabilities(fields map[string]json.RawMessage) error {
+func validateKnownCapabilities(fields map[string]CapabilityValue) error {
 	for _, name := range []string{
 		"batch", "citations", "code_execution", "context_management", "effort",
 		"image_input", "pdf_input", "structured_outputs", "thinking", "tool_use",
@@ -134,45 +261,47 @@ func validateKnownCapabilities(fields map[string]json.RawMessage) error {
 	return nil
 }
 
-func supportedCapability(raw json.RawMessage, name string) (*bool, error) {
-	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+func supportedCapability(value CapabilityValue, name string) (*bool, error) {
+	if value.kind == capabilityNullKind {
 		return nil, nil
 	}
-	var payload capabilityPayload
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, fmt.Errorf("%s capability must be an object: %w", name, err)
+	if value.kind != capabilityObjectKind {
+		return nil, fmt.Errorf("%s capability must be an object", name)
 	}
-	return cloneBool(payload.Supported), nil
+	supported, ok := value.object["supported"]
+	if !ok || supported.kind == capabilityNullKind {
+		return nil, nil
+	}
+	if supported.kind != capabilityBooleanKind {
+		return nil, fmt.Errorf("%s.supported must be a boolean", name)
+	}
+	valueCopy := supported.boolean
+	return &valueCopy, nil
 }
 
-func capabilitySupported(raw json.RawMessage) *bool {
-	var payload capabilityPayload
-	if len(raw) == 0 || json.Unmarshal(raw, &payload) != nil {
+func capabilitySupported(value CapabilityValue) *bool {
+	if value.kind != capabilityObjectKind {
 		return nil
 	}
-	return cloneBool(payload.Supported)
+	supported, ok := value.object["supported"]
+	if !ok || supported.kind != capabilityBooleanKind {
+		return nil
+	}
+	valueCopy := supported.boolean
+	return &valueCopy
 }
 
-func mergeSupportedCapability(raw json.RawMessage, supported *bool) json.RawMessage {
-	fields := capabilityObject(raw)
-	fields["supported"], _ = json.Marshal(*supported)
-	encoded, _ := json.Marshal(fields)
-	return encoded
+func capabilityObject(value CapabilityValue) map[string]CapabilityValue {
+	return capabilityObjectValue(value)
 }
 
-func capabilityObject(raw json.RawMessage) map[string]json.RawMessage {
-	fields := make(map[string]json.RawMessage)
-	_ = json.Unmarshal(raw, &fields)
-	return fields
-}
-
-func cloneCapabilityFields(fields map[string]json.RawMessage) map[string]json.RawMessage {
+func cloneCapabilityValues(fields map[string]CapabilityValue) map[string]CapabilityValue {
 	if fields == nil {
 		return nil
 	}
-	cloned := make(map[string]json.RawMessage, len(fields))
+	cloned := make(map[string]CapabilityValue, len(fields))
 	for name, value := range fields {
-		cloned[name] = append(json.RawMessage(nil), value...)
+		cloned[name] = cloneCapabilityValue(value)
 	}
 	return cloned
 }

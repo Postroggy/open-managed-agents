@@ -8,7 +8,7 @@
 
 ## 领域合同
 
-`ModelCatalog` 负责模型发现、校验、发布和目录新鲜度。`CatalogSnapshot` 只包含一次完整的 AI Gateway 返回结果。`Model Selection` 优先使用有效的 `model_catalog.default_model_id`；未配置有效默认值时，客户端使用目录第一项作为初始选择，用户仍可显式切换。
+`ModelCatalog` 负责模型发现、校验、发布和目录新鲜度。`CatalogSnapshot` 只包含一次完整的 AI Gateway 返回结果。`Model Selection` 优先使用有效的 `model_catalog.default_model_id`；未配置有效默认值时，客户端使用目录第一项作为初始选择，用户仍可显式切换。对于省略模型的 Workbench 生成请求，服务端在同一快照内使用相同的目录首项回退，避免客户端状态尚未保存时出现不一致。
 
 模型 ID 是不透明字符串。目录只校验 ID 非空且可稳定持久化，不根据其拼写推断供应商、能力或价格层级。
 
@@ -56,7 +56,7 @@ flowchart LR
 
 当前 Anthropic 文档将 `created_at`、token 上限和完整 `capabilities` 标为必填，但 BYOK Gateway 可能只实现较早版本或兼容子集。OMA 的兼容策略是：`id` 必须存在，`display_name` 缺失时回退到 Gateway 的 `name` 或不透明 ID；其余增强字段仅在 Gateway 明确返回时透传。缺失字段不会被伪造成 epoch、0 或“不支持”，因为这些值会改变模型语义。完整实现当前 Anthropic Models API 的 Gateway 会得到完整 `ModelInfo`；兼容子集仍可用于模型选择，但客户端可以通过字段是否存在识别元数据未知。
 
-Anthropic 当前定义的 `ModelCapabilities` 包含 Batch、引用、代码执行、上下文管理、Effort、图片输入、PDF 输入、结构化输出和 Thinking。目录对这些字段提供命名的三态视图，同时以开放 JSON 对象保留未来官方字段和 Gateway 扩展；`tool_use` 当前属于 Gateway 扩展，不冒充 Anthropic 的已定义字段。
+Anthropic 当前定义的 `ModelCapabilities` 包含 Batch、引用、代码执行、上下文管理、Effort、图片输入、PDF 输入、结构化输出和 Thinking。目录对这些字段提供命名的三态视图，同时以递归的结构化 JSON 值保留未来官方字段和 Gateway 扩展；未知字段只在 Gateway、持久化和 HTTP 投影边界保持开放，不把 `json.RawMessage` 作为业务模型跨包传递。`tool_use` 当前属于 Gateway 扩展，不冒充 Anthropic 的已定义字段。
 
 Console `/models` 将同一目录适配为 Workbench 所需结构，并向前端提供目录新鲜度元数据。两个读取接口都不会直接请求 AI Gateway。
 
@@ -92,3 +92,9 @@ model_catalog:
 ```
 
 `default_model_id` 是可选项。只有成功快照中包含完全相同的不透明 ID 时，该值才会作为安装级默认模型暴露给消费者。未暴露有效默认值时，客户端以目录第一项作为初始选择，但不会把该选择写回服务端配置。
+
+## 组件边界
+
+- `internal/modelcatalog` 负责上游分页、快照状态和模型领域类型；能力值使用命名的递归 JSON 类型保留未知扩展。
+- `internal/db` 负责快照 SQL 和 session-scoped advisory lock。锁通过 pinned sqlx connection 获取和释放，`modelcatalog` 不直接操作 pgx pool。
+- `internal/api` 在组装阶段把 catalog、upstream、persistence store 和 logger 注入 `workbenchHandler`；这些稳定依赖不放入 request context。

@@ -19,7 +19,7 @@ import (
 
 func TestListReportsUnavailableCatalogWithoutFallbackModels(t *testing.T) {
 	t.Parallel()
-	handler := NewHandler(fakeCatalogReader{err: modelcatalog.ErrUnavailable})
+	handler := NewHandler(fakeCatalogReader{err: modelcatalog.ErrUnavailable}, nil)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -54,7 +54,7 @@ func TestListAdaptsPublishedCatalogSnapshot(t *testing.T) {
 			Capabilities:   catalogCapabilities,
 		}},
 		LastSuccessAt: &lastSuccess,
-	}})
+	}}, nil)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -89,7 +89,7 @@ func TestListAppliesAnthropicCursorPagination(t *testing.T) {
 		id := fmt.Sprintf("model-%02d", index)
 		models = append(models, modelcatalog.Model{ID: id, DisplayName: id})
 	}
-	handler := NewHandler(fakeCatalogReader{snapshot: modelcatalog.Snapshot{Models: models}})
+	handler := NewHandler(fakeCatalogReader{snapshot: modelcatalog.Snapshot{Models: models}}, nil)
 
 	t.Run("default limit", func(t *testing.T) {
 		response := serveModelsRequest(handler, "/")
@@ -130,7 +130,7 @@ func TestRetrieveReturnsCatalogModel(t *testing.T) {
 	handler := NewHandler(fakeCatalogReader{snapshot: modelcatalog.Snapshot{Models: []modelcatalog.Model{{
 		ID:          "model-1",
 		DisplayName: "Model One",
-	}}}})
+	}}}}, nil)
 
 	response := serveModelsRequest(handler, "/model-1")
 	if response.Code != http.StatusOK {
@@ -165,7 +165,7 @@ func TestOfficialAnthropicSDKListsAndRetrievesCatalogModels(t *testing.T) {
 		MaxInputTokens: &inputTokens,
 		MaxTokens:      &maxTokens,
 		Capabilities:   capabilities,
-	}}}})
+	}}}}, nil)
 	server := httptest.NewServer(http.StripPrefix("/v1/models", handler))
 	defer server.Close()
 	client := anthropic.NewClient(option.WithAPIKey("test-key"), option.WithBaseURL(server.URL))

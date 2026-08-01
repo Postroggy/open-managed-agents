@@ -49,11 +49,8 @@ func RegisterOrgWorkbenchRoutes(
 	catalog modelcatalog.Reader,
 	logger *slog.Logger,
 ) {
-	h := newWorkbenchHandler(store, upstream, logger)
+	h := newWorkbenchHandlerWithCatalog(store, upstream, catalog, logger)
 	workbenchRouter := chi.NewRouter()
-	workbenchRouter.Use(func(next http.Handler) http.Handler {
-		return withWorkbenchDependenciesAndCatalog(h.store, upstream, catalog, next.ServeHTTP)
-	})
 	h.registerRoutes(workbenchRouter)
 	r.Mount("/", workbenchRouter)
 }
@@ -163,20 +160,23 @@ func proxyMessagesAnthropicToken(upstream config.AnthropicUpstreamConfig) string
 	return strings.TrimSpace(upstream.APIKey)
 }
 
-func resolveWorkbenchModel(r *http.Request, candidates ...string) (string, error) {
-	catalog := workbenchModelCatalogFromRequest(r)
+func (h *workbenchHandler) resolveWorkbenchModel(r *http.Request, candidates ...string) (string, error) {
+	catalog := h.catalog
 	if catalog == nil {
 		return "", modelcatalog.ErrUnavailable
 	}
 
 	modelID := firstNonEmpty(candidates...)
-	modelID = modelmapping.Resolve(modelID, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
+	modelID = modelmapping.Resolve(modelID, h.upstream.ModelMappings)
 	if modelID == "" {
 		snapshot, err := catalog.Snapshot(r.Context())
 		if err != nil {
 			return "", modelcatalog.ErrUnavailable
 		}
 		modelID = snapshot.DefaultModelID
+		if modelID == "" && len(snapshot.Models) > 0 {
+			modelID = snapshot.Models[0].ID
+		}
 	}
 	if modelID == "" {
 		return "", errWorkbenchModelRequired

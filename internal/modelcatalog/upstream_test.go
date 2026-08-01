@@ -179,13 +179,18 @@ func TestHTTPUpstreamMapsOpaqueModelsAndPagination(t *testing.T) {
 			t.Fatalf("%s = %v, want false", name, capability)
 		}
 	}
-	for _, capability := range []string{
-		`"image_input":{"supported":true}`,
-		`"audio_input":{"supported":true,"formats":["wav"]}`,
-	} {
-		if !strings.Contains(string(capabilities), capability) {
-			t.Fatalf("capabilities = %s, want provider capability %s", capabilities, capability)
-		}
+	var capabilityPayload map[string]map[string]any
+	if err := json.Unmarshal(capabilities, &capabilityPayload); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
+	if capabilityPayload["image_input"]["supported"] != true {
+		t.Fatalf("image_input capability = %#v, want supported=true", capabilityPayload["image_input"])
+	}
+	if capabilityPayload["audio_input"]["supported"] != true {
+		t.Fatalf("audio_input capability = %#v, want supported=true", capabilityPayload["audio_input"])
+	}
+	if !strings.Contains(string(capabilities), `"formats":["wav"]`) {
+		t.Fatalf("capabilities = %s, want audio formats", capabilities)
 	}
 	page.Models[0].Capabilities = nil
 	want := Page{

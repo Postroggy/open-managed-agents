@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"maps"
 	"net/http"
 	"sort"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/superduck-ai/open-managed-agents/internal/aigateway"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
-	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
 	"github.com/superduck-ai/open-managed-agents/internal/modelmapping"
@@ -70,56 +68,10 @@ type workbenchKVEntry struct {
 	Version any
 }
 
-type workbenchPersistenceContextKey struct{}
-type workbenchAnthropicUpstreamContextKey struct{}
-type workbenchModelCatalogContextKey struct{}
-type workbenchModelCatalogUserStoreContextKey struct{}
-
 type workbenchModelCatalogUserStore interface {
 	GetAdminUser(context.Context, string, string) (db.AdminUser, error)
 }
 
-func withWorkbenchDependenciesAndCatalog(
-	store workbenchPersistenceStore,
-	upstream config.AnthropicUpstreamConfig,
-	catalog modelcatalog.Reader,
-	handler http.HandlerFunc,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), workbenchAnthropicUpstreamContextKey{}, upstream)
-		if store != nil {
-			ctx = context.WithValue(ctx, workbenchPersistenceContextKey{}, store)
-		}
-		if catalog != nil {
-			ctx = context.WithValue(ctx, workbenchModelCatalogContextKey{}, catalog)
-		}
-		if userStore, ok := store.(workbenchModelCatalogUserStore); ok {
-			ctx = context.WithValue(ctx, workbenchModelCatalogUserStoreContextKey{}, userStore)
-		}
-		r = r.WithContext(ctx)
-		handler(w, r)
-	}
-}
-
-func workbenchPersistenceFromRequest(r *http.Request) workbenchPersistenceStore {
-	store, _ := r.Context().Value(workbenchPersistenceContextKey{}).(workbenchPersistenceStore)
-	return store
-}
-
-func workbenchAnthropicUpstreamFromRequest(r *http.Request) config.AnthropicUpstreamConfig {
-	upstream, _ := r.Context().Value(workbenchAnthropicUpstreamContextKey{}).(config.AnthropicUpstreamConfig)
-	return upstream
-}
-
-func workbenchModelCatalogFromRequest(r *http.Request) modelcatalog.Reader {
-	catalog, _ := r.Context().Value(workbenchModelCatalogContextKey{}).(modelcatalog.Reader)
-	return catalog
-}
-
-func workbenchModelCatalogUserStoreFromRequest(r *http.Request) workbenchModelCatalogUserStore {
-	store, _ := r.Context().Value(workbenchModelCatalogUserStoreContextKey{}).(workbenchModelCatalogUserStore)
-	return store
-}
 func workbenchWritePersistenceError(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
@@ -563,7 +515,7 @@ func (h *workbenchHandler) handleWorkbenchModels(w http.ResponseWriter, r *http.
 	if !visibleOrgUUIDOrPlatformClaudeMirror(w, r) {
 		return
 	}
-	catalog := workbenchModelCatalogFromRequest(r)
+	catalog := h.catalog
 	if catalog == nil {
 		writeWorkbenchCatalogUnavailable(w)
 		return
@@ -573,10 +525,10 @@ func (h *workbenchHandler) handleWorkbenchModels(w http.ResponseWriter, r *http.
 		writeWorkbenchCatalogUnavailable(w)
 		return
 	}
-	writeWorkbenchModelsSnapshot(w, snapshot, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
+	writeWorkbenchModelsSnapshot(w, snapshot, h.upstream.ModelMappings)
 }
 
-func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) {
+func (h *workbenchHandler) handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) {
 	if _, ok := visibleOrgUUID(w, r); !ok {
 		return
 	}
@@ -585,7 +537,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
 		return
 	}
-	userStore := workbenchModelCatalogUserStoreFromRequest(r)
+	userStore := h.userStore
 	if userStore == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "model_catalog_refresh_unavailable"})
 		return
@@ -596,7 +548,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "model_catalog_refresh_forbidden"})
 			return
 		}
-		slog.Default().ErrorContext(r.Context(), "authorize model catalog refresh", "organization_uuid", principal.OrganizationUUID, "error", err)
+		h.logger.ErrorContext(r.Context(), "authorize model catalog refresh", "organization_uuid", principal.OrganizationUUID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "model_catalog_refresh_authorization_failed"})
 		return
 	}
@@ -605,7 +557,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	catalog := workbenchModelCatalogFromRequest(r)
+	catalog := h.catalog
 	refresher, ok := catalog.(modelcatalog.Refresher)
 	if !ok {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "model_catalog_refresh_unavailable"})
@@ -616,7 +568,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "model_catalog_refresh_in_progress"})
 			return
 		}
-		slog.Default().ErrorContext(r.Context(), "refresh model catalog", "error", err)
+		h.logger.ErrorContext(r.Context(), "refresh model catalog", "error", err)
 		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "model_catalog_refresh_failed"})
 		return
 	}
@@ -625,7 +577,7 @@ func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) 
 		writeWorkbenchCatalogUnavailable(w)
 		return
 	}
-	writeWorkbenchModelsSnapshot(w, snapshot, workbenchAnthropicUpstreamFromRequest(r).ModelMappings)
+	writeWorkbenchModelsSnapshot(w, snapshot, h.upstream.ModelMappings)
 }
 
 func canRefreshModelCatalog(role string) bool {
@@ -752,7 +704,7 @@ func (h *workbenchHandler) handleWorkbenchStream(text string) http.HandlerFunc {
 		if _, ok := visibleOrgUUID(w, r); !ok {
 			return
 		}
-		model, err := resolveWorkbenchModel(r)
+		model, err := h.resolveWorkbenchModel(r)
 		if err != nil {
 			writeWorkbenchModelSelectionError(w, err)
 			return
@@ -766,7 +718,7 @@ func (h *workbenchHandler) handleWorkbenchGenerateTestCase(w http.ResponseWriter
 		return
 	}
 	body, _ := readJSONObject(r)
-	model, err := resolveWorkbenchModel(
+	model, err := h.resolveWorkbenchModel(
 		r,
 		chatNormalizeString(body["model_name"]),
 		chatNormalizeString(body["model"]),
@@ -775,7 +727,7 @@ func (h *workbenchHandler) handleWorkbenchGenerateTestCase(w http.ResponseWriter
 		writeWorkbenchModelSelectionError(w, err)
 		return
 	}
-	text, generatedValues, err := workbenchGenerateTestCaseFromAnthropic(r, body, model)
+	text, generatedValues, err := h.workbenchGenerateTestCaseFromAnthropic(r, body, model)
 	if err != nil {
 		workbenchWriteGenerationError(w, err)
 		return
@@ -791,7 +743,7 @@ func (h *workbenchHandler) handleWorkbenchGenerateTestCases(w http.ResponseWrite
 		return
 	}
 	body, _ := readJSONObject(r)
-	model, err := resolveWorkbenchModel(
+	model, err := h.resolveWorkbenchModel(
 		r,
 		chatNormalizeString(body["model_name"]),
 		chatNormalizeString(body["model"]),
@@ -801,7 +753,7 @@ func (h *workbenchHandler) handleWorkbenchGenerateTestCases(w http.ResponseWrite
 		return
 	}
 	count := workbenchTestCaseCount(body)
-	generatedCases, err := workbenchGenerateTestCasesFromAnthropic(r, body, model, count)
+	generatedCases, err := h.workbenchGenerateTestCasesFromAnthropic(r, body, model, count)
 	if err != nil {
 		workbenchWriteGenerationError(w, err)
 		return
@@ -820,12 +772,12 @@ func workbenchWriteGeneratedTestCasesStream(w http.ResponseWriter, generatedCase
 	}
 }
 
-func workbenchGenerateTestCaseFromAnthropic(r *http.Request, body map[string]any, model string) (string, map[string]any, error) {
+func (h *workbenchHandler) workbenchGenerateTestCaseFromAnthropic(r *http.Request, body map[string]any, model string) (string, map[string]any, error) {
 	variableNames := workbenchVariableNamesFromPayload(body)
 	if len(variableNames) == 0 {
 		return "", nil, errWorkbenchVariablesRequired
 	}
-	text, _, _, err := workbenchAnthropicTextFromBody(r, workbenchGenerateTestCaseAnthropicBody(body, variableNames, model))
+	text, _, _, err := h.workbenchAnthropicTextFromBody(r, workbenchGenerateTestCaseAnthropicBody(body, variableNames, model))
 	if err != nil {
 		return "", nil, err
 	}
@@ -837,12 +789,12 @@ func workbenchGenerateTestCaseFromAnthropic(r *http.Request, body map[string]any
 	return workbenchGeneratedTestCaseTextFromValuesWithPlanning(values, planning), values, nil
 }
 
-func workbenchGenerateTestCasesFromAnthropic(r *http.Request, body map[string]any, model string, count int) ([]map[string]any, error) {
+func (h *workbenchHandler) workbenchGenerateTestCasesFromAnthropic(r *http.Request, body map[string]any, model string, count int) ([]map[string]any, error) {
 	variableNames := workbenchVariableNamesFromPayload(body)
 	if len(variableNames) == 0 {
 		return nil, errWorkbenchVariablesRequired
 	}
-	text, _, _, err := workbenchAnthropicTextFromBody(r, workbenchGenerateTestCasesAnthropicBody(body, variableNames, model, count))
+	text, _, _, err := h.workbenchAnthropicTextFromBody(r, workbenchGenerateTestCasesAnthropicBody(body, variableNames, model, count))
 	if err != nil {
 		return nil, err
 	}
@@ -853,8 +805,8 @@ func workbenchGenerateTestCasesFromAnthropic(r *http.Request, body map[string]an
 	return generatedCases, nil
 }
 
-func workbenchAnthropicTextFromBody(r *http.Request, upstreamBody map[string]any) (string, int, int, error) {
-	upstreamReq, err := workbenchAnthropicRequest(r, upstreamBody, "application/json")
+func (h *workbenchHandler) workbenchAnthropicTextFromBody(r *http.Request, upstreamBody map[string]any) (string, int, int, error) {
+	upstreamReq, err := h.workbenchAnthropicRequest(r, upstreamBody, "application/json")
 	if err != nil {
 		return "", 0, 0, err
 	}
@@ -887,8 +839,8 @@ func workbenchAnthropicTextFromBody(r *http.Request, upstreamBody map[string]any
 	return strings.TrimSpace(text.String()), upstream.Usage.InputTokens, upstream.Usage.OutputTokens, nil
 }
 
-func workbenchAnthropicRequest(r *http.Request, upstreamBody map[string]any, accept string) (*http.Request, error) {
-	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
+func (h *workbenchHandler) workbenchAnthropicRequest(r *http.Request, upstreamBody map[string]any, accept string) (*http.Request, error) {
+	upstreamConfig := h.upstream
 	if err := aigateway.ValidateConfig(upstreamConfig.BaseURL, upstreamConfig.APIKey); err != nil {
 		return nil, errWorkbenchGatewayNotConfigured
 	}
@@ -1301,8 +1253,8 @@ func (h *workbenchHandler) handleWorkbenchCompletions(w http.ResponseWriter, r *
 		writeProxyMessagesAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "request body must match WorkbenchCompletionRequest")
 		return
 	}
-	upstreamConfig := workbenchAnthropicUpstreamFromRequest(r)
-	model, err := resolveWorkbenchModel(
+	upstreamConfig := h.upstream
+	model, err := h.resolveWorkbenchModel(
 		r,
 		chatNormalizeString(payload["model_name"]),
 		chatNormalizeString(payload["model"]),
@@ -1326,7 +1278,7 @@ func (h *workbenchHandler) handleWorkbenchCompletions(w http.ResponseWriter, r *
 		writeProxyMessagesAnthropicError(w, http.StatusBadGateway, "api_error", err.Error())
 		return
 	}
-	upstreamReq, err := workbenchAnthropicRequest(r, upstreamBody, "text/event-stream")
+	upstreamReq, err := h.workbenchAnthropicRequest(r, upstreamBody, "text/event-stream")
 	if err != nil {
 		writeProxyMessagesAnthropicError(w, http.StatusInternalServerError, "api_error", "failed to build Anthropic request")
 		return
@@ -1687,7 +1639,7 @@ func (h *workbenchHandler) handleWorkbenchGenerateTitle(w http.ResponseWriter, r
 		return
 	}
 	messageContent := workbenchTitleMessageContent(payload.MessageContent)
-	model, err := resolveWorkbenchModel(
+	model, err := h.resolveWorkbenchModel(
 		r,
 		payload.Model,
 	)
@@ -1700,7 +1652,7 @@ func (h *workbenchHandler) handleWorkbenchGenerateTitle(w http.ResponseWriter, r
 		return
 	}
 
-	title, inputTokens, outputTokens, err := workbenchAnthropicTextFromBody(r, workbenchGenerateTitleAnthropicBody(messageContent, model))
+	title, inputTokens, outputTokens, err := h.workbenchAnthropicTextFromBody(r, workbenchGenerateTitleAnthropicBody(messageContent, model))
 	if err != nil {
 		workbenchWriteGenerationError(w, err)
 		return
@@ -1785,7 +1737,7 @@ func (h *workbenchHandler) handleWorkbenchGeneratePrompt(w http.ResponseWriter, 
 		writeProxyMessagesAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "task is required")
 		return
 	}
-	model, err := resolveWorkbenchModel(
+	model, err := h.resolveWorkbenchModel(
 		r,
 		payload.Model,
 	)
@@ -1793,7 +1745,7 @@ func (h *workbenchHandler) handleWorkbenchGeneratePrompt(w http.ResponseWriter, 
 		writeWorkbenchModelSelectionError(w, err)
 		return
 	}
-	upstreamReq, err := workbenchAnthropicRequest(
+	upstreamReq, err := h.workbenchAnthropicRequest(
 		r,
 		workbenchGeneratePromptAnthropicBody(model, task, payload.TargetThinkingMode),
 		"text/event-stream",
@@ -1818,7 +1770,7 @@ func (h *workbenchHandler) handleWorkbenchGeneratePrompt(w http.ResponseWriter, 
 		_, _ = io.Copy(w, upstreamRes.Body)
 		return
 	}
-	slog.Default().DebugContext(r.Context(), "workbench generate prompt upstream stream", "upstream_host", upstreamReq.URL.Host, "status", upstreamRes.StatusCode, "content_type", upstreamRes.Header.Get("Content-Type"))
+	h.logger.DebugContext(r.Context(), "workbench generate prompt upstream stream", "upstream_host", upstreamReq.URL.Host, "status", upstreamRes.StatusCode, "content_type", upstreamRes.Header.Get("Content-Type"))
 	copyProxyMessagesResponseHeaders(w.Header(), upstreamRes.Header)
 	if w.Header().Get("Content-Type") == "" {
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")

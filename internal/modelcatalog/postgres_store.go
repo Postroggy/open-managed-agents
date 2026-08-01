@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/superduck-ai/open-managed-agents/internal/db"
@@ -55,34 +54,5 @@ func (s *postgresStore) RecordFailure(ctx context.Context, attemptedAt time.Time
 }
 
 func (s *postgresStore) TryAcquireRefresh(ctx context.Context) (func(), bool, error) {
-	// PostgreSQL advisory locks are session-scoped, so lock and unlock must use
-	// the same pgx connection instead of the pool-backed sqlx wrapper.
-	connection, err := s.database.Pool.Acquire(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	var acquired bool
-	if err := connection.QueryRow(ctx, `select pg_try_advisory_lock($1)`, modelCatalogRefreshAdvisoryLockID).Scan(&acquired); err != nil {
-		connection.Release()
-		return nil, false, err
-	}
-	if !acquired {
-		connection.Release()
-		return func() {}, false, nil
-	}
-
-	var once sync.Once
-	release := func() {
-		once.Do(func() {
-			unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			var unlocked bool
-			unlockErr := connection.QueryRow(unlockCtx, `select pg_advisory_unlock($1)`, modelCatalogRefreshAdvisoryLockID).Scan(&unlocked)
-			if unlockErr != nil || !unlocked {
-				_ = connection.Conn().Close(unlockCtx)
-			}
-			connection.Release()
-		})
-	}
-	return release, true, nil
+	return s.database.TryAcquireAdvisoryLock(ctx, modelCatalogRefreshAdvisoryLockID)
 }

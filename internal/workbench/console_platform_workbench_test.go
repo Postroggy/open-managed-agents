@@ -20,23 +20,84 @@ import (
 )
 
 func handleWorkbenchModels(w http.ResponseWriter, r *http.Request) {
-	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchModels(w, r)
+	newWorkbenchTestHandler(r).handleWorkbenchModels(w, r)
 }
 
 func handleWorkbenchCompletions(w http.ResponseWriter, r *http.Request) {
-	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchCompletions(w, r)
+	newWorkbenchTestHandler(r).handleWorkbenchCompletions(w, r)
 }
 
 func handleWorkbenchGeneratePrompt(w http.ResponseWriter, r *http.Request) {
-	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchGeneratePrompt(w, r)
+	newWorkbenchTestHandler(r).handleWorkbenchGeneratePrompt(w, r)
 }
 
 func handleWorkbenchGenerateTitle(w http.ResponseWriter, r *http.Request) {
-	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchGenerateTitle(w, r)
+	newWorkbenchTestHandler(r).handleWorkbenchGenerateTitle(w, r)
 }
 
 func handleWorkbenchGenerateTestCase(w http.ResponseWriter, r *http.Request) {
-	newWorkbenchHandler(workbenchPersistenceFromRequest(r), workbenchAnthropicUpstreamFromRequest(r), nil).handleWorkbenchGenerateTestCase(w, r)
+	newWorkbenchTestHandler(r).handleWorkbenchGenerateTestCase(w, r)
+}
+
+func handleWorkbenchModelCatalogRefresh(w http.ResponseWriter, r *http.Request) {
+	newWorkbenchTestHandler(r).handleWorkbenchModelCatalogRefresh(w, r)
+}
+
+type workbenchPersistenceContextKey struct{}
+type workbenchAnthropicUpstreamContextKey struct{}
+type workbenchModelCatalogContextKey struct{}
+type workbenchModelCatalogUserStoreContextKey struct{}
+
+func newWorkbenchTestHandler(r *http.Request) *workbenchHandler {
+	h := newWorkbenchHandlerWithCatalog(
+		workbenchPersistenceFromRequest(r),
+		workbenchAnthropicUpstreamFromRequest(r),
+		workbenchModelCatalogFromRequest(r),
+		nil,
+	)
+	h.userStore = workbenchModelCatalogUserStoreFromRequest(r)
+	return h
+}
+
+func withWorkbenchDependenciesAndCatalog(
+	store workbenchPersistenceStore,
+	upstream config.AnthropicUpstreamConfig,
+	catalog modelcatalog.Reader,
+	handler http.HandlerFunc,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), workbenchAnthropicUpstreamContextKey{}, upstream)
+		if store != nil {
+			ctx = context.WithValue(ctx, workbenchPersistenceContextKey{}, store)
+		}
+		if catalog != nil {
+			ctx = context.WithValue(ctx, workbenchModelCatalogContextKey{}, catalog)
+		}
+		if userStore, ok := store.(workbenchModelCatalogUserStore); ok {
+			ctx = context.WithValue(ctx, workbenchModelCatalogUserStoreContextKey{}, userStore)
+		}
+		handler(w, r.WithContext(ctx))
+	}
+}
+
+func workbenchPersistenceFromRequest(r *http.Request) workbenchPersistenceStore {
+	store, _ := r.Context().Value(workbenchPersistenceContextKey{}).(workbenchPersistenceStore)
+	return store
+}
+
+func workbenchAnthropicUpstreamFromRequest(r *http.Request) config.AnthropicUpstreamConfig {
+	upstream, _ := r.Context().Value(workbenchAnthropicUpstreamContextKey{}).(config.AnthropicUpstreamConfig)
+	return upstream
+}
+
+func workbenchModelCatalogFromRequest(r *http.Request) modelcatalog.Reader {
+	catalog, _ := r.Context().Value(workbenchModelCatalogContextKey{}).(modelcatalog.Reader)
+	return catalog
+}
+
+func workbenchModelCatalogUserStoreFromRequest(r *http.Request) workbenchModelCatalogUserStore {
+	store, _ := r.Context().Value(workbenchModelCatalogUserStoreContextKey{}).(workbenchModelCatalogUserStore)
+	return store
 }
 
 func TestWorkbenchCreatorUsesPrincipalWhenCookiePresent(t *testing.T) {
@@ -219,7 +280,7 @@ func TestWorkbenchAnthropicTextResolvesUpstreamModelAtRequestBoundary(t *testing
 		},
 	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		if _, _, _, err := workbenchAnthropicTextFromBody(r, map[string]any{
+		if _, _, _, err := newWorkbenchHandler(nil, upstream, nil).workbenchAnthropicTextFromBody(r, map[string]any{
 			"model":    "claude-sonnet-4-6",
 			"messages": []any{},
 		}); err != nil {
@@ -382,6 +443,48 @@ func TestWorkbenchGenerateTestCaseFailsWithoutConfiguredGateway(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "AI gateway is not configured") || strings.Contains(body, "Generated TOPIC example") {
 		t.Fatalf("body = %s, want explicit gateway error without generated values", body)
+	}
+}
+
+func TestWorkbenchGenerateTestCaseUsesFirstCatalogModelWhenDefaultIsUnset(t *testing.T) {
+	var upstreamModel string
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var requestBody struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Fatalf("decode upstream request: %v", err)
+		}
+		upstreamModel = requestBody.Model
+		writeJSON(w, http.StatusOK, map[string]any{
+			"content": []any{map[string]any{
+				"type": "text",
+				"text": "<planning>Use a concrete city.</planning><TOPIC>Beijing</TOPIC>",
+			}},
+			"usage": map[string]any{"input_tokens": 1, "output_tokens": 1},
+		})
+	}))
+	defer upstreamServer.Close()
+
+	orgUUID := "7482d00f-2e42-478b-b2db-07c3d056a3b6"
+	req := workbenchPostTestRequest(
+		orgUUID,
+		"/api/organizations/"+orgUUID+"/workbench/evaluations/generate_test_case",
+		`{"variables":[{"name":"TOPIC"}]}`,
+	)
+	rec := httptest.NewRecorder()
+	upstream := config.AnthropicUpstreamConfig{BaseURL: upstreamServer.URL, APIKey: "yaml-key"}
+	catalog := workbenchTestCatalog{snapshot: modelcatalog.Snapshot{
+		Models: []modelcatalog.Model{{ID: "provider/first"}, {ID: "provider/second"}},
+	}}
+
+	withWorkbenchDependenciesAndCatalog(nil, upstream, catalog, handleWorkbenchGenerateTestCase)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if upstreamModel != "provider/first" {
+		t.Fatalf("upstream model = %q, want first catalog model", upstreamModel)
 	}
 }
 

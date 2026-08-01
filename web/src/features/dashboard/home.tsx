@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useAuth } from '../../shared/auth/context';
 import { useI18n } from '../../shared/i18n';
+import { canRefreshModelCatalog } from '../../shared/permissions/model-catalog';
 import { useWorkspace } from '../../shared/workspaces/context';
 import { useModelCatalog, useRefreshModelCatalog } from '../model-catalog/hooks';
 import { type ModelCatalogModel, modelCatalogDisplayName } from '../model-catalog/model';
@@ -49,12 +50,7 @@ export function DashboardHome() {
   const { workspaceId } = useDashboardWorkspaceScope();
   const modelCatalog = useModelCatalog(orgUuid);
   const refreshModelCatalog = useRefreshModelCatalog(orgUuid, csrfToken);
-  const canRefreshModelCatalog =
-    account?.memberships?.some(
-      (membership) =>
-        membership.role?.trim().toLowerCase() === 'admin' &&
-        (!membership.organization?.uuid || membership.organization.uuid === orgUuid),
-    ) ?? false;
+  const canRefreshCatalog = canRefreshModelCatalog(account, orgUuid);
   const apiKeysHref = `/settings/workspaces/${encodeURIComponent(workspaceId || 'default')}/keys`;
 
   return (
@@ -188,7 +184,7 @@ export function DashboardHome() {
                     : msg('dashboard.models.fresh', 'Fresh')}
                 </Badge>
               ) : null}
-              {canRefreshModelCatalog ? (
+              {canRefreshCatalog ? (
                 <Tooltip>
                   <TooltipTrigger
                     render={

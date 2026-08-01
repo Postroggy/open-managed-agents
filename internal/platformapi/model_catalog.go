@@ -2,7 +2,6 @@ package platformapi
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"github.com/superduck-ai/open-managed-agents/internal/modelcatalog"
@@ -19,7 +18,6 @@ func loadPlatformModelCatalog(ctx context.Context, reader modelcatalog.Reader) p
 	}
 	snapshot, err := reader.Snapshot(ctx)
 	if err != nil {
-		log.Printf("load platform model catalog: %v", err)
 		return platformModelCatalog{}
 	}
 	defaultModelID := ""
