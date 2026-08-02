@@ -6,6 +6,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // MakeFilestoreDirectory 创建目录；MakeParents 为真时整条父链在同一事务内完成。
@@ -15,7 +17,7 @@ func (d *DB) MakeFilestoreDirectory(ctx context.Context, input MakeFilestoreDire
 	}
 	input.Now = filestoreNow(input.Now)
 	// 创建目录可能复用一个已过期的文件路径，因此也要先取得工作区用量锁。
-	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceID, input.FilesystemID)
+	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceUUID, input.FilesystemUUID)
 	if err != nil {
 		return FilestoreEntry{}, err
 	}
@@ -39,9 +41,17 @@ func (d *DB) MakeFilestoreDirectory(ctx context.Context, input MakeFilestoreDire
 		paths = filestoreDirectoryChain(input.Path)
 	}
 	for _, directoryPath := range paths {
-		directory, err = ensureFilestoreDirectoryTx(ctx, tx, input.WorkspaceID, filesystem, directoryPath, input.Now)
+		directory, err = ensureFilestoreDirectoryTx(ctx, tx, filesystem, directoryPath, input.Now)
 		if err != nil {
 			return FilestoreEntry{}, err
+		}
+		if filestorePathIsDescendant(sessionOutputsRootPath, directory.Path) ||
+			filestorePathIsDescendant(sessionUploadsRootPath, directory.Path) {
+			if err := refreshSessionFileProjectionForEntryTx(
+				ctx, tx, filesystem.WorkspaceUUID, filesystem, directory,
+			); err != nil {
+				return FilestoreEntry{}, err
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -57,14 +67,13 @@ func (d *DB) PutFilestoreFile(ctx context.Context, input PutFilestoreFileInput) 
 		return FilestoreMutationResult{}, err
 	}
 	input.Now = filestoreNow(input.Now)
-	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceID, input.FilesystemID)
+	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceUUID, input.FilesystemUUID)
 	if err != nil {
 		return FilestoreMutationResult{}, err
 	}
 	defer tx.Rollback()
 
 	result, err := putFilestoreFileTx(ctx, tx, filesystem, putFilestoreFileTxInput{
-		WorkspaceID:                input.WorkspaceID,
 		Path:                       input.Path,
 		Blob:                       input.Blob,
 		OverwriteExisting:          input.OverwriteExisting,
@@ -73,6 +82,11 @@ func (d *DB) PutFilestoreFile(ctx context.Context, input PutFilestoreFileInput) 
 		Now:                        input.Now,
 	})
 	if err != nil {
+		return FilestoreMutationResult{}, err
+	}
+	if err := refreshSessionFileProjectionForEntryTx(
+		ctx, tx, filesystem.WorkspaceUUID, filesystem, result.Entry,
+	); err != nil {
 		return FilestoreMutationResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -93,7 +107,7 @@ func (d *DB) CopyFilestoreFile(ctx context.Context, input CopyFilestoreFileInput
 		return FilestoreMutationResult{}, ErrPreconditionFailed
 	}
 	input.Now = filestoreNow(input.Now)
-	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceID, input.FilesystemID)
+	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceUUID, input.FilesystemUUID)
 	if err != nil {
 		return FilestoreMutationResult{}, err
 	}
@@ -127,7 +141,6 @@ func (d *DB) CopyFilestoreFile(ctx context.Context, input CopyFilestoreFileInput
 	blob.S3ETag = input.DestinationS3ETag
 	blob.S3VersionID = input.DestinationS3VersionID
 	result, err := putFilestoreFileTx(ctx, tx, filesystem, putFilestoreFileTxInput{
-		WorkspaceID:                input.WorkspaceID,
 		Path:                       input.DestinationPath,
 		Blob:                       blob,
 		OverwriteExisting:          input.OverwriteExisting,
@@ -136,6 +149,11 @@ func (d *DB) CopyFilestoreFile(ctx context.Context, input CopyFilestoreFileInput
 		Now:                        input.Now,
 	})
 	if err != nil {
+		return FilestoreMutationResult{}, err
+	}
+	if err := refreshSessionFileProjectionForEntryTx(
+		ctx, tx, filesystem.WorkspaceUUID, filesystem, result.Entry,
+	); err != nil {
 		return FilestoreMutationResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -153,7 +171,7 @@ func (d *DB) MoveFilestoreFile(ctx context.Context, input MoveFilestoreFileInput
 		return FilestoreMutationResult{}, ErrPreconditionFailed
 	}
 	input.Now = filestoreNow(input.Now)
-	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceID, input.FilesystemID)
+	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceUUID, input.FilesystemUUID)
 	if err != nil {
 		return FilestoreMutationResult{}, err
 	}
@@ -196,7 +214,7 @@ func (d *DB) MoveFilestoreFile(ctx context.Context, input MoveFilestoreFileInput
 		}
 		if destination.Kind == FilestoreEntryKindFile {
 			job, enqueued, err := enqueueOwnedFilestoreEntryCleanupJobTx(ctx, tx, filestoreEntryCleanupScope{
-				WorkspaceID: input.WorkspaceID, FilesystemID: filesystem.ID,
+				WorkspaceUUID: filesystem.WorkspaceUUID, FilesystemUUID: filesystem.UUID,
 			}, destination, "move_overwrite", input.Now)
 			if err != nil {
 				return FilestoreMutationResult{}, err
@@ -208,22 +226,29 @@ func (d *DB) MoveFilestoreFile(ctx context.Context, input MoveFilestoreFileInput
 		if _, err := namedExecContext(ctx, tx, `
 			update filestore_entries
 			set deleted_at = :now, updated_at = :now
-			where workspace_uuid = :workspace_uuid
-				and filesystem_uuid = :filesystem_uuid
-				and id = :entry_id
-				and deleted_at is null
+				where workspace_uuid = :workspace_uuid
+					and filesystem_uuid = :filesystem_uuid
+					and uuid = :entry_uuid
+					and deleted_at is null
 		`, map[string]any{
-			"workspace_uuid":  filesystem.WorkspaceUUID,
-			"filesystem_uuid": filesystem.UUID,
-			"entry_id":        destination.ID,
+			"workspace_uuid":  dbUUID(filesystem.WorkspaceUUID),
+			"filesystem_uuid": dbUUID(filesystem.UUID),
+			"entry_uuid":      dbUUID(destination.UUID),
 			"now":             input.Now,
 		}); err != nil {
 			return FilestoreMutationResult{}, err
 		}
+		if destination.Kind == FilestoreEntryKindFile {
+			if err := softDeleteSessionFileProjectionByEntryTx(
+				ctx, tx, filesystem.WorkspaceUUID, destination.UUID,
+			); err != nil {
+				return FilestoreMutationResult{}, err
+			}
+		}
 		removedBytes := destination.OwnedBytes()
 		if destination.Kind == FilestoreEntryKindFile && removedBytes > 0 {
 			if err := applyWorkspaceStorageDeltaSQLXTx(
-				ctx, tx, input.WorkspaceID, 0, -removedBytes, 0,
+				ctx, tx, filesystem.WorkspaceUUID, 0, -removedBytes, 0,
 			); err != nil {
 				return FilestoreMutationResult{}, err
 			}
@@ -235,20 +260,25 @@ func (d *DB) MoveFilestoreFile(ctx context.Context, input MoveFilestoreFileInput
 		set path = :destination_path,
 			parent_path = :destination_parent_path,
 			updated_at = :now
-		where workspace_uuid = :workspace_uuid
-			and filesystem_uuid = :filesystem_uuid
-			and id = :entry_id
-			and deleted_at is null
+			where workspace_uuid = :workspace_uuid
+				and filesystem_uuid = :filesystem_uuid
+				and uuid = :entry_uuid
+				and deleted_at is null
 		returning `+filestoreEntryColumns()+`
 	`, map[string]any{
-		"workspace_uuid":          filesystem.WorkspaceUUID,
-		"filesystem_uuid":         filesystem.UUID,
-		"entry_id":                source.ID,
+		"workspace_uuid":          dbUUID(filesystem.WorkspaceUUID),
+		"filesystem_uuid":         dbUUID(filesystem.UUID),
+		"entry_uuid":              dbUUID(source.UUID),
 		"destination_path":        input.DestinationPath,
 		"destination_parent_path": filestoreParentPath(input.DestinationPath),
 		"now":                     input.Now,
 	})
 	if err != nil {
+		return FilestoreMutationResult{}, err
+	}
+	if err := refreshSessionFileProjectionForEntryTx(
+		ctx, tx, filesystem.WorkspaceUUID, filesystem, moved,
+	); err != nil {
 		return FilestoreMutationResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -270,7 +300,7 @@ func (d *DB) MoveFilestoreDirectory(ctx context.Context, input MoveFilestoreDire
 		return FilestoreMutationResult{}, err
 	}
 	input.Now = filestoreNow(input.Now)
-	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceID, input.FilesystemID)
+	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceUUID, input.FilesystemUUID)
 	if err != nil {
 		return FilestoreMutationResult{}, err
 	}
@@ -295,8 +325,8 @@ func (d *DB) MoveFilestoreDirectory(ctx context.Context, input MoveFilestoreDire
 	var maxMovedPathBytes int
 	// 在批量更新前按字节预演最长目标路径，避免中途触发约束而留下难以解释的错误。
 	moveArguments := map[string]any{
-		"workspace_uuid":          filesystem.WorkspaceUUID,
-		"filesystem_uuid":         filesystem.UUID,
+		"workspace_uuid":          dbUUID(filesystem.WorkspaceUUID),
+		"filesystem_uuid":         dbUUID(filesystem.UUID),
 		"source_path":             input.SourcePath,
 		"destination_path":        input.DestinationPath,
 		"destination_parent_path": filestoreParentPath(input.DestinationPath),
@@ -322,9 +352,9 @@ func (d *DB) MoveFilestoreDirectory(ctx context.Context, input MoveFilestoreDire
 	if maxMovedPathBytes > filestoreMaxPathBytes {
 		return FilestoreMutationResult{}, ErrPreconditionFailed
 	}
-	var conflictingID int64
-	err = namedGetContext(ctx, tx, &conflictingID, `
-		select id
+	var conflictingUUID uuid.UUID
+	err = namedGetContext(ctx, tx, &conflictingUUID, `
+		select uuid
 		from filestore_entries
 		where workspace_uuid = :workspace_uuid
 			and filesystem_uuid = :filesystem_uuid
@@ -344,14 +374,22 @@ func (d *DB) MoveFilestoreDirectory(ctx context.Context, input MoveFilestoreDire
 	}
 	cleanupJobs, retiredBytes, err := retireExpiredFilestoreSubtreeTx(
 		ctx, tx, filestoreEntryCleanupScope{
-			WorkspaceID: input.WorkspaceID, FilesystemID: filesystem.ID,
+			WorkspaceUUID: filesystem.WorkspaceUUID, FilesystemUUID: filesystem.UUID,
 		}, filesystem, input.DestinationPath, input.Now,
 	)
 	if err != nil {
 		return FilestoreMutationResult{}, err
 	}
 	if retiredBytes > 0 {
-		if err := applyWorkspaceStorageDeltaSQLXTx(ctx, tx, input.WorkspaceID, 0, -retiredBytes, 0); err != nil {
+		if err := applyWorkspaceStorageDeltaSQLXTx(ctx, tx, filesystem.WorkspaceUUID, 0, -retiredBytes, 0); err != nil {
+			return FilestoreMutationResult{}, err
+		}
+	}
+	if filestorePathIsDescendant(sessionOutputsRootPath, input.DestinationPath) ||
+		filestorePathIsDescendant(sessionUploadsRootPath, input.DestinationPath) {
+		if err := softDeleteSessionFileProjectionSubtreeTx(
+			ctx, tx, filesystem.WorkspaceUUID, filesystem, input.DestinationPath,
+		); err != nil {
 			return FilestoreMutationResult{}, err
 		}
 	}
@@ -399,7 +437,7 @@ func (d *DB) RemoveFilestoreFile(ctx context.Context, input RemoveFilestoreEntry
 		return FilestoreMutationResult{}, ErrFilestoreNotFile
 	}
 	input.Now = filestoreNow(input.Now)
-	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceID, input.FilesystemID)
+	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceUUID, input.FilesystemUUID)
 	if err != nil {
 		return FilestoreMutationResult{}, err
 	}
@@ -412,7 +450,7 @@ func (d *DB) RemoveFilestoreFile(ctx context.Context, input RemoveFilestoreEntry
 		return FilestoreMutationResult{}, ErrFilestoreNotFile
 	}
 	job, enqueued, err := enqueueOwnedFilestoreEntryCleanupJobTx(ctx, tx, filestoreEntryCleanupScope{
-		WorkspaceID: input.WorkspaceID, FilesystemID: filesystem.ID,
+		WorkspaceUUID: filesystem.WorkspaceUUID, FilesystemUUID: filesystem.UUID,
 	}, entry, "remove_file", input.Now)
 	if err != nil {
 		return FilestoreMutationResult{}, err
@@ -422,19 +460,24 @@ func (d *DB) RemoveFilestoreFile(ctx context.Context, input RemoveFilestoreEntry
 		set deleted_at = :now, updated_at = :now
 		where workspace_uuid = :workspace_uuid
 			and filesystem_uuid = :filesystem_uuid
-			and id = :entry_id
+			and uuid = :entry_uuid
 			and deleted_at is null
 	`, map[string]any{
-		"workspace_uuid":  filesystem.WorkspaceUUID,
-		"filesystem_uuid": filesystem.UUID,
-		"entry_id":        entry.ID,
+		"workspace_uuid":  dbUUID(filesystem.WorkspaceUUID),
+		"filesystem_uuid": dbUUID(filesystem.UUID),
+		"entry_uuid":      dbUUID(entry.UUID),
 		"now":             input.Now,
 	}); err != nil {
 		return FilestoreMutationResult{}, err
 	}
+	if err := softDeleteSessionFileProjectionByEntryTx(
+		ctx, tx, filesystem.WorkspaceUUID, entry.UUID,
+	); err != nil {
+		return FilestoreMutationResult{}, err
+	}
 	if removedBytes := entry.OwnedBytes(); removedBytes > 0 {
 		if err := applyWorkspaceStorageDeltaSQLXTx(
-			ctx, tx, input.WorkspaceID, 0, -removedBytes, 0,
+			ctx, tx, filesystem.WorkspaceUUID, 0, -removedBytes, 0,
 		); err != nil {
 			return FilestoreMutationResult{}, err
 		}
@@ -458,7 +501,7 @@ func (d *DB) RemoveFilestoreDirectory(ctx context.Context, input RemoveFilestore
 		return FilestoreMutationResult{}, err
 	}
 	input.Now = filestoreNow(input.Now)
-	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceID, input.FilesystemID)
+	tx, filesystem, err := d.beginFilestoreNamespaceMutation(ctx, input.WorkspaceUUID, input.FilesystemUUID)
 	if err != nil {
 		return FilestoreMutationResult{}, err
 	}
@@ -472,8 +515,8 @@ func (d *DB) RemoveFilestoreDirectory(ctx context.Context, input RemoveFilestore
 	}
 	var childCount int
 	entryArguments := map[string]any{
-		"workspace_uuid":  filesystem.WorkspaceUUID,
-		"filesystem_uuid": filesystem.UUID,
+		"workspace_uuid":  dbUUID(filesystem.WorkspaceUUID),
+		"filesystem_uuid": dbUUID(filesystem.UUID),
 		"entry_path":      input.Path,
 		"now":             input.Now,
 	}
@@ -490,7 +533,7 @@ func (d *DB) RemoveFilestoreDirectory(ctx context.Context, input RemoveFilestore
 		return FilestoreMutationResult{}, ErrFilestoreDirectoryNotEmpty
 	}
 	cleanupJobs, removedBytes, err := enqueueFilestoreSubtreeCleanupJobsTx(ctx, tx, filestoreEntryCleanupScope{
-		WorkspaceID: input.WorkspaceID, FilesystemID: filesystem.ID,
+		WorkspaceUUID: filesystem.WorkspaceUUID, FilesystemUUID: filesystem.UUID,
 	}, filesystem, input.Path, input.Now)
 	if err != nil {
 		return FilestoreMutationResult{}, err
@@ -508,8 +551,16 @@ func (d *DB) RemoveFilestoreDirectory(ctx context.Context, input RemoveFilestore
 	`, entryArguments); err != nil {
 		return FilestoreMutationResult{}, err
 	}
+	if filestorePathIsDescendant(sessionOutputsRootPath, input.Path) ||
+		filestorePathIsDescendant(sessionUploadsRootPath, input.Path) {
+		if err := softDeleteSessionFileProjectionSubtreeTx(
+			ctx, tx, filesystem.WorkspaceUUID, filesystem, input.Path,
+		); err != nil {
+			return FilestoreMutationResult{}, err
+		}
+	}
 	if removedBytes > 0 {
-		if err := applyWorkspaceStorageDeltaSQLXTx(ctx, tx, input.WorkspaceID, 0, -removedBytes, 0); err != nil {
+		if err := applyWorkspaceStorageDeltaSQLXTx(ctx, tx, filesystem.WorkspaceUUID, 0, -removedBytes, 0); err != nil {
 			return FilestoreMutationResult{}, err
 		}
 	}

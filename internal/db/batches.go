@@ -6,58 +6,58 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type MessageBatch struct {
-	ID                int64
-	UUID              string
-	ExternalID        string
-	WorkspaceID       int64
-	WorkspaceUUID     string
-	CreatedByAPIKeyID int64
-	APIVariant        string
-	AnthropicVersion  string
-	BetaHeaders       []string
-	ProcessingStatus  string
-	RequestCount      int
-	ProcessingCount   int
-	SucceededCount    int
-	ErroredCount      int
-	CanceledCount     int
-	ExpiredCount      int
-	ResultsS3Bucket   *string
-	ResultsS3Key      *string
-	ResultsSizeBytes  *int64
-	ResultsSHA256     *string
-	CreatedAt         time.Time
-	ExpiresAt         time.Time
-	EndedAt           *time.Time
-	CancelInitiatedAt *time.Time
-	ArchivedAt        *time.Time
-	DeletedAt         *time.Time
-	LastError         *string
-	UpdatedAt         time.Time
+	UUID                string
+	ExternalID          string
+	WorkspaceUUID       string
+	CreatedByAPIKeyUUID string
+	APIVariant          string
+	AnthropicVersion    string
+	BetaHeaders         []string
+	ProcessingStatus    string
+	RequestCount        int
+	ProcessingCount     int
+	SucceededCount      int
+	ErroredCount        int
+	CanceledCount       int
+	ExpiredCount        int
+	ResultsS3Bucket     *string
+	ResultsS3Key        *string
+	ResultsSizeBytes    *int64
+	ResultsSHA256       *string
+	CreatedAt           time.Time
+	ExpiresAt           time.Time
+	EndedAt             *time.Time
+	CancelInitiatedAt   *time.Time
+	ArchivedAt          *time.Time
+	DeletedAt           *time.Time
+	LastError           *string
+	UpdatedAt           time.Time
 }
 
 type NewBatchRequest struct {
-	ExternalID   string
-	WorkspaceID  int64
-	RequestIndex int
-	CustomID     string
-	Params       json.RawMessage
+	ExternalID    string
+	WorkspaceUUID string
+	RequestIndex  int
+	CustomID      string
+	Params        json.RawMessage
 }
 
 type ListMessageBatchesPageParams struct {
-	WorkspaceID int64
-	AfterID     string
-	BeforeID    string
-	Limit       int
+	WorkspaceUUID string
+	AfterID       string
+	BeforeID      string
+	Limit         int
 }
 
 type MessageBatchRequest struct {
-	ID                int64
-	WorkspaceID       int64
-	MessageBatchID    int64
+	UUID              string
+	WorkspaceUUID     string
+	MessageBatchUUID  string
 	RequestIndex      int
 	ExternalID        string
 	CustomID          string
@@ -73,49 +73,52 @@ type MessageBatchRequest struct {
 }
 
 type MessageBatchJob struct {
-	ID                     int64
+	UUID                   string
 	ExternalID             string
-	WorkspaceID            int64
-	MessageBatchID         int64
+	WorkspaceUUID          string
+	MessageBatchUUID       string
 	MessageBatchExternalID string
 	Attempts               int
 }
 
+type messageBatchJobPayload struct {
+	MessageBatchUUID       string `json:"message_batch_uuid"`
+	MessageBatchExternalID string `json:"message_batch_external_id"`
+}
+
 type messageBatchRow struct {
-	ID                int64      `db:"id"`
-	UUID              string     `db:"uuid"`
-	ExternalID        string     `db:"external_id"`
-	WorkspaceID       int64      `db:"workspace_id"`
-	WorkspaceUUID     string     `db:"workspace_uuid"`
-	CreatedByAPIKeyID int64      `db:"created_by_api_key_id"`
-	APIVariant        string     `db:"api_variant"`
-	AnthropicVersion  string     `db:"anthropic_version"`
-	BetaHeadersJSON   []byte     `db:"beta_headers"`
-	ProcessingStatus  string     `db:"processing_status"`
-	RequestCount      int        `db:"request_count"`
-	ProcessingCount   int        `db:"processing_count"`
-	SucceededCount    int        `db:"succeeded_count"`
-	ErroredCount      int        `db:"errored_count"`
-	CanceledCount     int        `db:"canceled_count"`
-	ExpiredCount      int        `db:"expired_count"`
-	ResultsS3Bucket   *string    `db:"results_s3_bucket"`
-	ResultsS3Key      *string    `db:"results_s3_key"`
-	ResultsSizeBytes  *int64     `db:"results_size_bytes"`
-	ResultsSHA256     *string    `db:"results_sha256"`
-	CreatedAt         time.Time  `db:"created_at"`
-	ExpiresAt         time.Time  `db:"expires_at"`
-	EndedAt           *time.Time `db:"ended_at"`
-	CancelInitiatedAt *time.Time `db:"cancel_initiated_at"`
-	ArchivedAt        *time.Time `db:"archived_at"`
-	DeletedAt         *time.Time `db:"deleted_at"`
-	LastError         *string    `db:"last_error"`
-	UpdatedAt         time.Time  `db:"updated_at"`
+	UUID                uuid.UUID  `db:"uuid"`
+	ExternalID          string     `db:"external_id"`
+	WorkspaceUUID       uuid.UUID  `db:"workspace_uuid"`
+	CreatedByAPIKeyUUID uuid.UUID  `db:"created_by_api_key_uuid"`
+	APIVariant          string     `db:"api_variant"`
+	AnthropicVersion    string     `db:"anthropic_version"`
+	BetaHeadersJSON     []byte     `db:"beta_headers"`
+	ProcessingStatus    string     `db:"processing_status"`
+	RequestCount        int        `db:"request_count"`
+	ProcessingCount     int        `db:"processing_count"`
+	SucceededCount      int        `db:"succeeded_count"`
+	ErroredCount        int        `db:"errored_count"`
+	CanceledCount       int        `db:"canceled_count"`
+	ExpiredCount        int        `db:"expired_count"`
+	ResultsS3Bucket     *string    `db:"results_s3_bucket"`
+	ResultsS3Key        *string    `db:"results_s3_key"`
+	ResultsSizeBytes    *int64     `db:"results_size_bytes"`
+	ResultsSHA256       *string    `db:"results_sha256"`
+	CreatedAt           time.Time  `db:"created_at"`
+	ExpiresAt           time.Time  `db:"expires_at"`
+	EndedAt             *time.Time `db:"ended_at"`
+	CancelInitiatedAt   *time.Time `db:"cancel_initiated_at"`
+	ArchivedAt          *time.Time `db:"archived_at"`
+	DeletedAt           *time.Time `db:"deleted_at"`
+	LastError           *string    `db:"last_error"`
+	UpdatedAt           time.Time  `db:"updated_at"`
 }
 
 type messageBatchRequestRow struct {
-	ID                int64      `db:"id"`
-	WorkspaceID       int64      `db:"workspace_id"`
-	MessageBatchID    int64      `db:"message_batch_id"`
+	UUID              uuid.UUID  `db:"uuid"`
+	WorkspaceUUID     uuid.UUID  `db:"workspace_uuid"`
+	MessageBatchUUID  uuid.UUID  `db:"message_batch_uuid"`
 	RequestIndex      int        `db:"request_index"`
 	ExternalID        string     `db:"external_id"`
 	CustomID          string     `db:"custom_id"`
@@ -131,12 +134,12 @@ type messageBatchRequestRow struct {
 }
 
 type messageBatchJobRow struct {
-	ID                     int64  `db:"id"`
-	ExternalID             string `db:"external_id"`
-	WorkspaceID            int64  `db:"workspace_id"`
-	MessageBatchID         int64  `db:"message_batch_id"`
-	MessageBatchExternalID string `db:"message_batch_external_id"`
-	Attempts               int    `db:"attempts"`
+	UUID                   uuid.UUID `db:"uuid"`
+	ExternalID             string    `db:"external_id"`
+	WorkspaceUUID          uuid.UUID `db:"workspace_uuid"`
+	MessageBatchUUID       string    `db:"message_batch_uuid"`
+	MessageBatchExternalID string    `db:"message_batch_external_id"`
+	Attempts               int       `db:"attempts"`
 }
 
 func (d *DB) CreateMessageBatch(ctx context.Context, b MessageBatch, reqs []NewBatchRequest) (MessageBatch, error) {
@@ -154,40 +157,38 @@ func (d *DB) CreateMessageBatch(ctx context.Context, b MessageBatch, reqs []NewB
 	}()
 
 	var created struct {
-		ID        int64     `db:"id"`
-		UUID      string    `db:"uuid"`
+		UUID      uuid.UUID `db:"uuid"`
 		CreatedAt time.Time `db:"created_at"`
 		UpdatedAt time.Time `db:"updated_at"`
 	}
 	err = namedGetContext(ctx, tx, &created, `
 		insert into message_batches (
-			uuid, external_id, workspace_id, created_by_api_key_id, api_variant,
+			uuid, external_id, workspace_uuid, created_by_api_key_uuid, api_variant,
 			anthropic_version, beta_headers, request_count, processing_count,
 			created_at, expires_at
 		)
 		values (
-			:uuid, :external_id, :workspace_id, :created_by_api_key_id, :api_variant,
+			:uuid, :external_id, :workspace_uuid, :created_by_api_key_uuid, :api_variant,
 			:anthropic_version, CAST(:beta_headers AS jsonb), :request_count,
 			:request_count, :created_at, :expires_at
 		)
-		returning id, CAST(uuid AS text) AS uuid, created_at, updated_at
+		returning uuid, created_at, updated_at
 	`, map[string]any{
-		"uuid":                  b.UUID,
-		"external_id":           b.ExternalID,
-		"workspace_id":          b.WorkspaceID,
-		"created_by_api_key_id": b.CreatedByAPIKeyID,
-		"api_variant":           b.APIVariant,
-		"anthropic_version":     b.AnthropicVersion,
-		"beta_headers":          string(betaHeaders),
-		"request_count":         len(reqs),
-		"created_at":            b.CreatedAt,
-		"expires_at":            b.ExpiresAt,
+		"uuid":                    dbUUID(b.UUID),
+		"external_id":             b.ExternalID,
+		"workspace_uuid":          dbUUID(b.WorkspaceUUID),
+		"created_by_api_key_uuid": dbUUID(b.CreatedByAPIKeyUUID),
+		"api_variant":             b.APIVariant,
+		"anthropic_version":       b.AnthropicVersion,
+		"beta_headers":            string(betaHeaders),
+		"request_count":           len(reqs),
+		"created_at":              b.CreatedAt,
+		"expires_at":              b.ExpiresAt,
 	})
 	if err != nil {
 		return MessageBatch{}, err
 	}
-	b.ID = created.ID
-	b.UUID = created.UUID
+	b.UUID = created.UUID.String()
 	b.CreatedAt = created.CreatedAt
 	b.UpdatedAt = created.UpdatedAt
 	b.RequestCount = len(reqs)
@@ -200,34 +201,41 @@ func (d *DB) CreateMessageBatch(ctx context.Context, b MessageBatch, reqs []NewB
 	}
 	defer requestStatement.Close()
 	for _, req := range reqs {
+		requestWorkspaceUUID, err := parseDBUUID("workspace_uuid", req.WorkspaceUUID)
+		if err != nil {
+			return MessageBatch{}, err
+		}
 		if _, err := requestStatement.ExecContext(ctx, map[string]any{
-			"external_id":      req.ExternalID,
-			"workspace_id":     req.WorkspaceID,
-			"message_batch_id": b.ID,
-			"request_index":    req.RequestIndex,
-			"custom_id":        req.CustomID,
-			"params":           string(req.Params),
+			"external_id":        req.ExternalID,
+			"workspace_uuid":     requestWorkspaceUUID,
+			"message_batch_uuid": created.UUID,
+			"request_index":      req.RequestIndex,
+			"custom_id":          req.CustomID,
+			"params":             string(req.Params),
 		}); err != nil {
 			return MessageBatch{}, err
 		}
 	}
 
+	jobPayload, err := json.Marshal(messageBatchJobPayload{
+		MessageBatchUUID:       b.UUID,
+		MessageBatchExternalID: b.ExternalID,
+	})
+	if err != nil {
+		return MessageBatch{}, err
+	}
 	if _, err := namedExecContext(ctx, tx, `
-		insert into jobs (external_id, workspace_id, type, status, payload)
+		insert into jobs (external_id, workspace_uuid, type, status, payload)
 		values (
 			concat('job_', replace(CAST(gen_random_uuid() AS text), '-', '')),
-			:workspace_id,
+			:workspace_uuid,
 			'message_batch_process',
 			'pending',
-			jsonb_build_object(
-				'message_batch_id', CAST(:message_batch_id AS bigint),
-				'message_batch_external_id', CAST(:message_batch_external_id AS text)
-			)
+			CAST(:payload AS jsonb)
 		)
 	`, map[string]any{
-		"workspace_id":              b.WorkspaceID,
-		"message_batch_id":          b.ID,
-		"message_batch_external_id": b.ExternalID,
+		"workspace_uuid": dbUUID(b.WorkspaceUUID),
+		"payload":        jobPayload,
 	}); err != nil {
 		return MessageBatch{}, err
 	}
@@ -238,21 +246,21 @@ func (d *DB) CreateMessageBatch(ctx context.Context, b MessageBatch, reqs []NewB
 	return b, nil
 }
 
-func (d *DB) GetMessageBatch(ctx context.Context, workspaceID int64, externalID string) (MessageBatch, error) {
+func (d *DB) GetMessageBatch(ctx context.Context, workspaceUUID, externalID string) (MessageBatch, error) {
 	return getMessageBatchSQLX(ctx, d.sql, messageBatchSelectSQL()+`
-		where mb.workspace_id = :workspace_id
+		where mb.workspace_uuid = :workspace_uuid
 			and mb.external_id = :external_id
 			and mb.deleted_at is null
 	`, map[string]any{
-		"workspace_id": workspaceID,
-		"external_id":  externalID,
+		"workspace_uuid": dbUUID(workspaceUUID),
+		"external_id":    externalID,
 	})
 }
 
-func (d *DB) GetMessageBatchByID(ctx context.Context, id int64) (MessageBatch, error) {
+func (d *DB) GetMessageBatchByUUID(ctx context.Context, batchUUID string) (MessageBatch, error) {
 	return getMessageBatchSQLX(ctx, d.sql, messageBatchSelectSQL()+`
-		where mb.id = :id
-	`, map[string]any{"id": id})
+		where mb.uuid = :batch_uuid
+	`, map[string]any{"batch_uuid": dbUUID(batchUUID)})
 }
 
 func (d *DB) ListMessageBatchesPage(ctx context.Context, params ListMessageBatchesPageParams) ([]MessageBatch, bool, error) {
@@ -264,7 +272,7 @@ func (d *DB) ListMessageBatchesPage(ctx context.Context, params ListMessageBatch
 	}
 
 	var cursor struct {
-		ID        int64     `db:"id"`
+		UUID      uuid.UUID `db:"uuid"`
 		CreatedAt time.Time `db:"created_at"`
 	}
 	if params.AfterID != "" || params.BeforeID != "" {
@@ -273,14 +281,14 @@ func (d *DB) ListMessageBatchesPage(ctx context.Context, params ListMessageBatch
 			cursorExternalID = params.BeforeID
 		}
 		err := namedGetContext(ctx, d.sql, &cursor, `
-			select id, created_at
+			select uuid, created_at
 			from message_batches
-			where workspace_id = :workspace_id
+			where workspace_uuid = :workspace_uuid
 				and external_id = :external_id
 				and deleted_at is null
 		`, map[string]any{
-			"workspace_id": params.WorkspaceID,
-			"external_id":  cursorExternalID,
+			"workspace_uuid": dbUUID(params.WorkspaceUUID),
+			"external_id":    cursorExternalID,
 		})
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, false, nil
@@ -291,28 +299,28 @@ func (d *DB) ListMessageBatchesPage(ctx context.Context, params ListMessageBatch
 	}
 
 	query := messageBatchSelectSQL() + `
-		where mb.workspace_id = :workspace_id and mb.deleted_at is null
+		where mb.workspace_uuid = :workspace_uuid and mb.deleted_at is null
 	`
 	arguments := map[string]any{
-		"workspace_id": params.WorkspaceID,
-		"limit":        params.Limit + 1,
+		"workspace_uuid": dbUUID(params.WorkspaceUUID),
+		"limit":          params.Limit + 1,
 	}
 	if params.AfterID != "" {
 		query += `
 			and (mb.created_at < :cursor_created_at
-				or (mb.created_at = :cursor_created_at and mb.id < :cursor_id))
+				or (mb.created_at = :cursor_created_at and mb.uuid < :cursor_uuid))
 		`
 		arguments["cursor_created_at"] = cursor.CreatedAt
-		arguments["cursor_id"] = cursor.ID
+		arguments["cursor_uuid"] = cursor.UUID
 	} else if params.BeforeID != "" {
 		query += `
 			and (mb.created_at > :cursor_created_at
-				or (mb.created_at = :cursor_created_at and mb.id > :cursor_id))
+				or (mb.created_at = :cursor_created_at and mb.uuid > :cursor_uuid))
 		`
 		arguments["cursor_created_at"] = cursor.CreatedAt
-		arguments["cursor_id"] = cursor.ID
+		arguments["cursor_uuid"] = cursor.UUID
 	}
-	query += ` order by mb.created_at desc, mb.id desc limit :limit`
+	query += ` order by mb.created_at desc, mb.uuid desc limit :limit`
 
 	var rows []messageBatchRow
 	if err := namedSelectContext(ctx, d.sql, &rows, query, arguments); err != nil {
@@ -329,17 +337,17 @@ func (d *DB) ListMessageBatchesPage(ctx context.Context, params ListMessageBatch
 	return batches, hasMore, nil
 }
 
-func (d *DB) CancelMessageBatch(ctx context.Context, workspaceID int64, externalID string) (MessageBatch, error) {
+func (d *DB) CancelMessageBatch(ctx context.Context, workspaceUUID, externalID string) (MessageBatch, error) {
 	arguments := map[string]any{
-		"workspace_id": workspaceID,
-		"external_id":  externalID,
+		"workspace_uuid": dbUUID(workspaceUUID),
+		"external_id":    externalID,
 	}
 	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, `
 		update message_batches
 		set processing_status = 'canceling',
 			cancel_initiated_at = now(),
 			updated_at = now()
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and external_id = :external_id
 			and deleted_at is null
 			and processing_status = 'in_progress'
@@ -352,7 +360,7 @@ func (d *DB) CancelMessageBatch(ctx context.Context, workspaceID int64, external
 		if err := namedGetContext(ctx, d.sql, &exists, `
 			select exists(
 				select 1 from message_batches
-				where workspace_id = :workspace_id
+				where workspace_uuid = :workspace_uuid
 					and external_id = :external_id
 					and deleted_at is null
 			)
@@ -363,18 +371,18 @@ func (d *DB) CancelMessageBatch(ctx context.Context, workspaceID int64, external
 			return MessageBatch{}, ErrNotFound
 		}
 	}
-	return d.GetMessageBatch(ctx, workspaceID, externalID)
+	return d.GetMessageBatch(ctx, workspaceUUID, externalID)
 }
 
-func (d *DB) SoftDeleteMessageBatch(ctx context.Context, workspaceID int64, externalID string) error {
+func (d *DB) SoftDeleteMessageBatch(ctx context.Context, workspaceUUID, externalID string) error {
 	arguments := map[string]any{
-		"workspace_id": workspaceID,
-		"external_id":  externalID,
+		"workspace_uuid": dbUUID(workspaceUUID),
+		"external_id":    externalID,
 	}
 	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, `
 		update message_batches
 		set deleted_at = now(), updated_at = now()
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and external_id = :external_id
 			and deleted_at is null
 			and processing_status = 'ended'
@@ -390,7 +398,7 @@ func (d *DB) SoftDeleteMessageBatch(ctx context.Context, workspaceID int64, exte
 	err = namedGetContext(ctx, d.sql, &status, `
 		select processing_status
 		from message_batches
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and external_id = :external_id
 			and deleted_at is null
 	`, arguments)
@@ -403,7 +411,7 @@ func (d *DB) SoftDeleteMessageBatch(ctx context.Context, workspaceID int64, exte
 	return ErrInvalidState
 }
 
-func (d *DB) FinalizeMessageBatch(ctx context.Context, id int64, processing, succeeded, errored, canceled, expired int, resultsBucket, resultsKey string, resultsSize int64, resultsSHA string, endedAt time.Time) error {
+func (d *DB) FinalizeMessageBatch(ctx context.Context, batchUUID string, processing, succeeded, errored, canceled, expired int, resultsBucket, resultsKey string, resultsSize int64, resultsSHA string, endedAt time.Time) error {
 	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, `
 		update message_batches
 		set processing_status = 'ended',
@@ -418,9 +426,9 @@ func (d *DB) FinalizeMessageBatch(ctx context.Context, id int64, processing, suc
 			results_size_bytes = :results_size_bytes,
 			results_sha256 = :results_sha256,
 			updated_at = now()
-		where id = :id and processing_status in ('in_progress', 'canceling')
+		where uuid = :batch_uuid and processing_status in ('in_progress', 'canceling')
 	`, map[string]any{
-		"id":                 id,
+		"batch_uuid":         dbUUID(batchUUID),
 		"ended_at":           endedAt,
 		"processing_count":   processing,
 		"succeeded_count":    succeeded,
@@ -441,40 +449,40 @@ func (d *DB) FinalizeMessageBatch(ctx context.Context, id int64, processing, suc
 	return nil
 }
 
-func (d *DB) FinalizePendingRequests(ctx context.Context, batchID int64, finalStatus string, result json.RawMessage) error {
+func (d *DB) FinalizePendingRequests(ctx context.Context, batchUUID, finalStatus string, result json.RawMessage) error {
 	_, err := namedExecContext(ctx, d.sql, `
 		update message_batch_requests
 		set status = :final_status,
 			result = CAST(:result AS jsonb),
 			completed_at = now(),
 			updated_at = now()
-		where message_batch_id = :message_batch_id and status = 'queued'
+		where message_batch_uuid = :message_batch_uuid and status = 'queued'
 	`, map[string]any{
-		"message_batch_id": batchID,
-		"final_status":     finalStatus,
-		"result":           string(result),
+		"message_batch_uuid": dbUUID(batchUUID),
+		"final_status":       finalStatus,
+		"result":             string(result),
 	})
 	return err
 }
 
-func (d *DB) MarkStaleInFlightRequestsErrored(ctx context.Context, batchID int64, before time.Time, result json.RawMessage) (int64, error) {
+func (d *DB) MarkStaleInFlightRequestsErrored(ctx context.Context, batchUUID string, before time.Time, result json.RawMessage) (int64, error) {
 	return namedExecRowsAffected(ctx, d.sql, `
 		update message_batch_requests
 		set status = 'errored',
 			result = CAST(:result AS jsonb),
 			completed_at = now(),
 			updated_at = now()
-		where message_batch_id = :message_batch_id
+		where message_batch_uuid = :message_batch_uuid
 			and status = 'in_flight'
 			and started_at < :before
 	`, map[string]any{
-		"message_batch_id": batchID,
-		"before":           before,
-		"result":           string(result),
+		"message_batch_uuid": dbUUID(batchUUID),
+		"before":             before,
+		"result":             string(result),
 	})
 }
 
-func (d *DB) CountRequestsByStatus(ctx context.Context, batchID int64) (processing, succeeded, errored, canceled, expired int, err error) {
+func (d *DB) CountRequestsByStatus(ctx context.Context, batchUUID string) (processing, succeeded, errored, canceled, expired int, err error) {
 	var counts struct {
 		Processing int `db:"processing"`
 		Succeeded  int `db:"succeeded"`
@@ -490,8 +498,8 @@ func (d *DB) CountRequestsByStatus(ctx context.Context, batchID int64) (processi
 			CAST(count(*) filter (where status = 'canceled') AS int) AS canceled,
 			CAST(count(*) filter (where status = 'expired') AS int) AS expired
 		from message_batch_requests
-		where message_batch_id = :message_batch_id
-	`, map[string]any{"message_batch_id": batchID})
+		where message_batch_uuid = :message_batch_uuid
+	`, map[string]any{"message_batch_uuid": dbUUID(batchUUID)})
 	processing = counts.Processing
 	succeeded = counts.Succeeded
 	errored = counts.Errored
@@ -509,7 +517,7 @@ func (d *DB) ListExpiredBatches(ctx context.Context, now time.Time, limit int) (
 		where mb.deleted_at is null
 			and mb.processing_status in ('in_progress', 'canceling')
 			and mb.expires_at <= :now
-		order by mb.expires_at, mb.id
+		order by mb.expires_at, mb.uuid
 		limit :limit
 	`, map[string]any{
 		"now":   now,
@@ -521,21 +529,21 @@ func (d *DB) ListExpiredBatches(ctx context.Context, now time.Time, limit int) (
 	return messageBatchesFromRows(rows)
 }
 
-func (d *DB) GetMessageBatchRequestByIndex(ctx context.Context, batchID int64, index int) (MessageBatchRequest, error) {
+func (d *DB) GetMessageBatchRequestByIndex(ctx context.Context, batchUUID string, index int) (MessageBatchRequest, error) {
 	return getMessageBatchRequestSQLX(ctx, d.sql, messageBatchRequestSelectSQL()+`
-		where message_batch_id = :message_batch_id and request_index = :request_index
+		where message_batch_uuid = :message_batch_uuid and request_index = :request_index
 	`, map[string]any{
-		"message_batch_id": batchID,
-		"request_index":    index,
+		"message_batch_uuid": dbUUID(batchUUID),
+		"request_index":      index,
 	})
 }
 
-func (d *DB) ListMessageBatchRequestsOrdered(ctx context.Context, batchID int64) ([]MessageBatchRequest, error) {
+func (d *DB) ListMessageBatchRequestsOrdered(ctx context.Context, batchUUID string) ([]MessageBatchRequest, error) {
 	var rows []messageBatchRequestRow
 	err := namedSelectContext(ctx, d.sql, &rows, messageBatchRequestSelectSQL()+`
-		where message_batch_id = :message_batch_id
+		where message_batch_uuid = :message_batch_uuid
 		order by request_index
-	`, map[string]any{"message_batch_id": batchID})
+	`, map[string]any{"message_batch_uuid": dbUUID(batchUUID)})
 	if err != nil {
 		return nil, err
 	}
@@ -546,18 +554,18 @@ func (d *DB) ListMessageBatchRequestsOrdered(ctx context.Context, batchID int64)
 	return requests, nil
 }
 
-func (d *DB) ClaimMessageBatchRequest(ctx context.Context, id int64, workerID string, startedAt time.Time) (bool, error) {
+func (d *DB) ClaimMessageBatchRequest(ctx context.Context, requestUUID, workerID string, startedAt time.Time) (bool, error) {
 	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, `
 		update message_batch_requests
 		set status = 'in_flight',
 			started_at = :started_at,
 			in_flight_worker_id = :worker_id,
 			updated_at = now()
-		where id = :id and status = 'queued'
+		where uuid = :request_uuid and status = 'queued'
 	`, map[string]any{
-		"id":         id,
-		"worker_id":  workerID,
-		"started_at": startedAt,
+		"request_uuid": dbUUID(requestUUID),
+		"worker_id":    workerID,
+		"started_at":   startedAt,
 	})
 	if err != nil {
 		return false, err
@@ -565,7 +573,7 @@ func (d *DB) ClaimMessageBatchRequest(ctx context.Context, id int64, workerID st
 	return rowsAffected > 0, nil
 }
 
-func (d *DB) CompleteMessageBatchRequest(ctx context.Context, id int64, status string, result json.RawMessage, upstreamRequestID string, completedAt time.Time) (bool, error) {
+func (d *DB) CompleteMessageBatchRequest(ctx context.Context, requestUUID, status string, result json.RawMessage, upstreamRequestID string, completedAt time.Time) (bool, error) {
 	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, `
 		update message_batch_requests
 		set status = :status,
@@ -573,9 +581,9 @@ func (d *DB) CompleteMessageBatchRequest(ctx context.Context, id int64, status s
 			upstream_request_id = nullif(:upstream_request_id, ''),
 			completed_at = :completed_at,
 			updated_at = now()
-		where id = :id and status = 'in_flight'
+		where uuid = :request_uuid and status = 'in_flight'
 	`, map[string]any{
-		"id":                  id,
+		"request_uuid":        dbUUID(requestUUID),
 		"status":              status,
 		"result":              string(result),
 		"upstream_request_id": upstreamRequestID,
@@ -587,23 +595,26 @@ func (d *DB) CompleteMessageBatchRequest(ctx context.Context, id int64, status s
 	return rowsAffected > 0, nil
 }
 
-func (d *DB) EnqueueMessageBatchJob(ctx context.Context, workspaceID, batchID int64, batchExternalID string) error {
-	_, err := namedExecContext(ctx, d.sql, `
-		insert into jobs (external_id, workspace_id, type, status, payload)
+func (d *DB) EnqueueMessageBatchJob(ctx context.Context, workspaceUUID, batchUUID, batchExternalID string) error {
+	payload, err := json.Marshal(messageBatchJobPayload{
+		MessageBatchUUID:       batchUUID,
+		MessageBatchExternalID: batchExternalID,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = namedExecContext(ctx, d.sql, `
+		insert into jobs (external_id, workspace_uuid, type, status, payload)
 		values (
 			concat('job_', replace(CAST(gen_random_uuid() AS text), '-', '')),
-			:workspace_id,
+			:workspace_uuid,
 			'message_batch_process',
 			'pending',
-			jsonb_build_object(
-				'message_batch_id', CAST(:message_batch_id AS bigint),
-				'message_batch_external_id', CAST(:message_batch_external_id AS text)
-			)
+			CAST(:payload AS jsonb)
 		)
 	`, map[string]any{
-		"workspace_id":              workspaceID,
-		"message_batch_id":          batchID,
-		"message_batch_external_id": batchExternalID,
+		"workspace_uuid": dbUUID(workspaceUUID),
+		"payload":        payload,
 	})
 	return err
 }
@@ -633,7 +644,7 @@ func (d *DB) LeaseMessageBatchJobs(ctx context.Context, workerID string, limit i
 
 const leaseMessageBatchJobsSQL = `
 		with next_jobs as (
-			select id
+			select uuid
 			from jobs
 			where type = 'message_batch_process'
 				and run_after <= now()
@@ -651,14 +662,15 @@ const leaseMessageBatchJobsSQL = `
 			locked_until = now() + :lease_microseconds * interval '1 microsecond',
 			updated_at = now()
 		from next_jobs
-		where j.id = next_jobs.id
-		returning j.id, j.external_id, j.workspace_id,
-			CAST(j.payload->>'message_batch_id' AS bigint) AS message_batch_id,
+		where j.uuid = next_jobs.uuid
+		returning j.uuid, j.external_id,
+			j.workspace_uuid,
+			j.payload->>'message_batch_uuid' AS message_batch_uuid,
 			coalesce(j.payload->>'message_batch_external_id', '') AS message_batch_external_id,
 			j.attempts
 	`
 
-func (d *DB) ExtendMessageBatchJobLease(ctx context.Context, jobID int64, workerID string, leaseDuration time.Duration) error {
+func (d *DB) ExtendMessageBatchJobLease(ctx context.Context, jobUUID, workerID string, leaseDuration time.Duration) error {
 	if leaseDuration <= 0 {
 		leaseDuration = time.Minute
 	}
@@ -666,12 +678,12 @@ func (d *DB) ExtendMessageBatchJobLease(ctx context.Context, jobID int64, worker
 		update jobs
 		set locked_until = now() + :lease_microseconds * interval '1 microsecond',
 			updated_at = now()
-		where id = :job_id
+		where uuid = :job_uuid
 			and type = 'message_batch_process'
 			and status = 'running'
 			and locked_by = :worker_id
 	`, map[string]any{
-		"job_id":             jobID,
+		"job_uuid":           dbUUID(jobUUID),
 		"worker_id":          workerID,
 		"lease_microseconds": leaseDuration.Microseconds(),
 	})
@@ -684,19 +696,19 @@ func (d *DB) ExtendMessageBatchJobLease(ctx context.Context, jobID int64, worker
 	return nil
 }
 
-func (d *DB) CompleteMessageBatchJob(ctx context.Context, jobID int64) error {
+func (d *DB) CompleteMessageBatchJob(ctx context.Context, jobUUID string) error {
 	_, err := namedExecContext(ctx, d.sql, `
 		update jobs
 		set status = 'completed',
 			locked_by = null,
 			locked_until = null,
 			updated_at = now()
-		where id = :job_id and type = 'message_batch_process'
-	`, map[string]any{"job_id": jobID})
+		where uuid = :job_uuid and type = 'message_batch_process'
+	`, map[string]any{"job_uuid": dbUUID(jobUUID)})
 	return err
 }
 
-func (d *DB) FailMessageBatchJob(ctx context.Context, jobID int64, attempts int, reason string, retryDelay time.Duration, maxAttempts int) error {
+func (d *DB) FailMessageBatchJob(ctx context.Context, jobUUID string, attempts int, reason string, retryDelay time.Duration, maxAttempts int) error {
 	nextAttempts := attempts + 1
 	status := "retry"
 	if nextAttempts >= maxAttempts {
@@ -712,9 +724,9 @@ func (d *DB) FailMessageBatchJob(ctx context.Context, jobID int64, attempts int,
 			updated_at = now(),
 			attempts = :attempts,
 			payload = payload || jsonb_build_object('last_error', CAST(:reason AS text))
-		where id = :job_id and type = 'message_batch_process'
+		where uuid = :job_uuid and type = 'message_batch_process'
 	`, map[string]any{
-		"job_id":    jobID,
+		"job_uuid":  dbUUID(jobUUID),
 		"status":    status,
 		"run_after": runAfter,
 		"reason":    reason,
@@ -725,8 +737,9 @@ func (d *DB) FailMessageBatchJob(ctx context.Context, jobID int64, attempts int,
 
 func messageBatchSelectSQL() string {
 	return `
-		select mb.id, CAST(mb.uuid AS text) AS uuid, mb.external_id, mb.workspace_id,
-			CAST(w.uuid AS text) AS workspace_uuid, mb.created_by_api_key_id,
+		select mb.uuid, mb.external_id,
+			mb.workspace_uuid,
+			mb.created_by_api_key_uuid,
 			mb.api_variant, mb.anthropic_version, mb.beta_headers, mb.processing_status,
 			mb.request_count, mb.processing_count, mb.succeeded_count, mb.errored_count,
 			mb.canceled_count, mb.expired_count, mb.results_s3_bucket, mb.results_s3_key,
@@ -734,7 +747,6 @@ func messageBatchSelectSQL() string {
 			mb.ended_at, mb.cancel_initiated_at, mb.archived_at, mb.deleted_at,
 			mb.last_error, mb.updated_at
 		from message_batches mb
-		join workspaces w on w.id = mb.workspace_id
 	`
 }
 
@@ -770,50 +782,51 @@ func (row messageBatchRow) batch() (MessageBatch, error) {
 		}
 	}
 	return MessageBatch{
-		ID:                row.ID,
-		UUID:              row.UUID,
-		ExternalID:        row.ExternalID,
-		WorkspaceID:       row.WorkspaceID,
-		WorkspaceUUID:     row.WorkspaceUUID,
-		CreatedByAPIKeyID: row.CreatedByAPIKeyID,
-		APIVariant:        row.APIVariant,
-		AnthropicVersion:  row.AnthropicVersion,
-		BetaHeaders:       betaHeaders,
-		ProcessingStatus:  row.ProcessingStatus,
-		RequestCount:      row.RequestCount,
-		ProcessingCount:   row.ProcessingCount,
-		SucceededCount:    row.SucceededCount,
-		ErroredCount:      row.ErroredCount,
-		CanceledCount:     row.CanceledCount,
-		ExpiredCount:      row.ExpiredCount,
-		ResultsS3Bucket:   row.ResultsS3Bucket,
-		ResultsS3Key:      row.ResultsS3Key,
-		ResultsSizeBytes:  row.ResultsSizeBytes,
-		ResultsSHA256:     row.ResultsSHA256,
-		CreatedAt:         row.CreatedAt,
-		ExpiresAt:         row.ExpiresAt,
-		EndedAt:           row.EndedAt,
-		CancelInitiatedAt: row.CancelInitiatedAt,
-		ArchivedAt:        row.ArchivedAt,
-		DeletedAt:         row.DeletedAt,
-		LastError:         row.LastError,
-		UpdatedAt:         row.UpdatedAt,
+		UUID:                row.UUID.String(),
+		ExternalID:          row.ExternalID,
+		WorkspaceUUID:       row.WorkspaceUUID.String(),
+		CreatedByAPIKeyUUID: row.CreatedByAPIKeyUUID.String(),
+		APIVariant:          row.APIVariant,
+		AnthropicVersion:    row.AnthropicVersion,
+		BetaHeaders:         betaHeaders,
+		ProcessingStatus:    row.ProcessingStatus,
+		RequestCount:        row.RequestCount,
+		ProcessingCount:     row.ProcessingCount,
+		SucceededCount:      row.SucceededCount,
+		ErroredCount:        row.ErroredCount,
+		CanceledCount:       row.CanceledCount,
+		ExpiredCount:        row.ExpiredCount,
+		ResultsS3Bucket:     row.ResultsS3Bucket,
+		ResultsS3Key:        row.ResultsS3Key,
+		ResultsSizeBytes:    row.ResultsSizeBytes,
+		ResultsSHA256:       row.ResultsSHA256,
+		CreatedAt:           row.CreatedAt,
+		ExpiresAt:           row.ExpiresAt,
+		EndedAt:             row.EndedAt,
+		CancelInitiatedAt:   row.CancelInitiatedAt,
+		ArchivedAt:          row.ArchivedAt,
+		DeletedAt:           row.DeletedAt,
+		LastError:           row.LastError,
+		UpdatedAt:           row.UpdatedAt,
 	}, nil
 }
 
 const insertMessageBatchRequestSQL = `
 	insert into message_batch_requests (
-		external_id, workspace_id, message_batch_id, request_index, custom_id, params
+		external_id, workspace_uuid, message_batch_uuid, request_index, custom_id, params
 	)
 	values (
-		:external_id, :workspace_id, :message_batch_id, :request_index, :custom_id,
+		:external_id, :workspace_uuid, :message_batch_uuid, :request_index, :custom_id,
 		CAST(:params AS jsonb)
 	)
 `
 
 func messageBatchRequestSelectSQL() string {
 	return `
-		select id, workspace_id, message_batch_id, request_index, external_id, custom_id,
+		select uuid,
+			workspace_uuid,
+			message_batch_uuid,
+			request_index, external_id, custom_id,
 			params, status, result, upstream_request_id, started_at, completed_at,
 			in_flight_worker_id, created_at, updated_at
 		from message_batch_requests
@@ -834,9 +847,9 @@ func getMessageBatchRequestSQLX(ctx context.Context, database sqlxNamedQueryer, 
 
 func (row messageBatchRequestRow) request() MessageBatchRequest {
 	return MessageBatchRequest{
-		ID:                row.ID,
-		WorkspaceID:       row.WorkspaceID,
-		MessageBatchID:    row.MessageBatchID,
+		UUID:              row.UUID.String(),
+		WorkspaceUUID:     row.WorkspaceUUID.String(),
+		MessageBatchUUID:  row.MessageBatchUUID.String(),
 		RequestIndex:      row.RequestIndex,
 		ExternalID:        row.ExternalID,
 		CustomID:          row.CustomID,
@@ -854,10 +867,10 @@ func (row messageBatchRequestRow) request() MessageBatchRequest {
 
 func (row messageBatchJobRow) job() MessageBatchJob {
 	return MessageBatchJob{
-		ID:                     row.ID,
+		UUID:                   row.UUID.String(),
 		ExternalID:             row.ExternalID,
-		WorkspaceID:            row.WorkspaceID,
-		MessageBatchID:         row.MessageBatchID,
+		WorkspaceUUID:          row.WorkspaceUUID.String(),
+		MessageBatchUUID:       row.MessageBatchUUID,
 		MessageBatchExternalID: row.MessageBatchExternalID,
 		Attempts:               row.Attempts,
 	}

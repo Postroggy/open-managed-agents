@@ -36,9 +36,9 @@ generated_key="$TEST_DIRECTORY/generated.pem"
 "$GENERATOR" "$generated_key" >/dev/null
 openssl pkey -in "$generated_key" -check -noout >/dev/null
 
-pem_header='-----BEGIN PRIVATE'
-pem_header+=' KEY-----'
-if [[ "$(head -n 1 "$generated_key")" != "$pem_header" ]]; then
+private_key_label="PRIVATE KEY"
+expected_header="-----BEGIN ${private_key_label}-----"
+if [[ "$(head -n 1 "$generated_key")" != "$expected_header" ]]; then
   echo "generated key is not PKCS#8 PEM" >&2
   exit 1
 fi
