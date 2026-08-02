@@ -2,10 +2,39 @@ package db
 
 import (
 	"context"
+	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/superduck-ai/open-managed-agents/internal/platform"
 )
+
+type consoleWorkspaceRowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanConsoleWorkspace(row consoleWorkspaceRowScanner) (platform.ConsoleWorkspace, error) {
+	var scanned consoleWorkspaceRow
+	if err := row.Scan(
+		&scanned.UUID,
+		&scanned.OrgUUID,
+		&scanned.Name,
+		&scanned.DisplayColor,
+		&scanned.Color,
+		&scanned.DataResidency,
+		&scanned.ExternalKeyID,
+		&scanned.Tags,
+		&scanned.ArchivedAt,
+		&scanned.CreatedAt,
+		&scanned.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return platform.ConsoleWorkspace{}, platform.ErrNotFound
+		}
+		return platform.ConsoleWorkspace{}, err
+	}
+	return scanned.workspace()
+}
 
 // ArchiveConsoleWorkspace soft-deletes a console workspace by setting its
 // archived_at timestamp and, in the same transaction, cascading the archive to
