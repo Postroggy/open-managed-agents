@@ -3,18 +3,21 @@ package db
 import (
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestConsoleAPIKeyQueriesUseSQLXNamedParameters(t *testing.T) {
-	workspaceID := "workspace_test"
-	apiKeyQuery, apiKeyArguments := listConsoleAPIKeysQuery("org_test", &workspaceID)
-	workspaceQuery, workspaceArguments := listConsoleWorkspacesQuery("org_test", false)
+	orgUUID := uuid.MustParse("11111111-1111-4111-8111-111111111111")
+	workspaceUUID := uuid.MustParse("22222222-2222-4222-8222-222222222222")
+	apiKeyQuery, apiKeyArguments := listConsoleAPIKeysQuery(orgUUID, uuid.NullUUID{UUID: workspaceUUID, Valid: true})
+	workspaceQuery, workspaceArguments := listConsoleWorkspacesQuery(orgUUID, false)
 
 	t.Run("rejects a missing named argument", func(t *testing.T) {
 		if _, _, err := bindNamed(postgresRebinder{}, apiKeyQuery, map[string]any{
-			"org_uuid": "org_test",
+			"org_uuid": orgUUID,
 		}); err == nil {
-			t.Fatal("bindNamed() error = nil, want missing workspace_id error")
+			t.Fatal("bindNamed() error = nil, want missing workspace_uuid error")
 		}
 	})
 
@@ -34,7 +37,7 @@ func TestConsoleAPIKeyQueriesUseSQLXNamedParameters(t *testing.T) {
 			name:         "list workspaces",
 			query:        workspaceQuery,
 			arguments:    workspaceArguments,
-			wantArgCount: 2,
+			wantArgCount: 1,
 		},
 	}
 
@@ -50,6 +53,9 @@ func TestConsoleAPIKeyQueriesUseSQLXNamedParameters(t *testing.T) {
 			if strings.Contains(test.query, "::") {
 				t.Fatalf("query uses PostgreSQL cast shorthand: %q", test.query)
 			}
+			if strings.Contains(test.query, " AS uuid)") || strings.Contains(test.query, " AS text)") {
+				t.Fatalf("query contains UUID cast ceremony: %q", test.query)
+			}
 			if len(arguments) != test.wantArgCount {
 				t.Fatalf("argument count = %d, want %d", len(arguments), test.wantArgCount)
 			}
@@ -59,14 +65,18 @@ func TestConsoleAPIKeyQueriesUseSQLXNamedParameters(t *testing.T) {
 
 func TestConsoleWorkspaceRowMapsJSONFields(t *testing.T) {
 	row := consoleWorkspaceRow{
-		UUID:    "workspace_test",
-		OrgUUID: "org_test",
-		Tags:    []byte(`{"team":"platform"}`),
+		UUID:       uuid.MustParse("22222222-2222-4222-8222-222222222222"),
+		ExternalID: "workspace_external",
+		OrgUUID:    uuid.MustParse("11111111-1111-4111-8111-111111111111"),
+		Tags:       []byte(`{"team":"platform"}`),
 	}
 
 	workspace, err := row.workspace()
 	if err != nil {
 		t.Fatalf("workspace(): %v", err)
+	}
+	if workspace.UUID != "22222222-2222-4222-8222-222222222222" || workspace.ExternalID != "workspace_external" {
+		t.Fatalf("workspace identifiers = (%q, %q), want database UUID and external ID", workspace.UUID, workspace.ExternalID)
 	}
 	if workspace.Tags["team"] != "platform" {
 		t.Fatalf("tags = %#v, want platform team", workspace.Tags)

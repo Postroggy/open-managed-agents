@@ -5,16 +5,17 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
 	webhookEndpointColumns = `
-		id,
-		CAST(uuid AS text) AS uuid,
+		uuid,
 		external_id,
-		organization_id,
-		workspace_id,
-		created_by_api_key_id,
+		organization_uuid,
+		workspace_uuid,
+		created_by_api_key_uuid,
 		url,
 		name,
 		description,
@@ -29,20 +30,19 @@ const (
 	`
 	getWorkspaceIdentifiersQuery = `
 		select
-			o.external_id AS organization_external_id,
+			w.organization_uuid,
 			w.external_id AS workspace_external_id
 		from workspaces w
-		join organizations o on o.id = w.organization_id
-		where w.id = :workspace_id
+		where w.uuid = :workspace_uuid
 	`
 	createWebhookEndpointQuery = `
 		insert into webhook_endpoints (
-			uuid, external_id, organization_id, workspace_id, created_by_api_key_id,
+			uuid, external_id, organization_uuid, workspace_uuid, created_by_api_key_uuid,
 			url, name, description, enabled_events, signing_secret, status,
 			disabled_reason, consecutive_failures, created_at, updated_at
 		)
 		values (
-			:uuid, :external_id, :organization_id, :workspace_id, :created_by_api_key_id,
+			:uuid, :external_id, :organization_uuid, :workspace_uuid, :created_by_api_key_uuid,
 			:url, :name, :description, CAST(:enabled_events AS jsonb), :signing_secret, :status,
 			:disabled_reason, :consecutive_failures, :created_at, :created_at
 		)
@@ -51,13 +51,13 @@ const (
 	listWebhookEndpointsQuery = `
 		select ` + webhookEndpointColumns + `
 		from webhook_endpoints
-		where workspace_id = :workspace_id and deleted_at is null
-		order by created_at desc, id desc
+		where workspace_uuid = :workspace_uuid and deleted_at is null
+		order by created_at desc, uuid desc
 	`
 	getWebhookEndpointQuery = `
 		select ` + webhookEndpointColumns + `
 		from webhook_endpoints
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and external_id = :external_id
 			and deleted_at is null
 	`
@@ -71,7 +71,7 @@ const (
 			disabled_reason = :disabled_reason,
 			consecutive_failures = :consecutive_failures,
 			updated_at = :updated_at
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and external_id = :external_id
 			and deleted_at is null
 		returning ` + webhookEndpointColumns + `
@@ -80,7 +80,7 @@ const (
 		update webhook_endpoints
 		set signing_secret = :signing_secret,
 			updated_at = :updated_at
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and external_id = :external_id
 			and deleted_at is null
 	`
@@ -88,7 +88,7 @@ const (
 		update webhook_endpoints
 		set deleted_at = now(),
 			updated_at = now()
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and external_id = :external_id
 			and deleted_at is null
 	`
@@ -96,24 +96,24 @@ const (
 		select exists(
 			select 1
 			from webhook_endpoints
-			where workspace_id = :workspace_id and deleted_at is null
+			where workspace_uuid = :workspace_uuid and deleted_at is null
 		)
 	`
 	listActiveWebhookEndpointsForEventQuery = `
 		select ` + webhookEndpointColumns + `
 		from webhook_endpoints
-		where workspace_id = :workspace_id
+		where workspace_uuid = :workspace_uuid
 			and deleted_at is null
 			and status = 'enabled'
 			and jsonb_exists(enabled_events, :event_type)
-		order by created_at asc, id asc
+		order by created_at asc, uuid asc
 	`
 	recordWebhookEndpointDeliverySuccessQuery = `
 		update webhook_endpoints
 		set consecutive_failures = 0,
 			disabled_reason = null,
 			updated_at = now()
-		where id = :endpoint_id and deleted_at is null and status = 'enabled'
+		where uuid = :endpoint_uuid and deleted_at is null and status = 'enabled'
 	`
 	recordWebhookEndpointDeliveryFailureQuery = `
 		update webhook_endpoints
@@ -127,22 +127,21 @@ const (
 				else disabled_reason
 			end,
 			updated_at = now()
-		where id = :endpoint_id and deleted_at is null and status = 'enabled'
+		where uuid = :endpoint_uuid and deleted_at is null and status = 'enabled'
 	`
 )
 
 type WorkspaceIdentifiers struct {
-	OrganizationExternalID string
-	WorkspaceExternalID    string
+	OrganizationUUID    string
+	WorkspaceExternalID string
 }
 
 type WebhookEndpoint struct {
-	ID                  int64
 	UUID                string
 	ExternalID          string
-	OrganizationID      int64
-	WorkspaceID         int64
-	CreatedByAPIKeyID   int64
+	OrganizationUUID    string
+	WorkspaceUUID       string
+	CreatedByAPIKeyUUID string
 	URL                 string
 	Name                string
 	Description         string
@@ -157,17 +156,16 @@ type WebhookEndpoint struct {
 }
 
 type workspaceIdentifiersRow struct {
-	OrganizationExternalID string `db:"organization_external_id"`
-	WorkspaceExternalID    string `db:"workspace_external_id"`
+	OrganizationUUID    uuid.UUID `db:"organization_uuid"`
+	WorkspaceExternalID string    `db:"workspace_external_id"`
 }
 
 type webhookEndpointRow struct {
-	ID                  int64          `db:"id"`
-	UUID                string         `db:"uuid"`
+	UUID                uuid.UUID      `db:"uuid"`
 	ExternalID          string         `db:"external_id"`
-	OrganizationID      int64          `db:"organization_id"`
-	WorkspaceID         int64          `db:"workspace_id"`
-	CreatedByAPIKeyID   int64          `db:"created_by_api_key_id"`
+	OrganizationUUID    uuid.UUID      `db:"organization_uuid"`
+	WorkspaceUUID       uuid.UUID      `db:"workspace_uuid"`
+	CreatedByAPIKeyUUID uuid.UUID      `db:"created_by_api_key_uuid"`
 	URL                 string         `db:"url"`
 	Name                string         `db:"name"`
 	Description         string         `db:"description"`
@@ -181,16 +179,16 @@ type webhookEndpointRow struct {
 	DeletedAt           *time.Time     `db:"deleted_at"`
 }
 
-func (d *DB) GetWorkspaceIdentifiers(ctx context.Context, workspaceID int64) (WorkspaceIdentifiers, error) {
+func (d *DB) GetWorkspaceIdentifiers(ctx context.Context, workspaceUUID string) (WorkspaceIdentifiers, error) {
 	var row workspaceIdentifiersRow
 	if err := namedGetContext(ctx, d.sql, &row, getWorkspaceIdentifiersQuery, map[string]any{
-		"workspace_id": workspaceID,
+		"workspace_uuid": dbUUID(workspaceUUID),
 	}); err != nil {
 		return WorkspaceIdentifiers{}, mapNoRows(err)
 	}
 	return WorkspaceIdentifiers{
-		OrganizationExternalID: row.OrganizationExternalID,
-		WorkspaceExternalID:    row.WorkspaceExternalID,
+		OrganizationUUID:    row.OrganizationUUID.String(),
+		WorkspaceExternalID: row.WorkspaceExternalID,
 	}, nil
 }
 
@@ -200,43 +198,43 @@ func (d *DB) CreateWebhookEndpoint(ctx context.Context, endpoint WebhookEndpoint
 		return WebhookEndpoint{}, err
 	}
 	return getWebhookEndpointSQLX(ctx, d.sql, createWebhookEndpointQuery, map[string]any{
-		"uuid":                  endpoint.UUID,
-		"external_id":           endpoint.ExternalID,
-		"organization_id":       endpoint.OrganizationID,
-		"workspace_id":          endpoint.WorkspaceID,
-		"created_by_api_key_id": endpoint.CreatedByAPIKeyID,
-		"url":                   endpoint.URL,
-		"name":                  endpoint.Name,
-		"description":           endpoint.Description,
-		"enabled_events":        jsonArg(json.RawMessage(events)),
-		"signing_secret":        endpoint.SigningSecret,
-		"status":                endpoint.Status,
-		"disabled_reason":       endpoint.DisabledReason,
-		"consecutive_failures":  endpoint.ConsecutiveFailures,
-		"created_at":            endpoint.CreatedAt,
+		"uuid":                    dbUUID(endpoint.UUID),
+		"external_id":             endpoint.ExternalID,
+		"organization_uuid":       dbUUID(endpoint.OrganizationUUID),
+		"workspace_uuid":          dbUUID(endpoint.WorkspaceUUID),
+		"created_by_api_key_uuid": dbUUID(endpoint.CreatedByAPIKeyUUID),
+		"url":                     endpoint.URL,
+		"name":                    endpoint.Name,
+		"description":             endpoint.Description,
+		"enabled_events":          jsonArg(json.RawMessage(events)),
+		"signing_secret":          endpoint.SigningSecret,
+		"status":                  endpoint.Status,
+		"disabled_reason":         endpoint.DisabledReason,
+		"consecutive_failures":    endpoint.ConsecutiveFailures,
+		"created_at":              endpoint.CreatedAt,
 	})
 }
 
-func (d *DB) ListWebhookEndpoints(ctx context.Context, workspaceID int64) ([]WebhookEndpoint, error) {
+func (d *DB) ListWebhookEndpoints(ctx context.Context, workspaceUUID string) ([]WebhookEndpoint, error) {
 	return selectWebhookEndpointsSQLX(ctx, d.sql, listWebhookEndpointsQuery, map[string]any{
-		"workspace_id": workspaceID,
+		"workspace_uuid": dbUUID(workspaceUUID),
 	})
 }
 
-func (d *DB) GetWebhookEndpoint(ctx context.Context, workspaceID int64, externalID string) (WebhookEndpoint, error) {
+func (d *DB) GetWebhookEndpoint(ctx context.Context, workspaceUUID string, externalID string) (WebhookEndpoint, error) {
 	return getWebhookEndpointSQLX(ctx, d.sql, getWebhookEndpointQuery, map[string]any{
-		"workspace_id": workspaceID,
-		"external_id":  externalID,
+		"workspace_uuid": dbUUID(workspaceUUID),
+		"external_id":    externalID,
 	})
 }
 
-func (d *DB) UpdateWebhookEndpoint(ctx context.Context, workspaceID int64, externalID string, next WebhookEndpoint) (WebhookEndpoint, error) {
+func (d *DB) UpdateWebhookEndpoint(ctx context.Context, workspaceUUID string, externalID string, next WebhookEndpoint) (WebhookEndpoint, error) {
 	events, err := json.Marshal(next.EnabledEvents)
 	if err != nil {
 		return WebhookEndpoint{}, err
 	}
 	return getWebhookEndpointSQLX(ctx, d.sql, updateWebhookEndpointQuery, map[string]any{
-		"workspace_id":         workspaceID,
+		"workspace_uuid":       dbUUID(workspaceUUID),
 		"external_id":          externalID,
 		"url":                  next.URL,
 		"name":                 next.Name,
@@ -249,9 +247,9 @@ func (d *DB) UpdateWebhookEndpoint(ctx context.Context, workspaceID int64, exter
 	})
 }
 
-func (d *DB) RegenerateWebhookEndpointSigningSecret(ctx context.Context, workspaceID int64, externalID string, signingSecret string, updatedAt time.Time) error {
+func (d *DB) RegenerateWebhookEndpointSigningSecret(ctx context.Context, workspaceUUID string, externalID string, signingSecret string, updatedAt time.Time) error {
 	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, regenerateWebhookEndpointSigningSecretQuery, map[string]any{
-		"workspace_id":   workspaceID,
+		"workspace_uuid": dbUUID(workspaceUUID),
 		"external_id":    externalID,
 		"signing_secret": signingSecret,
 		"updated_at":     updatedAt,
@@ -265,10 +263,10 @@ func (d *DB) RegenerateWebhookEndpointSigningSecret(ctx context.Context, workspa
 	return nil
 }
 
-func (d *DB) DeleteWebhookEndpoint(ctx context.Context, workspaceID int64, externalID string) error {
+func (d *DB) DeleteWebhookEndpoint(ctx context.Context, workspaceUUID string, externalID string) error {
 	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, deleteWebhookEndpointQuery, map[string]any{
-		"workspace_id": workspaceID,
-		"external_id":  externalID,
+		"workspace_uuid": dbUUID(workspaceUUID),
+		"external_id":    externalID,
 	})
 	if err != nil {
 		return err
@@ -279,34 +277,34 @@ func (d *DB) DeleteWebhookEndpoint(ctx context.Context, workspaceID int64, exter
 	return nil
 }
 
-func (d *DB) HasWebhookEndpoints(ctx context.Context, workspaceID int64) (bool, error) {
+func (d *DB) HasWebhookEndpoints(ctx context.Context, workspaceUUID string) (bool, error) {
 	var exists bool
 	err := namedGetContext(ctx, d.sql, &exists, hasWebhookEndpointsQuery, map[string]any{
-		"workspace_id": workspaceID,
+		"workspace_uuid": dbUUID(workspaceUUID),
 	})
 	return exists, err
 }
 
-func (d *DB) ListActiveWebhookEndpointsForEvent(ctx context.Context, workspaceID int64, eventType string) ([]WebhookEndpoint, error) {
+func (d *DB) ListActiveWebhookEndpointsForEvent(ctx context.Context, workspaceUUID string, eventType string) ([]WebhookEndpoint, error) {
 	return selectWebhookEndpointsSQLX(ctx, d.sql, listActiveWebhookEndpointsForEventQuery, map[string]any{
-		"workspace_id": workspaceID,
-		"event_type":   eventType,
+		"workspace_uuid": dbUUID(workspaceUUID),
+		"event_type":     eventType,
 	})
 }
 
-func (d *DB) RecordWebhookEndpointDeliverySuccess(ctx context.Context, endpointID int64) error {
+func (d *DB) RecordWebhookEndpointDeliverySuccess(ctx context.Context, endpointUUID string) error {
 	_, err := namedExecContext(ctx, d.sql, recordWebhookEndpointDeliverySuccessQuery, map[string]any{
-		"endpoint_id": endpointID,
+		"endpoint_uuid": dbUUID(endpointUUID),
 	})
 	return err
 }
 
-func (d *DB) RecordWebhookEndpointDeliveryFailure(ctx context.Context, endpointID int64, reason string, disableAfter int) error {
+func (d *DB) RecordWebhookEndpointDeliveryFailure(ctx context.Context, endpointUUID string, reason string, disableAfter int) error {
 	if disableAfter <= 0 {
 		disableAfter = 20
 	}
 	_, err := namedExecContext(ctx, d.sql, recordWebhookEndpointDeliveryFailureQuery, map[string]any{
-		"endpoint_id":   endpointID,
+		"endpoint_uuid": dbUUID(endpointUUID),
 		"disable_after": disableAfter,
 		"reason":        truncateWebhookFailureReason(reason),
 	})
@@ -355,12 +353,11 @@ func (r webhookEndpointRow) endpoint() (WebhookEndpoint, error) {
 		}
 	}
 	endpoint := WebhookEndpoint{
-		ID:                  r.ID,
-		UUID:                r.UUID,
+		UUID:                r.UUID.String(),
 		ExternalID:          r.ExternalID,
-		OrganizationID:      r.OrganizationID,
-		WorkspaceID:         r.WorkspaceID,
-		CreatedByAPIKeyID:   r.CreatedByAPIKeyID,
+		OrganizationUUID:    r.OrganizationUUID.String(),
+		WorkspaceUUID:       r.WorkspaceUUID.String(),
+		CreatedByAPIKeyUUID: r.CreatedByAPIKeyUUID.String(),
 		URL:                 r.URL,
 		Name:                r.Name,
 		Description:         r.Description,

@@ -19,17 +19,13 @@ const (
 		i.expires_at
 	`
 	createConsoleInviteQuery = `
-		with org as (
-			select id
-			from organizations
-			where CAST(uuid AS text) = :org_uuid or external_id = :org_uuid
-			limit 1
-		)
 		insert into organization_invites (
-			external_id, organization_id, email, role, status, invited_at, expires_at
+			external_id, organization_uuid, email, role, status, invited_at, expires_at
 		)
-		select :external_id, org.id, :email, :role, 'pending', :invited_at, :expires_at
-		from org
+		values (
+			:external_id, :org_uuid, :email, :role,
+			'pending', :invited_at, :expires_at
+		)
 		returning
 			external_id AS id,
 			email,
@@ -43,9 +39,7 @@ const (
 		set status = 'pending',
 			invited_at = :invited_at,
 			expires_at = :expires_at
-		from organizations o
-		where i.organization_id = o.id
-			and (CAST(o.uuid AS text) = :org_uuid or o.external_id = :org_uuid)
+		where i.organization_uuid = :org_uuid
 			and i.external_id = :invite_id
 			and i.deleted_at is null
 		returning ` + consoleInviteColumns + `
@@ -54,9 +48,7 @@ const (
 		update organization_invites i
 		set status = 'deleted',
 			deleted_at = coalesce(i.deleted_at, now())
-		from organizations o
-		where i.organization_id = o.id
-			and (CAST(o.uuid AS text) = :org_uuid or o.external_id = :org_uuid)
+		where i.organization_uuid = :org_uuid
 			and i.external_id = :invite_id
 		returning ` + consoleInviteColumns + `
 	`
@@ -78,11 +70,14 @@ func (d *DB) ListConsoleInvites(ctx context.Context, orgUUID string, status stri
 	if limit <= 0 || limit > 1000 {
 		limit = 1000
 	}
+	typedOrgUUID, err := parseDBUUID("organization_uuid", orgUUID)
+	if err != nil {
+		return []platform.ConsoleInvite{}, nil
+	}
 	query := `
 		select ` + consoleInviteColumns + `
 		from organization_invites i
-		join organizations o on o.id = i.organization_id
-		where (CAST(o.uuid AS text) = :org_uuid or o.external_id = :org_uuid)
+		where i.organization_uuid = :org_uuid
 	`
 	switch strings.TrimSpace(strings.ToLower(status)) {
 	case "":
@@ -98,11 +93,11 @@ func (d *DB) ListConsoleInvites(ctx context.Context, orgUUID string, status stri
 	default:
 		return []platform.ConsoleInvite{}, nil
 	}
-	query += ` order by i.invited_at desc, i.id desc limit :limit`
+	query += ` order by i.invited_at desc, i.uuid desc limit :limit`
 
 	var rows []consoleInviteRow
-	err := namedSelectContext(ctx, d.sql, &rows, query, map[string]any{
-		"org_uuid": strings.TrimSpace(orgUUID),
+	err = namedSelectContext(ctx, d.sql, &rows, query, map[string]any{
+		"org_uuid": typedOrgUUID,
 		"limit":    limit,
 	})
 	if err != nil {
@@ -128,9 +123,13 @@ func (d *DB) CreateConsoleInvite(ctx context.Context, input platform.CreateConso
 	if err != nil {
 		return platform.ConsoleInvite{}, err
 	}
+	orgUUID, err := parseDBUUID("organization_uuid", input.OrgUUID)
+	if err != nil {
+		return platform.ConsoleInvite{}, platform.ErrNotFound
+	}
 	now := time.Now().UTC()
 	invite, err := getConsoleInviteSQLX(ctx, d.sql, createConsoleInviteQuery, map[string]any{
-		"org_uuid":    strings.TrimSpace(input.OrgUUID),
+		"org_uuid":    orgUUID,
 		"external_id": externalID,
 		"email":       strings.TrimSpace(input.Email),
 		"role":        strings.TrimSpace(input.Role),
@@ -147,9 +146,13 @@ func (d *DB) ResendConsoleInvite(ctx context.Context, orgUUID string, inviteID s
 	if d == nil || d.sql == nil || strings.TrimSpace(orgUUID) == "" || strings.TrimSpace(inviteID) == "" {
 		return platform.ConsoleInvite{}, platform.ErrNotFound
 	}
+	typedOrgUUID, err := parseDBUUID("organization_uuid", orgUUID)
+	if err != nil {
+		return platform.ConsoleInvite{}, platform.ErrNotFound
+	}
 	now := time.Now().UTC()
 	return getConsoleInviteSQLX(ctx, d.sql, resendConsoleInviteQuery, map[string]any{
-		"org_uuid":   strings.TrimSpace(orgUUID),
+		"org_uuid":   typedOrgUUID,
 		"invite_id":  strings.TrimSpace(inviteID),
 		"invited_at": now,
 		"expires_at": now.Add(21 * 24 * time.Hour),
@@ -160,8 +163,12 @@ func (d *DB) DeleteConsoleInvite(ctx context.Context, orgUUID string, inviteID s
 	if d == nil || d.sql == nil || strings.TrimSpace(orgUUID) == "" || strings.TrimSpace(inviteID) == "" {
 		return platform.ConsoleInvite{}, platform.ErrNotFound
 	}
+	typedOrgUUID, err := parseDBUUID("organization_uuid", orgUUID)
+	if err != nil {
+		return platform.ConsoleInvite{}, platform.ErrNotFound
+	}
 	return getConsoleInviteSQLX(ctx, d.sql, deleteConsoleInviteQuery, map[string]any{
-		"org_uuid":  strings.TrimSpace(orgUUID),
+		"org_uuid":  typedOrgUUID,
 		"invite_id": strings.TrimSpace(inviteID),
 	})
 }
