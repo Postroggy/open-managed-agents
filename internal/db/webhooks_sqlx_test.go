@@ -18,22 +18,19 @@ func TestWebhookDeliveryQueriesUseSQLXNamedParameters(t *testing.T) {
 			name:  "enqueue",
 			query: enqueueWebhookDeliveryJobQuery,
 			arguments: map[string]any{
-				"workspace_id": int64(1),
-				"event_type":   "session.created",
-				"event":        []byte(`{"type":"session.created"}`),
+				"workspace_uuid": "00000000-0000-0000-0000-000000000001",
+				"payload":        []byte(`{"event_type":"session.created","event":{"type":"session.created"}}`),
 			},
-			wantArgCount: 3,
+			wantArgCount: 2,
 		},
 		{
 			name:  "enqueue endpoint",
 			query: enqueueWebhookDeliveryJobForEndpointQuery,
 			arguments: map[string]any{
-				"workspace_id":        int64(1),
-				"event_type":          "session.created",
-				"event":               []byte(`{"type":"session.created"}`),
-				"webhook_endpoint_id": int64(2),
+				"workspace_uuid": "00000000-0000-0000-0000-000000000001",
+				"payload":        []byte(`{"event_type":"session.created","event":{"type":"session.created"},"webhook_endpoint_uuid":"00000000-0000-0000-0000-000000000002"}`),
 			},
-			wantArgCount: 4,
+			wantArgCount: 2,
 		},
 		{
 			name:  "lease",
@@ -48,14 +45,14 @@ func TestWebhookDeliveryQueriesUseSQLXNamedParameters(t *testing.T) {
 		{
 			name:         "complete",
 			query:        completeWebhookDeliveryJobQuery,
-			arguments:    map[string]any{"job_id": int64(3)},
+			arguments:    map[string]any{"job_uuid": "00000000-0000-0000-0000-000000000003"},
 			wantArgCount: 1,
 		},
 		{
 			name:  "fail",
 			query: failWebhookDeliveryJobQuery,
 			arguments: map[string]any{
-				"job_id":    int64(3),
+				"job_uuid":  "00000000-0000-0000-0000-000000000003",
 				"status":    "retry",
 				"run_after": now,
 				"attempts":  1,

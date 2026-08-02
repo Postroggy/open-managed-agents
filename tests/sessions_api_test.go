@@ -24,6 +24,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/codesessions"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
+	"github.com/superduck-ai/open-managed-agents/internal/storage"
 	"github.com/superduck-ai/open-managed-agents/internal/webhooks"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -213,7 +214,7 @@ func TestArchivedSessionResourceMutationsReturnInvalidState(t *testing.T) {
 	defer deleteSession(t, app, created.ID)
 
 	session := mustSessionRecord(t, app, created.ID)
-	resources, err := app.db.ListSessionResources(context.Background(), session.WorkspaceID, session.ExternalID)
+	resources, err := app.db.ListSessionResources(context.Background(), session.WorkspaceUUID, session.ExternalID)
 	if err != nil {
 		t.Fatalf("list Session resources: %v", err)
 	}
@@ -257,7 +258,7 @@ func mustSessionRecord(t *testing.T, app *testApp, sessionExternalID string) db.
 	t.Helper()
 	session, err := app.db.GetSession(
 		context.Background(),
-		getDefaultDBIDs(t, app.db).WorkspaceID,
+		getDefaultDBIDs(t, app.db).WorkspaceUUID,
 		sessionExternalID,
 	)
 	if err != nil {
@@ -931,7 +932,7 @@ func TestSessionThreadsDefaultPageSupportsOfficialPollingAndLegacyPrimary(t *tes
 
 	if _, err := app.db.Pool.Exec(context.Background(), `
 		delete from session_threads
-		where session_external_id = $1 and parent_thread_id is null
+		where session_external_id = $1 and parent_thread_uuid is null
 	`, session.ID); err != nil {
 		t.Fatalf("delete primary thread: %v", err)
 	}
@@ -1135,6 +1136,72 @@ func TestCodeSessionWorkerEndpointsPublishEvents(t *testing.T) {
 		t.Fatalf("primary thread status after details-only update = %+v, want running", threads.Data)
 	}
 
+	sessionRecord := mustSessionRecord(t, app, session.ID)
+	filesystem, err := app.db.GetFilestoreFilesystemBySession(
+		context.Background(),
+		sessionRecord.WorkspaceUUID,
+		sessionRecord.ExternalID,
+	)
+	if err != nil {
+		t.Fatalf("load Session filesystem for output projection: %v", err)
+	}
+	outputContent := []byte("worker output")
+	outputKey := "session-output/" + strings.TrimPrefix(session.ID, "sesn_")
+	if _, err := app.store.Upload(
+		context.Background(),
+		outputKey,
+		bytes.NewReader(outputContent),
+		storage.UploadOptions{Size: int64(len(outputContent)), ContentType: "text/plain"},
+	); err != nil {
+		t.Fatalf("upload output fixture: %v", err)
+	}
+	if _, err := app.db.PutFilestoreFile(context.Background(), db.PutFilestoreFileInput{
+		WorkspaceUUID:  sessionRecord.WorkspaceUUID,
+		FilesystemUUID: filesystem.UUID,
+		Path:           "/outputs/worker-output.txt",
+		Blob: db.FilestoreFileBlob{
+			SizeBytes:    int64(len(outputContent)),
+			MediaType:    "text/plain",
+			Downloadable: true,
+			MD5:          "00000000000000000000000000000000",
+			SHA256:       strings.Repeat("a", 64),
+			S3Bucket:     app.store.Name(),
+			S3Key:        outputKey,
+		},
+	}); err != nil {
+		t.Fatalf("create output entry: %v", err)
+	}
+	runningFiles := listFiles(t, app, "scope_id="+session.ID)
+	var outputFile *metadataResponse
+	for index := range runningFiles.Data {
+		if runningFiles.Data[index].Filename == "worker-output.txt" {
+			outputFile = &runningFiles.Data[index]
+			break
+		}
+	}
+	if outputFile == nil {
+		t.Fatalf("scoped files while running = %+v, want worker output", runningFiles.Data)
+	}
+	if !outputFile.Downloadable {
+		t.Fatalf("output projection = %+v, want downloadable", *outputFile)
+	}
+	outputDownload := app.do(
+		t,
+		http.MethodGet,
+		"/v1/files/"+outputFile.ID+"/content?beta=true",
+		nil,
+		defaultTestKey,
+		true,
+		"",
+	)
+	defer outputDownload.Body.Close()
+	if outputDownload.StatusCode != http.StatusOK {
+		t.Fatalf("download output status = %d: %s", outputDownload.StatusCode, readAll(t, outputDownload.Body))
+	}
+	if got := readAll(t, outputDownload.Body); !bytes.Equal(got, outputContent) {
+		t.Fatalf("download output = %q, want %q", got, outputContent)
+	}
+
 	idleState := putCodeSessionWorkerState(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(workerEpoch)+`,"worker_status":"idle","external_metadata":{"pending_action":null}}`)
 	if idleState.Worker.WorkerStatus != "idle" || !rawMessageIsJSONNull(idleState.Worker.RequiresActionDetails) {
 		t.Fatalf("idle worker state = %+v, details=%s; want idle with cleared details", idleState.Worker, idleState.Worker.RequiresActionDetails)
@@ -1148,6 +1215,20 @@ func TestCodeSessionWorkerEndpointsPublishEvents(t *testing.T) {
 	threads = listSessionThreads(t, app, session.ID, defaultTestKey)
 	if len(threads.Data) != 1 || threads.Data[0].Status != "idle" {
 		t.Fatalf("primary thread status after idle = %+v, want idle", threads.Data)
+	}
+	afterIdleFiles := listFiles(t, app, "scope_id="+session.ID)
+	var outputFileAfterIdle *metadataResponse
+	for index := range afterIdleFiles.Data {
+		if afterIdleFiles.Data[index].Filename == "worker-output.txt" {
+			outputFileAfterIdle = &afterIdleFiles.Data[index]
+			break
+		}
+	}
+	if outputFileAfterIdle == nil {
+		t.Fatalf("scoped files after idle = %+v, want worker output", afterIdleFiles.Data)
+	}
+	if outputFileAfterIdle.ID != outputFile.ID {
+		t.Fatalf("output file id after idle = %q, want stable id %q", outputFileAfterIdle.ID, outputFile.ID)
 	}
 	readBackState := getCodeSessionWorkerReadStateResponse(t, app, codeSessionID, workerEpoch)
 	readBackMetadata := codeSessionWorkerReadExternalMetadata(t, readBackState)
@@ -1208,7 +1289,7 @@ func TestSessionEventsListHidesLegacyEnvManagerLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get api key: %v", err)
 	}
-	storedSession, err := app.db.GetSession(ctx, apiKey.WorkspaceID, session.ID)
+	storedSession, err := app.db.GetSession(ctx, apiKey.WorkspaceUUID.String(), session.ID)
 	if err != nil {
 		t.Fatalf("get stored session: %v", err)
 	}
@@ -1216,7 +1297,7 @@ func TestSessionEventsListHidesLegacyEnvManagerLog(t *testing.T) {
 	hiddenEventID := "sevt_legacy_env_manager_log_" + eventSuffix
 	visibleEventID := "sevt_visible_after_legacy_env_" + eventSuffix
 	now := time.Now().UTC()
-	if _, err := app.db.AppendSessionEvents(ctx, storedSession.WorkspaceID, storedSession.ExternalID, []db.SessionEvent{
+	if _, err := app.db.AppendSessionEvents(ctx, storedSession.WorkspaceUUID, storedSession.ExternalID, []db.SessionEvent{
 		{
 			UUID:        uuid.NewString(),
 			ExternalID:  hiddenEventID,
@@ -2345,7 +2426,7 @@ func TestCodeSessionWorkerEpochValidationRejectsInvalidValues(t *testing.T) {
 	assertError(t, resp, http.StatusBadRequest, "invalid_request_error")
 }
 
-func TestCodeSessionWorkerOTLPRejectsMissingEpoch(t *testing.T) {
+func TestCodeSessionWorkerOTLPAcceptsMissingEpochWithoutWorkerActivity(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-otlp-missing-epoch-bucket"))
 	defer app.close()
 
@@ -2355,11 +2436,33 @@ func TestCodeSessionWorkerOTLPRejectsMissingEpoch(t *testing.T) {
 	defer cleanupEnvironmentRows(t, app.db, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
-	_ = registerCodeSessionWorker(t, app, codeSessionID)
+	before, err := app.db.GetCodeSession(context.Background(), codeSessionID)
+	if err != nil {
+		t.Fatalf("load code session before OTLP: %v", err)
+	}
 
 	for _, suffix := range []string{"metrics", "logs"} {
 		resp := doCodeSessionWorkerOTLPRequest(t, app, codeSessionID, suffix, "", "application/x-protobuf", nil)
-		assertError(t, resp, http.StatusBadRequest, "invalid_request_error")
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("post epochless worker otlp/%s status = %d, want 200: %s", suffix, resp.StatusCode, readAll(t, resp.Body))
+		}
+		if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/x-protobuf") {
+			t.Fatalf("post epochless worker otlp/%s content-type = %q, want application/x-protobuf", suffix, contentType)
+		}
+		if body := readAll(t, resp.Body); len(body) != 0 {
+			t.Fatalf("post epochless worker otlp/%s body = %q, want empty protobuf response", suffix, string(body))
+		}
+	}
+
+	after, err := app.db.GetCodeSession(context.Background(), codeSessionID)
+	if err != nil {
+		t.Fatalf("load code session after OTLP: %v", err)
+	}
+	if after.CurrentWorkerEpoch != before.CurrentWorkerEpoch ||
+		!nullableTimeEqual(after.LastWorkerActivityAt, before.LastWorkerActivityAt) ||
+		!nullableTimeEqual(after.WorkerLeaseExpiresAt, before.WorkerLeaseExpiresAt) {
+		t.Fatalf("epochless OTLP changed worker ownership state: before=%+v after=%+v", before, after)
 	}
 }
 
@@ -2494,6 +2597,64 @@ func TestCodeSessionWorkerHeartbeatRejectsInvalidRequests(t *testing.T) {
 	assertError(t, resp, http.StatusUnauthorized, "authentication_error")
 }
 
+func TestCodeSessionWorkerHeartbeatReportsSandboxTimeoutFailure(t *testing.T) {
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-heartbeat-timeout-failure-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-heartbeat-timeout-failure-agent"}`)
+	defer cleanupAgentRows(t, app.db, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-worker-heartbeat-timeout-failure-env"}`)
+	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
+	putCodeSessionWorkerState(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(workerEpoch)+`,"worker_status":"running"}`)
+	app.sandboxTimeouts.setError(errors.New("provider unavailable"))
+
+	resp := doCodeSessionWorkerRequest(t, app, codeSessionID, "heartbeat", workerHeartbeatBody(codeSessionID, workerEpoch))
+	assertError(t, resp, http.StatusServiceUnavailable, "api_error")
+	calls := app.sandboxTimeouts.snapshotCalls()
+	if len(calls) != 1 {
+		t.Fatalf("sandbox timeout calls = %d, want 1", len(calls))
+	}
+}
+
+func TestCodeSessionWorkerHeartbeatSkipsSandboxTimeoutWhenNotRunning(t *testing.T) {
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-heartbeat-idle-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-heartbeat-idle-agent"}`)
+	defer cleanupAgentRows(t, app.db, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-worker-heartbeat-idle-env"}`)
+	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
+
+	beforeIdle, err := app.db.GetCodeSession(context.Background(), codeSessionID)
+	if err != nil {
+		t.Fatalf("load before idle heartbeat: %v", err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	idleExpiresAt := assertCodeSessionWorkerHeartbeat(t, app, codeSessionID, workerEpoch)
+	if beforeIdle.WorkerLeaseExpiresAt == nil || !idleExpiresAt.After(*beforeIdle.WorkerLeaseExpiresAt) {
+		t.Fatalf("idle heartbeat lease expiry = %s, want after %v", idleExpiresAt, beforeIdle.WorkerLeaseExpiresAt)
+	}
+	if calls := app.sandboxTimeouts.snapshotCalls(); len(calls) != 0 {
+		t.Fatalf("idle heartbeat sandbox timeout calls = %d, want 0", len(calls))
+	}
+
+	putCodeSessionWorkerState(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(workerEpoch)+`,"worker_status":"requires_action"}`)
+	time.Sleep(5 * time.Millisecond)
+	requiresActionExpiresAt := assertCodeSessionWorkerHeartbeat(t, app, codeSessionID, workerEpoch)
+	if !requiresActionExpiresAt.After(idleExpiresAt) {
+		t.Fatalf("requires-action heartbeat lease expiry = %s, want after %s", requiresActionExpiresAt, idleExpiresAt)
+	}
+	if calls := app.sandboxTimeouts.snapshotCalls(); len(calls) != 0 {
+		t.Fatalf("requires-action heartbeat sandbox timeout calls = %d, want 0", len(calls))
+	}
+}
+
 func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-heartbeat-lease-bucket"))
 	defer app.close()
@@ -2506,6 +2667,7 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
 	epoch1 := registerCodeSessionWorker(t, app, codeSessionID)
+	putCodeSessionWorkerState(t, app, codeSessionID, `{"worker_epoch":`+quoteJSON(epoch1)+`,"worker_status":"running"}`)
 	before, err := app.db.GetCodeSession(context.Background(), codeSessionID)
 	if err != nil {
 		t.Fatalf("load before heartbeat: %v", err)
@@ -2522,6 +2684,22 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	numberExpiresAt := assertCodeSessionWorkerHeartbeatBody(t, app, codeSessionID, `{"session_id":`+quoteJSON(codeSessionID)+`,"worker_epoch":`+epoch1+`}`)
 	if !numberExpiresAt.After(stringExpiresAt) {
 		t.Fatalf("number heartbeat lease expiry = %s, want after %s", numberExpiresAt, stringExpiresAt)
+	}
+	timeoutCalls := app.sandboxTimeouts.snapshotCalls()
+	if len(timeoutCalls) != 2 {
+		t.Fatalf("sandbox timeout calls = %d, want 2", len(timeoutCalls))
+	}
+	sandbox, err := app.db.GetRenewableEnvironmentSandboxForCodeSession(context.Background(), codeSessionID)
+	if err != nil {
+		t.Fatalf("load active sandbox for code session: %v", err)
+	}
+	if sandbox.ProviderSandboxID == nil {
+		t.Fatal("active sandbox provider id = nil")
+	}
+	for _, call := range timeoutCalls {
+		if call.sandboxID != *sandbox.ProviderSandboxID || call.timeout != app.cfg.E2B.SandboxTimeout {
+			t.Fatalf("sandbox timeout call = %+v, want sandbox %q timeout %s", call, *sandbox.ProviderSandboxID, app.cfg.E2B.SandboxTimeout)
+		}
 	}
 	after, err := app.db.GetCodeSession(context.Background(), codeSessionID)
 	if err != nil {
@@ -2540,6 +2718,9 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	}
 	resp := doCodeSessionWorkerRequest(t, app, codeSessionID, "heartbeat", workerHeartbeatBody(codeSessionID, "999"))
 	assertError(t, resp, http.StatusConflict, "conflict_error")
+	if calls := app.sandboxTimeouts.snapshotCalls(); len(calls) != 2 {
+		t.Fatalf("future epoch sandbox timeout calls = %d, want 2", len(calls))
+	}
 	afterFutureMismatch, err := app.db.GetCodeSession(context.Background(), codeSessionID)
 	if err != nil {
 		t.Fatalf("load after future mismatch heartbeat: %v", err)
@@ -2556,6 +2737,9 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	}
 	resp = doCodeSessionWorkerRequest(t, app, codeSessionID, "heartbeat", workerHeartbeatBody(codeSessionID, epoch1))
 	assertError(t, resp, http.StatusConflict, "conflict_error")
+	if calls := app.sandboxTimeouts.snapshotCalls(); len(calls) != 2 {
+		t.Fatalf("stale epoch sandbox timeout calls = %d, want 2", len(calls))
+	}
 	afterMismatch, err := app.db.GetCodeSession(context.Background(), codeSessionID)
 	if err != nil {
 		t.Fatalf("load after mismatch heartbeat: %v", err)
@@ -2570,6 +2754,9 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 		t.Fatalf("load grace lease record: %v", err)
 	}
 	assertCodeSessionWorkerHeartbeat(t, app, codeSessionID, epoch2)
+	if calls := app.sandboxTimeouts.snapshotCalls(); len(calls) != 3 {
+		t.Fatalf("grace heartbeat sandbox timeout calls = %d, want 3", len(calls))
+	}
 	graceAfter, err := app.db.GetCodeSession(context.Background(), codeSessionID)
 	if err != nil {
 		t.Fatalf("load after grace heartbeat: %v", err)
@@ -2590,6 +2777,9 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	}
 	resp = doCodeSessionWorkerRequest(t, app, codeSessionID, "heartbeat", workerHeartbeatBody(codeSessionID, epoch2))
 	assertError(t, resp, http.StatusGone, "session_expired")
+	if calls := app.sandboxTimeouts.snapshotCalls(); len(calls) != 3 {
+		t.Fatalf("expired heartbeat sandbox timeout calls = %d, want 3", len(calls))
+	}
 	resp = doCodeSessionWorkerOTLPRequest(t, app, codeSessionID, "metrics", epoch2, "application/x-protobuf", nil)
 	assertError(t, resp, http.StatusGone, "session_expired")
 	afterExpiredHeartbeat, err := app.db.GetCodeSession(context.Background(), codeSessionID)
@@ -3546,8 +3736,8 @@ func codeSessionIngressTokenNoFatal(app *testApp, codeSessionID string) (string,
 	}
 	credentialContext, err := app.db.GetCodeSessionCredentialContextForIssue(
 		ctx,
-		record.OrganizationID,
-		record.WorkspaceID,
+		record.OrganizationUUID,
+		record.WorkspaceUUID,
 		codeSessionID,
 	)
 	if err != nil {
@@ -4236,15 +4426,15 @@ func containsSession(sessions []sessionAPIResponse, id string) bool {
 
 func createEnvironmentKeyForTest(t *testing.T, app *testApp, envID, key string) string {
 	t.Helper()
-	record, err := app.db.GetEnvironment(context.Background(), getDefaultDBIDs(t, app.db).WorkspaceID, envID)
+	record, err := app.db.GetEnvironment(context.Background(), getDefaultDBIDs(t, app.db).WorkspaceUUID, envID)
 	if err != nil {
 		t.Fatalf("get environment for key: %v", err)
 	}
 	if err := app.db.CreateEnvironmentKey(context.Background(), db.EnvironmentKey{
 		ExternalID:            "envkey_" + strings.ReplaceAll(envID, "-", "_"),
-		OrganizationID:        record.OrganizationID,
-		WorkspaceID:           record.WorkspaceID,
-		EnvironmentID:         record.ID,
+		OrganizationUUID:      record.OrganizationUUID,
+		WorkspaceUUID:         record.WorkspaceUUID,
+		EnvironmentUUID:       record.UUID,
 		EnvironmentExternalID: record.ExternalID,
 	}, auth.HashAPIKey(key)); err != nil {
 		t.Fatalf("create environment key: %v", err)

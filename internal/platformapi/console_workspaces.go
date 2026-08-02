@@ -26,13 +26,13 @@ func handleArchiveConsoleWorkspace(store OrganizationStore) http.HandlerFunc {
 			internalError(w, "failed to archive workspace")
 			return
 		}
-		workspaceID, ok := consoleWorkspaceIDFromRequest(w, r, workspaceLister, orgUUID)
+		workspaceScope, ok := consoleWorkspaceScopeFromRequest(w, r, workspaceLister, orgUUID)
 		if !ok {
 			return
 		}
 		// The default workspace (literal "default") is the Anthropic-equivalent
 		// fallback workspace and must always remain usable; it cannot be archived.
-		if workspaceID == defaultConsoleWorkspaceID {
+		if workspaceScope.DisplayID == defaultConsoleWorkspaceID {
 			writeJSON(w, http.StatusConflict, map[string]any{
 				"error":   "cannot_archive_default_workspace",
 				"message": "the default workspace cannot be archived",
@@ -43,8 +43,10 @@ func handleArchiveConsoleWorkspace(store OrganizationStore) http.HandlerFunc {
 		// session is bound to. This is the backend counterpart of the front-end
 		// guard that disables archiving the active workspace.
 		if principal, ok := auth.PrincipalFromContext(r.Context()); ok {
-			principalWorkspace := strings.TrimSpace(principal.WorkspaceExternalID)
-			if principalWorkspace != "" && strings.EqualFold(principalWorkspace, workspaceID) {
+			principalWorkspaceUUID := strings.TrimSpace(principal.WorkspaceUUID)
+			principalWorkspaceID := strings.TrimSpace(principal.WorkspaceExternalID)
+			if (principalWorkspaceUUID != "" && principalWorkspaceUUID == workspaceScope.UUID) ||
+				(principalWorkspaceID != "" && strings.EqualFold(principalWorkspaceID, workspaceScope.DisplayID)) {
 				writeJSON(w, http.StatusConflict, map[string]any{
 					"error":   "cannot_archive_current_workspace",
 					"message": "archive the workspace from a different workspace context",
@@ -52,7 +54,7 @@ func handleArchiveConsoleWorkspace(store OrganizationStore) http.HandlerFunc {
 				return
 			}
 		}
-		workspace, err := workspaceArchiver.ArchiveConsoleWorkspace(r.Context(), orgUUID, workspaceID)
+		workspace, err := workspaceArchiver.ArchiveConsoleWorkspace(r.Context(), orgUUID, workspaceScope.UUID)
 		if err != nil {
 			if errors.Is(err, platform.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, map[string]any{"error": "workspace not found"})

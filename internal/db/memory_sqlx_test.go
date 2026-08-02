@@ -12,11 +12,11 @@ func TestInsertMemoryVersionQueryUsesSQLXNamedParameters(t *testing.T) {
 	arguments := map[string]any{
 		"uuid":                           "11111111-1111-4111-8111-111111111111",
 		"external_id":                    "memver_test",
-		"organization_id":                int64(1),
-		"workspace_id":                   int64(2),
-		"memory_store_id":                int64(3),
+		"organization_uuid":              "00000000-0000-0000-0000-000000000001",
+		"workspace_uuid":                 "00000000-0000-0000-0000-000000000002",
+		"memory_store_uuid":              "00000000-0000-0000-0000-000000000003",
 		"memory_store_external_id":       "memstore_test",
-		"memory_id":                      int64(4),
+		"memory_uuid":                    "00000000-0000-0000-0000-000000000004",
 		"memory_external_id":             "mem_test",
 		"operation":                      "created",
 		"path":                           "/test.md",
@@ -25,7 +25,7 @@ func TestInsertMemoryVersionQueryUsesSQLXNamedParameters(t *testing.T) {
 		"s3_bucket":                      "bucket",
 		"s3_key":                         "key",
 		"created_by_actor_type":          "api_key",
-		"created_by_api_key_id":          int64(5),
+		"created_by_api_key_uuid":        "00000000-0000-0000-0000-000000000005",
 		"created_by_api_key_external_id": "sk-ant-test",
 		"created_by_session_id":          nil,
 		"created_by_user_id":             nil,
@@ -56,26 +56,29 @@ func TestMemoryColumnListsSupportStructScan(t *testing.T) {
 		{
 			name:    "memory store",
 			columns: memoryStoreColumns(),
-			want:    []string{"CAST(uuid AS text) as uuid", "metadata", "archived_at"},
+			want:    []string{"uuid", "metadata", "archived_at"},
 		},
 		{
 			name:    "memory",
 			columns: memoryColumns(),
 			want: []string{
-				"coalesce(current_version_id, 0) as current_version_id",
+				"current_version_uuid",
 				"coalesce(current_version_external_id, '') as current_version_external_id",
 			},
 		},
 		{
 			name:    "memory version",
 			columns: memoryVersionColumns(),
-			want:    []string{"CAST(uuid AS text) as uuid", "redacted_by_actor_type", "created_at"},
+			want:    []string{"uuid", "redacted_by_actor_type", "created_at"},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if strings.Contains(test.columns, "::") {
 				t.Fatalf("columns contain PostgreSQL shorthand cast: %q", test.columns)
+			}
+			if strings.Contains(strings.ToLower(test.columns), "cast(") {
+				t.Fatalf("typed UUID columns contain SQL casts: %q", test.columns)
 			}
 			for _, fragment := range test.want {
 				if !strings.Contains(test.columns, fragment) {

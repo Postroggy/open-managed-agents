@@ -2,39 +2,10 @@ package db
 
 import (
 	"context"
-	"errors"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/superduck-ai/open-managed-agents/internal/platform"
 )
-
-type consoleWorkspaceRowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanConsoleWorkspace(row consoleWorkspaceRowScanner) (platform.ConsoleWorkspace, error) {
-	var scanned consoleWorkspaceRow
-	if err := row.Scan(
-		&scanned.UUID,
-		&scanned.OrgUUID,
-		&scanned.Name,
-		&scanned.DisplayColor,
-		&scanned.Color,
-		&scanned.DataResidency,
-		&scanned.ExternalKeyID,
-		&scanned.Tags,
-		&scanned.ArchivedAt,
-		&scanned.CreatedAt,
-		&scanned.UpdatedAt,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return platform.ConsoleWorkspace{}, platform.ErrNotFound
-		}
-		return platform.ConsoleWorkspace{}, err
-	}
-	return scanned.workspace()
-}
 
 // ArchiveConsoleWorkspace soft-deletes a console workspace by setting its
 // archived_at timestamp and, in the same transaction, cascading the archive to
@@ -47,68 +18,69 @@ func scanConsoleWorkspace(row consoleWorkspaceRowScanner) (platform.ConsoleWorks
 // supplied (the "default" alias or the workspace's real external_id), and such
 // a request surfaces as ErrNotFound. A missing workspace also yields ErrNotFound.
 func (d *DB) ArchiveConsoleWorkspace(ctx context.Context, orgUUID, workspaceID string) (platform.ConsoleWorkspace, error) {
-	if d == nil || d.Pool == nil || strings.TrimSpace(orgUUID) == "" || strings.TrimSpace(workspaceID) == "" {
+	if d == nil || d.sql == nil || strings.TrimSpace(orgUUID) == "" || strings.TrimSpace(workspaceID) == "" {
 		return platform.ConsoleWorkspace{}, ErrNotFound
 	}
-	tx, err := d.Pool.Begin(ctx)
+	tx, err := d.sql.BeginTxx(ctx, nil)
 	if err != nil {
 		return platform.ConsoleWorkspace{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback() }()
 
-	workspace, err := scanConsoleWorkspace(tx.QueryRow(ctx, `
+	workspace, err := getConsoleWorkspaceSQLX(ctx, tx, `
 		update workspaces as w
-		   set archived_at = coalesce(w.archived_at, now()),
-		       updated_at = now()
-		  from organizations o
-		 where w.organization_id = o.id
-		   and (o.external_id = $1 or o.uuid::text = $1)
-		   and w.external_id = $2
-		   and lower(coalesce(w.name, '')) <> 'default'
+		set archived_at = coalesce(w.archived_at, now()),
+			updated_at = now()
+		where w.organization_uuid = :organization_uuid
+			and (w.uuid = :workspace_uuid or w.external_id = :workspace_external_id)
+			and lower(coalesce(w.name, '')) <> 'default'
 		returning
+			w.uuid,
 			w.external_id,
-			o.uuid::text,
+			w.organization_uuid AS org_uuid,
 			w.name,
-			w.display_color,
-			w.display_color,
+			w.display_color AS display_color,
+			w.display_color AS color,
 			w.data_residency,
 			w.external_key_id,
 			w.tags,
 			w.archived_at,
 			w.created_at,
 			w.updated_at
-	`, orgUUID, workspaceID))
+	`, map[string]any{
+		"organization_uuid":     dbUUID(orgUUID),
+		"workspace_uuid":        tryParseDBUUIDIdentifier(workspaceID),
+		"workspace_external_id": strings.TrimSpace(workspaceID),
+	})
 	if err != nil {
 		return platform.ConsoleWorkspace{}, err
 	}
 
-	if _, err := tx.Exec(ctx, `
+	if _, err := namedExecContext(ctx, tx, `
 		update console_api_keys
-		   set status = 'archived',
-		       archived_at = coalesce(archived_at, now()),
-		       updated_at = now()
-		 where org_uuid = $1 and workspace_id = $2
-	`, orgUUID, workspaceID); err != nil {
+		set status = 'archived',
+			archived_at = coalesce(archived_at, now()),
+			updated_at = now()
+		where organization_uuid = :organization_uuid
+			and workspace_uuid = :workspace_uuid
+	`, map[string]any{
+		"organization_uuid": dbUUID(orgUUID),
+		"workspace_uuid":    dbUUID(workspace.UUID),
+	}); err != nil {
 		return platform.ConsoleWorkspace{}, err
 	}
 
-	if _, err := tx.Exec(ctx, `
+	if _, err := namedExecContext(ctx, tx, `
 		update api_keys
-		   set status = 'archived',
-		       updated_at = now()
-		 where status = 'active'
-		   and workspace_id in (
-		       select w.id
-		         from workspaces w
-		         join organizations o on o.id = w.organization_id
-		        where (o.external_id = $1 or o.uuid::text = $1)
-		          and w.external_id = $2
-		   )
-	`, orgUUID, workspaceID); err != nil {
+		set status = 'archived',
+			updated_at = now()
+		where status = 'active'
+			and workspace_uuid = :workspace_uuid
+	`, map[string]any{"workspace_uuid": dbUUID(workspace.UUID)}); err != nil {
 		return platform.ConsoleWorkspace{}, err
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	if err := tx.Commit(); err != nil {
 		return platform.ConsoleWorkspace{}, err
 	}
 	return workspace, nil

@@ -17,10 +17,12 @@ func TestConsoleWorkspaceArchive(t *testing.T) {
 	cookies := app.platformLoginCookies(t, "console-workspace-archive@example.com")
 
 	var orgUUID string
-	var orgID int64
 	if err := app.db.Pool.QueryRow(context.Background(), `
-		select uuid::text, id from organizations where external_id = 'org_default'
-	`).Scan(&orgUUID, &orgID); err != nil {
+		select o.uuid::text
+		from organizations o
+		join workspaces w on w.organization_uuid = o.uuid
+		where w.external_id = 'workspace_default'
+	`).Scan(&orgUUID); err != nil {
 		t.Fatalf("load default organization: %v", err)
 	}
 	base := "/api/console/organizations/" + orgUUID
@@ -41,9 +43,9 @@ func TestConsoleWorkspaceArchive(t *testing.T) {
 		// own-workspace guard, which the alias case already covers.
 		var defaultWSExternalID string
 		if err := app.db.Pool.QueryRow(context.Background(), `
-			select external_id from workspaces where organization_id = $1 and name = 'default'
+			select external_id from workspaces where organization_uuid = $1 and name = 'default'
 			limit 1
-		`, orgID).Scan(&defaultWSExternalID); err != nil {
+		`, orgUUID).Scan(&defaultWSExternalID); err != nil {
 			t.Fatalf("load default workspace external_id: %v", err)
 		}
 		_, err := app.db.ArchiveConsoleWorkspace(context.Background(), orgUUID, defaultWSExternalID)
@@ -70,8 +72,8 @@ func TestConsoleWorkspaceArchive(t *testing.T) {
 	})
 
 	t.Run("archive is isolated by organization", func(t *testing.T) {
-		otherOrgID := seedArchiveOrganization(t, app, "org_archive_isolation_"+uniqueAdminSuffix())
-		otherWS := seedArchiveTargetWorkspace(t, app, otherOrgID, "Other Org WS")
+		otherOrgUUID := seedArchiveOrganization(t, app, "Other Org")
+		otherWS := seedArchiveTargetWorkspace(t, app, otherOrgUUID, "Other Org WS")
 		resp := app.doPlatformConsole(t, http.MethodPost, base+"/workspaces/"+otherWS+"/archive", nil, cookies)
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound {
@@ -80,12 +82,11 @@ func TestConsoleWorkspaceArchive(t *testing.T) {
 	})
 
 	t.Run("cannot archive current workspace", func(t *testing.T) {
-		myWS := seedArchiveTargetWorkspace(t, app, orgID, "My Current WS")
-		var myWSID int64
+		myWS := seedArchiveTargetWorkspace(t, app, orgUUID, "My Current WS")
 		var myWSUUID string
 		if err := app.db.Pool.QueryRow(context.Background(), `
-			select id, uuid::text from workspaces where external_id = $1
-		`, myWS).Scan(&myWSID, &myWSUUID); err != nil {
+			select uuid::text from workspaces where external_id = $1
+		`, myWS).Scan(&myWSUUID); err != nil {
 			t.Fatalf("load new workspace: %v", err)
 		}
 
@@ -98,13 +99,13 @@ func TestConsoleWorkspaceArchive(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get session: %v", err)
 		}
-		origWSID, origWSUUID, origWSExternal := session.WorkspaceID, session.WorkspaceUUID, session.WorkspaceExternalID
-		session.WorkspaceID, session.WorkspaceUUID, session.WorkspaceExternalID = myWSID, myWSUUID, myWS
+		origWSUUID, origWSExternal := session.WorkspaceUUID, session.WorkspaceExternalID
+		session.WorkspaceUUID, session.WorkspaceExternalID = myWSUUID, myWS
 		if err := app.sessions.Save(context.Background(), sessionKey, session); err != nil {
 			t.Fatalf("bind session to current workspace: %v", err)
 		}
 		defer func() {
-			session.WorkspaceID, session.WorkspaceUUID, session.WorkspaceExternalID = origWSID, origWSUUID, origWSExternal
+			session.WorkspaceUUID, session.WorkspaceExternalID = origWSUUID, origWSExternal
 			if err := app.sessions.Save(context.Background(), sessionKey, session); err != nil {
 				t.Fatalf("restore session workspace: %v", err)
 			}
@@ -122,7 +123,7 @@ func TestConsoleWorkspaceArchive(t *testing.T) {
 		}
 	})
 
-	targetWS := seedArchiveTargetWorkspace(t, app, orgID, "Archive Target")
+	targetWS := seedArchiveTargetWorkspace(t, app, orgUUID, "Archive Target")
 	keyID := seedConsoleAPIKeyForWorkspace(t, app, orgUUID, targetWS, "target key")
 	liveKeyHash := seedLiveAPIKeyForWorkspace(t, app, targetWS)
 
@@ -182,28 +183,27 @@ func TestConsoleWorkspaceArchive(t *testing.T) {
 	})
 }
 
-func seedArchiveOrganization(t *testing.T, app *testApp, externalID string) int64 {
+func seedArchiveOrganization(t *testing.T, app *testApp, name string) string {
 	t.Helper()
-	var id int64
+	var orgUUID string
 	if err := app.db.Pool.QueryRow(context.Background(), `
-		insert into organizations (external_id, name)
-		values ($1, $1)
-		on conflict (external_id) do update set name = excluded.name
-		returning id
-	`, externalID).Scan(&id); err != nil {
+		insert into organizations (name)
+		values ($1)
+		returning uuid::text
+	`, name).Scan(&orgUUID); err != nil {
 		t.Fatalf("seed archive organization: %v", err)
 	}
-	return id
+	return orgUUID
 }
 
-func seedArchiveTargetWorkspace(t *testing.T, app *testApp, orgID int64, name string) string {
+func seedArchiveTargetWorkspace(t *testing.T, app *testApp, orgUUID string, name string) string {
 	t.Helper()
 	suffix := uniqueAdminSuffix()
 	externalID := "ws_archive_" + suffix
 	if _, err := app.db.Pool.Exec(context.Background(), `
-		insert into workspaces (external_id, organization_id, name)
+		insert into workspaces (external_id, organization_uuid, name)
 		values ($1, $2, $3)
-	`, externalID, orgID, name+" "+suffix); err != nil {
+	`, externalID, orgUUID, name+" "+suffix); err != nil {
 		t.Fatalf("seed archive target workspace: %v", err)
 	}
 	return externalID
@@ -211,15 +211,23 @@ func seedArchiveTargetWorkspace(t *testing.T, app *testApp, orgID int64, name st
 
 func seedConsoleAPIKeyForWorkspace(t *testing.T, app *testApp, orgUUID, workspaceExternalID, name string) string {
 	t.Helper()
-	externalID := "cak_archive_" + uniqueAdminSuffix()
-	if _, err := app.db.Pool.Exec(context.Background(), `
-		insert into console_api_keys (external_id, api_key_uuid, org_uuid, workspace_id, name, key_prefix, key_suffix, key_hash, status)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, 'active')
-	`, externalID, "akuuid_"+externalID, orgUUID, workspaceExternalID, name, "sk-ant-", "ARCH",
-		auth.HashAPIKey("secret-"+externalID)); err != nil {
+	var workspaceUUID string
+	if err := app.db.Pool.QueryRow(context.Background(), `
+		select uuid::text from workspaces
+		where organization_uuid = $1 and external_id = $2
+	`, orgUUID, workspaceExternalID).Scan(&workspaceUUID); err != nil {
+		t.Fatalf("load console api key workspace: %v", err)
+	}
+	created, err := app.db.CreateConsoleAPIKey(context.Background(), platform.CreateConsoleAPIKeyInput{
+		OrgUUID:            orgUUID,
+		WorkspaceUUID:      workspaceUUID,
+		WorkspaceDisplayID: workspaceExternalID,
+		Name:               name,
+	})
+	if err != nil {
 		t.Fatalf("seed console api key for workspace: %v", err)
 	}
-	return externalID
+	return created.APIKey.ID
 }
 
 // seedLiveAPIKeyForWorkspace seeds a row in api_keys, the table /v1 request
@@ -231,8 +239,8 @@ func seedLiveAPIKeyForWorkspace(t *testing.T, app *testApp, workspaceExternalID 
 	externalID := "ak_archive_" + uniqueAdminSuffix()
 	keyHash := auth.HashAPIKey("secret-" + externalID)
 	tag, err := app.db.Pool.Exec(context.Background(), `
-		insert into api_keys (external_id, workspace_id, key_hash, status)
-		select $1, w.id, $2, 'active'
+		insert into api_keys (external_id, workspace_uuid, key_hash, status)
+		select $1, w.uuid, $2, 'active'
 		  from workspaces w
 		 where w.external_id = $3
 	`, externalID, keyHash, workspaceExternalID)
