@@ -17,7 +17,7 @@ Anthropic Console 中，归档工作区是不可逆的软删除：工作区立�
 - `workspaces.archived_at timestamptz`：非空即归档。
 - `console_api_keys.archived_at timestamptz`：随工作区归档一并置位。
 
-`console_api_keys.workspace_id` 存储工作区的 `external_id`（如 `default`），级联按 `org_uuid` + `workspace_id` 定位。归档写使用 `coalesce(archived_at, now())`，因此对已归档工作区重复归档是幂等的：`archived_at` 不会被改写。
+`workspaces.uuid` 是内部稳定工作区标识，`external_id` 是兼容 API 的展示标识，`organization_uuid` 是租户边界。`console_api_keys.organization_uuid` + `workspace_uuid` 和 `api_keys.workspace_uuid` 分别定位控制台密钥与实际鉴权密钥。归档写使用 `coalesce(archived_at, now())`，因此对已归档工作区重复归档是幂等的：`archived_at` 不会被改写。
 
 ## 状态机与级联
 
@@ -42,10 +42,11 @@ sequenceDiagram
     UI->>H: POST /workspaces/{id}/archive
     H->>H: 校验 default / current workspace
     H->>DB: ArchiveConsoleWorkspace(orgUUID, id)
-    DB->>DB: BEGIN tx
+    DB->>DB: BEGIN sqlx tx
     DB->>WS: UPDATE archived_at = coalesce(archived_at, now())
     WS-->>DB: returning workspace
-    DB->>KEY: UPDATE archived_at = coalesce(archived_at, now()) WHERE org_uuid AND workspace_id
+    DB->>KEY: UPDATE console_api_keys WHERE organization_uuid AND workspace_uuid
+    DB->>KEY: UPDATE api_keys status = archived WHERE workspace_uuid
     DB->>DB: COMMIT
     DB-->>H: ConsoleWorkspace(archived_at)
     H-->>UI: 200 OK
@@ -57,26 +58,26 @@ sequenceDiagram
 
 | 场景 | 后端 | 前端 |
 |------|------|------|
-| `default` 别名 | handler `id == "default"` → 409 `cannot_archive_default_workspace` | DropdownMenu 归档项 disabled |
+| `default` 别名 | handler `DisplayID == "default"` → 409 `cannot_archive_default_workspace` | DropdownMenu 归档项 disabled |
 | 默认工作区（真实 external_id） | DB 层 `WHERE name <> 'default'` 排除，0 行 → `ErrNotFound` → 404 | 列表过滤默认工作区，前端不可达 |
-| 当前会话绑定的工作区 | handler `principal.WorkspaceExternalID == id` → 409 `cannot_archive_current_workspace` | `workspace.id === activeWorkspaceId` 时归档项 disabled |
+| 当前会话绑定的工作区 | handler 比较 principal 的 workspace UUID 或 external ID → 409 `cannot_archive_current_workspace` | `workspace.id === activeWorkspaceId` 时归档项 disabled |
 
-默认工作区是兼容 Anthropic 的回退工作区，永远不可归档。`workspaces` 表的 `(organization_id, name)` 唯一约束保证每个组织只有一个 `name = 'default'` 的工作区，因此 DB 层 `WHERE lower(coalesce(name, '')) <> 'default'` 精确兜底：即便调用方绕过 handler 的别名校验、直接用默认工作区的真实 external_id 调用，UPDATE 也命中 0 行而返回 `ErrNotFound`（404）。handler 的别名校验仅用于对最常见的 `"default"` 调用给出明确的 409 语义。
+默认工作区是兼容 Anthropic 的回退工作区，永远不可归档。`workspaces` 表的 `(organization_uuid, name)` 唯一约束保证每个组织只有一个 `name = 'default'` 的工作区，因此 DB 层 `WHERE lower(coalesce(name, '')) <> 'default'` 精确兜底：即便调用方绕过 handler 的别名校验、直接用默认工作区的真实 `external_id` 或 UUID 调用，UPDATE 也命中 0 行而返回 `ErrNotFound`（404）。handler 的别名校验仅用于对最常见的 `"default"` 调用给出明确的 409 语义。
 
 前端禁用是为了避免用户触发必败请求；后端校验是权威防线，防止绕过 UI 直接调用 API 造成自锁——归档当前工作区后，会话绑定的 API key 会立即被吊销。
 
 ## 包职责
 
 - `internal/db/console_workspaces.go`
-  - `ArchiveConsoleWorkspace(ctx, orgUUID, workspaceID)` 在单个事务内更新 `workspaces.archived_at` 并级联更新 `console_api_keys.archived_at`。
-  - UPDATE 的 WHERE 子句带 `lower(coalesce(name, '')) <> 'default'`，把"默认工作区不可归档"作为写入路径不变量，覆盖调用方传别名或真实 external_id 的所有路径。
-  - `returning` 列顺序与 `console_api_keys.go` 的 `scanConsoleWorkspace` 对齐，复用既有 scan 辅助函数；本功能不改动 `console_api_keys.go`。
+  - `ArchiveConsoleWorkspace(ctx, orgUUID, workspaceID)` 在单个 `sqlx` 事务内按 `organization_uuid` 定位工作区，兼容 workspace UUID 与 external ID 输入。
+  - UPDATE 的 WHERE 子句带 `lower(coalesce(name, '')) <> 'default'`，把"默认工作区不可归档"作为写入路径不变量；随后按稳定 workspace UUID 级联更新 `console_api_keys` 和实际鉴权用的 `api_keys`。
+  - `returning` 结果复用已有命名 SQLX row mapping，所有事务 SQL 使用命名参数和 UUID 类型边界。
 - `internal/platformapi/console_workspaces.go`
-  - `handleArchiveConsoleWorkspace` 负责禁归档校验（default / current）、`404`/`409` 映射与响应。
+  - `handleArchiveConsoleWorkspace` 先通过 `WorkspaceScope` 将路由中的 display ID 或 UUID 解析为稳定 UUID，负责禁归档校验（default / current）、`404`/`409` 映射与响应。
 - `internal/platformapi/platform_backend_routes.go`
   - 归档路由挂在已有的 `RegisterConsoleOrganizationWorkspaceRoutes`（workspace 路由的独立入口，`server.go` 已在调用），与 `r.Get("/workspaces", ...)` 同处。
 - `internal/platformapi/console_api_keys.go` 与 `internal/db/console_api_keys.go`
-  - 零改动：归档功能不夹带与之无关的 select 去重或 handler 搬迁，此类重构另行开 PR。
+  - 提供 `WorkspaceScope`、console workspace row mapping 和 console API key schema；归档复用这些边界，不重新引入旧的 identity 列。
 
 ## API 契约
 
@@ -87,7 +88,7 @@ POST /api/console/organizations/{orgUuid}/workspaces/{workspaceId}/archive
 | 状态码 | 含义 |
 |--------|------|
 | 200 | 归档成功（含幂等重试），返回带 `archived_at` 的 workspace |
-| 404 | 工作区不存在、不属于该组织（组织隔离），或默认工作区按真实 external_id 归档（DB 层不变量） |
+| 404 | 工作区不存在、不属于该组织（组织隔离），或默认工作区按真实 external_id/UUID 归档（DB 层不变量） |
 | 409 | 目标是 `default` 别名，或当前会话绑定的工作区 |
 
 归档不要求请求体。
@@ -105,6 +106,7 @@ POST /api/console/organizations/{orgUuid}/workspaces/{workspaceId}/archive
 - 未知工作区 → 404。
 - 组织隔离（用 A 组织凭证归档 B 组织工作区 → 404）。
 - 归档成功并级联吊销 `console_api_keys`（断言 key 的 `archived_at` 非空）。
+- 归档同时吊销 `api_keys`，使已归档工作区的实际鉴权立即失效。
 - 重复归档幂等（`archived_at` 不变）。
 
 验证命令：
