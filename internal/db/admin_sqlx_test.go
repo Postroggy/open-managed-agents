@@ -2,66 +2,63 @@ package db
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-func TestAppendAdminCursorFilterBindsNamedParameters(t *testing.T) {
-	cursorTime := time.Date(2026, time.July, 23, 10, 30, 0, 0, time.UTC)
-	arguments := map[string]any{
-		"organization_id": int64(42),
-		"limit":           11,
-	}
+func TestAppendAdminCursorFilterBuildsBeforeCondition(t *testing.T) {
+	cursorTime := time.Date(2026, time.July, 23, 11, 0, 0, 0, time.UTC)
+	organizationUUID := uuid.MustParse("99999999-9999-4999-8999-999999999999")
+	cursorUUID := uuid.MustParse("77777777-7777-4777-8777-777777777777")
+	arguments := map[string]any{}
 	query := appendCursorFilter(
-		adminAPIKeySelectSQL()+` where w.organization_id = :organization_id`,
+		"select uuid from users where organization_uuid = :organization_uuid",
 		arguments,
-		"ak.created_at",
-		"apikey_after",
+		"added_at",
 		"",
-		&AdminCursor{CreatedAt: cursorTime, ID: 99},
+		"user_before",
+		&pagePosition{CreatedAt: cursorTime, UUID: cursorUUID},
 	)
-	query += " order by ak.created_at desc, ak.id desc limit :limit"
+	arguments["organization_uuid"] = organizationUUID
 
 	boundQuery, values, err := bindNamed(postgresRebinder{}, query, arguments)
 	if err != nil {
 		t.Fatalf("bindNamed() error = %v", err)
 	}
-	wantQuery := adminAPIKeySelectSQL() + ` where w.organization_id = $1` +
-		" and (ak.created_at < $2 or (ak.created_at = $3 and ak.id < $4))" +
-		" order by ak.created_at desc, ak.id desc limit $5"
+	wantQuery := "select uuid from users where organization_uuid = $1" +
+		" and (added_at > $2 or (added_at = $3 and uuid > $4))"
 	if boundQuery != wantQuery {
 		t.Fatalf("bindNamed() query = %q, want %q", boundQuery, wantQuery)
 	}
-	wantValues := []any{int64(42), cursorTime, cursorTime, int64(99), 11}
+	wantValues := []any{
+		organizationUUID,
+		cursorTime,
+		cursorTime,
+		cursorUUID,
+	}
 	if !reflect.DeepEqual(values, wantValues) {
 		t.Fatalf("bindNamed() values = %#v, want %#v", values, wantValues)
 	}
 }
 
-func TestAppendAdminCursorFilterBuildsBeforeCondition(t *testing.T) {
-	cursorTime := time.Date(2026, time.July, 23, 11, 0, 0, 0, time.UTC)
-	arguments := map[string]any{}
-	query := appendCursorFilter(
-		"select id from users where organization_id = :organization_id",
-		arguments,
-		"added_at",
-		"",
-		"user_before",
-		&AdminCursor{CreatedAt: cursorTime, ID: 7},
-	)
-	arguments["organization_id"] = int64(9)
-
-	boundQuery, values, err := bindNamed(postgresRebinder{}, query, arguments)
+func TestGetAdminOrganizationQueryUsesUUID(t *testing.T) {
+	organizationUUID := uuid.MustParse("22222222-2222-4222-8222-222222222222")
+	query, arguments, err := bindNamed(postgresRebinder{}, getAdminOrganizationQuery, map[string]any{
+		"organization_uuid": organizationUUID,
+	})
 	if err != nil {
 		t.Fatalf("bindNamed() error = %v", err)
 	}
-	wantQuery := "select id from users where organization_id = $1" +
-		" and (added_at > $2 or (added_at = $3 and id > $4))"
-	if boundQuery != wantQuery {
-		t.Fatalf("bindNamed() query = %q, want %q", boundQuery, wantQuery)
+	if len(arguments) != 1 || arguments[0] != organizationUUID {
+		t.Fatalf("bindNamed() arguments = %#v, want organization UUID", arguments)
 	}
-	wantValues := []any{int64(9), cursorTime, cursorTime, int64(7)}
-	if !reflect.DeepEqual(values, wantValues) {
-		t.Fatalf("bindNamed() values = %#v, want %#v", values, wantValues)
+	if want := "where uuid = $1"; !strings.Contains(query, want) {
+		t.Fatalf("bound query = %q, want %q", query, want)
+	}
+	if strings.Contains(query, "CAST(") {
+		t.Fatalf("bound query contains UUID cast ceremony: %q", query)
 	}
 }

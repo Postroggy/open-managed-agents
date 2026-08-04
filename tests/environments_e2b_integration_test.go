@@ -53,7 +53,7 @@ func TestE2BEnvironmentRunnerIntegration(t *testing.T) {
 		cfg.E2B.SandboxTimeout = time.Minute
 	}
 
-	database, err := db.Open(ctx, cfg)
+	database, err := db.Open(ctx, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestE2BEnvironmentRunnerIntegration(t *testing.T) {
 
 	template := strings.TrimSpace(cfg.E2B.Template)
 	if template == "" {
-		template = "claude-code-interpreter"
+		template = config.DefaultE2BTemplate
 	}
 	envID, err := ids.New("env_")
 	if err != nil {
