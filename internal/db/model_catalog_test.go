@@ -77,7 +77,7 @@ func TestModelCatalogSnapshotSQLXRoundTripAndFailurePreservesSuccess(t *testing.
 	if err != nil {
 		t.Skipf("PostgreSQL integration test requires config: %v", err)
 	}
-	database, err := Open(ctx, cfg)
+	database, err := Open(ctx, cfg, nil)
 	if err != nil {
 		t.Skipf("PostgreSQL integration test requires database: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestTryAcquireAdvisoryLockUsesOneSessionAndReleasesIt(t *testing.T) {
 	if err != nil {
 		t.Skipf("PostgreSQL integration test requires config: %v", err)
 	}
-	database, err := Open(ctx, cfg)
+	database, err := Open(ctx, cfg, nil)
 	if err != nil {
 		t.Skipf("PostgreSQL integration test requires database: %v", err)
 	}
