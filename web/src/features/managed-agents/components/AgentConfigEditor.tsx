@@ -131,7 +131,7 @@ export const agentConfigEditorBasicSetup = {
   // in agentConfigEditorTheme above so both states render consistently.
   drawSelection: false,
   dropCursor: true,
-  allowMultipleSelections: true,
+  allowMultipleSelections: false,
   indentOnInput: true,
   bracketMatching: true,
   closeBrackets: true,
