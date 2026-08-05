@@ -1,9 +1,11 @@
 import { expect, test } from 'bun:test';
+import { EditorSelection } from '@codemirror/state';
 import {
   ManagedAgentsPage,
   WorkspaceContext,
   act,
   cleanup,
+  type CodeMirrorTestElement,
   codeBlockContaining,
   createAgentRequestFixture,
   expectPageTextToContain,
@@ -92,6 +94,19 @@ export function registerManagedAgentsAgentsTests() {
     expect(yamlEditor.closest('.agent-config-codemirror')?.getAttribute('style')).toContain(
       '--agent-config-editor-min-height: 0px',
     );
+    // drawSelection is disabled so CodeMirror must not paint its own
+    // .cm-selectionLayer, nor inject hideNativeSelection (which forces the OS
+    // Highlight color on ::selection while focused and inverts the syntax
+    // foreground). Regression guard for the jarring selected-text color.
+    expect(yamlEditor.closest('.cm-editor')?.querySelector('.cm-selectionLayer')).toBeNull();
+    const editorView = (yamlEditor as CodeMirrorTestElement).__agentConfigCodeMirrorView;
+    expect(editorView).toBeTruthy();
+    act(() => {
+      editorView?.dispatch({
+        selection: EditorSelection.create([EditorSelection.cursor(0), EditorSelection.cursor(1)]),
+      });
+    });
+    expect(editorView?.state.selection.ranges).toHaveLength(1);
 
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Template' }));
 
