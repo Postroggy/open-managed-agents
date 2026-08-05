@@ -1120,9 +1120,7 @@ export function AgentStatusBadge({ archived }: { archived: boolean }) {
       variant="secondary"
       className={clsx(
         'h-6 rounded-md px-2 text-xs font-medium',
-        archived
-          ? 'bg-secondary text-secondary-foreground'
-          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+        archived ? 'bg-secondary text-secondary-foreground' : 'status-success',
       )}
     >
       {archived ? msg('common.archived', 'Archived') : msg('common.active', 'Active')}
@@ -1136,7 +1134,7 @@ export function StatusPill({ children, tone = 'neutral' }: { children: ReactNode
       variant="secondary"
       className={clsx(
         'h-6 rounded-md px-2 text-xs font-medium',
-        tone === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-secondary-foreground',
+        tone === 'success' ? 'status-success' : 'text-secondary-foreground',
       )}
     >
       {children}

@@ -312,9 +312,8 @@ export function ManagedEntityDetailPage({
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             {config.section === 'environments' ? (
               <span className="text-foreground">{msg('managedAgents.environments.cloud', 'Cloud')}</span>
-            ) : (
-              <StatusPill tone={statusPillTone(entity)}>{entityStatusLabel(entity)}</StatusPill>
-            )}
+            ) : null}
+            <StatusPill tone={statusPillTone(config.section, entity)}>{entityStatusLabel(entity)}</StatusPill>
             <Button
               type="button"
               variant="outline"
@@ -1249,7 +1248,7 @@ export function MemoryStorePanel({
                 {store.name || store.id}
               </h1>
               <div className="mt-3">
-                <StatusPill tone={statusPillTone(store)}>{entityStatusLabel(store)}</StatusPill>
+                <StatusPill tone={statusPillTone('memory-stores', store)}>{entityStatusLabel(store)}</StatusPill>
               </div>
             </div>
             {addMemoryButton}

@@ -17,7 +17,7 @@ export function useManagedEntityCells(
   return {
     Name: entityDisplayName(section, entity),
     Status: (
-      <StatusPill tone={statusPillTone(entity)}>
+      <StatusPill tone={statusPillTone(section, entity)}>
         {entity.archived_at ? msg('common.archived', 'Archived') : msg('common.active', 'Active')}
       </StatusPill>
     ),
