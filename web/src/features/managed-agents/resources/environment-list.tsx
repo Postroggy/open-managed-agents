@@ -2,7 +2,7 @@ import { useFormatters, useI18n } from '../../../shared/i18n';
 import { type ReactNode } from 'react';
 import { StatusPill } from '../components/common';
 import { type ManagedEntityApiResponse, type ManagedEntitySection } from '../types';
-import { cellsForEntity, entityDisplayName } from './model';
+import { cellsForEntity, entityDisplayName, statusPillTone } from './model';
 import { localizedRelativeTime } from './environment-model';
 
 export function useManagedEntityCells(
@@ -12,12 +12,12 @@ export function useManagedEntityCells(
   const { msg } = useI18n();
   const formatters = useFormatters();
   if (section !== 'environments') {
-    return cellsForEntity(section, entity);
+    return cellsForEntity(section, entity, msg, formatters.relativeTime);
   }
   return {
     Name: entityDisplayName(section, entity),
     Status: (
-      <StatusPill>
+      <StatusPill tone={statusPillTone(section, entity)}>
         {entity.archived_at ? msg('common.archived', 'Archived') : msg('common.active', 'Active')}
       </StatusPill>
     ),

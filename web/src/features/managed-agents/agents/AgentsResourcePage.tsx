@@ -1,5 +1,5 @@
 import { type ApiError } from '../../../shared/api/client';
-import { useI18n } from '../../../shared/i18n';
+import { useFormatters, useI18n } from '../../../shared/i18n';
 import { cn } from '../../../shared/lib/utils';
 import { Button } from '../../../shared/ui/button';
 import {
@@ -94,6 +94,7 @@ export function AgentsResourcePage({
   routeWorkspaceId?: string;
 }) {
   const { msg } = useI18n();
+  const formatters = useFormatters();
   const { activeWorkspaceId } = useWorkspace();
   const workspaceId = routeWorkspaceId || activeWorkspaceId;
   const [search, setSearch] = useState('');
@@ -101,7 +102,12 @@ export function AgentsResourcePage({
   const [createdFilter, setCreatedFilter] = useState<AgentCreatedFilter>(defaultAgentFilters.created);
   const [statusFilter, setStatusFilter] = useState<AgentStatusFilter>(defaultAgentFilters.status);
   const [openFilterMenu, setOpenFilterMenu] = useState<AgentFilterMenu | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(
+    () =>
+      config.section === 'agents' &&
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('create_agent') === '1',
+  );
   const [remoteAgentsState, setRemoteAgentsState] = useState<{
     workspaceId: string;
     requestKey: string;
@@ -214,6 +220,18 @@ export function AgentsResourcePage({
     setArchiveError(null);
     setArchivingIds(new Set());
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!dialogOpen || typeof window === 'undefined') {
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('create_agent') !== '1') {
+      return;
+    }
+    url.searchParams.delete('create_agent');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [dialogOpen]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -671,10 +689,10 @@ export function AgentsResourcePage({
                         <AgentStatusBadge archived={Boolean(agent.archived_at)} />
                       </DataTableCell>
                       <DataTableCell className="truncate text-muted-foreground">
-                        {relativeTime(agent.created_at)}
+                        {relativeTime(agent.created_at, formatters.relativeTime)}
                       </DataTableCell>
                       <DataTableCell className="truncate text-muted-foreground">
-                        {relativeTime(agent.updated_at)}
+                        {relativeTime(agent.updated_at, formatters.relativeTime)}
                       </DataTableCell>
                       <DataTableCell edge="end" className="px-2">
                         {renderAgentActionMenu(agent, archiving)}

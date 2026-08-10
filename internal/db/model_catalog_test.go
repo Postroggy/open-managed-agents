@@ -4,74 +4,63 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/yourbatis"
 )
 
-func TestModelCatalogQueriesUseNamedPostgreSQLBindings(t *testing.T) {
-	t.Parallel()
+func TestModelCatalogMapperBuilders(t *testing.T) {
 	now := time.Date(2026, time.July, 24, 1, 2, 3, 0, time.UTC)
-	tests := []struct {
-		name      string
-		query     string
-		arguments map[string]any
-		wantJSON  bool
-	}{
-		{
-			name:  "failure metadata",
-			query: recordModelCatalogFailureSQL,
-			arguments: map[string]any{
-				"catalog_key":     modelCatalogTestKey,
-				"models":          json.RawMessage(`[]`),
-				"last_attempt_at": now,
-				"last_error":      "upstream_timeout",
-			},
-			wantJSON: true,
-		},
-		{
-			name:  "successful snapshot",
-			query: saveModelCatalogSuccessSQL,
-			arguments: map[string]any{
-				"catalog_key":     modelCatalogTestKey,
-				"models":          json.RawMessage(`[{"id":"provider/model"}]`),
-				"last_attempt_at": now,
-				"last_success_at": now,
-			},
-			wantJSON: true,
-		},
-		{
-			name:  "snapshot lookup",
-			query: getModelCatalogSnapshotSQL,
-			arguments: map[string]any{
-				"catalog_key": modelCatalogTestKey,
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			query, values, err := bindNamed(postgresRebinder{}, test.query, test.arguments)
-			if err != nil {
-				t.Fatalf("bindNamed() error = %v", err)
-			}
-			if strings.Contains(query, ":catalog_key") || len(values) == 0 {
-				t.Fatalf("bound query = %q, values = %#v", query, values)
-			}
-			if test.wantJSON && !strings.Contains(query, "CAST($") {
-				t.Fatalf("bound query = %q, want PostgreSQL JSON cast", query)
-			}
-		})
-	}
+	assertMapperBuilderContract(t, mapperBuilderContract{
+		statement:         modelCatalogMapperFindByCatalogKeyStatement,
+		bound:             buildModelCatalogMapperFindByCatalogKey(yourbatis.DialectPostgres, modelCatalogTestKey),
+		wantID:            "ModelCatalogMapper.FindByCatalogKey",
+		wantKind:          yourbatis.StatementSelect,
+		wantArgumentNames: []string{"catalogKey"},
+		wantSQLFragments:  []string{"FROM model_catalog_snapshots", "WHERE catalog_key = $1"},
+	})
+	assertMapperBuilderContract(t, mapperBuilderContract{
+		statement: modelCatalogMapperSaveSuccessStatement,
+		bound: buildModelCatalogMapperSaveSuccess(yourbatis.DialectPostgres, saveModelCatalogSuccessParams{
+			CatalogKey:    modelCatalogTestKey,
+			Models:        []byte(`[{"id":"provider/model"}]`),
+			LastAttemptAt: &now,
+			LastSuccessAt: &now,
+		}),
+		wantID:            "ModelCatalogMapper.SaveSuccess",
+		wantKind:          yourbatis.StatementInsert,
+		wantArgumentNames: []string{"params.CatalogKey", "params.Models", "params.LastAttemptAt", "params.LastSuccessAt"},
+		wantSQLFragments:  []string{"CAST($2 AS jsonb)", "ON CONFLICT (catalog_key)"},
+	})
+	assertMapperBuilderContract(t, mapperBuilderContract{
+		statement: modelCatalogMapperRecordFailureStatement,
+		bound: buildModelCatalogMapperRecordFailure(yourbatis.DialectPostgres, recordModelCatalogFailureParams{
+			CatalogKey:    modelCatalogTestKey,
+			Models:        []byte(`[]`),
+			LastAttemptAt: now,
+			LastError:     "upstream_timeout",
+		}),
+		wantID:            "ModelCatalogMapper.RecordFailure",
+		wantKind:          yourbatis.StatementInsert,
+		wantArgumentNames: []string{"params.CatalogKey", "params.Models", "params.LastAttemptAt", "params.LastError"},
+		wantSQLFragments:  []string{"CAST($2 AS jsonb)", "last_error = excluded.last_error"},
+	})
+	assertMapperBuilderContract(t, mapperBuilderContract{
+		statement:         modelCatalogMapperDeleteByCatalogKeyStatement,
+		bound:             buildModelCatalogMapperDeleteByCatalogKey(yourbatis.DialectPostgres, modelCatalogTestKey),
+		wantID:            "ModelCatalogMapper.DeleteByCatalogKey",
+		wantKind:          yourbatis.StatementDelete,
+		wantArgumentNames: []string{"catalogKey"},
+		wantSQLFragments:  []string{"DELETE FROM model_catalog_snapshots"},
+	})
 }
 
 const modelCatalogTestKey = "default"
 
-func TestModelCatalogSnapshotSQLXRoundTripAndFailurePreservesSuccess(t *testing.T) {
+func TestModelCatalogSnapshotRoundTripAndFailurePreservesSuccess(t *testing.T) {
 	ctx := context.Background()
 	cfg, err := config.Load()
 	if err != nil {
@@ -85,7 +74,9 @@ func TestModelCatalogSnapshotSQLXRoundTripAndFailurePreservesSuccess(t *testing.
 
 	key := "model_catalog_test_" + uuid.NewString()
 	defer func() {
-		_, _ = database.sql.ExecContext(ctx, `delete from model_catalog_snapshots where catalog_key = $1`, key)
+		if err := NewModelCatalogMapper(database.mapperDB).DeleteByCatalogKey(ctx, key); err != nil {
+			t.Errorf("DeleteByCatalogKey() error = %v", err)
+		}
 	}()
 
 	successAt := time.Date(2026, time.July, 24, 1, 2, 3, 0, time.UTC)

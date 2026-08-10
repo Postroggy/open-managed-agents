@@ -47,6 +47,7 @@ type yamlConfig struct {
 	EnvironmentRunner EnvironmentRunnerConfig `yaml:"environment_runner"`
 	CodeSession       yamlCodeSessionConfig   `yaml:"code_session"`
 	Webhook           yamlWebhookConfig       `yaml:"webhook"`
+	Vault             VaultConfig             `yaml:"vault"`
 	Bootstrap         yamlBootstrapConfig     `yaml:"bootstrap"`
 	SDKFixtures       SDKFixtureConfig        `yaml:"sdk_fixtures"`
 }
@@ -116,6 +117,7 @@ func newYAMLConfig() yamlConfig {
 			MaxAttempts:   defaults.Webhook.MaxAttempts,
 			AllowInsecure: defaults.Webhook.AllowInsecure,
 		},
+		Vault: defaults.Vault,
 		Bootstrap: yamlBootstrapConfig{
 			WorkspaceName:       defaults.Bootstrap.WorkspaceName,
 			OrganizationName:    defaults.Bootstrap.OrganizationName,
@@ -156,6 +158,7 @@ func (input yamlConfig) resolve() Config {
 			MaxAttempts:   input.Webhook.MaxAttempts,
 			AllowInsecure: input.Webhook.AllowInsecure,
 		},
+		Vault: input.Vault,
 		Bootstrap: BootstrapConfig{
 			WorkspaceName:       input.Bootstrap.WorkspaceName,
 			OrganizationName:    input.Bootstrap.OrganizationName,

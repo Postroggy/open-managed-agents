@@ -8,7 +8,7 @@ help:
 
 # Generate ignored Go sources required by builds, tests, and static analysis.
 generate:
-  go generate ./...
+  ./scripts/generate-go.sh
 
 # Create the gitignored Docker Compose runtime config without overwriting an existing secret-bearing file.
 init-compose-config:
@@ -43,6 +43,10 @@ restart-web:
 test: generate
   go test ./... -count=1
 
+# Regenerate DB mappers with the version pinned by go.mod's tool directive.
+generate-yourbatis-mappers:
+  go generate ./internal/db
+
 # Run the repository's configured Go static-analysis and formatting checks.
 lint: generate
   golangci-lint run --config .golangci.yml ./...
@@ -68,6 +72,13 @@ generate-upstream-proxy-ca-key output:
 
 test-generate-upstream-proxy-ca-key:
   ./scripts/tests/generate-upstream-proxy-ca-key_test.sh
+
+# Generate a vault master KEK (base64 32 bytes). Example: just generate-vault-kek config/secrets/vault-kek
+generate-vault-kek output:
+  ./scripts/generate-vault-kek.sh "{{ output }}"
+
+test-generate-vault-kek:
+  ./scripts/tests/generate-vault-kek_test.sh
 
 go-complexity: generate
   ./scripts/go-complexity.sh

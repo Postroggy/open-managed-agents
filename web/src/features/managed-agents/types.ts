@@ -564,6 +564,27 @@ export type AgentModelEffortLevel = (typeof AGENT_MODEL_EFFORT_LEVELS)[number];
 
 export type AgentModelEffort = AgentModelEffortLevel | { type: AgentModelEffortLevel };
 
+export type AgentReferenceInput = {
+  type: 'agent';
+  id: string;
+  version: number;
+};
+
+export type SelfAgentReferenceInput = {
+  type: 'self';
+};
+
+export type AgentMultiagentInput = {
+  type: 'coordinator';
+  agents: Array<AgentReferenceInput | SelfAgentReferenceInput>;
+};
+
+export type AgentSkillInput = {
+  type: 'anthropic' | 'custom';
+  skill_id: string;
+  version?: string;
+};
+
 export type CreateAgentInput = {
   name: string;
   description?: string | null;
@@ -573,6 +594,7 @@ export type CreateAgentInput = {
   tools: Array<Record<string, unknown>>;
   skills: unknown[];
   metadata?: Record<string, string>;
+  multiagent?: AgentMultiagentInput | null;
 };
 
 export type AgentEditConfig = z.infer<typeof agentEditConfigSchema>;
