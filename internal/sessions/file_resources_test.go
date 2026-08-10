@@ -73,7 +73,7 @@ func TestValidateNormalizedSessionResources(t *testing.T) {
 			resources = append(resources, testNormalizedFileResource(t, "/workspace/files/"+strings.Repeat("x", index+1)))
 		}
 		if err := validateNormalizedSessionResources(resources); err == nil {
-			t.Fatal("validateNormalizedSessionResources() accepted more than 100 files")
+			t.Fatalf("validateNormalizedSessionResources() accepted more than %d files", db.MaxSessionFileResources)
 		}
 	})
 	t.Run("rejects duplicate paths", func(t *testing.T) {
@@ -112,7 +112,7 @@ func testNormalizedFileResource(t *testing.T, mountPath string) normalizedSessio
 	if err != nil {
 		t.Fatalf("marshal mount path: %v", err)
 	}
-	spec, err := sessionresource.NormalizeFileSpec("file_test", nil, raw)
+	spec, err := sessionresource.NormalizeFileSpec("file_test", "data.csv", nil, raw)
 	if err != nil {
 		t.Fatalf("normalize FileSpec: %v", err)
 	}
