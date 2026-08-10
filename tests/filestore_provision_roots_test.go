@@ -39,7 +39,7 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 			t.Fatalf("ProvisionFilestoreFilesystem() = created %v, error %v; want active root file conflict", created, err)
 		}
 		if got := filestoreRootKinds(t, app, filesystem); !reflect.DeepEqual(got, map[string]string{
-			"/uploads": db.FilestoreEntryKindFile,
+			"/uploads": db.SessionResourceFileKindFile,
 		}) {
 			t.Fatalf("roots after rejected provision = %v, want only the original /uploads file", got)
 		}
@@ -86,10 +86,10 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 		}
 		assertFixedFilestoreRoots(t, app, filesystem)
 
-		if _, err := app.db.Pool.Exec(context.Background(), `
-			delete from filestore_entries
-			where filesystem_uuid = $1 and path = '/transcripts'
-		`, filesystem.UUID); err != nil {
+		if _, err := app.pool.Exec(context.Background(), `
+			delete from session_resources
+			where session_uuid = $1 and path = '/transcripts'
+		`, filesystem.SessionUUID); err != nil {
 			t.Fatalf("delete fixed root for repair test: %v", err)
 		}
 		repaired, created, err := app.db.ProvisionFilestoreFilesystem(context.Background(), input)
@@ -115,7 +115,7 @@ func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T)
 		apiKeyUUID,
 	)
 	var sessionExternalID string
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select external_id from sessions where uuid = $1
 	`, sessionUUID).Scan(&sessionExternalID); err != nil {
 		t.Fatalf("load Session external ID: %v", err)
@@ -123,7 +123,7 @@ func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	blocker, err := app.db.Pool.Begin(ctx)
+	blocker, err := app.pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin workspace lock blocker: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T)
 	}
 
 	var activeFilesystems, retiredFilesystems int
-	if err := app.db.Pool.QueryRow(ctx, `
+	if err := app.pool.QueryRow(ctx, `
 		select
 			count(*) filter (where deleted_at is null),
 			count(*) filter (where deleted_at is not null)
@@ -207,7 +207,7 @@ func waitForAdvisoryLockWait(t *testing.T, app *testApp) {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		var waiting bool
-		if err := app.db.Pool.QueryRow(context.Background(), `
+		if err := app.pool.QueryRow(context.Background(), `
 			select exists (
 				select 1
 				from pg_stat_activity
@@ -253,7 +253,7 @@ func insertFilestoreFilesystemWithoutRoots(
 	input db.ProvisionFilestoreFilesystemInput,
 ) db.FilestoreFilesystem {
 	t.Helper()
-	if _, err := app.db.Pool.Exec(context.Background(), `
+	if _, err := app.pool.Exec(context.Background(), `
 		insert into filestore_filesystems (
 			uuid, external_id, organization_uuid, workspace_uuid, session_uuid,
 			code_session_uuid, created_by_api_key_uuid, created_at, updated_at
@@ -274,11 +274,11 @@ func assertFixedFilestoreRoots(t *testing.T, app *testApp, filesystem db.Filesto
 	t.Helper()
 	got := filestoreRootKinds(t, app, filesystem)
 	want := map[string]string{
-		"/outputs":      db.FilestoreEntryKindDirectory,
-		"/skills":       db.FilestoreEntryKindDirectory,
-		"/uploads":      db.FilestoreEntryKindDirectory,
-		"/transcripts":  db.FilestoreEntryKindDirectory,
-		"/tool_results": db.FilestoreEntryKindDirectory,
+		"/outputs":      db.SessionResourceFileKindDirectory,
+		"/skills":       db.SessionResourceFileKindDirectory,
+		"/uploads":      db.SessionResourceFileKindDirectory,
+		"/transcripts":  db.SessionResourceFileKindDirectory,
+		"/tool_results": db.SessionResourceFileKindDirectory,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fixed Filestore roots = %v, want %v", got, want)
@@ -287,14 +287,14 @@ func assertFixedFilestoreRoots(t *testing.T, app *testApp, filesystem db.Filesto
 
 func filestoreRootKinds(t *testing.T, app *testApp, filesystem db.FilestoreFilesystem) map[string]string {
 	t.Helper()
-	rows, err := app.db.Pool.Query(context.Background(), `
-		select path, kind
-		from filestore_entries
-		where filesystem_uuid = $1
+	rows, err := app.pool.Query(context.Background(), `
+		select path, case resource_type when 'skill_archive' then 'archive' else resource_type end
+		from session_resources
+		where session_uuid = $1
 			and parent_path = '/'
 			and deleted_at is null
 		order by path
-	`, filesystem.UUID)
+	`, filesystem.SessionUUID)
 	if err != nil {
 		t.Fatalf("list fixed Filestore roots: %v", err)
 	}

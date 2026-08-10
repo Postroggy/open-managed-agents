@@ -1397,20 +1397,20 @@ export function registerManagedAgentsResourceTests() {
     expect(createSessionButton.hasAttribute('disabled')).toBe(true);
 
     fireEvent.change(fileIdInput, { target: { value: 'file_input123456' } });
+    expect(createSessionButton.hasAttribute('disabled')).toBe(true);
     fireEvent.change(mountPathInput, {
       target: { value: '/workspace/input.txt' },
     });
     expect(createSessionButton.hasAttribute('disabled')).toBe(true);
-    expect(within(dialog).getByText('Must start with /uploads/')).toBeTruthy();
+    expect(within(dialog).getByText('Enter a path relative to /uploads')).toBeTruthy();
 
     fireEvent.change(mountPathInput, {
-      target: { value: '/uploads/input.txt' },
+      target: { value: 'input.txt' },
     });
     expect(within(dialog).getByText('Available at /mnt/session/uploads/input.txt')).toBeTruthy();
     expect(within(dialog).getByRole('link', { name: 'Manage files' }).getAttribute('href')).toBe(
       '/workspaces/default/files',
     );
-
     await waitFor(() =>
       expect(within(dialog).getByRole('combobox', { name: 'Agent' }).textContent).toContain('Option agent'),
     );
@@ -1809,7 +1809,11 @@ export function registerManagedAgentsResourceTests() {
     mockManagedResourceApi();
     renderManagedAgentsPage('environments');
 
-    expect(await screen.findByRole('heading', { name: 'Environment one' })).toBeTruthy();
+    const detailHeader = (await screen.findByRole('heading', { name: 'Environment one' })).closest(
+      'header',
+    ) as HTMLElement;
+    expect(within(detailHeader).getByText('Cloud')).toBeTruthy();
+    expect(within(detailHeader).getByText('Active').className).toContain('status-success');
     const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(breadcrumb.dataset.slot).toBe('breadcrumb');
     expect(within(breadcrumb).getByRole('link', { name: 'Environments' }).getAttribute('href')).toBe(

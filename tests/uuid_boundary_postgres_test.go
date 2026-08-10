@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -11,13 +12,14 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/platform"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
+	"github.com/superduck-ai/open-managed-agents/internal/secrets"
 
 	"github.com/google/uuid"
 )
 
 // TestTypedUUIDAuthAndAdminPostgres is intentionally backed by PostgreSQL.
-// It exercises both sqlx's native UUID binding/scanning and the string-based
-// HTTP protocol boundary used by API key authentication and Admin responses.
+// It exercises Mapper UUID binding/scanning and the string-based HTTP protocol
+// boundary used by API key authentication and Admin responses.
 func TestTypedUUIDAuthAndAdminPostgres(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("typed-uuid-auth-admin"))
 	defer app.close()
@@ -59,7 +61,7 @@ func TestTypedUUIDAdminConsoleWorkbenchPostgres(t *testing.T) {
 	defer app.close()
 
 	ctx := context.Background()
-	ids := getDefaultDBIDs(t, app.db)
+	ids := getDefaultDBIDs(t, app.pool)
 
 	workspace, err := app.db.GetAdminWorkspace(ctx, ids.OrganizationUUID, "workspace_default")
 	if err != nil {
@@ -105,14 +107,14 @@ func TestTypedUUIDAdminConsoleWorkbenchPostgres(t *testing.T) {
 		t.Fatalf("created Console API key = %+v, want null creator and workspace %s", createdKey.APIKey, ids.WorkspaceUUID)
 	}
 	defer func() {
-		if _, cleanupErr := app.db.Pool.Exec(
+		if _, cleanupErr := app.pool.Exec(
 			context.Background(),
 			"delete from console_api_keys where external_id = $1",
 			createdKey.APIKey.ID,
 		); cleanupErr != nil {
 			t.Errorf("delete Console API key fixture: %v", cleanupErr)
 		}
-		if _, cleanupErr := app.db.Pool.Exec(
+		if _, cleanupErr := app.pool.Exec(
 			context.Background(),
 			"delete from api_keys where external_id = $1",
 			createdKey.APIKey.ID,
@@ -194,6 +196,96 @@ func TestTypedUUIDAdminConsoleWorkbenchPostgres(t *testing.T) {
 	if prompt.OrgUUID != ids.OrganizationUUID || prompt.WorkspaceUUID != ids.WorkspaceUUID {
 		t.Fatalf("Workbench prompt UUIDs = (%s, %s), want (%s, %s)", prompt.OrgUUID, prompt.WorkspaceUUID, ids.OrganizationUUID, ids.WorkspaceUUID)
 	}
+
+	if err := app.db.UpsertWorkbenchRevision(ctx, platform.WorkbenchRevisionRecord{
+		OrgUUID:      ids.OrganizationUUID,
+		PromptUUID:   promptID,
+		RevisionUUID: revisionID,
+		Payload:      map[string]any{"model": "test"},
+	}); err != nil {
+		t.Fatalf("upsert Workbench revision: %v", err)
+	}
+	revision, err := app.db.GetWorkbenchRevision(ctx, ids.OrganizationUUID, promptID, revisionID)
+	if err != nil {
+		t.Fatalf("get Workbench revision = (%+v, %v)", revision, err)
+	}
+	if revision.Payload["model"] != "test" {
+		t.Fatalf("Workbench revision payload = %+v", revision.Payload)
+	}
+
+	kvRecord := platform.WorkbenchKVRecord{
+		OrgUUID:    ids.OrganizationUUID,
+		PromptUUID: promptID,
+		Key:        "model",
+		Value:      "test",
+		Version:    map[string]any{"number": 1},
+	}
+	if err := app.db.UpsertWorkbenchKV(ctx, kvRecord); err != nil {
+		t.Fatalf("upsert Workbench key value: %v", err)
+	}
+	keyValue, err := app.db.GetWorkbenchKV(ctx, ids.OrganizationUUID, promptID, kvRecord.Key)
+	if err != nil {
+		t.Fatalf("get Workbench key value = (%+v, %v)", keyValue, err)
+	}
+	version, versionOK := keyValue.Version.(map[string]any)
+	if !versionOK || version["number"] != float64(1) {
+		t.Fatalf("get Workbench key value = (%+v, %v)", keyValue, err)
+	}
+	kvRecord.Version = nil
+	if err := app.db.UpsertWorkbenchKV(ctx, kvRecord); err != nil {
+		t.Fatalf("upsert Workbench key value with nullable version: %v", err)
+	}
+	keyValue, err = app.db.GetWorkbenchKV(ctx, ids.OrganizationUUID, promptID, kvRecord.Key)
+	if err != nil {
+		t.Fatalf("get Workbench key value with nullable version = (%+v, %v)", keyValue, err)
+	}
+	if keyValue.Version != nil {
+		t.Fatalf("get Workbench key value with nullable version = (%+v, %v)", keyValue, err)
+	}
+
+	evaluationID := "evaluation_typed_uuid_" + uuid.NewString()
+	if err := app.db.UpsertWorkbenchEvaluation(ctx, platform.WorkbenchEvaluationRecord{
+		OrgUUID:        ids.OrganizationUUID,
+		RevisionUUID:   revisionID,
+		EvaluationUUID: evaluationID,
+		Payload:        map[string]any{"score": 1},
+	}); err != nil {
+		t.Fatalf("upsert Workbench evaluation: %v", err)
+	}
+	revisionIDs, err := app.db.ListWorkbenchEvaluationRevisionIDs(ctx, ids.OrganizationUUID)
+	if err != nil || !slices.Contains(revisionIDs, revisionID) {
+		t.Fatalf("list Workbench evaluation revision IDs = (%+v, %v)", revisionIDs, err)
+	}
+	evaluations, err := app.db.ListWorkbenchEvaluations(ctx, ids.OrganizationUUID, revisionID)
+	if err != nil || len(evaluations) != 1 || evaluations[0].EvaluationUUID != evaluationID {
+		t.Fatalf("list Workbench evaluations = (%+v, %v)", evaluations, err)
+	}
+	evaluation, err := app.db.GetWorkbenchEvaluation(ctx, ids.OrganizationUUID, evaluationID)
+	if err != nil {
+		t.Fatalf("get Workbench evaluation = (%+v, %v)", evaluation, err)
+	}
+	if evaluation.Payload["score"] != float64(1) {
+		t.Fatalf("get Workbench evaluation = (%+v, %v)", evaluation, err)
+	}
+	deletedEvaluation, err := app.db.DeleteWorkbenchEvaluation(ctx, ids.OrganizationUUID, evaluationID)
+	if err != nil {
+		t.Fatalf("delete Workbench evaluation = (%+v, %v)", deletedEvaluation, err)
+	}
+	if deletedEvaluation.EvaluationUUID != evaluationID {
+		t.Fatalf("delete Workbench evaluation = (%+v, %v)", deletedEvaluation, err)
+	}
+
+	generatedValues := map[string]any{"input": "value", "expected": "result"}
+	if err := app.db.AppendWorkbenchGeneratedTestCase(ctx, ids.OrganizationUUID, generatedValues); err != nil {
+		t.Fatalf("append Workbench generated test case: %v", err)
+	}
+	takenValues, found, err := app.db.TakeWorkbenchGeneratedTestCase(ctx, ids.OrganizationUUID, map[string]any{"input": nil})
+	if err != nil || !found || takenValues["expected"] != "result" {
+		t.Fatalf("take Workbench generated test case = (%+v, %t, %v)", takenValues, found, err)
+	}
+	if err := app.db.DeleteWorkbenchKV(ctx, ids.OrganizationUUID, promptID, kvRecord.Key); err != nil {
+		t.Fatalf("delete Workbench key value: %v", err)
+	}
 }
 
 func containsConsoleAPIKey(keys []platform.ConsoleAPIKey, keyID string, status string) bool {
@@ -213,7 +305,7 @@ func TestTypedUUIDResourceFamiliesPostgres(t *testing.T) {
 	defer app.close()
 
 	ctx := context.Background()
-	ids := getDefaultDBIDs(t, app.db)
+	ids := getDefaultDBIDs(t, app.pool)
 	suffix := uuid.NewString()
 	now := time.Now().UTC()
 
@@ -246,6 +338,33 @@ func TestTypedUUIDResourceFamiliesPostgres(t *testing.T) {
 		Cursor:        &db.AgentPageCursor{CreatedAt: agent.CreatedAt.Add(time.Second), UUID: uuid.MustParse(agent.UUID).String()},
 	}); err != nil || len(agents) == 0 {
 		t.Fatalf("list Agents with typed UUID cursor = (%+v, %v)", agents, err)
+	}
+	nextAgent := agent
+	nextAgent.Name = "string UUID PostgreSQL agent"
+	nextAgent.UpdatedAt = now.Add(time.Minute)
+	updatedAgent, err := app.db.UpdateAgent(
+		ctx,
+		ids.WorkspaceUUID,
+		agentID,
+		1,
+		nextAgent,
+		"agentver_string_uuid_"+suffix,
+	)
+	if err != nil || updatedAgent.CurrentVersion != 2 || updatedAgent.Name != nextAgent.Name {
+		t.Fatalf("update Agent through string UUID mapper parameters = (%+v, %v)", updatedAgent, err)
+	}
+	if version, err := app.db.GetAgentVersion(ctx, ids.WorkspaceUUID, agentID, 1); err != nil || version.Name != agent.Name {
+		t.Fatalf("get initial Agent version through string UUID mapper parameters = (%+v, %v)", version, err)
+	}
+	if versions, _, err := app.db.ListAgentVersionsPage(ctx, db.ListAgentVersionsPageParams{
+		WorkspaceUUID:   ids.WorkspaceUUID,
+		AgentExternalID: agentID,
+		Limit:           10,
+	}); err != nil || len(versions) != 2 || versions[0].CurrentVersion != 2 {
+		t.Fatalf("list Agent versions through string UUID mapper parameters = (%+v, %v)", versions, err)
+	}
+	if archived, err := app.db.ArchiveAgent(ctx, ids.WorkspaceUUID, agentID); err != nil || archived.ArchivedAt == nil {
+		t.Fatalf("archive Agent through string UUID mapper parameters = (%+v, %v)", archived, err)
 	}
 
 	skillID := "skill_typed_uuid_" + suffix
@@ -281,6 +400,34 @@ func TestTypedUUIDResourceFamiliesPostgres(t *testing.T) {
 		Limit:           10,
 	}); err != nil || len(versions) != 1 || versions[0].UUID != skillVersion.UUID {
 		t.Fatalf("list Skill versions through typed UUID rows = (%+v, %v)", versions, err)
+	}
+	updatedSkill, secondSkillVersion, err := app.db.CreateSkillVersion(
+		ctx,
+		ids.WorkspaceUUID,
+		skillID,
+		db.SkillVersion{
+			UUID:                uuid.NewString(),
+			ExternalID:          "skillver_typed_uuid_second_" + suffix,
+			Version:             "2.0.0",
+			Name:                "typed-uuid-v2",
+			Description:         "PostgreSQL UUID boundary second version",
+			Directory:           "typed-uuid",
+			S3Bucket:            "test",
+			S3Key:               "typed-uuid/second/" + suffix,
+			SizeBytes:           2,
+			SHA256:              "typed-uuid-v2",
+			CreatedByAPIKeyUUID: ids.APIKeyUUID,
+			CreatedAt:           now.Add(time.Second),
+		},
+	)
+	if err != nil || updatedSkill.LatestVersion == nil || *updatedSkill.LatestVersion != secondSkillVersion.Version {
+		t.Fatalf("create second Skill version = (%+v, %+v, %v)", updatedSkill, secondSkillVersion, err)
+	}
+	if loaded, err := app.db.GetSkillVersion(ctx, ids.WorkspaceUUID, skillID, skillVersion.Version); err != nil || loaded.UUID != skillVersion.UUID {
+		t.Fatalf("get Skill version through string UUID mapper parameters = (%+v, %v)", loaded, err)
+	}
+	if latest, err := app.db.GetLatestSkillVersion(ctx, ids.WorkspaceUUID, skillID); err != nil || latest.UUID != secondSkillVersion.UUID {
+		t.Fatalf("get latest Skill version through string UUID mapper parameters = (%+v, %v)", latest, err)
 	}
 
 	environmentID := "env_typed_uuid_" + suffix
@@ -380,9 +527,16 @@ func TestTypedUUIDResourceFamiliesPostgres(t *testing.T) {
 		AuthType:         "static_bearer",
 		CredentialKey:    "typed_uuid_" + suffix,
 		Auth:             []byte(`{"type":"bearer"}`),
-		SecretPayload:    []byte(`{"token":"test"}`),
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		SecretEnvelope: &secrets.Envelope{
+			Ciphertext:    []byte("typed-uuid-cipher"),
+			Nonce:         []byte("nonce-12byte"),
+			WrappedDEK:    []byte("typed-uuid-wrap"),
+			FormatVersion: 1,
+			KeyProvider:   "local",
+			KeyVersion:    1,
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	if err != nil || credential.CreatedByAPIKeyUUID != "" || credential.VaultUUID != vault.UUID {
 		t.Fatalf("create Vault credential with nullable creator UUID = (%+v, %v)", credential, err)
@@ -502,6 +656,19 @@ func TestTypedUUIDResourceFamiliesPostgres(t *testing.T) {
 	if loadedSkill, err := app.db.GetSkill(ctx, ids.WorkspaceUUID, skillID); err != nil || loadedSkill.UUID != skill.UUID {
 		t.Fatalf("get Skill through typed UUID row = (%+v, %v)", loadedSkill, err)
 	}
+	deletedVersion, latestVersion, err := app.db.SoftDeleteSkillVersion(
+		ctx,
+		ids.WorkspaceUUID,
+		skillID,
+		secondSkillVersion.Version,
+	)
+	if err != nil || deletedVersion.UUID != secondSkillVersion.UUID || latestVersion == nil || *latestVersion != skillVersion.Version {
+		t.Fatalf("soft delete Skill version = (%+v, %+v, %v)", deletedVersion, latestVersion, err)
+	}
+	deletedSkill, deletedVersions, err := app.db.SoftDeleteSkill(ctx, ids.WorkspaceUUID, skillID)
+	if err != nil || deletedSkill.UUID != skill.UUID || len(deletedVersions) != 1 || deletedVersions[0].UUID != skillVersion.UUID {
+		t.Fatalf("soft delete Skill = (%+v, %+v, %v)", deletedSkill, deletedVersions, err)
+	}
 }
 
 // TestTypedUUIDSessionsAndRuntimePostgres covers the transaction-heavy session
@@ -513,7 +680,7 @@ func TestTypedUUIDSessionsAndRuntimePostgres(t *testing.T) {
 	t.Cleanup(app.close)
 
 	ctx := context.Background()
-	ids := getDefaultDBIDs(t, app.db)
+	ids := getDefaultDBIDs(t, app.pool)
 	now := time.Now().UTC()
 	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")
 
@@ -561,7 +728,7 @@ func TestTypedUUIDSessionsAndRuntimePostgres(t *testing.T) {
 		Payload:     []byte(`{"typed_uuid":true}`),
 		ProcessedAt: now,
 		CreatedAt:   now,
-	}})
+	}}, nil)
 	if err != nil || len(events) != 1 || events[0].ThreadUUID == nil || *events[0].ThreadUUID != thread.UUID {
 		t.Fatalf("append Session event with inferred typed thread UUID = (%+v, %v)", events, err)
 	}
@@ -886,57 +1053,29 @@ func TestTypedUUIDFilesAndFilestorePostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("put Filestore file through typed UUID parameters: %v", err)
 	}
-	if activeResult.Entry.UUID == "" || activeResult.Entry.ManagedResourceUUID != nil ||
-		activeResult.Entry.SourceFileUUID != nil ||
-		activeResult.Entry.CreatedByCodeSessionUUID == nil ||
-		*activeResult.Entry.CreatedByCodeSessionUUID != codeSessionUUID {
-		t.Fatalf("Filestore nullable UUID row = %+v", activeResult.Entry)
+	if activeResult.Node.UUID == "" || activeResult.Node.SourceFileUUID != nil {
+		t.Fatalf("Filestore nullable UUID row = %+v", activeResult.Node)
 	}
 
-	expiredAt := now.Add(-time.Minute)
-	if _, err := app.db.PutFilestoreFile(ctx, db.PutFilestoreFileInput{
-		WorkspaceUUID:  workspaceUUID,
-		FilesystemUUID: filesystem.UUID,
-		Path:           "/outputs/expired.txt",
-		Blob: db.FilestoreFileBlob{
-			SizeBytes:             5,
-			MediaType:             "text/plain",
-			Metadata:              []byte(`{}`),
-			AuthorizationMetadata: []byte(`{}`),
-			MD5:                   strings.Repeat("b", 32),
-			SHA256:                strings.Repeat("b", 64),
-			S3Bucket:              "typed-uuid",
-			S3Key:                 "filestore/" + suffix + "/expired.txt",
-			ExpiresAt:             &expiredAt,
-		},
-		Now: now,
-	}); err != nil {
-		t.Fatalf("put expiring Filestore file: %v", err)
-	}
-	expiryJobs, err := app.db.ExpireFilestoreEntries(ctx, 10)
-	if err != nil || len(expiryJobs) == 0 {
-		t.Fatalf("expire Filestore entries through UUID array binding = (%+v, %v)", expiryJobs, err)
-	}
-
-	page, err := app.db.ListFilestoreEntriesPage(ctx, db.ListFilestoreEntriesPageParams{
+	page, err := app.db.ListSessionResourceFilesPage(ctx, db.ListSessionResourceFilesPageParams{
 		WorkspaceUUID:  workspaceUUID,
 		FilesystemUUID: filesystem.UUID,
 		DirectoryPath:  "/outputs",
 		Recursive:      true,
 		Limit:          1,
-		Cursor: &db.FilestoreEntryPageCursor{
+		Cursor: &db.SessionResourceFilePageCursor{
 			Path: "/outputs",
 			UUID: uuid.NewString(),
 		},
 	})
-	if err != nil || len(page.Entries) != 1 || page.Entries[0].UUID != activeResult.Entry.UUID {
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].UUID != activeResult.Node.UUID {
 		t.Fatalf("list Filestore entries with typed UUID cursor = (%+v, %v)", page, err)
 	}
 
 	cleanupJob, err := app.db.EnqueueFilestoreObjectCleanupJob(ctx, db.EnqueueFilestoreObjectCleanupJobInput{
 		WorkspaceUUID:   workspaceUUID,
 		FilesystemUUID:  filesystem.UUID,
-		EntryExternalID: activeResult.Entry.ExternalID,
+		EntryExternalID: activeResult.Node.ExternalID,
 		Bucket:          "typed-uuid",
 		Key:             "filestore/" + suffix + "/sentinel.txt",
 		Reason:          "typed_uuid_integration",
@@ -964,7 +1103,7 @@ func TestTypedUUIDFilesAndFilestorePostgres(t *testing.T) {
 	}
 
 	storageBytes, err := app.db.GetWorkspaceStorageBytes(ctx, workspaceUUID)
-	if err != nil || storageBytes != firstFile.SizeBytes+secondFile.SizeBytes+activeResult.Entry.OwnedBytes() {
+	if err != nil || storageBytes != firstFile.SizeBytes+secondFile.SizeBytes+activeResult.Node.OwnedBytes() {
 		t.Fatalf("workspace storage bytes = (%d, %v), want %d", storageBytes, err, 16)
 	}
 }
