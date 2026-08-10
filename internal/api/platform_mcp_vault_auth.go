@@ -21,6 +21,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
+	vaultsapi "github.com/superduck-ai/open-managed-agents/internal/vaults"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -119,7 +120,7 @@ func (s *Server) handlePlatformMCPVaultAuthStart(w http.ResponseWriter, r *http.
 		return
 	}
 	orgUUID := strings.TrimSpace(chi.URLParam(r, "orgUuid"))
-	if orgUUID == "" || (orgUUID != principal.OrganizationUUID && orgUUID != principal.OrganizationExternalID) {
+	if orgUUID == "" || orgUUID != principal.OrganizationUUID {
 		writePlatformMCPVaultAuthError(w, http.StatusNotFound, platformMCPVaultAuthVerificationRequestFailed, "")
 		return
 	}
@@ -151,7 +152,7 @@ func (s *Server) handlePlatformMCPVaultAuthStart(w http.ResponseWriter, r *http.
 	if workspaceID == "default" {
 		workspaceID = principal.WorkspaceExternalID
 	}
-	workspace, err := s.db.GetAdminWorkspace(r.Context(), principal.OrganizationID, workspaceID)
+	workspace, err := s.db.GetAdminWorkspace(r.Context(), principal.OrganizationUUID, workspaceID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			writePlatformMCPVaultAuthError(w, http.StatusNotFound, platformMCPVaultAuthVerificationRequestFailed, "")
@@ -166,7 +167,7 @@ func (s *Server) handlePlatformMCPVaultAuthStart(w http.ResponseWriter, r *http.
 		return
 	}
 
-	vault, err := s.db.GetVaultByExternalIDOrUUID(r.Context(), workspace.ID, req.VaultID)
+	vault, err := s.db.GetVaultByExternalIDOrUUID(r.Context(), workspace.UUID.String(), req.VaultID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			writePlatformMCPVaultAuthError(w, http.StatusNotFound, platformMCPVaultAuthVerificationRequestFailed, "")
@@ -182,7 +183,7 @@ func (s *Server) handlePlatformMCPVaultAuthStart(w http.ResponseWriter, r *http.
 	}
 
 	credentials, _, err := s.db.ListVaultCredentialsPage(r.Context(), db.ListVaultCredentialsPageParams{
-		WorkspaceID:     workspace.ID,
+		WorkspaceUUID:   workspace.UUID.String(),
 		VaultExternalID: vault.ExternalID,
 		Limit:           50,
 		IncludeArchived: false,
@@ -240,11 +241,11 @@ func (s *Server) handlePlatformMCPVaultAuthStart(w http.ResponseWriter, r *http.
 	if _, err := s.db.CreateMCPOAuthFlow(r.Context(), db.MCPOAuthFlow{
 		UUID:                      uuid.NewString(),
 		ExternalID:                flowID,
-		OrganizationID:            principal.OrganizationID,
-		WorkspaceID:               workspace.ID,
-		VaultID:                   vault.ID,
+		OrganizationUUID:          principal.OrganizationUUID,
+		WorkspaceUUID:             workspace.UUID.String(),
+		VaultUUID:                 vault.UUID,
 		VaultExternalID:           vault.ExternalID,
-		UserID:                    principal.UserID,
+		UserUUID:                  principal.UserUUID,
 		UserExternalID:            principal.UserExternalID,
 		PlatformSessionExternalID: principal.PlatformSessionExternalID,
 		MCPServerURL:              mcpServerURL,
@@ -400,23 +401,35 @@ func (s *Server) handlePlatformMCPVaultAuthCallback(w http.ResponseWriter, r *ht
 		s.logger.ErrorContext(r.Context(), "build mcp oauth credential metadata for flow", "flow_external_id", flow.ExternalID, "error", err)
 		metadata = json.RawMessage(`{}`)
 	}
-	created, err := s.db.CreateVaultCredential(r.Context(), db.VaultCredential{
-		UUID:              uuid.NewString(),
-		ExternalID:        credentialID,
-		OrganizationID:    flow.OrganizationID,
-		WorkspaceID:       flow.WorkspaceID,
-		VaultID:           flow.VaultID,
-		VaultExternalID:   flow.VaultExternalID,
-		CreatedByAPIKeyID: 0,
-		DisplayName:       flow.DisplayName,
-		Metadata:          metadata,
-		AuthType:          "mcp_oauth",
-		CredentialKey:     flow.MCPServerURL,
-		Auth:              publicAuth,
-		SecretPayload:     secretPayload,
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	})
+	credential := db.VaultCredential{
+		UUID:                uuid.NewString(),
+		ExternalID:          credentialID,
+		OrganizationUUID:    flow.OrganizationUUID,
+		WorkspaceUUID:       flow.WorkspaceUUID,
+		VaultUUID:           flow.VaultUUID,
+		VaultExternalID:     flow.VaultExternalID,
+		CreatedByAPIKeyUUID: "",
+		DisplayName:         flow.DisplayName,
+		Metadata:            metadata,
+		AuthType:            "mcp_oauth",
+		CredentialKey:       flow.MCPServerURL,
+		Auth:                publicAuth,
+		SecretPayload:       secretPayload,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+	if err := vaultsapi.SealCredentialSecret(r.Context(), s.vaultSecrets, &credential); err != nil {
+		s.logger.ErrorContext(r.Context(), "seal mcp oauth vault credential for flow", "flow_external_id", flow.ExternalID, "error", err)
+		s.failPlatformMCPVaultAuthFlow(r.Context(), flow.ExternalID, platformMCPVaultAuthVerificationRequestFailed, now)
+		writePlatformMCPVaultAuthCallback(w, platformMCPVaultAuthCallbackPayload{
+			Type:      "vault_oauth_complete",
+			FlowID:    flow.ExternalID,
+			VaultID:   flow.VaultExternalID,
+			ErrorCode: platformMCPVaultAuthVerificationRequestFailed,
+		})
+		return
+	}
+	created, err := s.db.CreateVaultCredential(r.Context(), credential)
 	if err != nil {
 		errorCode := platformMCPVaultAuthVerificationRequestFailed
 		if errors.Is(err, db.ErrDuplicate) {

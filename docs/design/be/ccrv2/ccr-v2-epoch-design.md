@@ -96,7 +96,7 @@ return nextEpoch
 
 ## 5. Worker 写请求校验
 
-所有 worker 写请求都必须解析 `worker_epoch`：
+以下 worker 写请求必须解析 `worker_epoch`：
 
 - `PUT /worker`
 - `POST /worker/events`
@@ -104,8 +104,6 @@ return nextEpoch
 - `POST /worker/events/delivery`
 - `POST /worker/diagnostics`
 - `POST /worker/heartbeat`
-- `POST /worker/otlp/metrics`
-- `POST /worker/otlp/logs`
 
 错误语义：
 
@@ -113,6 +111,8 @@ return nextEpoch
 - unknown code session: `404 not_found_error`
 - epoch mismatch: `409 conflict_error`
 - auth failure: `401 authentication_error`
+
+`POST /worker/otlp/metrics` 与 `POST /worker/otlp/logs` 是例外：environment-manager 会在 worker register 前通过标准 OTLP exporter 上报生命周期 telemetry，且该 exporter 只携带 session Authorization。缺少 epoch 的 OTLP 请求在确认 session 存在后可以接收，但不得刷新 worker activity 或 lease；如果请求携带 epoch，则仍执行当前 epoch 与 active lease 校验，stale epoch 返回 `409`，非法 epoch 返回 `400`。
 
 `POST /worker/events/delivery` 除了校验当前 epoch，还要求被 ACK 的 inbound event 已经由同一 epoch 的 SSE stream 写出并标记为 `sent`；queued 事件、旧发送 epoch 事件或未知事件不会推进状态，只计入 delivery 响应的 `ignored`。
 
@@ -163,6 +163,14 @@ insert code_session_outbound_events / inbound_events
 update code_sessions sequence_num
 commit()
 ```
+
+该事务由共享的 `yourbatis.DB.Transaction` 创建；回调中的同一个事务 `Executor`
+同时构造 `CodeSessionMapper`、`CodeSessionInboundEventMapper` 和
+`CodeSessionOutboundEventMapper`。`CodeSessionMapper.LockCodeSessionByExternalID`
+负责日常 append 的行锁，不附加 `initializing` 状态限制；启动激活仍使用独立的
+`LockInitializingCodeSession`。方向对应的 event mapper 在锁内完成幂等单条查询和
+`INSERT ... RETURNING`，随后由 `CodeSessionMapper` 更新对应方向的 sequence。
+激活使用的 inbound 批量 insert 保持独立，不经过单条 append。
 
 这样线性化语义才成立：
 
@@ -278,7 +286,7 @@ CCR v2 worker 使用持久化 inbound event 队列和带 epoch 的
 - 不同 code session 都从 `1` 开始，互不影响。
 - 旧 epoch 调 worker 写 endpoints 返回 `409`。
 - 当前 epoch 调同样 endpoints 成功。
-- 缺失、`0`、非数字、浮点、负数 `worker_epoch` 返回 `400`。
+- 必须携带 epoch 的 worker 写入口缺失、`0`、非数字、浮点、负数 `worker_epoch` 返回 `400`；OTLP 缺失 epoch 可以成功且不更新 worker activity/lease，非法 epoch 仍返回 `400`。
 - heartbeat 当前 epoch 更新 heartbeat/lease 时间。
 - heartbeat 旧 epoch 返回 `409` 且不更新 lease。
 - lease 过期不自动 bump，下一次 register 才 bump。

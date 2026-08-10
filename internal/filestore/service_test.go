@@ -90,19 +90,19 @@ func TestServiceFilestoreTokenBindsSingleFilesystem(t *testing.T) {
 	for _, test := range []struct {
 		name       string
 		requestID  string
-		internalID int64
+		internalID string
 		database   *fakeServiceDatabase
 	}{
 		{
 			name:       "reject another filesystem identifier",
 			requestID:  "fs_other",
-			internalID: filesystem.ID,
+			internalID: filesystem.UUID,
 			database:   &fakeServiceDatabase{},
 		},
 		{
 			name:       "reject stale internal binding",
 			requestID:  filesystem.ExternalID,
-			internalID: filesystem.ID + 1,
+			internalID: "00000000-0000-4000-8000-000000000099",
 			database: &fakeServiceDatabase{
 				getFilesystemFn: serviceFilesystemLookup(filesystem),
 			},
@@ -114,7 +114,7 @@ func TestServiceFilestoreTokenBindsSingleFilesystem(t *testing.T) {
 			principal := serviceTestPrincipal()
 			principal.FilesystemUUID = filesystem.UUID
 			principal.FilesystemExternalID = filesystem.ExternalID
-			principal.FilesystemInternalID = test.internalID
+			principal.FilesystemUUID = test.internalID
 			service := newServiceUnderTest(config.Config{}, test.database, &fakeServiceBlobStore{})
 
 			_, apiErr := service.resolveFilesystem(context.Background(), principal, test.requestID)
@@ -126,7 +126,7 @@ func TestServiceFilestoreTokenBindsSingleFilesystem(t *testing.T) {
 	principal := serviceTestPrincipal()
 	principal.FilesystemUUID = filesystem.UUID
 	principal.FilesystemExternalID = filesystem.ExternalID
-	principal.FilesystemInternalID = filesystem.ID
+	principal.FilesystemUUID = filesystem.UUID
 	service := newServiceUnderTest(config.Config{}, &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
 	}, &fakeServiceBlobStore{})
@@ -137,8 +137,8 @@ func TestServiceFilestoreTokenBindsSingleFilesystem(t *testing.T) {
 		if apiErr != nil {
 			t.Fatalf("resolveFilesystem(%q) error = %v", requestID, apiErr)
 		}
-		if got.ID != filesystem.ID {
-			t.Fatalf("resolveFilesystem(%q) = %#v, want ID %d", requestID, got, filesystem.ID)
+		if got.UUID != filesystem.UUID {
+			t.Fatalf("resolveFilesystem(%q) = %#v, want UUID %s", requestID, got, filesystem.UUID)
 		}
 	}
 }
@@ -150,7 +150,7 @@ func TestServiceListDirectoryRejectsInvalidLimitAndCursor(t *testing.T) {
 		FilesystemID: "fs_other",
 		Path:         "/reports",
 		LastPath:     "/reports/old",
-		LastID:       10,
+		LastUUID:     "00000000-0000-4000-8000-000000000010",
 	})
 	if err != nil {
 		t.Fatalf("encode mismatched cursor: %v", err)
@@ -194,10 +194,10 @@ func TestServiceReadFileRejectsInvalidRangesBeforeObjectLookup(t *testing.T) {
 
 			filesystem := serviceTestFilesystem()
 			database := &fakeServiceDatabase{
-				getFilesystemFn: func(context.Context, int64, string) (db.FilestoreFilesystem, error) {
+				getFilesystemFn: func(context.Context, string, string) (db.FilestoreFilesystem, error) {
 					return filesystem, nil
 				},
-				getEntryFn: func(context.Context, int64, int64, string) (db.FilestoreEntry, error) {
+				getEntryFn: func(context.Context, string, string, string) (db.SessionResourceFile, error) {
 					return serviceTestFileEntry(filesystem, "/file.txt", []byte("12345")), nil
 				},
 			}
@@ -240,11 +240,11 @@ func TestServiceCreateFileDiscardsOrphanGuardWhenUploadFails(t *testing.T) {
 	t.Parallel()
 
 	filesystem := serviceTestFilesystem()
-	job := db.FilestoreObjectCleanupJob{ID: 89, ExternalID: "cleanup_upload_failure"}
+	job := db.FilestoreObjectCleanupJob{UUID: "00000000-0000-4000-8000-000000000089", ExternalID: "cleanup_upload_failure"}
 	var enqueueInput db.EnqueueFilestoreObjectCleanupJobInput
 	var deletedKey string
 	var deletedOptions storage.DeleteOptions
-	var completedJobID int64
+	var completedJobUUID string
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
 		getEntryFn:      serviceParentDirectoryLookup(filesystem),
@@ -252,8 +252,8 @@ func TestServiceCreateFileDiscardsOrphanGuardWhenUploadFails(t *testing.T) {
 			enqueueInput = input
 			return job, nil
 		},
-		completeCleanupFn: func(_ context.Context, jobID int64) error {
-			completedJobID = jobID
+		completeCleanupFn: func(_ context.Context, jobUUID string) error {
+			completedJobUUID = jobUUID
 			return nil
 		},
 	}
@@ -278,8 +278,8 @@ func TestServiceCreateFileDiscardsOrphanGuardWhenUploadFails(t *testing.T) {
 	if enqueueInput.Key == "" || deletedKey != enqueueInput.Key || deletedOptions.VersionID != "" || !deletedOptions.AllVersions {
 		t.Fatalf("enqueued key = %q, deleted key/options = %q/%+v", enqueueInput.Key, deletedKey, deletedOptions)
 	}
-	if completedJobID != job.ID {
-		t.Fatalf("completed cleanup job = %d, want %d", completedJobID, job.ID)
+	if completedJobUUID != job.UUID {
+		t.Fatalf("completed cleanup job = %s, want %s", completedJobUUID, job.UUID)
 	}
 }
 
@@ -288,29 +288,29 @@ func TestServiceCopyFileDiscardsOrphanGuardWhenCopyFails(t *testing.T) {
 
 	filesystem := serviceTestFilesystem()
 	source := serviceTestFileEntry(filesystem, "/source.txt", []byte("source"))
-	job := db.FilestoreObjectCleanupJob{ID: 90, ExternalID: "cleanup_copy_failure"}
+	job := db.FilestoreObjectCleanupJob{UUID: "00000000-0000-4000-8000-000000000090", ExternalID: "cleanup_copy_failure"}
 	var enqueueInput db.EnqueueFilestoreObjectCleanupJobInput
 	var deletedKey string
 	var deletedOptions storage.DeleteOptions
-	var completedJobID int64
+	var completedJobUUID string
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
-		getEntryFn: func(_ context.Context, _ int64, _ int64, entryPath string) (db.FilestoreEntry, error) {
+		getEntryFn: func(_ context.Context, _ string, _ string, entryPath string) (db.SessionResourceFile, error) {
 			switch entryPath {
 			case "/source.txt":
 				return source, nil
 			case "/archive":
 				return serviceTestDirectoryEntry(filesystem, 30, "/archive"), nil
 			default:
-				return db.FilestoreEntry{}, db.ErrNotFound
+				return db.SessionResourceFile{}, db.ErrNotFound
 			}
 		},
 		enqueueCleanupFn: func(_ context.Context, input db.EnqueueFilestoreObjectCleanupJobInput) (db.FilestoreObjectCleanupJob, error) {
 			enqueueInput = input
 			return job, nil
 		},
-		completeCleanupFn: func(_ context.Context, jobID int64) error {
-			completedJobID = jobID
+		completeCleanupFn: func(_ context.Context, jobUUID string) error {
+			completedJobUUID = jobUUID
 			return nil
 		},
 	}
@@ -336,8 +336,8 @@ func TestServiceCopyFileDiscardsOrphanGuardWhenCopyFails(t *testing.T) {
 		t.Fatalf("enqueued key = %q, deleted key/options = %q/%+v", enqueueInput.Key, deletedKey, deletedOptions)
 	}
 	assertCleanupEntryExternalIDMatchesBlobKey(t, enqueueInput)
-	if completedJobID != job.ID {
-		t.Fatalf("completed cleanup job = %d, want %d", completedJobID, job.ID)
+	if completedJobUUID != job.UUID {
+		t.Fatalf("completed cleanup job = %s, want %s", completedJobUUID, job.UUID)
 	}
 }
 
@@ -345,13 +345,13 @@ func TestServiceCreateFileRejectsOversizeUploadAndCleansOrphan(t *testing.T) {
 	t.Parallel()
 
 	filesystem := serviceTestFilesystem()
-	job := db.FilestoreObjectCleanupJob{ID: 91, ExternalID: "cleanup_oversize"}
+	job := db.FilestoreObjectCleanupJob{UUID: "00000000-0000-4000-8000-000000000091", ExternalID: "cleanup_oversize"}
 	var enqueued db.EnqueueFilestoreObjectCleanupJobInput
 	var uploadedKey string
 	var uploadedBody []byte
 	var deletedKey string
 	var deletedOptions storage.DeleteOptions
-	var completedJobID int64
+	var completedJobUUID string
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
 		getEntryFn:      serviceParentDirectoryLookup(filesystem),
@@ -359,8 +359,8 @@ func TestServiceCreateFileRejectsOversizeUploadAndCleansOrphan(t *testing.T) {
 			enqueued = input
 			return job, nil
 		},
-		completeCleanupFn: func(_ context.Context, jobID int64) error {
-			completedJobID = jobID
+		completeCleanupFn: func(_ context.Context, jobUUID string) error {
+			completedJobUUID = jobUUID
 			return nil
 		},
 	}
@@ -391,8 +391,8 @@ func TestServiceCreateFileRejectsOversizeUploadAndCleansOrphan(t *testing.T) {
 	if uploadedKey == "" || enqueued.Key != uploadedKey || deletedKey != uploadedKey || deletedOptions.VersionID != "version-oversize" || deletedOptions.AllVersions {
 		t.Fatalf("uploaded key = %q, enqueued = %+v, deleted key/options = %q/%+v", uploadedKey, enqueued, deletedKey, deletedOptions)
 	}
-	if completedJobID != job.ID {
-		t.Fatalf("completed cleanup job = %d, want %d", completedJobID, job.ID)
+	if completedJobUUID != job.UUID {
+		t.Fatalf("completed cleanup job = %s, want %s", completedJobUUID, job.UUID)
 	}
 }
 
@@ -400,7 +400,7 @@ func TestServiceCreateFileLeavesGuardWhenDatabaseCommitOutcomeIsUnknown(t *testi
 	t.Parallel()
 
 	filesystem := serviceTestFilesystem()
-	job := db.FilestoreObjectCleanupJob{ID: 92, ExternalID: "cleanup_commit_failure"}
+	job := db.FilestoreObjectCleanupJob{UUID: "00000000-0000-4000-8000-000000000092", ExternalID: "cleanup_commit_failure"}
 	var uploadedKey string
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
@@ -411,7 +411,7 @@ func TestServiceCreateFileLeavesGuardWhenDatabaseCommitOutcomeIsUnknown(t *testi
 		putFileFn: func(context.Context, db.PutFilestoreFileInput) (db.FilestoreMutationResult, error) {
 			return db.FilestoreMutationResult{}, errors.New("commit result unknown")
 		},
-		attachCleanupFn: func(context.Context, int64, string, string, string) error {
+		attachCleanupFn: func(context.Context, string, string, string, string) error {
 			return nil
 		},
 	}
@@ -441,7 +441,7 @@ func TestServiceReadFileReturnsEmptyBodyWithoutObjectLookup(t *testing.T) {
 	filesystem := serviceTestFilesystem()
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
-		getEntryFn: func(context.Context, int64, int64, string) (db.FilestoreEntry, error) {
+		getEntryFn: func(context.Context, string, string, string) (db.SessionResourceFile, error) {
 			return serviceTestFileEntry(filesystem, "/empty-range.txt", []byte("12345")), nil
 		},
 	}
@@ -474,21 +474,21 @@ func TestServiceListDirectoryUsesBoundCursorAndReturnsNextCursor(t *testing.T) {
 		Path:         "/reports",
 		Recursive:    true,
 		LastPath:     "/reports/a",
-		LastID:       10,
+		LastUUID:     "00000000-0000-4000-8000-000000000010",
 	})
 	if err != nil {
 		t.Fatalf("encode request cursor: %v", err)
 	}
-	entries := []db.FilestoreEntry{
+	entries := []db.SessionResourceFile{
 		serviceTestDirectoryEntry(filesystem, 11, "/reports/b"),
 		serviceTestDirectoryEntry(filesystem, 12, "/reports/c"),
 	}
-	var listInput db.ListFilestoreEntriesPageParams
+	var listInput db.ListSessionResourceFilesPageParams
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
-		listEntriesFn: func(_ context.Context, input db.ListFilestoreEntriesPageParams) (db.FilestoreEntryPage, error) {
+		listEntriesFn: func(_ context.Context, input db.ListSessionResourceFilesPageParams) (db.SessionResourceFilePage, error) {
 			listInput = input
-			return db.FilestoreEntryPage{Entries: entries, HasMore: true}, nil
+			return db.SessionResourceFilePage{Entries: entries, HasMore: true}, nil
 		},
 	}
 	service := newServiceUnderTest(config.Config{}, database, &fakeServiceBlobStore{})
@@ -503,9 +503,9 @@ func TestServiceListDirectoryUsesBoundCursorAndReturnsNextCursor(t *testing.T) {
 	if apiErr != nil {
 		t.Fatalf("ListDirectory() error = %v", apiErr)
 	}
-	if listInput.WorkspaceID != serviceTestPrincipal().WorkspaceID || listInput.FilesystemID != filesystem.ID ||
+	if listInput.WorkspaceUUID != serviceTestPrincipal().WorkspaceUUID || listInput.FilesystemUUID != filesystem.UUID ||
 		listInput.DirectoryPath != "/reports" || !listInput.Recursive || listInput.Limit != 25 || listInput.Cursor == nil ||
-		listInput.Cursor.Path != "/reports/a" || listInput.Cursor.ID != 10 {
+		listInput.Cursor.Path != "/reports/a" || listInput.Cursor.UUID != "00000000-0000-4000-8000-000000000010" {
 		t.Fatalf("list input = %+v", listInput)
 	}
 	if len(response.Entries) != 2 || response.Entries[0].Directory == nil || response.Entries[1].Directory == nil {
@@ -515,7 +515,7 @@ func TestServiceListDirectoryUsesBoundCursorAndReturnsNextCursor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode response cursor: %v", err)
 	}
-	if next.LastPath != "/reports/c" || next.LastID != 12 {
+	if next.LastPath != "/reports/c" || next.LastUUID != "00000000-0000-4000-8000-000000000012" {
 		t.Fatalf("next cursor = %+v", next)
 	}
 }
@@ -526,13 +526,13 @@ func TestServiceCreateFileStreamsAndPersistsIntegrityMetadata(t *testing.T) {
 	filesystem := serviceTestFilesystem()
 	principal := serviceTestPrincipal()
 	contents := []byte("hello world")
-	cleanupJob := db.FilestoreObjectCleanupJob{ID: 93, ExternalID: "cleanup_create"}
+	cleanupJob := db.FilestoreObjectCleanupJob{UUID: "00000000-0000-4000-8000-000000000093", ExternalID: "cleanup_create"}
 	var enqueueInput db.EnqueueFilestoreObjectCleanupJobInput
 	var putInput db.PutFilestoreFileInput
 	var uploadKey string
 	var uploadOptions storage.UploadOptions
 	var uploadedBody []byte
-	var attachedWorkspaceID int64
+	var attachedWorkspaceUUID string
 	var attachedJobExternalID string
 	var attachedETag string
 	var attachedVersionID string
@@ -545,10 +545,10 @@ func TestServiceCreateFileStreamsAndPersistsIntegrityMetadata(t *testing.T) {
 		},
 		putFileFn: func(_ context.Context, input db.PutFilestoreFileInput) (db.FilestoreMutationResult, error) {
 			putInput = input
-			return db.FilestoreMutationResult{Entry: serviceTestFileEntryFromBlob(filesystem, "file_created", input.Path, input.Blob)}, nil
+			return db.FilestoreMutationResult{Node: serviceTestFileEntryFromBlob(filesystem, "file_created", input.Path, input.Blob)}, nil
 		},
-		attachCleanupFn: func(_ context.Context, workspaceID int64, jobExternalID, etag, versionID string) error {
-			attachedWorkspaceID = workspaceID
+		attachCleanupFn: func(_ context.Context, workspaceUUID string, jobExternalID, etag, versionID string) error {
+			attachedWorkspaceUUID = workspaceUUID
 			attachedJobExternalID = jobExternalID
 			attachedETag = etag
 			attachedVersionID = versionID
@@ -597,9 +597,9 @@ func TestServiceCreateFileStreamsAndPersistsIntegrityMetadata(t *testing.T) {
 		enqueueInput.Reason != "orphan_guard" || !enqueueInput.RunAfter.Equal(serviceTestNow.Add(orphanCleanupDelay)) {
 		t.Fatalf("cleanup enqueue input = %+v", enqueueInput)
 	}
-	if attachedWorkspaceID != principal.WorkspaceID || attachedJobExternalID != cleanupJob.ExternalID ||
+	if attachedWorkspaceUUID != principal.WorkspaceUUID || attachedJobExternalID != cleanupJob.ExternalID ||
 		attachedETag != "etag-create" || attachedVersionID != "version-create" {
-		t.Fatalf("attached cleanup version = workspace %d, job %q, etag %q, version %q", attachedWorkspaceID, attachedJobExternalID, attachedETag, attachedVersionID)
+		t.Fatalf("attached cleanup version = workspace %s, job %q, etag %q, version %q", attachedWorkspaceUUID, attachedJobExternalID, attachedETag, attachedVersionID)
 	}
 	md5Sum := md5.Sum(contents)
 	sha256Sum := sha256.Sum256(contents)
@@ -643,25 +643,25 @@ func TestServiceCopyFilePreservesMetadataAndUsesCopiedObjectIdentity(t *testing.
 	source.AuthorizationMetadata = json.RawMessage("{\"intent\":\"assistant_output\",\"downloadable\":true}")
 	source.Tags = []string{"source-tag"}
 	source.Downloadable = true
-	cleanupJob := db.FilestoreObjectCleanupJob{ID: 94, ExternalID: "cleanup_copy"}
+	cleanupJob := db.FilestoreObjectCleanupJob{UUID: "00000000-0000-4000-8000-000000000094", ExternalID: "cleanup_copy"}
 	var enqueueInput db.EnqueueFilestoreObjectCleanupJobInput
 	var copiedSourceKey string
 	var copiedDestinationKey string
 	var copyInput db.CopyFilestoreFileInput
-	var attachedWorkspaceID int64
+	var attachedWorkspaceUUID string
 	var attachedJobExternalID string
 	var attachedETag string
 	var attachedVersionID string
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
-		getEntryFn: func(_ context.Context, _ int64, _ int64, entryPath string) (db.FilestoreEntry, error) {
+		getEntryFn: func(_ context.Context, _ string, _ string, entryPath string) (db.SessionResourceFile, error) {
 			switch entryPath {
 			case "/source.txt":
 				return source, nil
 			case "/archive":
 				return serviceTestDirectoryEntry(filesystem, 30, "/archive"), nil
 			default:
-				return db.FilestoreEntry{}, db.ErrNotFound
+				return db.SessionResourceFile{}, db.ErrNotFound
 			}
 		},
 		enqueueCleanupFn: func(_ context.Context, input db.EnqueueFilestoreObjectCleanupJobInput) (db.FilestoreObjectCleanupJob, error) {
@@ -685,10 +685,10 @@ func TestServiceCopyFilePreservesMetadataAndUsesCopiedObjectIdentity(t *testing.
 				S3ETag:                input.DestinationS3ETag,
 				S3VersionID:           input.DestinationS3VersionID,
 			}
-			return db.FilestoreMutationResult{Entry: serviceTestFileEntryFromBlob(filesystem, "file_copy", input.DestinationPath, blob)}, nil
+			return db.FilestoreMutationResult{Node: serviceTestFileEntryFromBlob(filesystem, "file_copy", input.DestinationPath, blob)}, nil
 		},
-		attachCleanupFn: func(_ context.Context, workspaceID int64, jobExternalID, etag, versionID string) error {
-			attachedWorkspaceID = workspaceID
+		attachCleanupFn: func(_ context.Context, workspaceUUID string, jobExternalID, etag, versionID string) error {
+			attachedWorkspaceUUID = workspaceUUID
 			attachedJobExternalID = jobExternalID
 			attachedETag = etag
 			attachedVersionID = versionID
@@ -720,9 +720,9 @@ func TestServiceCopyFilePreservesMetadataAndUsesCopiedObjectIdentity(t *testing.
 		t.Fatalf("copy cleanup input = %+v", enqueueInput)
 	}
 	assertCleanupEntryExternalIDMatchesBlobKey(t, enqueueInput)
-	if attachedWorkspaceID != principal.WorkspaceID || attachedJobExternalID != cleanupJob.ExternalID ||
+	if attachedWorkspaceUUID != principal.WorkspaceUUID || attachedJobExternalID != cleanupJob.ExternalID ||
 		attachedETag != "etag-copy" || attachedVersionID != "version-copy" {
-		t.Fatalf("attached copy cleanup version = workspace %d, job %q, etag %q, version %q", attachedWorkspaceID, attachedJobExternalID, attachedETag, attachedVersionID)
+		t.Fatalf("attached copy cleanup version = workspace %s, job %q, etag %q, version %q", attachedWorkspaceUUID, attachedJobExternalID, attachedETag, attachedVersionID)
 	}
 	if copyInput.SourcePath != "/source.txt" || copyInput.DestinationPath != "/archive/copied.txt" ||
 		copyInput.ExpectedSourceS3Key != stringValue(source.S3Key) || copyInput.ExpectedSourceS3VersionID != stringValue(source.S3VersionID) ||
@@ -738,21 +738,19 @@ func TestServiceCopyFilePreservesMetadataAndUsesCopiedObjectIdentity(t *testing.
 	}
 }
 
-func TestServiceCopyFileRejectsBorrowedSourceBeforeObjectCopy(t *testing.T) {
+func TestServiceCopyFileRejectsInputResourceBeforeObjectCopy(t *testing.T) {
 	t.Parallel()
 
 	filesystem := serviceTestFilesystem()
 	source := serviceTestFileEntry(filesystem, "/uploads/source.txt", []byte("source"))
 	source.SourceFileUUID = serviceTestPointer("11111111-1111-4111-8111-111111111111")
-	source.ManagedBy = serviceTestPointer("session_resource")
-	source.ManagedResourceUUID = serviceTestPointer("22222222-2222-4222-8222-222222222222")
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
-		getEntryFn: func(_ context.Context, _ int64, _ int64, entryPath string) (db.FilestoreEntry, error) {
+		getEntryFn: func(_ context.Context, _ string, _ string, entryPath string) (db.SessionResourceFile, error) {
 			if entryPath == source.Path {
 				return source, nil
 			}
-			return db.FilestoreEntry{}, db.ErrNotFound
+			return db.SessionResourceFile{}, db.ErrNotFound
 		},
 	}
 	service := newServiceUnderTest(config.Config{}, database, &fakeServiceBlobStore{})
@@ -776,7 +774,7 @@ func TestServiceMoveOperationsReturnDatabaseEntries(t *testing.T) {
 			getFilesystemFn: serviceFilesystemLookup(filesystem),
 			moveFileFn: func(_ context.Context, input db.MoveFilestoreFileInput) (db.FilestoreMutationResult, error) {
 				moveInput = input
-				return db.FilestoreMutationResult{Entry: serviceTestFileEntry(filesystem, input.DestinationPath, []byte("moved"))}, nil
+				return db.FilestoreMutationResult{Node: serviceTestFileEntry(filesystem, input.DestinationPath, []byte("moved"))}, nil
 			},
 		}
 		service := newServiceUnderTest(config.Config{}, database, &fakeServiceBlobStore{})
@@ -808,7 +806,7 @@ func TestServiceMoveOperationsReturnDatabaseEntries(t *testing.T) {
 			getFilesystemFn: serviceFilesystemLookup(filesystem),
 			moveDirectoryFn: func(_ context.Context, input db.MoveFilestoreDirectoryInput) (db.FilestoreMutationResult, error) {
 				moveInput = input
-				return db.FilestoreMutationResult{Entry: serviceTestDirectoryEntry(filesystem, 40, input.DestinationPath)}, nil
+				return db.FilestoreMutationResult{Node: serviceTestDirectoryEntry(filesystem, 40, input.DestinationPath)}, nil
 			},
 		}
 		service := newServiceUnderTest(config.Config{}, database, &fakeServiceBlobStore{})
@@ -837,10 +835,10 @@ func TestServiceRemoveOperationsAreIdempotentForMissingEntries(t *testing.T) {
 		t.Parallel()
 
 		filesystem := serviceTestFilesystem()
-		var removeInput db.RemoveFilestoreEntryInput
+		var removeInput db.RemoveSessionResourceFileInput
 		database := &fakeServiceDatabase{
 			getFilesystemFn: serviceFilesystemLookup(filesystem),
-			removeFileFn: func(_ context.Context, input db.RemoveFilestoreEntryInput) (db.FilestoreMutationResult, error) {
+			removeFileFn: func(_ context.Context, input db.RemoveSessionResourceFileInput) (db.FilestoreMutationResult, error) {
 				removeInput = input
 				return db.FilestoreMutationResult{}, db.ErrNotFound
 			},
@@ -893,7 +891,7 @@ func TestServiceReadFileUsesMetadataSizeWhenObjectSizeIsUnknown(t *testing.T) {
 	var openedRange *storage.ByteRange
 	database := &fakeServiceDatabase{
 		getFilesystemFn: serviceFilesystemLookup(filesystem),
-		getEntryFn: func(context.Context, int64, int64, string) (db.FilestoreEntry, error) {
+		getEntryFn: func(context.Context, string, string, string) (db.SessionResourceFile, error) {
 			return entry, nil
 		},
 	}

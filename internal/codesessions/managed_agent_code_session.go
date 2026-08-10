@@ -23,7 +23,6 @@ type ManagedAgentCreateInput struct {
 	PermissionMode             string
 	DangerouslySkipPermissions bool
 	Config                     json.RawMessage
-	InitialEvents              []json.RawMessage
 }
 
 // ManagedAgentCreateResult 只在创建链路内短暂携带两份明文凭证，调用方应立即交给
@@ -39,7 +38,7 @@ type ManagedAgentCreateResult struct {
 // CreateManagedAgentCodeSession 原子地建立 code-session 身份上下文，并为 sandbox
 // 分别签发 Messages OAuth-compatible token 与 worker session-ingress JWT。
 func (s *Service) CreateManagedAgentCodeSession(ctx context.Context, input ManagedAgentCreateInput) (ManagedAgentCreateResult, error) {
-	if input.EnvironmentWork.ID <= 0 {
+	if strings.TrimSpace(input.EnvironmentWork.UUID) == "" {
 		return ManagedAgentCreateResult{}, errors.New("managed agent environment work is required")
 	}
 	codeSessionID, err := ids.New("cse_")
@@ -57,16 +56,16 @@ func (s *Service) CreateManagedAgentCodeSession(ctx context.Context, input Manag
 	}
 	record, err := s.db.CreateCodeSession(ctx, db.CreateCodeSessionInput{
 		ExternalID:            codeSessionID,
-		OrganizationID:        input.Session.OrganizationID,
-		WorkspaceID:           input.Session.WorkspaceID,
-		SessionID:             input.Session.ID,
+		OrganizationUUID:      input.Session.OrganizationUUID,
+		WorkspaceUUID:         input.Session.WorkspaceUUID,
+		SessionUUID:           input.Session.UUID,
 		SessionExternalID:     input.Session.ExternalID,
-		EnvironmentID:         input.Environment.ID,
+		EnvironmentUUID:       input.Environment.UUID,
 		EnvironmentExternalID: input.Environment.ExternalID,
 		WorkDir:               strings.TrimSpace(input.WorkDir),
 		PermissionMode:        strings.TrimSpace(input.PermissionMode),
 		Model:                 strings.TrimSpace(input.Model),
-		Status:                "active",
+		Status:                "initializing",
 		Metadata:              metadata,
 		// OAuth-compatible token 只落 SHA-256 hash；明文仅存在于当前返回值中。
 		OAuthAccessTokenHash: auth.HashAPIKey(oauthAccessToken),
@@ -84,8 +83,8 @@ func (s *Service) CreateManagedAgentCodeSession(ctx context.Context, input Manag
 		defer cancel()
 		if cleanupErr := s.db.TerminateManagedAgentCodeSession(
 			cleanupCtx,
-			input.Session.OrganizationID,
-			input.Session.WorkspaceID,
+			input.Session.OrganizationUUID,
+			input.Session.WorkspaceUUID,
 			record.ExternalID,
 		); cleanupErr != nil {
 			s.logger.ErrorContext(
@@ -99,13 +98,13 @@ func (s *Service) CreateManagedAgentCodeSession(ctx context.Context, input Manag
 	if err := s.queueInitialize(ctx, record, input.Config, now); err != nil {
 		return ManagedAgentCreateResult{}, err
 	}
-	if err := s.queueInitialPublicSessionEvents(ctx, record, input.InitialEvents, now); err != nil {
+	if err := s.ActivateManagedAgentCodeSession(ctx, record); err != nil {
 		return ManagedAgentCreateResult{}, err
 	}
 	credentialContext, err := s.db.GetCodeSessionCredentialContextForIssue(
 		ctx,
-		input.Session.OrganizationID,
-		input.Session.WorkspaceID,
+		input.Session.OrganizationUUID,
+		input.Session.WorkspaceUUID,
 		record.ExternalID,
 	)
 	if err != nil {
@@ -126,6 +125,76 @@ func (s *Service) CreateManagedAgentCodeSession(ctx context.Context, input Manag
 	}, nil
 }
 
+// ActivateManagedAgentCodeSession locks the owning Session, replays complete
+// public history in stable order, and activates the Code Session atomically.
+func (s *Service) ActivateManagedAgentCodeSession(
+	ctx context.Context,
+	codeSession db.CodeSession,
+) error {
+	if s == nil || s.db == nil {
+		return db.ErrNotFound
+	}
+	return s.db.WithManagedAgentActivationTx(ctx, func(tx db.ManagedAgentActivationTx) error {
+		// lock session by session external id
+		lockedSession, err := tx.LockSessionForEvents(
+			ctx,
+			codeSession.WorkspaceUUID,
+			codeSession.SessionExternalID,
+		)
+		if err != nil {
+			return err
+		}
+		// lock code_session by code session id
+		lockedCodeSession, err := tx.LockInitializingCodeSession(
+			ctx,
+			codeSession.WorkspaceUUID,
+			codeSession.UUID,
+		)
+		if err != nil {
+			return err
+		}
+		sessionEvents, err := tx.ListSessionEventsForActivation(ctx, lockedSession)
+		if err != nil {
+			return err
+		}
+		inboundInputs := make([]db.AppendCodeSessionEventInput, 0, len(sessionEvents))
+		for _, event := range sessionEvents {
+			if !shouldForwardPublicEventToWorker(event.EventType) {
+				continue
+			}
+			inbound, err := s.convertSessionEventToInbound(lockedCodeSession.ExternalID, event)
+			if err != nil {
+				return err
+			}
+			inboundInputs = append(inboundInputs, inbound)
+		}
+		if err := tx.AppendCodeSessionInboundEvents(ctx, lockedCodeSession, inboundInputs); err != nil {
+			return err
+		}
+		activated, err := tx.ActivateCodeSession(ctx, lockedCodeSession.UUID, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		if !activated {
+			return db.ErrInvalidState
+		}
+		return nil
+	})
+}
+
+// convertSessionEventToInbound maps one public session event payload into a
+// Code Session inbound append input.
+func (s *Service) convertSessionEventToInbound(
+	codeSessionID string,
+	event db.SessionEvent,
+) (db.AppendCodeSessionEventInput, error) {
+	payload, err := workerPayloadForPublicEvent(codeSessionID, event.Payload, event.ProcessedAt)
+	if err != nil {
+		return db.AppendCodeSessionEventInput{}, err
+	}
+	return newInboundEventInput(codeSessionID, payload, "public-session")
+}
+
 // TerminateManagedAgentCodeSession revokes a Code Session created for a
 // sandbox launch that failed before the runtime became usable.
 func (s *Service) TerminateManagedAgentCodeSession(
@@ -138,8 +207,8 @@ func (s *Service) TerminateManagedAgentCodeSession(
 	}
 	return s.db.TerminateManagedAgentCodeSession(
 		ctx,
-		session.OrganizationID,
-		session.WorkspaceID,
+		session.OrganizationUUID,
+		session.WorkspaceUUID,
 		strings.TrimSpace(codeSessionID),
 	)
 }

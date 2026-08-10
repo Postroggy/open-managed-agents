@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/superduck-ai/yourbatis"
 )
 
 type workspaceStorageUsage struct {
@@ -13,107 +13,74 @@ type workspaceStorageUsage struct {
 	FilestoreBytes int64 `db:"filestore_bytes"`
 }
 
-// workspaceStorageBytesQuery 从事务型账本读取工作区总用量，查询成本不随文件数量增长。
-// 尚未写入过文件的新工作区可能没有账本行，此时自然视为零用量。
-func workspaceStorageBytesQuery(ctx context.Context, database *sqlx.DB, workspaceID int64) (int64, error) {
-	var total int64
-	err := namedGetContext(ctx, database, &total, `
-		select coalesce((
-			select files_bytes + filestore_bytes
-			from workspace_storage_usage
-			where workspace_id = :workspace_id
-		), 0)
-	`, map[string]any{"workspace_id": workspaceID})
-	return total, err
-}
-
 // GetWorkspaceStorageBytes returns the transactionally maintained Files API
-// plus Filestore usage for one workspace.
-func (d *DB) GetWorkspaceStorageBytes(ctx context.Context, workspaceID int64) (int64, error) {
-	return workspaceStorageBytesQuery(ctx, d.sql, workspaceID)
+// plus Filestore usage for one workspace. The query reads the transactional
+// ledger, so its cost does not grow with the number of files. A workspace with
+// no ledger row is treated as using zero bytes.
+func (d *DB) GetWorkspaceStorageBytes(ctx context.Context, workspaceUUID string) (int64, error) {
+	mapper := NewWorkspaceStorageUsageMapper(d.mapperDB)
+	return mapper.GetWorkspaceStorageBytes(ctx, workspaceUUID)
 }
 
 // ReconcileWorkspaceStorageUsage 在工作区锁内从文件事实表重建账本。
 // 它用于迁移校验和低频运维修复，不应放回正常请求链路。
-func (d *DB) ReconcileWorkspaceStorageUsage(ctx context.Context, workspaceID int64) (int64, error) {
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-	arguments := map[string]any{"workspace_id": workspaceID}
-	if _, err := namedExecContext(ctx, tx, `
-		select pg_advisory_xact_lock(:workspace_id)
-	`, arguments); err != nil {
-		return 0, err
-	}
-
+func (d *DB) ReconcileWorkspaceStorageUsage(ctx context.Context, workspaceUUID string) (int64, error) {
 	var usage workspaceStorageUsage
-	if err := namedGetContext(ctx, tx, &usage, `
-		select
-			coalesce((
-				select sum(size_bytes) from files
-				where workspace_id = :workspace_id and deleted_at is null
-			), 0) as files_bytes,
-			coalesce((
-				select sum(size_bytes) from filestore_entries
-				where workspace_uuid = (
-					select uuid from workspaces where id = :workspace_id
-				)
-					and kind = 'file' and deleted_at is null
-					and source_file_uuid is null
-			), 0) as filestore_bytes
-	`, arguments); err != nil {
-		return 0, err
-	}
-	if usage.FilesBytes > math.MaxInt64-usage.FilestoreBytes {
-		return 0, ErrStorageLimitExceeded
-	}
-	arguments["files_bytes"] = usage.FilesBytes
-	arguments["filestore_bytes"] = usage.FilestoreBytes
-	if _, err := namedExecContext(ctx, tx, `
-		insert into workspace_storage_usage (
-			workspace_id, files_bytes, filestore_bytes, updated_at
-		)
-		values (:workspace_id, :files_bytes, :filestore_bytes, now())
-		on conflict (workspace_id) do update set
-			files_bytes = excluded.files_bytes,
-			filestore_bytes = excluded.filestore_bytes,
-			updated_at = excluded.updated_at
-	`, arguments); err != nil {
-		return 0, err
-	}
-	if err := tx.Commit(); err != nil {
+	err := d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		mapper := NewWorkspaceStorageUsageMapper(executor)
+		if err := mapper.LockWorkspace(ctx, workspaceUUID); err != nil {
+			return err
+		}
+		var err error
+		usage, err = reconcileWorkspaceStorageUsageTx(ctx, executor, workspaceUUID)
+		return err
+	})
+	if err != nil {
 		return 0, err
 	}
 	return usage.FilesBytes + usage.FilestoreBytes, nil
 }
 
-func applyWorkspaceStorageDeltaSQLXTx(
+func reconcileWorkspaceStorageUsageTx(
 	ctx context.Context,
-	tx *sqlx.Tx,
-	workspaceID, filesDelta, filestoreDelta, workspaceStorageLimitBytes int64,
+	tx yourbatis.Executor,
+	workspaceUUID string,
+) (workspaceStorageUsage, error) {
+	mapper := NewWorkspaceStorageUsageMapper(tx)
+	usage, err := mapper.ReconcileWorkspaceStorageUsage(ctx, workspaceUUID)
+	if err != nil {
+		return workspaceStorageUsage{}, err
+	}
+	if usage.FilesBytes > math.MaxInt64-usage.FilestoreBytes {
+		return workspaceStorageUsage{}, ErrStorageLimitExceeded
+	}
+	if err := mapper.UpsertWorkspaceStorageUsage(ctx, workspaceStorageUsageParams{
+		WorkspaceUUID:  workspaceUUID,
+		FilesBytes:     usage.FilesBytes,
+		FilestoreBytes: usage.FilestoreBytes,
+	}); err != nil {
+		return workspaceStorageUsage{}, err
+	}
+	return usage, nil
+}
+
+func applyWorkspaceStorageDeltaTx(
+	ctx context.Context,
+	tx yourbatis.Executor,
+	workspaceUUID string,
+	filesDelta, filestoreDelta, workspaceStorageLimitBytes int64,
 ) error {
-	arguments := map[string]any{"workspace_id": workspaceID}
-	if _, err := namedExecContext(ctx, tx, `
-		insert into workspace_storage_usage (workspace_id)
-		values (:workspace_id)
-		on conflict (workspace_id) do nothing
-	`, arguments); err != nil {
+	mapper := NewWorkspaceStorageUsageMapper(tx)
+	if err := mapper.EnsureWorkspaceStorageUsage(ctx, workspaceUUID); err != nil {
 		return err
 	}
 
-	var usage workspaceStorageUsage
-	if err := namedGetContext(ctx, tx, &usage, `
-		select files_bytes, filestore_bytes
-		from workspace_storage_usage
-		where workspace_id = :workspace_id
-		for update
-	`, arguments); err != nil {
+	usage, err := mapper.GetWorkspaceStorageUsageForUpdate(ctx, workspaceUUID)
+	if err != nil {
 		return err
 	}
 	nextFilesBytes, nextFilestoreBytes, err := nextWorkspaceStorageUsage(
-		workspaceID,
+		workspaceUUID,
 		usage,
 		filesDelta,
 		filestoreDelta,
@@ -122,30 +89,25 @@ func applyWorkspaceStorageDeltaSQLXTx(
 	if err != nil {
 		return err
 	}
-	arguments["files_bytes"] = nextFilesBytes
-	arguments["filestore_bytes"] = nextFilestoreBytes
-	_, err = namedExecContext(ctx, tx, `
-		update workspace_storage_usage
-		set files_bytes = :files_bytes,
-			filestore_bytes = :filestore_bytes,
-			updated_at = now()
-		where workspace_id = :workspace_id
-	`, arguments)
-	return err
+	return mapper.UpdateWorkspaceStorageUsage(ctx, workspaceStorageUsageParams{
+		WorkspaceUUID:  workspaceUUID,
+		FilesBytes:     nextFilesBytes,
+		FilestoreBytes: nextFilestoreBytes,
+	})
 }
 
 func nextWorkspaceStorageUsage(
-	workspaceID int64,
+	workspaceUUID string,
 	usage workspaceStorageUsage,
 	filesDelta, filestoreDelta, workspaceStorageLimitBytes int64,
 ) (int64, int64, error) {
 	nextFilesBytes, err := addWorkspaceStorageDelta(usage.FilesBytes, filesDelta)
 	if err != nil {
-		return 0, 0, fmt.Errorf("update workspace %d Files API storage usage: %w", workspaceID, err)
+		return 0, 0, fmt.Errorf("update workspace %s Files API storage usage: %w", workspaceUUID, err)
 	}
 	nextFilestoreBytes, err := addWorkspaceStorageDelta(usage.FilestoreBytes, filestoreDelta)
 	if err != nil {
-		return 0, 0, fmt.Errorf("update workspace %d Filestore storage usage: %w", workspaceID, err)
+		return 0, 0, fmt.Errorf("update workspace %s Filestore storage usage: %w", workspaceUUID, err)
 	}
 	if nextFilesBytes > math.MaxInt64-nextFilestoreBytes {
 		return 0, 0, ErrStorageLimitExceeded

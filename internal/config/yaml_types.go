@@ -46,6 +46,7 @@ type yamlConfig struct {
 	EnvironmentRunner EnvironmentRunnerConfig `yaml:"environment_runner"`
 	CodeSession       yamlCodeSessionConfig   `yaml:"code_session"`
 	Webhook           yamlWebhookConfig       `yaml:"webhook"`
+	Vault             VaultConfig             `yaml:"vault"`
 	Bootstrap         yamlBootstrapConfig     `yaml:"bootstrap"`
 	SDKFixtures       SDKFixtureConfig        `yaml:"sdk_fixtures"`
 }
@@ -77,13 +78,12 @@ type yamlWebhookConfig struct {
 }
 
 type yamlBootstrapConfig struct {
-	SeedAPIKeys            optional[[]SeedAPIKey] `yaml:"seed_api_keys"`
-	WorkspaceName          string                 `yaml:"workspace_name"`
-	OrganizationName       string                 `yaml:"organization_name"`
-	OrganizationExternalID string                 `yaml:"organization_external_id"`
-	WorkspaceExternalID    string                 `yaml:"workspace_external_id"`
-	UserExternalID         string                 `yaml:"user_external_id"`
-	APIKeyExternalID       string                 `yaml:"api_key_external_id"`
+	SeedAPIKeys         optional[[]SeedAPIKey] `yaml:"seed_api_keys"`
+	WorkspaceName       string                 `yaml:"workspace_name"`
+	OrganizationName    string                 `yaml:"organization_name"`
+	WorkspaceExternalID string                 `yaml:"workspace_external_id"`
+	UserExternalID      string                 `yaml:"user_external_id"`
+	APIKeyExternalID    string                 `yaml:"api_key_external_id"`
 }
 
 func newYAMLConfig() yamlConfig {
@@ -115,13 +115,13 @@ func newYAMLConfig() yamlConfig {
 			MaxAttempts:   defaults.Webhook.MaxAttempts,
 			AllowInsecure: defaults.Webhook.AllowInsecure,
 		},
+		Vault: defaults.Vault,
 		Bootstrap: yamlBootstrapConfig{
-			WorkspaceName:          defaults.Bootstrap.WorkspaceName,
-			OrganizationName:       defaults.Bootstrap.OrganizationName,
-			OrganizationExternalID: defaults.Bootstrap.OrganizationExternalID,
-			WorkspaceExternalID:    defaults.Bootstrap.WorkspaceExternalID,
-			UserExternalID:         defaults.Bootstrap.UserExternalID,
-			APIKeyExternalID:       defaults.Bootstrap.APIKeyExternalID,
+			WorkspaceName:       defaults.Bootstrap.WorkspaceName,
+			OrganizationName:    defaults.Bootstrap.OrganizationName,
+			WorkspaceExternalID: defaults.Bootstrap.WorkspaceExternalID,
+			UserExternalID:      defaults.Bootstrap.UserExternalID,
+			APIKeyExternalID:    defaults.Bootstrap.APIKeyExternalID,
 		},
 		SDKFixtures: defaults.SDKFixtures,
 	}
@@ -155,13 +155,13 @@ func (input yamlConfig) resolve() Config {
 			MaxAttempts:   input.Webhook.MaxAttempts,
 			AllowInsecure: input.Webhook.AllowInsecure,
 		},
+		Vault: input.Vault,
 		Bootstrap: BootstrapConfig{
-			WorkspaceName:          input.Bootstrap.WorkspaceName,
-			OrganizationName:       input.Bootstrap.OrganizationName,
-			OrganizationExternalID: input.Bootstrap.OrganizationExternalID,
-			WorkspaceExternalID:    input.Bootstrap.WorkspaceExternalID,
-			UserExternalID:         input.Bootstrap.UserExternalID,
-			APIKeyExternalID:       input.Bootstrap.APIKeyExternalID,
+			WorkspaceName:       input.Bootstrap.WorkspaceName,
+			OrganizationName:    input.Bootstrap.OrganizationName,
+			WorkspaceExternalID: input.Bootstrap.WorkspaceExternalID,
+			UserExternalID:      input.Bootstrap.UserExternalID,
+			APIKeyExternalID:    input.Bootstrap.APIKeyExternalID,
 		},
 		SDKFixtures: input.SDKFixtures,
 	}

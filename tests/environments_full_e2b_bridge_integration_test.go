@@ -18,7 +18,7 @@ import (
 	e2b "github.com/superduck-ai/e2b-go-sdk"
 )
 
-const fullE2BManagedAgentSandboxImage = "registry.gz.cvte.cn/oma/managed-agent-sandbox:latest"
+const fullE2BManagedAgentSandboxImage = "ghcr.io/superduck-ai/managed-agent-sandbox:latest"
 
 func TestE2BManagedAgentBridgeEnvironmentManagerIntegration(t *testing.T) {
 	if testing.Short() {
@@ -160,7 +160,7 @@ func TestE2BManagedAgentBridgeEnvironmentManagerIntegration(t *testing.T) {
 	}
 	sandboxRecord, err := app.db.GetActiveEnvironmentSandboxForWork(
 		ctx,
-		getDefaultDBIDs(t, app.db).WorkspaceID,
+		getDefaultDBIDs(t, app.pool).WorkspaceID,
 		environment.ID,
 		workID,
 	)

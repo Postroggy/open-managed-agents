@@ -15,7 +15,10 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type environmentAPIResponse struct {
@@ -100,9 +103,15 @@ func TestEnvironmentsAPI(t *testing.T) {
 		assertError(t, resp, http.StatusBadRequest, "invalid_request_error")
 	})
 
+	t.Run("failure package URL credentials", func(t *testing.T) {
+		body := `{"name":"bad-package-credentials","config":{"type":"cloud","packages":{"pip":["pkg @ https://user:secret-token@example.test/private.whl"]}}}`
+		resp := doEnvironmentRequest(t, app, http.MethodPost, "/v1/environments?beta=true", strings.NewReader(body), defaultTestKey, true)
+		assertError(t, resp, http.StatusBadRequest, "invalid_request_error")
+	})
+
 	t.Run("success create update archive list delete and work lifecycle", func(t *testing.T) {
 		first := createEnvironment(t, app, `{"name":"env-api-default"}`)
-		defer cleanupEnvironmentRows(t, app.db, first.ID)
+		defer cleanupEnvironmentRows(t, app.pool, first.ID)
 		if first.Type != "environment" || first.Description != "" {
 			t.Fatalf("unexpected default environment: %+v", first)
 		}
@@ -133,7 +142,7 @@ func TestEnvironmentsAPI(t *testing.T) {
 				"networking":{"type":"limited","allowed_hosts":["*.example.com"],"allow_package_managers":true}
 			}
 		}`)
-		defer cleanupEnvironmentRows(t, app.db, configured.ID)
+		defer cleanupEnvironmentRows(t, app.pool, configured.ID)
 		if configured.Scope == nil || *configured.Scope != scope {
 			t.Fatalf("configured scope = %v, want organization", configured.Scope)
 		}
@@ -179,22 +188,22 @@ func TestEnvironmentsAPI(t *testing.T) {
 			t.Fatalf("include_archived list missing environment: %+v", archivedPage.Data)
 		}
 
-		record, err := app.db.GetEnvironment(context.Background(), getDefaultDBIDs(t, app.db).WorkspaceID, configured.ID)
+		record, err := app.db.GetEnvironment(context.Background(), getDefaultDBIDs(t, app.pool).WorkspaceUUID, configured.ID)
 		if err != nil {
 			t.Fatalf("get environment db record: %v", err)
 		}
 		envKey := "sk-ant-env-test"
 		if err := app.db.CreateEnvironmentKey(context.Background(), db.EnvironmentKey{
 			ExternalID:            "envkey_test",
-			OrganizationID:        record.OrganizationID,
-			WorkspaceID:           record.WorkspaceID,
-			EnvironmentID:         record.ID,
+			OrganizationUUID:      record.OrganizationUUID,
+			WorkspaceUUID:         record.WorkspaceUUID,
+			EnvironmentUUID:       record.UUID,
 			EnvironmentExternalID: record.ExternalID,
 		}, auth.HashAPIKey(envKey)); err != nil {
 			t.Fatalf("create environment key: %v", err)
 		}
 		workID := createEnvironmentWork(t, app, record)
-		defer cleanupEnvironmentWorkRows(t, app.db, workID)
+		defer cleanupEnvironmentWorkRows(t, app.pool, workID)
 
 		polled := pollEnvironmentWork(t, app, configured.ID, envKey)
 		if polled.ID != workID || polled.State != "queued" {
@@ -230,12 +239,58 @@ func TestEnvironmentsAPI(t *testing.T) {
 	})
 }
 
+func TestOfficialSDKEnvironmentPackagesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	app := newTestAppWithStore(t, nil, newFakeStore("environment-sdk-packages-bucket"))
+	defer app.close()
+	client := anthropic.NewClient(option.WithBaseURL(app.baseURL), option.WithAPIKey(defaultTestKey))
+	createdPackages := anthropic.BetaPackagesParams{
+		Type: anthropic.BetaPackagesParamsTypePackages, Apt: []string{"ffmpeg"}, Cargo: []string{"ripgrep@14.1.1"},
+		Gem: []string{"rake:13.2.1"}, Go: []string{"golang.org/x/tools/cmd/goimports@v0.35.0"},
+		Npm: []string{"typescript@5.9.3"}, Pip: []string{"numpy==2.3.5"},
+	}
+	created, err := client.Beta.Environments.New(ctx, anthropic.BetaEnvironmentNewParams{
+		Name: "sdk-packages-" + strings.ReplaceAll(time.Now().Format("150405.000000000"), ".", ""),
+		Config: anthropic.BetaEnvironmentNewParamsConfigUnion{OfCloud: &anthropic.BetaCloudConfigParams{
+			Packages: createdPackages,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SDK create environment: %v", err)
+	}
+	defer cleanupEnvironmentRows(t, app.pool, created.ID)
+
+	updatedPackages := anthropic.BetaPackagesParams{
+		Type: anthropic.BetaPackagesParamsTypePackages, Apt: []string{"jq"}, Pip: []string{"httpx==0.28.1"},
+	}
+	_, err = client.Beta.Environments.Update(ctx, created.ID, anthropic.BetaEnvironmentUpdateParams{
+		Config: anthropic.BetaEnvironmentUpdateParamsConfigUnion{OfCloud: &anthropic.BetaCloudConfigParams{
+			Packages: updatedPackages,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SDK update environment: %v", err)
+	}
+
+	got, err := client.Beta.Environments.Get(ctx, created.ID, anthropic.BetaEnvironmentGetParams{})
+	if err != nil {
+		t.Fatalf("SDK get environment: %v", err)
+	}
+	packages := got.Config.Packages
+	if packages.Type != anthropic.BetaPackagesTypePackages ||
+		len(packages.Apt) != 1 || packages.Apt[0] != "jq" ||
+		len(packages.Pip) != 1 || packages.Pip[0] != "httpx==0.28.1" ||
+		len(packages.Cargo) != 0 || len(packages.Gem) != 0 || len(packages.Go) != 0 || len(packages.Npm) != 0 {
+		t.Fatalf("SDK packages = %#v, want normalized jq/httpx packages", packages)
+	}
+}
+
 func TestEnvironmentsSchemaHasNoForeignKeys(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("environments-schema-bucket"))
 	defer app.close()
 
 	var foreignKeyCount int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from pg_constraint con
 		join pg_class cls on cls.oid = con.conrelid
@@ -469,9 +524,9 @@ func createEnvironmentWork(t *testing.T, app *testApp, env db.Environment) strin
 	if _, err := app.db.CreateEnvironmentWork(context.Background(), db.EnvironmentWork{
 		UUID:                  uuid.NewString(),
 		ExternalID:            workID,
-		OrganizationID:        env.OrganizationID,
-		WorkspaceID:           env.WorkspaceID,
-		EnvironmentID:         env.ID,
+		OrganizationUUID:      env.OrganizationUUID,
+		WorkspaceUUID:         env.WorkspaceUUID,
+		EnvironmentUUID:       env.UUID,
 		EnvironmentExternalID: env.ExternalID,
 		Data:                  json.RawMessage(`{"type":"session","id":"session_test"}`),
 		Metadata:              json.RawMessage(`{}`),
@@ -492,31 +547,31 @@ func containsEnvironment(environments []environmentAPIResponse, id string) bool 
 	return false
 }
 
-func cleanupEnvironmentRows(t *testing.T, database *db.DB, envID string) {
+func cleanupEnvironmentRows(t *testing.T, pool *pgxpool.Pool, envID string) {
 	t.Helper()
-	if _, err := database.Pool.Exec(context.Background(), `delete from environment_sandboxes where environment_external_id = $1`, envID); err != nil {
+	if _, err := pool.Exec(context.Background(), `delete from environment_sandboxes where environment_external_id = $1`, envID); err != nil {
 		t.Fatalf("cleanup environment sandboxes: %v", err)
 	}
-	if _, err := database.Pool.Exec(context.Background(), `delete from environment_work where environment_external_id = $1`, envID); err != nil {
+	if _, err := pool.Exec(context.Background(), `delete from environment_work where environment_external_id = $1`, envID); err != nil {
 		t.Fatalf("cleanup environment work: %v", err)
 	}
-	if _, err := database.Pool.Exec(context.Background(), `delete from environment_worker_polls where environment_external_id = $1`, envID); err != nil {
+	if _, err := pool.Exec(context.Background(), `delete from environment_worker_polls where environment_external_id = $1`, envID); err != nil {
 		t.Fatalf("cleanup environment worker polls: %v", err)
 	}
-	if _, err := database.Pool.Exec(context.Background(), `delete from environment_keys where environment_external_id = $1`, envID); err != nil {
+	if _, err := pool.Exec(context.Background(), `delete from environment_keys where environment_external_id = $1`, envID); err != nil {
 		t.Fatalf("cleanup environment keys: %v", err)
 	}
-	if _, err := database.Pool.Exec(context.Background(), `delete from environments where external_id = $1`, envID); err != nil {
+	if _, err := pool.Exec(context.Background(), `delete from environments where external_id = $1`, envID); err != nil {
 		t.Fatalf("cleanup environment: %v", err)
 	}
 }
 
-func cleanupEnvironmentWorkRows(t *testing.T, database *db.DB, workID string) {
+func cleanupEnvironmentWorkRows(t *testing.T, pool *pgxpool.Pool, workID string) {
 	t.Helper()
-	if _, err := database.Pool.Exec(context.Background(), `delete from environment_sandboxes where work_external_id = $1`, workID); err != nil {
+	if _, err := pool.Exec(context.Background(), `delete from environment_sandboxes where work_external_id = $1`, workID); err != nil {
 		t.Fatalf("cleanup work sandboxes: %v", err)
 	}
-	if _, err := database.Pool.Exec(context.Background(), `delete from environment_work where external_id = $1`, workID); err != nil {
+	if _, err := pool.Exec(context.Background(), `delete from environment_work where external_id = $1`, workID); err != nil {
 		t.Fatalf("cleanup work: %v", err)
 	}
 }

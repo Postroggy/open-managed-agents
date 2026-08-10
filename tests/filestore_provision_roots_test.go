@@ -16,7 +16,7 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 	t.Run("rejects an active file at a fixed root", func(t *testing.T) {
 		app := newTestAppWithStore(t, nil, newFakeStore("filestore-provision-root-file"))
 		t.Cleanup(app.close)
-		_, workspaceID, organizationUUID, workspaceUUID, _, _, _, sessionUUID, codeSessionUUID, apiKeyUUID := seedFilestoreLookupScope(t, app)
+		_, _, organizationUUID, workspaceUUID, _, _, _, sessionUUID, codeSessionUUID, apiKeyUUID := seedFilestoreLookupScope(t, app)
 		input := newFilestoreProvisionInput(
 			organizationUUID,
 			workspaceUUID,
@@ -24,12 +24,12 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 			codeSessionUUID,
 			apiKeyUUID,
 		)
-		filesystem := insertFilestoreFilesystemWithoutRoots(t, app, workspaceID, input)
+		filesystem := insertFilestoreFilesystemWithoutRoots(t, app, input)
 		if _, err := app.db.PutFilestoreFile(context.Background(), db.PutFilestoreFileInput{
-			WorkspaceID:  workspaceID,
-			FilesystemID: filesystem.ID,
-			Path:         "/uploads",
-			Blob:         workspaceStorageBlob(1, nil),
+			WorkspaceUUID:  workspaceUUID,
+			FilesystemUUID: filesystem.UUID,
+			Path:           "/uploads",
+			Blob:           workspaceStorageBlob(1, nil),
 		}); err != nil {
 			t.Fatalf("PutFilestoreFile(/uploads) error = %v", err)
 		}
@@ -39,7 +39,7 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 			t.Fatalf("ProvisionFilestoreFilesystem() = created %v, error %v; want active root file conflict", created, err)
 		}
 		if got := filestoreRootKinds(t, app, filesystem); !reflect.DeepEqual(got, map[string]string{
-			"/uploads": db.FilestoreEntryKindFile,
+			"/uploads": db.SessionResourceFileKindFile,
 		}) {
 			t.Fatalf("roots after rejected provision = %v, want only the original /uploads file", got)
 		}
@@ -67,7 +67,7 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 	t.Run("repairs missing roots on an existing filesystem", func(t *testing.T) {
 		app := newTestAppWithStore(t, nil, newFakeStore("filestore-provision-repair-roots"))
 		t.Cleanup(app.close)
-		_, workspaceID, organizationUUID, workspaceUUID, _, _, _, sessionUUID, codeSessionUUID, apiKeyUUID := seedFilestoreLookupScope(t, app)
+		_, _, organizationUUID, workspaceUUID, _, _, _, sessionUUID, codeSessionUUID, apiKeyUUID := seedFilestoreLookupScope(t, app)
 		input := newFilestoreProvisionInput(
 			organizationUUID,
 			workspaceUUID,
@@ -75,29 +75,29 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 			codeSessionUUID,
 			apiKeyUUID,
 		)
-		inserted := insertFilestoreFilesystemWithoutRoots(t, app, workspaceID, input)
+		inserted := insertFilestoreFilesystemWithoutRoots(t, app, input)
 
 		filesystem, created, err := app.db.ProvisionFilestoreFilesystem(context.Background(), input)
 		if err != nil || created {
 			t.Fatalf("first idempotent ProvisionFilestoreFilesystem() = created %v, error %v", created, err)
 		}
-		if filesystem.ID != inserted.ID {
-			t.Fatalf("reused filesystem ID = %d, want %d", filesystem.ID, inserted.ID)
+		if filesystem.UUID != inserted.UUID {
+			t.Fatalf("reused filesystem UUID = %q, want %q", filesystem.UUID, inserted.UUID)
 		}
 		assertFixedFilestoreRoots(t, app, filesystem)
 
-		if _, err := app.db.Pool.Exec(context.Background(), `
-			delete from filestore_entries
-			where filesystem_uuid = $1 and path = '/transcripts'
-		`, filesystem.UUID); err != nil {
+		if _, err := app.pool.Exec(context.Background(), `
+			delete from session_resources
+			where session_uuid = $1 and path = '/transcripts'
+		`, filesystem.SessionUUID); err != nil {
 			t.Fatalf("delete fixed root for repair test: %v", err)
 		}
 		repaired, created, err := app.db.ProvisionFilestoreFilesystem(context.Background(), input)
 		if err != nil || created {
 			t.Fatalf("second idempotent ProvisionFilestoreFilesystem() = created %v, error %v", created, err)
 		}
-		if repaired.ID != filesystem.ID {
-			t.Fatalf("repaired filesystem ID = %d, want %d", repaired.ID, filesystem.ID)
+		if repaired.UUID != filesystem.UUID {
+			t.Fatalf("repaired filesystem UUID = %q, want %q", repaired.UUID, filesystem.UUID)
 		}
 		assertFixedFilestoreRoots(t, app, repaired)
 	})
@@ -106,7 +106,7 @@ func TestProvisionFilestoreFilesystemFixedRoots(t *testing.T) {
 func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("filestore-provision-delete-race"))
 	t.Cleanup(app.close)
-	_, workspaceID, organizationUUID, workspaceUUID, _, _, _, sessionUUID, codeSessionUUID, apiKeyUUID := seedFilestoreLookupScope(t, app)
+	_, _, organizationUUID, workspaceUUID, _, _, _, sessionUUID, codeSessionUUID, apiKeyUUID := seedFilestoreLookupScope(t, app)
 	input := newFilestoreProvisionInput(
 		organizationUUID,
 		workspaceUUID,
@@ -115,7 +115,7 @@ func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T)
 		apiKeyUUID,
 	)
 	var sessionExternalID string
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select external_id from sessions where uuid = $1
 	`, sessionUUID).Scan(&sessionExternalID); err != nil {
 		t.Fatalf("load Session external ID: %v", err)
@@ -123,14 +123,14 @@ func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	blocker, err := app.db.Pool.Begin(ctx)
+	blocker, err := app.pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin workspace lock blocker: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = blocker.Rollback(context.Background())
 	})
-	if _, err := blocker.Exec(ctx, `select pg_advisory_xact_lock($1)`, workspaceID); err != nil {
+	if _, err := blocker.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, workspaceUUID); err != nil {
 		t.Fatalf("lock workspace: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T)
 
 	deleted := make(chan error, 1)
 	go func() {
-		_, deleteErr := app.db.DeleteSession(ctx, workspaceID, sessionExternalID)
+		_, deleteErr := app.db.DeleteSession(ctx, workspaceUUID, sessionExternalID)
 		deleted <- deleteErr
 	}()
 	select {
@@ -181,7 +181,7 @@ func TestProvisionFilestoreFilesystemSerializesWithSessionDeletion(t *testing.T)
 	}
 
 	var activeFilesystems, retiredFilesystems int
-	if err := app.db.Pool.QueryRow(ctx, `
+	if err := app.pool.QueryRow(ctx, `
 		select
 			count(*) filter (where deleted_at is null),
 			count(*) filter (where deleted_at is not null)
@@ -207,7 +207,7 @@ func waitForAdvisoryLockWait(t *testing.T, app *testApp) {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		var waiting bool
-		if err := app.db.Pool.QueryRow(context.Background(), `
+		if err := app.pool.QueryRow(context.Background(), `
 			select exists (
 				select 1
 				from pg_stat_activity
@@ -250,11 +250,10 @@ func newFilestoreProvisionInput(
 func insertFilestoreFilesystemWithoutRoots(
 	t *testing.T,
 	app *testApp,
-	workspaceID int64,
 	input db.ProvisionFilestoreFilesystemInput,
 ) db.FilestoreFilesystem {
 	t.Helper()
-	if _, err := app.db.Pool.Exec(context.Background(), `
+	if _, err := app.pool.Exec(context.Background(), `
 		insert into filestore_filesystems (
 			uuid, external_id, organization_uuid, workspace_uuid, session_uuid,
 			code_session_uuid, created_by_api_key_uuid, created_at, updated_at
@@ -264,7 +263,7 @@ func insertFilestoreFilesystemWithoutRoots(
 		input.SessionUUID, input.CodeSessionUUID, input.CreatedByAPIKeyUUID, input.Now); err != nil {
 		t.Fatalf("insert filesystem without roots: %v", err)
 	}
-	filesystem, err := app.db.GetFilestoreFilesystem(context.Background(), workspaceID, input.ExternalID)
+	filesystem, err := app.db.GetFilestoreFilesystem(context.Background(), input.WorkspaceUUID, input.ExternalID)
 	if err != nil {
 		t.Fatalf("GetFilestoreFilesystem() error = %v", err)
 	}
@@ -275,11 +274,11 @@ func assertFixedFilestoreRoots(t *testing.T, app *testApp, filesystem db.Filesto
 	t.Helper()
 	got := filestoreRootKinds(t, app, filesystem)
 	want := map[string]string{
-		"/outputs":      db.FilestoreEntryKindDirectory,
-		"/skills":       db.FilestoreEntryKindDirectory,
-		"/uploads":      db.FilestoreEntryKindDirectory,
-		"/transcripts":  db.FilestoreEntryKindDirectory,
-		"/tool_results": db.FilestoreEntryKindDirectory,
+		"/outputs":      db.SessionResourceFileKindDirectory,
+		"/skills":       db.SessionResourceFileKindDirectory,
+		"/uploads":      db.SessionResourceFileKindDirectory,
+		"/transcripts":  db.SessionResourceFileKindDirectory,
+		"/tool_results": db.SessionResourceFileKindDirectory,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fixed Filestore roots = %v, want %v", got, want)
@@ -288,14 +287,14 @@ func assertFixedFilestoreRoots(t *testing.T, app *testApp, filesystem db.Filesto
 
 func filestoreRootKinds(t *testing.T, app *testApp, filesystem db.FilestoreFilesystem) map[string]string {
 	t.Helper()
-	rows, err := app.db.Pool.Query(context.Background(), `
-		select path, kind
-		from filestore_entries
-		where filesystem_uuid = $1
+	rows, err := app.pool.Query(context.Background(), `
+		select path, case resource_type when 'skill_archive' then 'archive' else resource_type end
+		from session_resources
+		where session_uuid = $1
 			and parent_path = '/'
 			and deleted_at is null
 		order by path
-	`, filesystem.UUID)
+	`, filesystem.SessionUUID)
 	if err != nil {
 		t.Fatalf("list fixed Filestore roots: %v", err)
 	}

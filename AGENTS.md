@@ -122,25 +122,37 @@
 - 不要为了凑文档而写重复内容；优先更新最贴近该功能的后端、前端或跨端设计文档，并保持实现细节、兼容说明和测试计划一致。
 - 编写或更新设计文档时，优先用 Mermaid 辅助说明复杂流程、状态机、组件/服务依赖、时序交互和数据流；图示应服务于理解，不要替代必要的文字说明。
 
-## Go 数据库访问与 sqlx 强制规则
+## Go 数据库访问与 Yourbatis 强制规则
 
-- 所有新增的应用运行时 SQL 操作，包括查询、写入、事务和返回行扫描，都必须使用 `github.com/jmoiron/sqlx`；禁止新增通过 `pgxpool.Query`、`pgxpool.QueryRow`、`pgxpool.Exec`、`pgx.Tx` 或等价原生 `pgx` 接口执行的 SQL。
-- 本次任务实质修改到的既有普通 SQL 也必须迁移到 `sqlx`。不要为了统一形式而批量改写本次任务未涉及的 `pgx` 代码。
-- `sqlx` 必须通过 `pgx/stdlib` 复用应用现有的唯一 `pgxpool`，不得为它另建连接池。关闭数据库时同时释放 `sqlx` 包装层与底层 pool，但不能让两者形成重复连接或彼此独立的容量配置。
-- 查询统一使用命名参数和带 `db` tag 的数据库行结构，并通过 `GetContext`、`SelectContext` 或 `StructScan` 显式映射；数据库行、领域模型和 API DTO 语义不一致时应分别定义并在边界转换，不要让数据库 tag 或 nullable/编码细节泄漏到业务模型。
-- 使用 sqlx 命名参数的 PostgreSQL SQL 不要写 `value::type`，因为冒号可能与命名参数解析冲突；统一写成 `CAST(value AS type)`。
-- 已有 `pgx.Tx` 事务链不得只迁移其中一段，避免同一业务事务跨 `pgx` 与 `sqlx` 两个句柄。需要在既有 `pgx.Tx` 事务链中增加或修改 SQL 时，必须先将整条事务链迁移为同一只 `sqlx.Tx`，再实施变更。
-- 只有本次任务完全未触碰的既有事务编排、批量/COPY、PostgreSQL 特有类型或 API 路径可以继续保留原生 `pgx`；该例外不得用于新增 SQL。
-- sqlx 迁移至少覆盖查询生成与参数绑定单测；涉及 nullable、JSON、数组、自定义类型或 PostgreSQL cast 时，还要增加真实 PostgreSQL 测试，验证命名参数绑定和结构体扫描，而不能只依赖 mock。
+- 所有应用运行时 SQL 操作，包括查询、写入、事务和返回行扫描，都必须使用 Yourbatis Mapper；禁止通过 `database/sql`、`pgxpool.Query`、`pgxpool.QueryRow`、`pgxpool.Exec`、`pgx.Tx` 或等价原生接口执行应用 SQL。
+- 数据库创建、迁移、schema 检查和约束清理等启动期维护操作可以直接使用 `database/sql`；该例外不得扩展到业务 CRUD。
+- Yourbatis 通过 `pgx/stdlib` 复用应用现有的唯一 `pgxpool`，不得另建连接池。关闭数据库时释放标准库包装层与底层 pool，不能让两者形成重复连接或彼此独立的容量配置。
+- 查询统一在 Mapper XML 中使用绑定参数，并由生成代码扫描带 `db` tag 的数据库行结构；数据库行、领域模型和 API DTO 语义不一致时应分别定义并在边界转换，不要让数据库 tag 或 nullable/编码细节泄漏到业务模型。
+- PostgreSQL `uuid` 列的查询和写入参数不强制使用 Go `uuid.UUID` 类型；已有调用链使用字符串标识符时，应直接以 `string` 绑定参数，不要仅为了匹配数据库列而在 DB 层重复调用 `uuid.Parse`、`parseDBUUID` 或增加类型包装。外部不可信输入如需校验，应在 HTTP、resource 或 service 边界完成；已经是 `uuid.UUID` 的内部值可以继续直接绑定。
+- PostgreSQL 能从 UUID 列比较和写入位置推断参数类型；普通条件和值绑定直接使用 `organization_uuid = #{organizationUUID}` 或 `workspace_uuid = #{workspaceUUID}`，不要写 `CAST(#{organizationUUID} AS uuid)`。只有参数所在表达式确实无法由 PostgreSQL 推断类型，并有测试证明需要显式类型时，才允许使用 cast。
+- 已有原生事务链不得只迁移其中一段。需要增加或修改应用 SQL 时，必须先将整条事务链迁移为同一个 Yourbatis transaction executor，再实施变更。
+- Mapper 迁移至少覆盖生成 SQL 和参数绑定单测；涉及 nullable、JSON、数组、自定义类型或 PostgreSQL cast 时，还要增加真实 PostgreSQL 测试，验证绑定和扫描，不能只依赖 mock。
+
+## Yourbatis 文件拆分
+
+- 新增或修改 Yourbatis Mapper 前，必须先阅读 `docs/design/be/yourbatis-guidelines.md`；本节规定必须遵守的文件边界，设计文档说明 Mapper、XML、事务、参数安全和测试的具体实现方式。
+- 使用 Yourbatis 的资源按以下职责拆分文件，不要把对上层暴露的 DB API、业务编排、Mapper 声明、XML SQL 和生成代码混放在同一个文件中：
+  - `xxxxs.go`：承载 `DB` 对上层暴露的公共方法、领域参数与结果类型，以及事务、错误映射、分页和其他业务编排；不要在这里声明 Yourbatis Mapper interface 或 `go:generate` 入口。
+  - `xxx_mapper.go`：承载 Yourbatis Mapper interface、Mapper 专属的查询参数与数据库行类型，以及对应的 `//go:generate go tool sqlmapgen ...` 生成入口；不要在这里实现 `DB` 对上层暴露的业务方法。
+  - `xxx.xml`：只承载该 Mapper 的 SQL、动态 SQL、公共 SQL fragment 和结果映射；XML `namespace` 必须与 Mapper interface 名一致，statement `id` 必须与 Mapper 方法名一一对应。
+  - `xxx.sqlmap.gen.go`：由 `sqlmapgen` 生成，禁止手工编辑且不纳入版本控制；修改 Mapper interface 或 XML 后必须重新运行 `go generate ./...` 验证生成结果。
+- 上述文件应放在同一个资源 package 和目录中，并使用一致的 `xxx` 资源前缀，使 Go Mapper、XML 与生成输出可以直接对应；一个生成入口只负责一个 Mapper interface 和一个 XML 文件。
 
 ## PostgreSQL Schema 规则
 
 - 不要创建 PostgreSQL 外键约束。
-- 核心表仍保留 `organization_id`、`workspace_id`、`created_by_api_key_id` 这类 bigint 引用列；完整性由应用写入、迁移代码、seed 代码和 E2E 测试保证。
+- 跨表引用统一使用目标资源的 `uuid`，例如 `organization_uuid`、`workspace_uuid`、`created_by_api_key_uuid`；完整性由应用写入、迁移代码、seed 代码和 E2E 测试保证。
 - 每张核心业务表都使用：
   - `id bigint generated always as identity` 作为数据库内部主键。
   - `uuid uuid default gen_random_uuid()` 作为稳定的业务标识符。
   - `external_id text` 作为兼容 Anthropic API 的 ID，例如 `file_...`。
+- `int`/`bigint` 类型的 `id` 只允许承担自增 identity，或确有必要的数据库内部排序；其他场景不得使用，也不得进入鉴权 Principal、业务模型、service 接口、API/事件 payload、锁键、行定位条件或跨表持久化引用。业务层的资源身份、租户范围和父子关联统一使用 UUID。
+- 已有 UUID 引用列时，查询应直接按 UUID 过滤或关联。禁止仅为 identity 与 UUID 互转而增加 JOIN 或子查询；只有校验目标存在、验证租户归属或确实读取目标表字段时才保留 JOIN，并应尽可能减少不必要的 JOIN。
 - 之后所有 DB schema 变更都必须通过 `internal/db/migrations` 中的 goose migration 管理。
 - 每次变更新增一个带编号的 migration 文件，例如 `00002_add_xxx.sql`；不要修改已应用的 migration，也不要把新的 schema 变更追加到 `internal/db/schema.go`。
 - `Migrate()` 在应用完 goose migrations 后，必须删除当前 schema 中发现的所有外键约束。
@@ -149,9 +161,10 @@
 ## 测试要求
 
 - 测试组织顺序应先写失败场景，再写成功场景。
+- `*.gen.go` 不纳入版本控制；干净 checkout 在直接运行 Go 编译、测试或静态分析前先执行 `./scripts/generate-go.sh`（内部为 `go generate ./internal/db`）。仓库标准 `just` 命令会自动完成生成。
 - 修改 `web/` 下的文件后，运行 `just web-format-check`，确保 Prettier 格式门禁通过。
 - 修改 Go 代码后，运行 `just lint`；该命令使用仓库根目录的 `.golangci.yml` 执行与 CI 相同的静态分析和格式检查。
-- 修改 schema 或 handler 后，运行 `go test ./... -count=1`。
+- 修改 schema 或 handler 后，运行 `just test`（等价于先生成 Go 源码，再运行 `go test ./... -count=1`）。
 - 做真实 E2E 时，先将测试配置的 `server.addr` 设为 `127.0.0.1:18080` 并用 `CONFIG_FILE=/path/to/test-config.yaml go run .` 启动本地服务，再以 `TEST_API_BASE_URL=http://127.0.0.1:18080` 和 `sk-ant-local-default` 运行 SDK 测试。
 - 自定义 SDK E2E 覆盖：
   - Go：`go test ./tests -run TestGoSDKFilesE2E -count=1 -v`

@@ -1,7 +1,6 @@
 package sessions
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
 	maevents "github.com/superduck-ai/open-managed-agents/internal/managedagentsevents"
+	"github.com/superduck-ai/open-managed-agents/internal/sandboxmount"
 	"github.com/superduck-ai/open-managed-agents/internal/sessionresource"
 
 	"github.com/google/uuid"
@@ -52,9 +52,9 @@ func (h *Handler) resolveAgent(r *http.Request, principal auth.Principal, raw js
 	var agent db.Agent
 	var err error
 	if version > 0 {
-		agent, err = h.db.GetAgentVersion(r.Context(), principal.WorkspaceID, agentID, version)
+		agent, err = h.db.GetAgentVersion(r.Context(), principal.WorkspaceUUID, agentID, version)
 	} else {
-		agent, err = h.db.GetAgent(r.Context(), principal.WorkspaceID, agentID)
+		agent, err = h.db.GetAgent(r.Context(), principal.WorkspaceUUID, agentID)
 	}
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -84,7 +84,7 @@ func (h *Handler) normalizeVaultIDs(r *http.Request, principal auth.Principal, r
 		if strings.TrimSpace(id) == "" {
 			return nil, errors.New("vault_ids must contain non-empty strings")
 		}
-		vault, err := h.db.GetVault(r.Context(), principal.WorkspaceID, id)
+		vault, err := h.db.GetVault(r.Context(), principal.WorkspaceUUID, id)
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				return nil, fmt.Errorf("vault not found: %s", id)
@@ -114,9 +114,9 @@ func (h *Handler) resourcesFromCreate(
 	}
 	resources := make([]normalizedSessionResource, 0, len(items))
 	session := db.Session{
-		ExternalID:     sessionID,
-		OrganizationID: principal.OrganizationID,
-		WorkspaceID:    principal.WorkspaceID,
+		ExternalID:       sessionID,
+		OrganizationUUID: principal.OrganizationUUID,
+		WorkspaceUUID:    principal.WorkspaceUUID,
 	}
 	for _, fields := range items {
 		resource, err := h.resourceFromFields(r, session, fields, now)
@@ -154,14 +154,19 @@ func (h *Handler) resourceFromFields(
 		if err != nil {
 			return normalizedSessionResource{}, err
 		}
-		_, err = h.db.GetFile(r.Context(), session.WorkspaceID, fileID)
+		file, err := h.db.GetFile(r.Context(), session.WorkspaceUUID, fileID)
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				return normalizedSessionResource{}, db.ErrFileReferenceNotFound
 			}
 			return normalizedSessionResource{}, err
 		}
-		fileSpec, err := sessionresource.NormalizeFileSpec(fileID, fields["source"], fields["mount_path"])
+		fileSpec, err := sessionresource.NormalizeFileSpec(
+			fileID,
+			file.Filename,
+			fields["source"],
+			fields["mount_path"],
+		)
 		if err != nil {
 			return normalizedSessionResource{}, err
 		}
@@ -172,7 +177,11 @@ func (h *Handler) resourceFromFields(
 		if err != nil {
 			return normalizedSessionResource{}, err
 		}
-		mountPath, err := optionalStringWithDefault(fields["mount_path"], "/workspace/repository", "mount_path")
+		mountPath, err := optionalStringWithDefault(
+			fields["mount_path"],
+			sessionresource.DefaultGitHubRepositoryMountPath(url),
+			"mount_path",
+		)
 		if err != nil {
 			return normalizedSessionResource{}, err
 		}
@@ -186,7 +195,7 @@ func (h *Handler) resourceFromFields(
 		if err != nil {
 			return normalizedSessionResource{}, err
 		}
-		store, err := h.db.GetMemoryStore(r.Context(), session.WorkspaceID, memoryStoreID)
+		store, err := h.db.GetMemoryStore(r.Context(), session.WorkspaceUUID, memoryStoreID)
 		if err != nil {
 			return normalizedSessionResource{}, resourceReferenceError{ResourceType: "memory_store", ResourceID: memoryStoreID, Err: err}
 		}
@@ -210,8 +219,8 @@ func (h *Handler) resourceFromFields(
 		resource: db.SessionResource{
 			UUID:              uuid.NewString(),
 			ExternalID:        resourceID,
-			OrganizationID:    session.OrganizationID,
-			WorkspaceID:       session.WorkspaceID,
+			OrganizationUUID:  session.OrganizationUUID,
+			WorkspaceUUID:     session.WorkspaceUUID,
 			SessionExternalID: session.ExternalID,
 			ResourceType:      resourceType,
 			Payload:           payloadRaw,
@@ -223,21 +232,25 @@ func (h *Handler) resourceFromFields(
 	}, nil
 }
 
-func (h *Handler) normalizeInputEvent(ctx context.Context, session db.Session, raw json.RawMessage, now time.Time) (db.SessionEvent, bool, error) {
+func normalizeInputEvent(
+	session db.Session,
+	raw json.RawMessage,
+	now time.Time,
+) (db.SessionEvent, json.RawMessage, bool, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return db.SessionEvent{}, false, errors.New("event must be an object")
+		return db.SessionEvent{}, nil, false, errors.New("event must be an object")
 	}
 	eventType, _ := payload["type"].(string)
 	if !allowedPublicEventType(eventType) {
-		return db.SessionEvent{}, false, errors.New("event type is not accepted by this endpoint")
+		return db.SessionEvent{}, nil, false, errors.New("event type is not accepted by this endpoint")
 	}
 	if err := validatePublicInputEvent(eventType, payload); err != nil {
-		return db.SessionEvent{}, false, err
+		return db.SessionEvent{}, nil, false, err
 	}
 	eventID, err := ids.New("sevt_")
 	if err != nil {
-		return db.SessionEvent{}, false, err
+		return db.SessionEvent{}, nil, false, err
 	}
 	payload["id"] = eventID
 	payload["processed_at"] = now.Format(time.RFC3339)
@@ -253,7 +266,7 @@ func (h *Handler) normalizeInputEvent(ctx context.Context, session db.Session, r
 		if outcomeID == "" {
 			outcomeID, err = ids.New("outc_")
 			if err != nil {
-				return db.SessionEvent{}, false, err
+				return db.SessionEvent{}, nil, false, err
 			}
 			payload["outcome_id"] = outcomeID
 		}
@@ -262,35 +275,33 @@ func (h *Handler) normalizeInputEvent(ctx context.Context, session db.Session, r
 			maxIterations = int(rawMax)
 		}
 		if maxIterations > 20 {
-			return db.SessionEvent{}, false, errors.New("max_iterations must be at most 20")
+			return db.SessionEvent{}, nil, false, errors.New("max_iterations must be at most 20")
 		}
 		payload["max_iterations"] = maxIterations
 		outcomes, err := appendOutcomeEvaluation(session.OutcomeEvaluations, outcomeID, maxIterations, now)
 		if err != nil {
-			return db.SessionEvent{}, false, err
+			return db.SessionEvent{}, nil, false, err
 		}
-		if _, err := h.db.SetSessionOutcomeEvaluations(ctx, session.WorkspaceID, session.ExternalID, outcomes); err != nil {
-			return db.SessionEvent{}, false, err
-		}
+		session.OutcomeEvaluations = outcomes
 		outcomesChanged = true
 	}
 	payloadRaw, err := httpapi.MarshalRaw(payload)
 	if err != nil {
-		return db.SessionEvent{}, false, err
+		return db.SessionEvent{}, nil, false, err
 	}
 	return db.SessionEvent{
 		UUID:              uuid.NewString(),
 		ExternalID:        eventID,
-		OrganizationID:    session.OrganizationID,
-		WorkspaceID:       session.WorkspaceID,
-		SessionID:         session.ID,
+		OrganizationUUID:  session.OrganizationUUID,
+		WorkspaceUUID:     session.WorkspaceUUID,
+		SessionUUID:       session.UUID,
 		SessionExternalID: session.ExternalID,
 		ThreadExternalID:  threadExternalID,
 		EventType:         eventType,
 		Payload:           payloadRaw,
 		ProcessedAt:       now,
 		CreatedAt:         now,
-	}, outcomesChanged, nil
+	}, session.OutcomeEvaluations, outcomesChanged, nil
 }
 
 func allowedPublicEventType(eventType string) bool {
@@ -428,7 +439,7 @@ func appendOutcomeEvaluation(raw json.RawMessage, outcomeID string, maxIteration
 }
 
 func (h *Handler) responseFromSession(r *http.Request, session db.Session) (sessionResponse, error) {
-	resources, err := h.db.ListSessionResources(r.Context(), session.WorkspaceID, session.ExternalID)
+	resources, err := h.db.ListSessionResources(r.Context(), session.WorkspaceUUID, session.ExternalID)
 	if err != nil {
 		return sessionResponse{}, err
 	}
@@ -483,6 +494,14 @@ func responseFromResource(resource db.SessionResource) json.RawMessage {
 	}
 	payload["id"] = resource.ExternalID
 	payload["type"] = resource.ResourceType
+	if resource.ResourceType == sessionresource.FileType {
+		delete(payload, "source")
+		if mountPath, ok := payload["mount_path"].(string); ok {
+			if publicMountPath, err := sandboxmount.FileBackingPath(mountPath); err == nil {
+				payload["mount_path"] = publicMountPath
+			}
+		}
+	}
 	payload["created_at"] = httpapi.FormatTime(resource.CreatedAt)
 	payload["updated_at"] = httpapi.FormatTime(resource.UpdatedAt)
 	raw, _ := json.Marshal(payload)

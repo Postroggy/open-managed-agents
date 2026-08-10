@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/superduck-ai/yourbatis"
 )
 
 func TestValidateFilestorePath(t *testing.T) {
@@ -126,71 +128,66 @@ func TestFilestorePathHelpers(t *testing.T) {
 	})
 }
 
-func TestNormalizeFilestoreEntriesPageLimit(t *testing.T) {
+func TestNormalizeSessionResourceFilesPageLimit(t *testing.T) {
 	tests := []struct {
 		name  string
 		limit int
 		want  int
 	}{
-		{name: "defaults nonpositive limit", limit: 0, want: defaultFilestoreEntriesPageLimit},
-		{name: "caps excessive limit", limit: maxFilestoreEntriesPageLimit + 1, want: maxFilestoreEntriesPageLimit},
+		{name: "defaults nonpositive limit", limit: 0, want: defaultSessionResourceFilesPageLimit},
+		{name: "caps excessive limit", limit: maxSessionResourceFilesPageLimit + 1, want: maxSessionResourceFilesPageLimit},
 		{name: "preserves valid limit", limit: 25, want: 25},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := normalizeFilestoreEntriesPageLimit(test.limit); got != test.want {
-				t.Fatalf("normalizeFilestoreEntriesPageLimit(%d) = %d, want %d", test.limit, got, test.want)
+			if got := normalizeSessionResourceFilesPageLimit(test.limit); got != test.want {
+				t.Fatalf("normalizeSessionResourceFilesPageLimit(%d) = %d, want %d", test.limit, got, test.want)
 			}
 		})
 	}
 }
 
-func TestBuildFilestoreEntriesPageQuery(t *testing.T) {
-	filesystem := FilestoreFilesystem{WorkspaceUUID: "workspace-uuid", UUID: "filesystem-uuid"}
+func TestBuildSessionResourceFilesPageQuery(t *testing.T) {
+	filesystem := FilestoreFilesystem{
+		WorkspaceUUID: "00000000-0000-4000-8000-000000000001",
+		SessionUUID:   "00000000-0000-4000-8000-000000000002",
+	}
 
 	t.Run("lists direct children without cursor", func(t *testing.T) {
-		query, args := buildFilestoreEntriesPageQuery(filesystem, ListFilestoreEntriesPageParams{
+		bound := buildSessionResourceFileMapperListResourceFilesPage(yourbatis.DialectPostgres, sessionResourceFilePageMapperParams{
+			WorkspaceUUID: filesystem.WorkspaceUUID,
+			SessionUUID:   filesystem.SessionUUID,
 			DirectoryPath: "/reports",
-			Limit:         25,
+			FetchLimit:    26,
 		})
-		if !strings.Contains(query, "and parent_path = :directory_path") ||
-			strings.Contains(query, "(path, id) >") ||
-			!strings.Contains(query, "limit :fetch_limit") {
-			t.Fatalf("direct-child query = %q", query)
+		if !strings.Contains(bound.SQL, "AND parent_path = $3") ||
+			strings.Contains(bound.SQL, "(path, uuid) >") ||
+			!strings.Contains(bound.SQL, "LIMIT $4") {
+			t.Fatalf("direct-child query = %q", bound.SQL)
 		}
-		wantArgs := map[string]any{
-			"workspace_uuid":  "workspace-uuid",
-			"filesystem_uuid": "filesystem-uuid",
-			"directory_path":  "/reports",
-			"fetch_limit":     26,
-		}
-		if !reflect.DeepEqual(args, wantArgs) {
-			t.Fatalf("direct-child args = %#v, want %#v", args, wantArgs)
+		if len(bound.Args) != 4 {
+			t.Fatalf("direct-child argument count = %d, want 4", len(bound.Args))
 		}
 	})
 
 	t.Run("lists recursive descendants after cursor", func(t *testing.T) {
-		query, args := buildFilestoreEntriesPageQuery(filesystem, ListFilestoreEntriesPageParams{
-			DirectoryPath: "/reports",
-			Recursive:     true,
-			Limit:         25,
-			Cursor:        &FilestoreEntryPageCursor{Path: "/reports/a", ID: 10},
+		bound := buildSessionResourceFileMapperListResourceFilesPage(yourbatis.DialectPostgres, sessionResourceFilePageMapperParams{
+			WorkspaceUUID:   filesystem.WorkspaceUUID,
+			SessionUUID:     filesystem.SessionUUID,
+			DirectoryPrefix: "/reports/",
+			Recursive:       true,
+			HasCursor:       true,
+			CursorPath:      "/reports/a",
+			CursorUUID:      "00000000-0000-4000-8000-000000000010",
+			FetchLimit:      26,
 		})
-		if !strings.Contains(query, "left(path, char_length(:directory_prefix)) = :directory_prefix") ||
-			!strings.Contains(query, "and (path, id) > (:cursor_path, :cursor_id)") ||
-			!strings.Contains(query, "limit :fetch_limit") {
-			t.Fatalf("recursive query = %q", query)
+		if !strings.Contains(bound.SQL, "left(path, char_length($3)) = $4") ||
+			!strings.Contains(bound.SQL, "AND (path, uuid) > ($5, $6)") ||
+			!strings.Contains(bound.SQL, "LIMIT $7") {
+			t.Fatalf("recursive query = %q", bound.SQL)
 		}
-		wantArgs := map[string]any{
-			"workspace_uuid":   "workspace-uuid",
-			"filesystem_uuid":  "filesystem-uuid",
-			"directory_prefix": "/reports/",
-			"cursor_path":      "/reports/a",
-			"cursor_id":        int64(10),
-			"fetch_limit":      26,
-		}
-		if !reflect.DeepEqual(args, wantArgs) {
-			t.Fatalf("recursive args = %#v, want %#v", args, wantArgs)
+		if len(bound.Args) != 7 {
+			t.Fatalf("recursive argument count = %d, want 7", len(bound.Args))
 		}
 	})
 
@@ -201,23 +198,23 @@ func TestBuildFilestoreEntriesPageQuery(t *testing.T) {
 	})
 }
 
-func TestFilestoreEntrySQLXRowEntry(t *testing.T) {
+func TestSessionResourceFileMapperRowEntry(t *testing.T) {
 	t.Run("rejects malformed tag JSON", func(t *testing.T) {
-		_, err := (filestoreEntryRow{TagsJSON: "not-json"}).entry()
+		_, err := (sessionResourceFileRow{TagsJSON: "not-json"}).entry()
 		if err == nil {
 			t.Fatal("entry() error = nil, want malformed tags error")
 		}
 	})
 
 	t.Run("maps database row to domain entry", func(t *testing.T) {
-		row := filestoreEntryRow{
+		row := sessionResourceFileRow{
 			ID:                    7,
-			UUID:                  "entry-uuid",
+			UUID:                  "00000000-0000-4000-8000-000000000001",
 			ExternalID:            "file_7",
-			OrganizationUUID:      "organization-uuid",
-			WorkspaceUUID:         "workspace-uuid",
-			FilesystemUUID:        "filesystem-uuid",
-			Kind:                  FilestoreEntryKindFile,
+			OrganizationUUID:      "00000000-0000-4000-8000-000000000002",
+			WorkspaceUUID:         "00000000-0000-4000-8000-000000000003",
+			SessionUUID:           "00000000-0000-4000-8000-000000000004",
+			Kind:                  SessionResourceFileKindFile,
 			Path:                  "/reports/july.txt",
 			Metadata:              []byte(`{"source":"test"}`),
 			AuthorizationMetadata: []byte(`{}`),
@@ -236,18 +233,18 @@ func TestFilestoreEntrySQLXRowEntry(t *testing.T) {
 	})
 }
 
-func TestNewFilestoreEntryPage(t *testing.T) {
-	entries := []FilestoreEntry{{ID: 1}, {ID: 2}, {ID: 3}}
+func TestNewSessionResourceFilePage(t *testing.T) {
+	entries := []SessionResourceFile{{ID: 1}, {ID: 2}, {ID: 3}}
 
 	t.Run("trims lookahead entry", func(t *testing.T) {
-		page := newFilestoreEntryPage(entries, 2)
+		page := newSessionResourceFilePage(entries, 2)
 		if !page.HasMore || len(page.Entries) != 2 || page.Entries[1].ID != 2 {
 			t.Fatalf("page = %+v, want two entries with HasMore", page)
 		}
 	})
 
 	t.Run("keeps complete final page", func(t *testing.T) {
-		page := newFilestoreEntryPage(entries[:2], 2)
+		page := newSessionResourceFilePage(entries[:2], 2)
 		if page.HasMore || len(page.Entries) != 2 {
 			t.Fatalf("page = %+v, want complete final page", page)
 		}
@@ -258,7 +255,7 @@ func TestFilestoreObjectIdentityIncludesVersion(t *testing.T) {
 	bucket := "filestore"
 	key := "objects/file"
 	version := "version-1"
-	entry := FilestoreEntry{S3Bucket: &bucket, S3Key: &key, S3VersionID: &version}
+	entry := SessionResourceFile{S3Bucket: &bucket, S3Key: &key, S3VersionID: &version}
 
 	if !sameFilestoreObject(entry, FilestoreFileBlob{S3Bucket: bucket, S3Key: key, S3VersionID: version}) {
 		t.Fatal("same exact object version was not recognized")
@@ -271,7 +268,6 @@ func TestFilestoreObjectIdentityIncludesVersion(t *testing.T) {
 func TestVirtualFilestoreRoot(t *testing.T) {
 	createdAt := time.Date(2026, time.July, 21, 1, 2, 3, 0, time.UTC)
 	filesystem := FilestoreFilesystem{
-		ID:               42,
 		UUID:             "00000000-0000-0000-0000-000000000042",
 		ExternalID:       "fs_test",
 		OrganizationUUID: "00000000-0000-4000-8000-000000000007",
@@ -281,11 +277,11 @@ func TestVirtualFilestoreRoot(t *testing.T) {
 	}
 
 	root := virtualFilestoreRoot(filesystem)
-	if root.ID != 0 || root.Path != "/" || root.ParentPath != nil || root.Kind != FilestoreEntryKindDirectory {
+	if root.ID != 0 || root.Path != "/" || root.ParentPath != nil || root.Kind != SessionResourceFileKindDirectory {
 		t.Fatalf("virtual root = %#v", root)
 	}
 	if root.OrganizationUUID != filesystem.OrganizationUUID ||
-		root.WorkspaceUUID != filesystem.WorkspaceUUID || root.FilesystemUUID != filesystem.UUID ||
+		root.WorkspaceUUID != filesystem.WorkspaceUUID || root.SessionUUID != filesystem.SessionUUID ||
 		root.ExternalID != filesystem.ExternalID {
 		t.Fatalf("virtual root scope = %#v, want filesystem %#v", root, filesystem)
 	}

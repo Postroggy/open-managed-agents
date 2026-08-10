@@ -20,8 +20,38 @@ type Config struct {
 	EnvironmentRunner EnvironmentRunnerConfig `yaml:"environment_runner"`
 	CodeSession       CodeSessionConfig       `yaml:"code_session"`
 	Webhook           WebhookConfig           `yaml:"webhook"`
+	Vault             VaultConfig             `yaml:"vault"`
 	Bootstrap         BootstrapConfig         `yaml:"bootstrap"`
 	SDKFixtures       SDKFixtureConfig        `yaml:"sdk_fixtures"`
+}
+
+// VaultConfig configures at-rest encryption for vault credential secrets.
+type VaultConfig struct {
+	MasterKey MasterKeyConfig `yaml:"master_key"`
+}
+
+// MasterKeyConfig supplies the key-encryption key (KEK) that wraps per-secret
+// DEKs. Exactly one of Kek or KekFile must be set (required in every env, same
+// as storage.s3 access keys). KekFile holds the same base64 text as Kek but
+// read from a mounted file (mirroring the
+// code_session.jwt_signing_private_key_file discipline).
+//
+// Version identifies the current wrap key (defaults to 1 when unset/0).
+// DecryptOnly holds older KEKs that may still open existing envelopes; Seal
+// always uses the current key. There is no rewrap step.
+type MasterKeyConfig struct {
+	Kek         string                 `yaml:"kek"`
+	KekFile     string                 `yaml:"kek_file"`
+	Version     int64                  `yaml:"version"`
+	DecryptOnly []DecryptOnlyKeyConfig `yaml:"decrypt_only"`
+}
+
+// DecryptOnlyKeyConfig is a prior KEK retained only for Open. Version is
+// required and must not collide with the current master_key.version.
+type DecryptOnlyKeyConfig struct {
+	Version int64  `yaml:"version"`
+	Kek     string `yaml:"kek"`
+	KekFile string `yaml:"kek_file"`
 }
 
 type ServerConfig struct {
@@ -84,11 +114,12 @@ type E2BConfig struct {
 }
 
 type EnvironmentRunnerConfig struct {
-	Enabled            bool   `yaml:"enabled"`
-	Concurrency        int    `yaml:"concurrency"`
-	ManagerPath        string `yaml:"manager_path"`
-	ClaudeAgentVersion string `yaml:"claude_agent_version"`
-	ClaudePath         string `yaml:"claude_path"`
+	Enabled                 bool          `yaml:"enabled"`
+	Concurrency             int           `yaml:"concurrency"`
+	PackageProvisionTimeout time.Duration `yaml:"package_provision_timeout"`
+	ManagerPath             string        `yaml:"manager_path"`
+	ClaudeAgentVersion      string        `yaml:"claude_agent_version"`
+	ClaudePath              string        `yaml:"claude_path"`
 }
 
 type CodeSessionConfig struct {
@@ -117,13 +148,12 @@ type WebhookConfig struct {
 }
 
 type BootstrapConfig struct {
-	SeedAPIKeys            []SeedAPIKey `yaml:"seed_api_keys"`
-	WorkspaceName          string       `yaml:"workspace_name"`
-	OrganizationName       string       `yaml:"organization_name"`
-	OrganizationExternalID string       `yaml:"organization_external_id"`
-	WorkspaceExternalID    string       `yaml:"workspace_external_id"`
-	UserExternalID         string       `yaml:"user_external_id"`
-	APIKeyExternalID       string       `yaml:"api_key_external_id"`
+	SeedAPIKeys         []SeedAPIKey `yaml:"seed_api_keys"`
+	WorkspaceName       string       `yaml:"workspace_name"`
+	OrganizationName    string       `yaml:"organization_name"`
+	WorkspaceExternalID string       `yaml:"workspace_external_id"`
+	UserExternalID      string       `yaml:"user_external_id"`
+	APIKeyExternalID    string       `yaml:"api_key_external_id"`
 }
 
 type SDKFixtureConfig struct {

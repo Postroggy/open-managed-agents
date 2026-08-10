@@ -260,7 +260,7 @@ export function cellsForEntity(
   section: ManagedEntitySection,
   entity: ManagedEntityApiResponse,
 ): Record<string, ReactNode> {
-  const status = <StatusPill>{entityStatusLabel(entity)}</StatusPill>;
+  const status = <StatusPill tone={statusPillTone(section, entity)}>{entityStatusLabel(entity)}</StatusPill>;
 
   switch (section) {
     case 'sessions':
@@ -315,6 +315,7 @@ export function initialFormValues(
     timezone: entity ? entityTimezone(entity) : localTimezone(),
     vaultIds: entity ? entityVaultIds(entity) : [],
     memoryStoreIds: entity ? entityMemoryStoreIds(entity) : [],
+    fileResources: [],
   };
 }
 
@@ -346,6 +347,13 @@ export function entityStatusLabel(entity: ManagedEntityApiResponse) {
     return titleCase(entity.state);
   }
   return 'Active';
+}
+
+export function statusPillTone(section: ManagedEntitySection, entity: ManagedEntityApiResponse): 'neutral' | 'success' {
+  if (entity.archived_at || section === 'sessions' || section === 'deployments') {
+    return 'neutral';
+  }
+  return 'success';
 }
 
 export function entityAgentLabel(entity: ManagedEntityApiResponse) {
@@ -643,20 +651,28 @@ export function credentialFormValues(credential?: VaultCredentialApiResponse): C
   };
 }
 
-export function credentialAuthBody(values: CredentialFormValues, includeImmutable: boolean) {
+export function credentialAuthBody(values: CredentialFormValues, mode: 'create' | 'update') {
   if (values.authType === 'environment_variable') {
-    return {
+    const body: Record<string, unknown> = {
       type: 'environment_variable',
-      ...(includeImmutable ? { secret_name: values.secretName.trim() } : {}),
-      secret_value: values.secretValue,
       networking: { type: 'unrestricted' },
     };
+    if (mode === 'create') {
+      body.secret_name = values.secretName.trim();
+      body.secret_value = values.secretValue;
+    } else if (values.secretValue.trim()) {
+      body.secret_value = values.secretValue;
+    }
+    return body;
   }
-  return {
+  const body: Record<string, unknown> = {
     type: 'static_bearer',
-    ...(includeImmutable ? { mcp_server_url: values.mcpServerUrl.trim() } : {}),
-    token: values.token,
+    mcp_server_url: values.mcpServerUrl.trim(),
   };
+  if (mode === 'create' || values.token.trim()) {
+    body.token = values.token;
+  }
+  return body;
 }
 
 export function credentialAuthLabel(auth: unknown) {

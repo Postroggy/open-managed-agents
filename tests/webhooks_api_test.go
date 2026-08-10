@@ -117,7 +117,7 @@ func TestWebhooksAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("load api key: %v", err)
 		}
-		storedWebhook, err := app.db.GetWebhookEndpoint(context.Background(), apiKey.WorkspaceID, created.ID)
+		storedWebhook, err := app.db.GetWebhookEndpoint(context.Background(), apiKey.WorkspaceUUID.String(), created.ID)
 		if err != nil {
 			t.Fatalf("load stored webhook: %v", err)
 		}
@@ -181,11 +181,11 @@ func TestWebhookEndpointDelivery(t *testing.T) {
 	enqueuer := webhooks.NewEnqueuer(app.db, app.cfg.Webhook, nil)
 	enqueue := func(eventType, resourceID string) {
 		enqueuer.Enqueue(ctx, webhooks.EnqueueInput{
-			WorkspaceID:            apiKey.WorkspaceID,
-			OrganizationExternalID: apiKey.OrganizationExternalID,
-			WorkspaceExternalID:    apiKey.WorkspaceExternalID,
-			EventType:              eventType,
-			ResourceID:             resourceID,
+			WorkspaceUUID:       apiKey.WorkspaceUUID.String(),
+			OrganizationUUID:    apiKey.OrganizationUUID.String(),
+			WorkspaceExternalID: apiKey.WorkspaceExternalID,
+			EventType:           eventType,
+			ResourceID:          resourceID,
 		})
 	}
 	sessionID := "sesn_webhook_endpoint_delivery"
@@ -214,14 +214,19 @@ func TestWebhookEndpointDelivery(t *testing.T) {
 	var payload struct {
 		Type string `json:"type"`
 		Data struct {
-			ID   string `json:"id"`
-			Type string `json:"type"`
+			ID             string `json:"id"`
+			OrganizationID string `json:"organization_id"`
+			Type           string `json:"type"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(delivered.Body, &payload); err != nil {
 		t.Fatalf("unmarshal delivered webhook: %v", err)
 	}
-	if event.Type != "event" || payload.Type != "event" || payload.Data.Type != "session.status_idled" || payload.Data.ID != sessionID {
+	if event.Type != "event" ||
+		payload.Type != "event" ||
+		payload.Data.Type != "session.status_idled" ||
+		payload.Data.ID != sessionID ||
+		payload.Data.OrganizationID != apiKey.OrganizationUUID.String() {
 		t.Fatalf("unexpected webhook event=%+v payload=%+v body=%s", event, payload, delivered.Body)
 	}
 
@@ -350,10 +355,10 @@ func deleteWebhook(t *testing.T, app *testApp, webhookID string) struct {
 
 func clearWebhookState(t *testing.T, app *testApp) {
 	t.Helper()
-	if _, err := app.db.Pool.Exec(context.Background(), `delete from jobs where type = 'webhook_delivery'`); err != nil {
+	if _, err := app.pool.Exec(context.Background(), `delete from jobs where type = 'webhook_delivery'`); err != nil {
 		t.Fatalf("clear webhook jobs: %v", err)
 	}
-	if _, err := app.db.Pool.Exec(context.Background(), `delete from webhook_endpoints`); err != nil {
+	if _, err := app.pool.Exec(context.Background(), `delete from webhook_endpoints`); err != nil {
 		t.Fatalf("clear webhook endpoints: %v", err)
 	}
 }

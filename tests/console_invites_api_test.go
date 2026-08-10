@@ -14,12 +14,12 @@ func TestConsoleInvitesAPI(t *testing.T) {
 	cookies := app.platformLoginCookies(t, "console-invites@example.com")
 
 	var orgUUID string
-	var orgID int64
-	if err := app.db.Pool.QueryRow(context.Background(), `
-		select o.uuid::text, o.id
+	if err := app.pool.QueryRow(context.Background(), `
+		select o.uuid::text
 		from organizations o
-		where o.external_id = 'org_default'
-	`).Scan(&orgUUID, &orgID); err != nil {
+		join workspaces w on w.organization_uuid = o.uuid
+		where w.external_id = 'workspace_default'
+	`).Scan(&orgUUID); err != nil {
 		t.Fatalf("load default organization ids: %v", err)
 	}
 	path := "/api/console/organizations/" + orgUUID + "/invites"
@@ -108,12 +108,12 @@ func TestConsoleInvitesAPI(t *testing.T) {
 	t.Run("success create and list pending invites", func(t *testing.T) {
 		suffix := uniqueAdminSuffix()
 		expiredID := "invite_expired_" + suffix
-		if _, err := app.db.Pool.Exec(context.Background(), `
+		if _, err := app.pool.Exec(context.Background(), `
 			insert into organization_invites (
-				external_id, organization_id, email, role, status, invited_at, expires_at
+				external_id, organization_uuid, email, role, status, invited_at, expires_at
 			)
 			values ($1, $2, $3, 'developer', 'pending', now() - interval '24 hours', now() - interval '1 hour')
-		`, expiredID, orgID, "expired-"+suffix+"@example.com"); err != nil {
+		`, expiredID, orgUUID, "expired-"+suffix+"@example.com"); err != nil {
 			t.Fatalf("seed expired invite: %v", err)
 		}
 
