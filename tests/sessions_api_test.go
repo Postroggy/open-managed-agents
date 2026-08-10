@@ -94,9 +94,9 @@ func TestSessionsAPI(t *testing.T) {
 
 	t.Run("success lifecycle resources threads events work and archive", func(t *testing.T) {
 		agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-api-agent"}`)
-		defer cleanupAgentRows(t, app.db, agent.ID)
+		defer cleanupAgentRows(t, app.pool, agent.ID)
 		env := createEnvironment(t, app, `{"name":"sessions-api-env"}`)
-		defer cleanupEnvironmentRows(t, app.db, env.ID)
+		defer cleanupEnvironmentRows(t, app.pool, env.ID)
 		file := uploadFile(t, app, "session-resource.txt", "text/plain", []byte("session file"))
 		defer deleteFile(t, app, file.ID)
 		memoryStore := createMemoryStore(t, app, "sessions-api-memory")
@@ -155,7 +155,7 @@ func TestSessionsAPI(t *testing.T) {
 		if _, err := time.Parse(time.RFC3339, sentCreatedAt); err != nil {
 			t.Fatalf("sent event created_at = %q, want RFC3339: %v", sentCreatedAt, err)
 		}
-		if _, err := app.db.Pool.Exec(context.Background(), `update session_events set payload = payload - 'created_at' where external_id = $1`, sentEventID); err != nil {
+		if _, err := app.pool.Exec(context.Background(), `update session_events set payload = payload - 'created_at' where external_id = $1`, sentEventID); err != nil {
 			t.Fatalf("remove stored event created_at: %v", err)
 		}
 		events := listSessionEvents(t, app, created.ID, "", defaultTestKey)
@@ -199,9 +199,9 @@ func TestArchivedSessionResourceMutationsReturnInvalidState(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"archived-session-resource-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"archived-session-resource-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	created := createSession(t, app, `{
 		"agent":`+quoteJSON(agent.ID)+`,
 		"environment_id":`+quoteJSON(env.ID)+`,
@@ -258,7 +258,7 @@ func mustSessionRecord(t *testing.T, app *testApp, sessionExternalID string) db.
 	t.Helper()
 	session, err := app.db.GetSession(
 		context.Background(),
-		getDefaultDBIDs(t, app.db).WorkspaceUUID,
+		getDefaultDBIDs(t, app.pool).WorkspaceUUID,
 		sessionExternalID,
 	)
 	if err != nil {
@@ -272,11 +272,11 @@ func TestSessionsEnvironmentKeyAccess(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-env-key-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-env-key-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	otherEnv := createEnvironment(t, app, `{"name":"sessions-env-key-other-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, otherEnv.ID)
+	defer cleanupEnvironmentRows(t, app.pool, otherEnv.ID)
 
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	otherSession := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(otherEnv.ID)+`}`)
@@ -307,9 +307,9 @@ func TestSessionsPlatformSessionAccess(t *testing.T) {
 
 	cookies := app.platformLoginCookies(t, "sessions-platform@example.com")
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-platform-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-platform-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 
 	createBody := `{"environment_id":` + quoteJSON(env.ID) + `,"agent":{"type":"agent","id":` + quoteJSON(agent.ID) + `}}`
 	createResp := app.platformRequest(t, http.MethodPost, "/v1/sessions?beta=true", strings.NewReader(createBody), cookies)
@@ -363,9 +363,9 @@ func TestPlatformWebSessionStream(t *testing.T) {
 
 	cookies := app.platformLoginCookies(t, "sessions-platform-web-stream@example.com")
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-platform-web-stream-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-platform-web-stream-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 
 	createBody := `{"environment_id":` + quoteJSON(env.ID) + `,"agent":{"type":"agent","id":` + quoteJSON(agent.ID) + `}}`
 	createResp := app.platformRequest(t, http.MethodPost, "/v1/sessions?beta=true", strings.NewReader(createBody), cookies)
@@ -461,9 +461,9 @@ func TestSessionEventsFromCodeSessionIngress(t *testing.T) {
 	defer clearWebhookState(t, app)
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-events-ingress-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-events-ingress-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	clearWebhookState(t, app)
@@ -516,9 +516,9 @@ func TestSessionCanonicalMultiAgentEventsFromCodeSessionIngress(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-canonical-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-canonical-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -619,9 +619,9 @@ func TestSessionClaudeCodeTaskEventsMapToCanonicalThreads(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-claude-code-task-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-claude-code-task-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -685,14 +685,208 @@ func TestSessionClaudeCodeTaskEventsMapToCanonicalThreads(t *testing.T) {
 	}
 }
 
+func TestManagedAgentActivationReplaysStartupHistory(t *testing.T) {
+	ctx := context.Background()
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-managed-agent-activation-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-managed-agent-activation-agent"}`)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-managed-agent-activation-env"}`)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	defer deleteSession(t, app, session.ID)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+
+	if _, err := app.pool.Exec(ctx, `
+		update code_sessions
+		set status = 'initializing'
+		where external_id = $1
+	`, codeSessionID); err != nil {
+		t.Fatalf("set code session initializing: %v", err)
+	}
+
+	codeSession, err := app.db.GetCodeSession(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("load initializing code session: %v", err)
+	}
+	codeSessionService := codesessions.NewServiceWithCredentials(app.db, app.credentials, nil)
+
+	accepted := sendSessionEvents(t, app, session.ID, `{"events":[
+		{"type":"user.message","content":[{"type":"text","text":"startup message one"}]},
+		{"type":"user.message","content":[{"type":"text","text":"startup message two"}]}
+	]}`, defaultTestKey)
+	if len(accepted.Data) != 2 {
+		t.Fatalf("accepted session events = %#v, want two", accepted.Data)
+	}
+
+	if err := codeSessionService.ActivateManagedAgentCodeSession(ctx, codeSession); err != nil {
+		t.Fatalf("activate with startup history: %v", err)
+	}
+	codeSession, err = app.db.GetCodeSession(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("reload activated code session: %v", err)
+	}
+	if codeSession.Status != "active" {
+		t.Fatalf("status after activation = %q, want active", codeSession.Status)
+	}
+	inbound, err := app.db.ListQueuedCodeSessionInboundEvents(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("list inbound after activation: %v", err)
+	}
+	if len(inbound) != 3 ||
+		!bytes.Contains(inbound[1].Payload, []byte("startup message one")) ||
+		!bytes.Contains(inbound[2].Payload, []byte("startup message two")) {
+		t.Fatalf("inbound after activation = %#v, want initialize and both startup messages", inbound)
+	}
+
+	sent := sendSessionEvents(t, app, session.ID, `{"events":[{"type":"user.message","content":[{"type":"text","text":"post-cutover message"}]}]}`, defaultTestKey)
+	if len(sent.Data) != 1 {
+		t.Fatalf("post-cutover events = %#v, want one", sent.Data)
+	}
+	inbound, err = app.db.ListQueuedCodeSessionInboundEvents(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("list post-cutover inbound: %v", err)
+	}
+	if len(inbound) != 4 || !bytes.Contains(inbound[3].Payload, []byte("post-cutover message")) {
+		t.Fatalf("post-cutover inbound = %#v, want realtime message after startup history", inbound)
+	}
+}
+
+func TestManagedAgentActivationPreservesLargeHistoryOrder(t *testing.T) {
+	ctx := context.Background()
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-managed-agent-large-history-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-managed-agent-large-history-agent"}`)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-managed-agent-large-history-env"}`)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
+	sessionResponse := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	defer deleteSession(t, app, sessionResponse.ID)
+	codeSessionID := launchLocalCodeSession(t, app, sessionResponse.ID)
+	if _, err := app.pool.Exec(ctx, `update code_sessions set status = 'initializing' where external_id = $1`, codeSessionID); err != nil {
+		t.Fatalf("set Code Session initializing: %v", err)
+	}
+
+	session, err := app.db.GetSession(ctx, getDefaultDBIDs(t, app.pool).WorkspaceUUID, sessionResponse.ID)
+	if err != nil {
+		t.Fatalf("load Session: %v", err)
+	}
+	codeSession, err := app.db.GetCodeSession(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("load Code Session: %v", err)
+	}
+	const eventCount = 501
+	createdAt := time.Now().UTC()
+	uuidPrefix := uuid.New()
+	eventIDs := make([]string, 0, eventCount)
+	events := make([]db.SessionEvent, 0, eventCount)
+	for i := range eventCount {
+		eventID := fmt.Sprintf("sevt_large_history_%03d_%s", i, strings.TrimPrefix(codeSessionID, "cse_"))
+		eventUUID := uuidPrefix
+		eventUUID[14] = byte((eventCount - i) >> 8)
+		eventUUID[15] = byte(eventCount - i)
+		eventIDs = append(eventIDs, eventID)
+		events = append(events, db.SessionEvent{
+			UUID:        eventUUID.String(),
+			ExternalID:  eventID,
+			EventType:   "user.interrupt",
+			Payload:     json.RawMessage(`{"type":"user.interrupt","id":` + quoteJSON(eventID) + `}`),
+			ProcessedAt: createdAt,
+			CreatedAt:   createdAt,
+		})
+	}
+	if _, err := app.db.AppendSessionEvents(ctx, session.WorkspaceUUID, session.ExternalID, events, nil); err != nil {
+		t.Fatalf("append large history: %v", err)
+	}
+	if err := codesessions.NewServiceWithCredentials(app.db, app.credentials, nil).ActivateManagedAgentCodeSession(ctx, codeSession); err != nil {
+		t.Fatalf("activate Code Session: %v", err)
+	}
+
+	inbound, err := app.db.ListQueuedCodeSessionInboundEvents(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("list inbound: %v", err)
+	}
+	if len(inbound) != eventCount+1 {
+		t.Fatalf("inbound count = %d, want %d", len(inbound), eventCount+1)
+	}
+	for i, eventID := range eventIDs {
+		if !bytes.Contains(inbound[i+1].Payload, []byte(eventID)) {
+			t.Fatalf("inbound %d is out of order: %s", i, inbound[i+1].Payload)
+		}
+	}
+}
+
+func TestManagedAgentActivationRollsBackOnHistoryConversionFailure(t *testing.T) {
+	ctx := context.Background()
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-history-activation-rollback-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-history-activation-rollback-agent"}`)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-history-activation-rollback-env"}`)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
+	sessionResponse := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	defer deleteSession(t, app, sessionResponse.ID)
+	codeSessionID := launchLocalCodeSession(t, app, sessionResponse.ID)
+
+	if _, err := app.pool.Exec(ctx, `
+		update code_sessions
+		set status = 'initializing'
+		where external_id = $1
+	`, codeSessionID); err != nil {
+		t.Fatalf("set rollback code session initializing: %v", err)
+	}
+	sendSessionEvents(t, app, sessionResponse.ID, `{"events":[{"type":"user.message","content":[{"type":"text","text":"history must remain durable"}]}]}`, defaultTestKey)
+	session, err := app.db.GetSession(ctx, getDefaultDBIDs(t, app.pool).WorkspaceUUID, sessionResponse.ID)
+	if err != nil {
+		t.Fatalf("load rollback Session: %v", err)
+	}
+	codeSession, err := app.db.GetCodeSession(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("load rollback Code Session: %v", err)
+	}
+	invalidAt := time.Now().UTC().Add(time.Second)
+	if _, err := app.db.AppendSessionEvents(ctx, session.WorkspaceUUID, session.ExternalID, []db.SessionEvent{{
+		UUID:        uuid.NewString(),
+		ExternalID:  "sevt_activation_invalid_" + strings.TrimPrefix(codeSessionID, "cse_"),
+		EventType:   "user.interrupt",
+		Payload:     json.RawMessage(`[]`),
+		ProcessedAt: invalidAt,
+		CreatedAt:   invalidAt,
+	}}, nil); err != nil {
+		t.Fatalf("append invalid forwardable history event: %v", err)
+	}
+	codeSessionService := codesessions.NewServiceWithCredentials(app.db, app.credentials, nil)
+	before, err := app.db.ListQueuedCodeSessionInboundEvents(ctx, codeSessionID)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("rollback inbound before delivery = (%#v, %v), want initialize", before, err)
+	}
+	if err := codeSessionService.ActivateManagedAgentCodeSession(ctx, codeSession); err == nil {
+		t.Fatal("activation with invalid forwardable history succeeded")
+	}
+	after, listErr := app.db.ListQueuedCodeSessionInboundEvents(ctx, codeSessionID)
+	if listErr != nil || len(after) != 1 {
+		t.Fatalf("rollback inbound after delivery = (%#v, %v), want unchanged initialize", after, listErr)
+	}
+	reloaded, err := app.db.GetCodeSession(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("reload rollback Code Session: %v", err)
+	}
+	if reloaded.Status != "initializing" {
+		t.Fatalf("rollback Code Session status = %q, want initializing", reloaded.Status)
+	}
+}
+
 func TestSessionClaudeCodeSubagentInternalEventsPublishToChildThread(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("sessions-claude-code-subagent-internal-bucket"))
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-claude-code-subagent-internal-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-claude-code-subagent-internal-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -725,7 +919,7 @@ func TestSessionClaudeCodeSubagentInternalEventsPublishToChildThread(t *testing.
 	if child == nil {
 		t.Fatalf("child thread was not created for subagent internal transcript: %+v", threads.Data)
 	}
-	if _, err := app.db.Pool.Exec(context.Background(), `
+	if _, err := app.pool.Exec(context.Background(), `
 		delete from session_events
 		where session_external_id = $1 and thread_external_id = $2
 	`, session.ID, child.ID); err != nil {
@@ -782,9 +976,9 @@ func TestSessionEventStreamReceivesCodeSessionIngressEvents(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-events-stream-ingress-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-events-stream-ingress-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -841,9 +1035,9 @@ func TestSessionEventStreamForwardsWorkerStreamDeltasWithoutHistory(t *testing.T
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-stream-delta-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-stream-delta-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -908,9 +1102,9 @@ func TestSessionThreadsDefaultPageSupportsOfficialPollingAndLegacyPrimary(t *tes
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-threads-default-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-threads-default-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -930,7 +1124,7 @@ func TestSessionThreadsDefaultPageSupportsOfficialPollingAndLegacyPrimary(t *tes
 		t.Fatalf("default thread page next_page = %q, want nil for 26 lanes", *threads.NextPage)
 	}
 
-	if _, err := app.db.Pool.Exec(context.Background(), `
+	if _, err := app.pool.Exec(context.Background(), `
 		delete from session_threads
 		where session_external_id = $1 and parent_thread_uuid is null
 	`, session.ID); err != nil {
@@ -1001,9 +1195,9 @@ func TestCodeSessionHTTPPollReceivesQueuedUserEvents(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-http-poll-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-http-poll-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	sendSessionEvents(t, app, session.ID, `{"events":[{"type":"user.message","content":[{"type":"text","text":"queued over http poll"}]}]}`, defaultTestKey)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
@@ -1056,9 +1250,9 @@ func TestCodeSessionWorkerEndpointsPublishEvents(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -1280,16 +1474,16 @@ func TestSessionEventsListHidesLegacyEnvManagerLog(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-legacy-env-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-legacy-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	ctx := context.Background()
 	apiKey, err := app.db.GetAPIKey(ctx, auth.HashAPIKey(defaultTestKey))
 	if err != nil {
 		t.Fatalf("get api key: %v", err)
 	}
-	storedSession, err := app.db.GetSession(ctx, apiKey.WorkspaceUUID, session.ID)
+	storedSession, err := app.db.GetSession(ctx, apiKey.WorkspaceUUID.String(), session.ID)
 	if err != nil {
 		t.Fatalf("get stored session: %v", err)
 	}
@@ -1314,7 +1508,7 @@ func TestSessionEventsListHidesLegacyEnvManagerLog(t *testing.T) {
 			ProcessedAt: now.Add(time.Second),
 			CreatedAt:   now.Add(time.Second),
 		},
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatalf("append legacy env manager log: %v", err)
 	}
 
@@ -1336,9 +1530,9 @@ func TestCodeSessionWorkerInternalEventsPersistForResume(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-internal-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-internal-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1363,7 +1557,7 @@ func TestCodeSessionWorkerInternalEventsPersistForResume(t *testing.T) {
 		t.Fatalf("internal events changed public session event count from %d to %d", beforePublicEvents, afterPublicEvents)
 	}
 	var duplicateCount int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from code_session_internal_events
 		where code_session_external_id = $1 and payload_uuid = 'fg-after' and deleted_at is null
@@ -1402,9 +1596,9 @@ func TestCodeSessionWorkerInternalEventsRejectsStaleEpochWithoutWrite(t *testing
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-internal-stale-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-internal-stale-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -1423,7 +1617,7 @@ func TestCodeSessionWorkerInternalEventsRejectsStaleEpochWithoutWrite(t *testing
 	assertError(t, resp, http.StatusConflict, "conflict_error")
 
 	var count int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from code_session_internal_events
 		where code_session_external_id = $1 and deleted_at is null
@@ -1440,9 +1634,9 @@ func TestCodeSessionWorkerInternalEventsPagination(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-internal-pagination-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-internal-pagination-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1477,9 +1671,9 @@ func TestCodeSessionWorkerInternalEventsValidation(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-internal-validation-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-internal-validation-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1517,9 +1711,9 @@ func TestCodeSessionWorkerEventsRejectInvalidBody(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-events-validation-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-events-validation-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1552,9 +1746,9 @@ func TestCodeSessionWorkerEventsAppendContract(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-events-contract-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-events-contract-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1629,7 +1823,7 @@ func TestCodeSessionWorkerEventsAppendContract(t *testing.T) {
 		t.Fatalf("control_request outbound row mismatch: %+v", rows)
 	}
 	var autoApproveCount int
-	if err := app.db.Pool.QueryRow(ctx, `
+	if err := app.pool.QueryRow(ctx, `
 		select count(*)
 		from code_session_inbound_events
 		where code_session_external_id = $1 and source = 'auto-approve' and deleted_at is null
@@ -1663,9 +1857,9 @@ func TestCodeSessionMCPDefaultAllowAutoApprovesWorkerPermissionRequest(t *testin
 			}
 		]
 	}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-mcp-default-allow-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1722,9 +1916,9 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 			}
 		]
 	}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-mcp-default-ask-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1740,7 +1934,7 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 		`}}]}`)
 
 	var autoApproveCount int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from code_session_inbound_events
 		where code_session_external_id = $1 and source = 'auto-approve' and deleted_at is null
@@ -1814,7 +2008,7 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 	}
 
 	var beforeCompatCount int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from code_session_inbound_events
 		where code_session_external_id = $1 and source = 'tool-confirmation' and deleted_at is null
@@ -1827,7 +2021,7 @@ func TestCodeSessionMCPDefaultAskPublishesRequiresActionAndAcceptsConfirmation(t
 		t.Fatalf("send legacy tool confirmation status = %d, want 200: %s", compatResp.StatusCode, readAll(t, compatResp.Body))
 	}
 	var afterCompatCount int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from code_session_inbound_events
 		where code_session_external_id = $1 and source = 'tool-confirmation' and deleted_at is null
@@ -1857,9 +2051,9 @@ func TestCodeSessionMCPDefaultAskPreservesSubagentThreadForConfirmation(t *testi
 			}
 		]
 	}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-mcp-default-ask-thread-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -1992,9 +2186,9 @@ func TestCodeSessionWorkerEventsDuplicateRetryPublishesExistingDurableEvent(t *t
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-events-duplicate-retry-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-events-duplicate-retry-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -2067,9 +2261,9 @@ func TestCodeSessionWorkerEventsStaleEpochDoesNotAppend(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-events-stale-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-events-stale-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -2089,9 +2283,9 @@ func TestCodeSessionWorkerRegisterEpochsAreSessionScopedAndConcurrent(t *testing
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-epoch-register-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-epoch-register-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	sessionA := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionA := launchLocalCodeSession(t, app, sessionA.ID)
 	sessionB := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
@@ -2140,9 +2334,9 @@ func TestCodeSessionWorkerEpochProtection(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-epoch-protection-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-epoch-protection-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -2180,9 +2374,9 @@ func TestCodeSessionWorkerEventAppendChecksEpochInsideTransaction(t *testing.T) 
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-epoch-append-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-epoch-append-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	ctx := context.Background()
@@ -2214,7 +2408,7 @@ func TestCodeSessionWorkerEventAppendChecksEpochInsideTransaction(t *testing.T) 
 		t.Fatalf("stale append error = %v, want worker epoch mismatch", err)
 	}
 	var staleCount int
-	if err := app.db.Pool.QueryRow(ctx, `select count(*) from code_session_outbound_events where external_id = $1`, staleID).Scan(&staleCount); err != nil {
+	if err := app.pool.QueryRow(ctx, `select count(*) from code_session_outbound_events where external_id = $1`, staleID).Scan(&staleCount); err != nil {
 		t.Fatalf("count stale outbound events: %v", err)
 	}
 	if staleCount != 0 {
@@ -2235,14 +2429,86 @@ func TestCodeSessionWorkerEventAppendChecksEpochInsideTransaction(t *testing.T) 
 	}
 }
 
+func TestCodeSessionEventAppendPreservesIdempotencyAndDirectionSequences(t *testing.T) {
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-event-append-sequences-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-event-append-sequences-agent"}`)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-code-event-append-sequences-env"}`)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	codeSessionID := launchLocalCodeSession(t, app, session.ID)
+	ctx := context.Background()
+
+	before, err := app.db.GetCodeSession(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("load Code Session before append: %v", err)
+	}
+	suffix := strings.TrimPrefix(codeSessionID, "cse_")
+	inboundInput := db.AppendCodeSessionEventInput{
+		ExternalID:     "csev_inbound_sequence_" + suffix,
+		EventType:      "user",
+		Payload:        json.RawMessage(`{"type":"user"}`),
+		PayloadHash:    "inbound-sequence",
+		IdempotencyKey: "inbound-sequence:" + suffix,
+		Source:         "test",
+	}
+	inbound, duplicate, err := app.db.AppendCodeSessionInboundEvent(ctx, codeSessionID, inboundInput)
+	if err != nil || duplicate {
+		t.Fatalf("append inbound event = (%+v, duplicate=%v, err=%v)", inbound, duplicate, err)
+	}
+	if inbound.SequenceNum != before.LastInboundSequenceNum+1 {
+		t.Fatalf("inbound sequence = %d, want %d", inbound.SequenceNum, before.LastInboundSequenceNum+1)
+	}
+	duplicateInbound, duplicate, err := app.db.AppendCodeSessionInboundEvent(ctx, codeSessionID, inboundInput)
+	if err != nil || !duplicate || duplicateInbound.UUID != inbound.UUID {
+		t.Fatalf("duplicate inbound event = (%+v, duplicate=%v, err=%v), want UUID %q", duplicateInbound, duplicate, err, inbound.UUID)
+	}
+
+	outboundInput := db.AppendCodeSessionEventInput{
+		ExternalID:     "csev_outbound_sequence_" + suffix,
+		EventType:      "assistant",
+		Payload:        json.RawMessage(`{"type":"assistant"}`),
+		PayloadHash:    "outbound-sequence",
+		IdempotencyKey: "outbound-sequence:" + suffix,
+		Source:         "test",
+	}
+	outbound, duplicate, err := app.db.AppendCodeSessionOutboundEvent(ctx, codeSessionID, outboundInput)
+	if err != nil || duplicate {
+		t.Fatalf("append outbound event = (%+v, duplicate=%v, err=%v)", outbound, duplicate, err)
+	}
+	if outbound.SequenceNum != before.LastOutboundSequenceNum+1 {
+		t.Fatalf("outbound sequence = %d, want %d", outbound.SequenceNum, before.LastOutboundSequenceNum+1)
+	}
+	duplicateOutbound, duplicate, err := app.db.AppendCodeSessionOutboundEvent(ctx, codeSessionID, outboundInput)
+	if err != nil || !duplicate || duplicateOutbound.UUID != outbound.UUID {
+		t.Fatalf("duplicate outbound event = (%+v, duplicate=%v, err=%v), want UUID %q", duplicateOutbound, duplicate, err, outbound.UUID)
+	}
+
+	after, err := app.db.GetCodeSession(ctx, codeSessionID)
+	if err != nil {
+		t.Fatalf("load Code Session after append: %v", err)
+	}
+	if after.LastInboundSequenceNum != inbound.SequenceNum || after.LastOutboundSequenceNum != outbound.SequenceNum {
+		t.Fatalf(
+			"stored sequences = inbound %d/outbound %d, want inbound %d/outbound %d",
+			after.LastInboundSequenceNum,
+			after.LastOutboundSequenceNum,
+			inbound.SequenceNum,
+			outbound.SequenceNum,
+		)
+	}
+}
+
 func TestCodeSessionWorkerConnectionStateUpdatesAreEpochScoped(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("sessions-code-worker-epoch-state-bucket"))
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-epoch-state-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-epoch-state-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	ctx := context.Background()
@@ -2252,7 +2518,7 @@ func TestCodeSessionWorkerConnectionStateUpdatesAreEpochScoped(t *testing.T) {
 	if epoch1 != "1" || epoch2 != "2" {
 		t.Fatalf("epochs = %q/%q, want 1/2", epoch1, epoch2)
 	}
-	if _, err := app.db.Pool.Exec(ctx, `
+	if _, err := app.pool.Exec(ctx, `
 		update code_sessions
 		set connection_status = 'disconnected',
 			last_worker_connected_at = null,
@@ -2342,9 +2608,9 @@ func TestCodeSessionWorkerEpochZeroRejectedAtDBLayer(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-epoch-zero-db-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-epoch-zero-db-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	ctx := context.Background()
@@ -2384,9 +2650,9 @@ func TestCodeSessionWorkerEpochValidationRejectsInvalidValues(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-epoch-invalid-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-epoch-invalid-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -2431,9 +2697,9 @@ func TestCodeSessionWorkerOTLPAcceptsMissingEpochWithoutWorkerActivity(t *testin
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-otlp-missing-epoch-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-otlp-missing-epoch-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	before, err := app.db.GetCodeSession(context.Background(), codeSessionID)
@@ -2471,9 +2737,9 @@ func TestCodeSessionWorkerOTLPRejectsInvalidSessionIngress(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-otlp-auth-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-otlp-auth-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	ingressToken := codeSessionIngressToken(t, app, codeSessionID)
@@ -2506,9 +2772,9 @@ func TestCodeSessionWorkerOTLPFileLogWritesAcceptedTelemetry(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-otlp-file-log-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-otlp-file-log-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	epoch1 := registerCodeSessionWorker(t, app, codeSessionID)
@@ -2580,9 +2846,9 @@ func TestCodeSessionWorkerHeartbeatRejectsInvalidRequests(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-heartbeat-invalid-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-heartbeat-invalid-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -2602,9 +2868,9 @@ func TestCodeSessionWorkerHeartbeatReportsSandboxTimeoutFailure(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-heartbeat-timeout-failure-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-heartbeat-timeout-failure-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -2624,9 +2890,9 @@ func TestCodeSessionWorkerHeartbeatSkipsSandboxTimeoutWhenNotRunning(t *testing.
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-heartbeat-idle-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-heartbeat-idle-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -2660,9 +2926,9 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-heartbeat-lease-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-heartbeat-lease-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -2746,7 +3012,7 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 	}
 	assertCodeSessionWorkerHeartbeatStateUnchanged(t, beforeMismatch, afterMismatch)
 
-	if _, err := app.db.Pool.Exec(context.Background(), `update code_sessions set worker_lease_expires_at = now() - interval '5 seconds' where external_id = $1`, codeSessionID); err != nil {
+	if _, err := app.pool.Exec(context.Background(), `update code_sessions set worker_lease_expires_at = now() - interval '5 seconds' where external_id = $1`, codeSessionID); err != nil {
 		t.Fatalf("expire worker lease inside grace: %v", err)
 	}
 	graceBefore, err := app.db.GetCodeSession(context.Background(), codeSessionID)
@@ -2765,7 +3031,7 @@ func TestCodeSessionWorkerHeartbeatUpdatesLeaseForCurrentEpoch(t *testing.T) {
 		t.Fatalf("grace heartbeat lease expiry = %v, want after %v", graceAfter.WorkerLeaseExpiresAt, graceBefore.WorkerLeaseExpiresAt)
 	}
 
-	if _, err := app.db.Pool.Exec(context.Background(), `update code_sessions set worker_lease_expires_at = now() - interval '15 seconds' where external_id = $1`, codeSessionID); err != nil {
+	if _, err := app.pool.Exec(context.Background(), `update code_sessions set worker_lease_expires_at = now() - interval '15 seconds' where external_id = $1`, codeSessionID); err != nil {
 		t.Fatalf("expire worker lease beyond grace: %v", err)
 	}
 	expired, err := app.db.GetCodeSession(context.Background(), codeSessionID)
@@ -2799,9 +3065,9 @@ func TestCodeSessionWorkerEventsStreamReceivesQueuedAndLiveUserEvents(t *testing
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-stream-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-stream-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	sendSessionEvents(t, app, session.ID, `{"events":[{"type":"user.message","content":[{"type":"text","text":"queued over worker sse"}]}]}`, defaultTestKey)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
@@ -2853,9 +3119,9 @@ func TestCodeSessionWorkerEventsStreamStopsAfterEpochTakeover(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-stream-epoch-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-stream-epoch-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -2932,9 +3198,9 @@ func TestCodeSessionWorkerEventsStreamRejectsInvalidReplayCursorWithoutConnectin
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-code-worker-stream-invalid-cursor-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-code-worker-stream-invalid-cursor-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -2965,9 +3231,9 @@ func TestCodeSessionWorkerDeliveryUpdatesInboundEventStatus(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-delivery-ack-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-delivery-ack-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -3037,9 +3303,9 @@ func TestCodeSessionWorkerDeliveryIgnoresUnsentOrStaleEpochEvents(t *testing.T) 
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-delivery-epoch-gate-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-delivery-epoch-gate-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	epoch1Text := registerCodeSessionWorker(t, app, codeSessionID)
@@ -3109,9 +3375,9 @@ func TestCodeSessionWorkerDeliveryRejectsInvalidUpdates(t *testing.T) {
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-delivery-validation-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-delivery-validation-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 	workerEpoch := registerCodeSessionWorker(t, app, codeSessionID)
@@ -3133,9 +3399,9 @@ func TestCodeSessionWorkerStreamReplaysUnprocessedEventsForNewEpoch(t *testing.T
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-worker-stream-replay-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-worker-stream-replay-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 	codeSessionID := launchLocalCodeSession(t, app, session.ID)
 
@@ -3227,14 +3493,48 @@ func TestCodeSessionWorkerStreamReplaysUnprocessedEventsForNewEpoch(t *testing.T
 	}
 }
 
+func TestSessionEventRejectedBatchHasNoSideEffects(t *testing.T) {
+	app := newTestAppWithStore(t, nil, newFakeStore("sessions-events-atomicity-bucket"))
+	defer app.close()
+
+	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-events-atomicity-agent"}`)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
+	env := createEnvironment(t, app, `{"name":"sessions-events-atomicity-env"}`)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
+	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
+	defer deleteSession(t, app, session.ID)
+
+	response := doSessionRequest(
+		t,
+		app,
+		http.MethodPost,
+		"/v1/sessions/"+session.ID+"/events?beta=true",
+		strings.NewReader(`{"events":[
+			{"type":"user.define_outcome","description":"must not persist","rubric":{"type":"text","text":"must pass"}},
+			{"type":"user.message","content":[]}
+		]}`),
+		defaultTestKey,
+		true,
+	)
+	assertError(t, response, http.StatusBadRequest, "invalid_request_error")
+
+	retrieved := retrieveSession(t, app, session.ID, defaultTestKey)
+	if string(retrieved.OutcomeEvaluations) != "[]" {
+		t.Fatalf("outcomes after rejected batch = %s, want []", retrieved.OutcomeEvaluations)
+	}
+	if events := listSessionEvents(t, app, session.ID, "order=asc&limit=100", defaultTestKey); len(events.Data) != 0 {
+		t.Fatalf("rejected batch public events = %#v, want empty", events.Data)
+	}
+}
+
 func TestSessionEventInputValidation(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("sessions-events-validation-bucket"))
 	defer app.close()
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-events-validation-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-events-validation-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 
 	resp := doSessionRequest(t, app, http.MethodPost, "/v1/sessions/"+session.ID+"/events?beta=true", strings.NewReader(`{"events":[{"type":"user.message","content":[]}]}`), defaultTestKey, true)
@@ -3249,6 +3549,10 @@ func TestSessionEventInputValidation(t *testing.T) {
 	valid := sendSessionEvents(t, app, session.ID, `{"events":[{"type":"user.custom_tool_result","custom_tool_use_id":"ctool_123"},{"type":"user.define_outcome","description":"done","rubric":{"type":"text","text":"must pass"},"max_iterations":2}]}`, defaultTestKey)
 	if len(valid.Data) != 2 || !bytes.Contains(valid.Data[0], []byte(`"type":"user.custom_tool_result"`)) || !bytes.Contains(valid.Data[1], []byte(`"type":"user.define_outcome"`)) {
 		t.Fatalf("unexpected valid events response: %+v", valid)
+	}
+	retrieved := retrieveSession(t, app, session.ID, defaultTestKey)
+	if !bytes.Contains(retrieved.OutcomeEvaluations, []byte(`"max_iterations":2`)) {
+		t.Fatalf("outcomes after accepted batch = %s, want committed evaluation", retrieved.OutcomeEvaluations)
 	}
 }
 
@@ -3294,9 +3598,9 @@ func TestSessionWebhooks(t *testing.T) {
 	defer clearWebhookState(t, app)
 
 	agent := createAgent(t, app, `{"model":"claude-opus-4-6","name":"sessions-webhook-agent"}`)
-	defer cleanupAgentRows(t, app.db, agent.ID)
+	defer cleanupAgentRows(t, app.pool, agent.ID)
 	env := createEnvironment(t, app, `{"name":"sessions-webhook-env"}`)
-	defer cleanupEnvironmentRows(t, app.db, env.ID)
+	defer cleanupEnvironmentRows(t, app.pool, env.ID)
 	session := createSession(t, app, `{"agent":`+quoteJSON(agent.ID)+`,"environment_id":`+quoteJSON(env.ID)+`}`)
 
 	if count := webhookJobCount(t, app, "session.created", session.ID); count != 1 {
@@ -3313,7 +3617,7 @@ func TestSessionWebhooks(t *testing.T) {
 	if status != "retry" || attempts != 1 {
 		t.Fatalf("after 500 status=%s attempts=%d, want retry/1", status, attempts)
 	}
-	if _, err := app.db.Pool.Exec(context.Background(), `update jobs set run_after = now() where type = 'webhook_delivery' and payload->>'event_type' = 'session.created' and payload->'event'->'data'->>'id' = $1`, session.ID); err != nil {
+	if _, err := app.pool.Exec(context.Background(), `update jobs set run_after = now() where type = 'webhook_delivery' and payload->>'event_type' = 'session.created' and payload->'event'->'data'->>'id' = $1`, session.ID); err != nil {
 		t.Fatalf("reset webhook run_after: %v", err)
 	}
 	if err := webhooks.NewWorker(app.db, app.cfg.Webhook, nil).RunOnce(context.Background(), "webhook-test-worker"); err != nil {
@@ -3355,7 +3659,7 @@ func TestSessionsSchemaHasNoForeignKeys(t *testing.T) {
 	defer app.close()
 
 	var foreignKeyCount int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from pg_constraint con
 		join pg_class cls on cls.oid = con.conrelid
@@ -3636,7 +3940,7 @@ type codeSessionOutboundEventForTest struct {
 
 func listCodeSessionOutboundEventsForTest(t *testing.T, app *testApp, codeSessionID string) []codeSessionOutboundEventForTest {
 	t.Helper()
-	rows, err := app.db.Pool.Query(context.Background(), `
+	rows, err := app.pool.Query(context.Background(), `
 		select sequence_num, event_type, coalesce(payload_uuid, ''), payload, ephemeral
 		from code_session_outbound_events
 		where code_session_external_id = $1 and deleted_at is null
@@ -3667,7 +3971,7 @@ func latestCodeSessionInboundEventForSource(t *testing.T, app *testApp, codeSess
 	var gotSource string
 	var eventType string
 	var payload []byte
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select source, event_type, payload
 		from code_session_inbound_events
 		where code_session_external_id = $1 and source = $2 and deleted_at is null
@@ -3692,6 +3996,13 @@ func launchLocalCodeSession(t *testing.T, app *testApp, sessionID string) string
 	for {
 		processed, err := runner.RunOnce(ctx, "sessions-code-session-test")
 		if err != nil {
+			// 全量测试共享一个队列；其他用例可能已删除 Environment，
+			// 但之前创建的 Work 仍在等待消费。runner 已将该 Work 停止，
+			// 此处继续轮询才能等到当前 Session 的 Work。
+			if errors.Is(err, db.ErrNotFound) && time.Now().Before(deadline) {
+				time.Sleep(25 * time.Millisecond)
+				continue
+			}
 			t.Fatalf("run environment runner for code session: %v", err)
 		}
 		retrieved := retrieveSession(t, app, sessionID, defaultTestKey)
@@ -3977,7 +4288,7 @@ func assertRawJSONEqual(t *testing.T, got json.RawMessage, want string) {
 func countSessionEvents(t *testing.T, app *testApp, sessionID string) int {
 	t.Helper()
 	var count int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from session_events
 		where session_external_id = $1 and deleted_at is null
@@ -4030,7 +4341,7 @@ func loadInboundDeliveryState(t *testing.T, app *testApp, eventExternalID string
 	var receivedAt *time.Time
 	var processingAt *time.Time
 	var processedAt *time.Time
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select delivery_status, delivery_worker_epoch, received_at, processing_at, processed_at
 		from code_session_inbound_events
 		where external_id = $1 and deleted_at is null
@@ -4426,7 +4737,7 @@ func containsSession(sessions []sessionAPIResponse, id string) bool {
 
 func createEnvironmentKeyForTest(t *testing.T, app *testApp, envID, key string) string {
 	t.Helper()
-	record, err := app.db.GetEnvironment(context.Background(), getDefaultDBIDs(t, app.db).WorkspaceUUID, envID)
+	record, err := app.db.GetEnvironment(context.Background(), getDefaultDBIDs(t, app.pool).WorkspaceUUID, envID)
 	if err != nil {
 		t.Fatalf("get environment for key: %v", err)
 	}
@@ -4445,7 +4756,7 @@ func createEnvironmentKeyForTest(t *testing.T, app *testApp, envID, key string) 
 func sessionWorkData(t *testing.T, app *testApp, sessionID string) (string, string, string) {
 	t.Helper()
 	var workType, workSessionID, state string
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select data->>'type', data->>'id', state
 		from environment_work
 		where data->>'id' = $1 and deleted_at is null
@@ -4460,7 +4771,7 @@ func sessionWorkData(t *testing.T, app *testApp, sessionID string) (string, stri
 func webhookJobCount(t *testing.T, app *testApp, eventType, resourceID string) int {
 	t.Helper()
 	var count int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select count(*)
 		from jobs
 		where type = 'webhook_delivery'
@@ -4476,7 +4787,7 @@ func latestWebhookJobStatus(t *testing.T, app *testApp, eventType, resourceID st
 	t.Helper()
 	var status string
 	var attempts int
-	if err := app.db.Pool.QueryRow(context.Background(), `
+	if err := app.pool.QueryRow(context.Background(), `
 		select status, attempts
 		from jobs
 		where type = 'webhook_delivery'

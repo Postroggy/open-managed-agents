@@ -117,7 +117,7 @@ func TestWebhooksAPI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("load api key: %v", err)
 		}
-		storedWebhook, err := app.db.GetWebhookEndpoint(context.Background(), apiKey.WorkspaceUUID, created.ID)
+		storedWebhook, err := app.db.GetWebhookEndpoint(context.Background(), apiKey.WorkspaceUUID.String(), created.ID)
 		if err != nil {
 			t.Fatalf("load stored webhook: %v", err)
 		}
@@ -181,8 +181,8 @@ func TestWebhookEndpointDelivery(t *testing.T) {
 	enqueuer := webhooks.NewEnqueuer(app.db, app.cfg.Webhook, nil)
 	enqueue := func(eventType, resourceID string) {
 		enqueuer.Enqueue(ctx, webhooks.EnqueueInput{
-			WorkspaceUUID:       apiKey.WorkspaceUUID,
-			OrganizationUUID:    apiKey.OrganizationUUID,
+			WorkspaceUUID:       apiKey.WorkspaceUUID.String(),
+			OrganizationUUID:    apiKey.OrganizationUUID.String(),
 			WorkspaceExternalID: apiKey.WorkspaceExternalID,
 			EventType:           eventType,
 			ResourceID:          resourceID,
@@ -226,7 +226,7 @@ func TestWebhookEndpointDelivery(t *testing.T) {
 		payload.Type != "event" ||
 		payload.Data.Type != "session.status_idled" ||
 		payload.Data.ID != sessionID ||
-		payload.Data.OrganizationID != apiKey.OrganizationUUID {
+		payload.Data.OrganizationID != apiKey.OrganizationUUID.String() {
 		t.Fatalf("unexpected webhook event=%+v payload=%+v body=%s", event, payload, delivered.Body)
 	}
 
@@ -355,10 +355,10 @@ func deleteWebhook(t *testing.T, app *testApp, webhookID string) struct {
 
 func clearWebhookState(t *testing.T, app *testApp) {
 	t.Helper()
-	if _, err := app.db.Pool.Exec(context.Background(), `delete from jobs where type = 'webhook_delivery'`); err != nil {
+	if _, err := app.pool.Exec(context.Background(), `delete from jobs where type = 'webhook_delivery'`); err != nil {
 		t.Fatalf("clear webhook jobs: %v", err)
 	}
-	if _, err := app.db.Pool.Exec(context.Background(), `delete from webhook_endpoints`); err != nil {
+	if _, err := app.pool.Exec(context.Background(), `delete from webhook_endpoints`); err != nil {
 		t.Fatalf("clear webhook endpoints: %v", err)
 	}
 }

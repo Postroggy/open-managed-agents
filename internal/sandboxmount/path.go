@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"unicode"
 
 	"github.com/superduck-ai/open-managed-agents/internal/filestorepath"
@@ -14,6 +15,8 @@ import (
 const (
 	// FileSource 是 managed-agent File resource 唯一允许的 Filestore source。
 	FileSource = "/uploads"
+	// SandboxUploadsMount 是 FileSource 在 Sandbox 中的挂载点。
+	SandboxUploadsMount = "/mnt/session/uploads"
 )
 
 // NormalizeFileSource 为省略的 source 补默认值，并拒绝 null 或其他 namespace。
@@ -32,12 +35,15 @@ func NormalizeFileSource(raw json.RawMessage) (string, error) {
 }
 
 // DefaultFileMountPath 返回 File resource 在 uploads namespace 中的默认路径。
-func DefaultFileMountPath(fileID string) string {
-	return "/" + fileID
+func DefaultFileMountPath(fileID, filename string) string {
+	if filename == "" {
+		filename = fileID
+	}
+	return FileSource + "/" + filename
 }
 
 // ValidateFileMountPath 校验 File resource 在固定 uploads 根目录下的相对命名空间路径。
-// 对外合同使用绝对路径形式；Sandbox 中的最终路径始终加上 /mnt/session/uploads 前缀。
+// 对外合同使用绝对路径形式；Sandbox 中的最终路径始终加上 SandboxUploadsMount 前缀。
 func ValidateFileMountPath(mountPath string) error {
 	_, err := FileBackingPath(mountPath)
 	return err
@@ -54,6 +60,9 @@ func FileBackingPath(mountPath string) (string, error) {
 		}
 	}
 	backingPath := FileSource + mountPath
+	if strings.HasPrefix(mountPath, FileSource+"/") {
+		backingPath = mountPath
+	}
 	if err := filestorepath.Validate(backingPath, false); err != nil {
 		return "", fmt.Errorf("source + mount_path %w", err)
 	}
@@ -62,15 +71,23 @@ func FileBackingPath(mountPath string) (string, error) {
 
 // ValidateFileMountPaths 校验重复路径与祖先/后代冲突。
 func ValidateFileMountPaths(mountPaths []string) error {
-	for index, current := range mountPaths {
-		if err := ValidateFileMountPath(current); err != nil {
+	backingPaths := make([]string, len(mountPaths))
+	for index, mountPath := range mountPaths {
+		backingPath, err := FileBackingPath(mountPath)
+		if err != nil {
 			return err
 		}
-		for _, other := range mountPaths[index+1:] {
-			if current == other {
+		backingPaths[index] = backingPath
+	}
+	for index, current := range mountPaths {
+		currentBackingPath := backingPaths[index]
+		for otherIndex, other := range mountPaths[index+1:] {
+			otherBackingPath := backingPaths[index+1+otherIndex]
+			if currentBackingPath == otherBackingPath {
 				return fmt.Errorf("resource mount_path is duplicated: %s", current)
 			}
-			if filestorepath.IsDescendant(current, other) || filestorepath.IsDescendant(other, current) {
+			if filestorepath.IsDescendant(currentBackingPath, otherBackingPath) ||
+				filestorepath.IsDescendant(otherBackingPath, currentBackingPath) {
 				return fmt.Errorf("resource mount_path values conflict by ancestry: %s and %s", current, other)
 			}
 		}
