@@ -8,8 +8,10 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/superduck-ai/open-managed-agents/internal/codesessions"
+	"github.com/superduck-ai/open-managed-agents/internal/common/collections"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/filestore"
@@ -40,7 +42,7 @@ type CodeSessionRuntime interface {
 // RuntimeSkillResolver resolves the immutable agent snapshot into skills that
 // the sandbox provider can mount for this launch.
 type RuntimeSkillResolver interface {
-	ResolveAgentSnapshot(context.Context, int64, json.RawMessage) ([]skillsapi.RuntimeSkill, error)
+	ResolveAgentSnapshot(context.Context, string, json.RawMessage) ([]skillsapi.RuntimeSkill, error)
 }
 
 // FilestoreTokenIssuer signs the read-write and read-only credentials used by
@@ -75,7 +77,6 @@ type Runner struct {
 
 type managedAgentLaunchPreparation struct {
 	Session       db.Session
-	InitialEvents []json.RawMessage
 	SessionConfig json.RawMessage
 	WorkDir       string
 	Title         string
@@ -187,32 +188,32 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 
 	// 领取成功后先把 Work 从 queued 推进到 starting，并清除短期 claim。
 	// 从这里开始，即使后续步骤失败，processed 也返回 true，表示本轮消费过一条 Work。
-	if _, err := r.db.AckEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID); err != nil {
+	if _, err := r.db.AckEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID); err != nil {
 		return true, err
 	}
 
 	// 加载 Work 所属的 Environment，并生成本服务对外使用的 envsbx_ ID。
 	// 此时实际的 E2B Sandbox 尚未创建；失败只需停止 Work，不存在远端资源需要清理。
-	env, err := r.db.GetEnvironmentByInternalID(ctx, work.WorkspaceID, work.EnvironmentID)
+	env, err := r.db.GetEnvironmentByUUID(ctx, work.WorkspaceUUID, work.EnvironmentUUID)
 	if err != nil {
-		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 		return true, err
 	}
 	sandboxID, err := ids.New("envsbx_")
 	if err != nil {
-		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 		return true, err
 	}
 
 	// 在 Provider 解析之前固化 Managed Agent 的网络 metadata。这样 Resolve 和
 	// 后续 Create 使用的是同一份 MCP allowlist，避免创建时网络策略发生漂移。
 	if err := r.prepareManagedAgentNetworkMetadata(ctx, env, work); err != nil {
-		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 		return true, err
 	}
 	resolution, err := r.provider.Resolve(env, work)
 	if err != nil {
-		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 		return true, err
 	}
 
@@ -221,7 +222,7 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 	// 后续只创建 Sandbox，不进入 Managed Agent 专属分支。
 	preparation, err := r.prepareManagedAgentLaunch(ctx, env, work)
 	if err != nil {
-		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 		return true, err
 	}
 
@@ -230,11 +231,11 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 	record, err := r.db.CreateEnvironmentSandbox(ctx, db.EnvironmentSandbox{
 		UUID:                  uuid.NewString(),
 		ExternalID:            sandboxID,
-		OrganizationID:        work.OrganizationID,
-		WorkspaceID:           work.WorkspaceID,
-		EnvironmentID:         work.EnvironmentID,
+		OrganizationUUID:      work.OrganizationUUID,
+		WorkspaceUUID:         work.WorkspaceUUID,
+		EnvironmentUUID:       work.EnvironmentUUID,
 		EnvironmentExternalID: work.EnvironmentExternalID,
-		WorkID:                &work.ID,
+		WorkUUID:              &work.UUID,
 		WorkExternalID:        &work.ExternalID,
 		Provider:              "e2b",
 		Template:              resolution.Template,
@@ -243,7 +244,7 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 		CreatedAt:             time.Now().UTC(),
 	})
 	if err != nil {
-		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 		return true, err
 	}
 
@@ -253,8 +254,8 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 	if err != nil {
 		now := time.Now().UTC()
 		message := err.Error()
-		_ = r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceID, record.ExternalID, "failed", nil, &message, &now)
-		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+		_ = r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceUUID, record.ExternalID, "failed", nil, &message, &now)
+		_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 		return true, err
 	}
 	providerSandboxID := sandbox.ID
@@ -272,12 +273,27 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 				return true, err
 			}
 		}
-		updatedWork, err := r.db.UpdateEnvironmentWorkMetadata(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, nextWorkMetadata)
+		updatedWork, err := r.db.UpdateEnvironmentWorkMetadata(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, nextWorkMetadata)
 		if err != nil {
 			r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
 			return true, err
 		}
 		*work = updatedWork
+	}
+
+	manifest, provision, err := buildPackageManifest(env.Config)
+	if err != nil {
+		r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
+		return true, err
+	}
+	if provision {
+		proceed, err := r.provisionCreatedSandboxPackages(ctx, record, work, providerSandboxID, manifest)
+		if err != nil {
+			return true, err
+		}
+		if !proceed {
+			return true, nil
+		}
 	}
 
 	// 只有 Cloud Session Managed Agent 使用固定的四组 Filestore 挂载。
@@ -297,13 +313,13 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 
 	// rclone 就绪后才公开 Sandbox 为 running。此后的失败统一由
 	// failCreatedSandbox 标记 Sandbox/Work 失败，并 Kill 已创建的 E2B Sandbox。
-	if err := r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceID, record.ExternalID, "running", &providerSandboxID, nil, nil); err != nil {
+	if err := r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceUUID, record.ExternalID, "running", &providerSandboxID, nil, nil); err != nil {
 		r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
 		return true, err
 	}
 
 	// 首次 heartbeat 把 Work 推进为 active，并建立 60 秒运行租约。
-	if _, err := r.db.HeartbeatEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, "", 60, formatTime); err != nil {
+	if _, err := r.db.HeartbeatEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, "", 60, formatTime); err != nil {
 		r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
 		return true, err
 	}
@@ -341,6 +357,54 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 	return true, nil
 }
 
+func (r *Runner) provisionCreatedSandboxPackages(
+	ctx context.Context,
+	record db.EnvironmentSandbox,
+	work *db.EnvironmentWork,
+	providerSandboxID string,
+	manifest []byte,
+) (bool, error) {
+	if collections.IsBlank(providerSandboxID) {
+		err := errors.New("provider returned an empty sandbox id for package provisioning")
+		r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
+		return false, err
+	}
+	// Persist the provider ID before provisioning so a concurrent stop can
+	// find and terminate the sandbox while package installation is running.
+	if err := r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceUUID, record.ExternalID, "creating", &providerSandboxID, nil, nil); err != nil {
+		r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
+		return false, err
+	}
+	if err := r.provisionPackages(ctx, providerSandboxID, manifest); err != nil {
+		if r.failCreatedSandbox(ctx, record, work, providerSandboxID, err) {
+			return false, nil
+		}
+		return false, err
+	}
+	heartbeat, err := r.db.HeartbeatEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, "", 60, formatTime)
+	if err != nil {
+		r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
+		return false, err
+	}
+	if heartbeat.LeaseExtended {
+		return true, nil
+	}
+	r.stopCreatedSandbox(ctx, record, work, providerSandboxID)
+	return false, nil
+}
+
+func (r *Runner) provisionPackages(ctx context.Context, sandboxID string, manifest []byte) error {
+	result, err := r.provider.RunCommand(ctx, sandboxID, e2bruntime.CommandRequest{
+		Command: buildPackageProvisionCommand(r.cfg),
+		Stdin:   manifest,
+		Timeout: r.cfg.EnvironmentRunner.PackageProvisionTimeout,
+	})
+	if err != nil {
+		return fmt.Errorf("provision environment packages: %w", err)
+	}
+	return validatePackageProvisioningResult(result)
+}
+
 func (r *Runner) failManagedAgentRuntime(
 	ctx context.Context,
 	record db.EnvironmentSandbox,
@@ -364,11 +428,32 @@ func (r *Runner) failManagedAgentRuntime(
 	r.failCreatedSandbox(ctx, record, work, providerSandboxID, cause)
 }
 
-func (r *Runner) failCreatedSandbox(ctx context.Context, record db.EnvironmentSandbox, work *db.EnvironmentWork, providerSandboxID string, cause error) {
+// failCreatedSandbox returns true when a concurrent user stop already won and
+// the sandbox was kept stopped instead of being rewritten as failed.
+func (r *Runner) failCreatedSandbox(ctx context.Context, record db.EnvironmentSandbox, work *db.EnvironmentWork, providerSandboxID string, cause error) bool {
+	currentWork, err := r.db.GetEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID)
+	if err == nil && (currentWork.State == "stopping" || currentWork.State == "stopped") {
+		*work = currentWork
+		r.stopCreatedSandbox(ctx, record, work, providerSandboxID)
+		return true
+	}
 	now := time.Now().UTC()
 	message := cause.Error()
-	_ = r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceID, record.ExternalID, "failed", &providerSandboxID, &message, &now)
-	_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceID, work.EnvironmentExternalID, work.ExternalID, true)
+	_ = r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceUUID, record.ExternalID, "failed", &providerSandboxID, &message, &now)
+	_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
+	if strings.TrimSpace(providerSandboxID) == "" {
+		return false
+	}
+	killCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	_ = r.provider.Kill(killCtx, providerSandboxID)
+	return false
+}
+
+func (r *Runner) stopCreatedSandbox(ctx context.Context, record db.EnvironmentSandbox, work *db.EnvironmentWork, providerSandboxID string) {
+	now := time.Now().UTC()
+	_ = r.db.UpdateEnvironmentSandboxState(ctx, record.WorkspaceUUID, record.ExternalID, "stopped", &providerSandboxID, nil, &now)
+	_, _ = r.db.StopEnvironmentWork(ctx, work.WorkspaceUUID, work.EnvironmentExternalID, work.ExternalID, true)
 	if strings.TrimSpace(providerSandboxID) == "" {
 		return
 	}
@@ -389,21 +474,17 @@ func (r *Runner) prepareManagedAgentLaunch(
 	if !ok || !cloudEnvironment(env) {
 		return nil, nil
 	}
-	session, err := r.db.GetSession(ctx, work.WorkspaceID, sessionID)
+	session, err := r.db.GetSession(ctx, work.WorkspaceUUID, sessionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load managed agent Session: %w", err)
 	}
-	resources, err := r.db.ListSessionResources(ctx, session.WorkspaceID, session.ExternalID)
+	resources, err := r.db.ListSessionResources(ctx, session.WorkspaceUUID, session.ExternalID)
 	if err != nil {
-		return nil, err
-	}
-	events, err := r.sessionEventPayloads(ctx, session)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list managed agent Session resources: %w", err)
 	}
 	runtimeSkills, err := r.resolveRuntimeSkills(ctx, session)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve managed agent skills: %w", err)
 	}
 	if err := r.replaceRuntimeSkillArchives(ctx, session, runtimeSkills); err != nil {
 		return nil, err
@@ -417,7 +498,6 @@ func (r *Runner) prepareManagedAgentLaunch(
 	}
 	return &managedAgentLaunchPreparation{
 		Session:       session,
-		InitialEvents: events,
 		SessionConfig: sessionConfig,
 		WorkDir:       workDir,
 		Title:         title,
@@ -440,7 +520,6 @@ func (r *Runner) createManagedAgentRuntimeLaunch(
 		PermissionMode:             "bypassPermissions",
 		DangerouslySkipPermissions: true,
 		Config:                     preparation.SessionConfig,
-		InitialEvents:              preparation.InitialEvents,
 	})
 	if err != nil {
 		return managedAgentRuntimeLaunch{}, err
@@ -497,19 +576,19 @@ func (r *Runner) publishManagedAgentRuntime(
 
 func (r *Runner) startRcloneFilestore(ctx context.Context, sandboxID string, launch rcloneFilestoreLaunch) error {
 	if err := r.provider.WriteFile(ctx, sandboxID, rcloneConfigPath, launch.ConfigPayload); err != nil {
-		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
+		_ = r.runSandboxCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
 		return r.logRcloneStageFailure(ctx, "config_write", errRcloneConfigWrite, err)
 	}
-	if err := r.provider.RunCommand(ctx, sandboxID, rcloneConfigPermissionsCommand(), rcloneCommandGraceTimeout); err != nil {
-		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
+	if err := r.runSandboxCommand(ctx, sandboxID, rcloneConfigPermissionsCommand(), rcloneCommandGraceTimeout); err != nil {
+		_ = r.runSandboxCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
 		return r.logRcloneStageFailure(ctx, "config_permissions", errRcloneConfigPermissions, err)
 	}
 	if err := r.provider.StartBackgroundCommand(ctx, sandboxID, rcloneStartCommand(), nil); err != nil {
-		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
+		_ = r.runSandboxCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
 		return r.logRcloneStageFailure(ctx, "process_start", errRcloneProcessStart, err)
 	}
 	if err := r.waitForRcloneReady(ctx, sandboxID, rcloneReadyPollInterval, rcloneReadyTimeout); err != nil {
-		_ = r.provider.RunCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
+		_ = r.runSandboxCommand(ctx, sandboxID, rcloneConfigCleanupCommand(), rcloneCommandGraceTimeout)
 		return r.logRcloneStageFailure(ctx, "readiness", errRcloneReadiness, err)
 	}
 	r.removeRcloneConfig(ctx, sandboxID)
@@ -518,7 +597,7 @@ func (r *Runner) startRcloneFilestore(ctx context.Context, sandboxID string, lau
 
 func (r *Runner) removeRcloneConfig(ctx context.Context, sandboxID string) {
 	for attempt := 1; attempt <= rcloneConfigCleanupTries; attempt++ {
-		cleanupErr := r.provider.RunCommand(
+		cleanupErr := r.runSandboxCommand(
 			ctx,
 			sandboxID,
 			rcloneConfigCleanupCommand(),
@@ -552,6 +631,35 @@ func (r *Runner) removeRcloneConfig(ctx context.Context, sandboxID string) {
 		"attempts", rcloneConfigCleanupTries,
 		"config_may_remain", true,
 	)
+}
+
+func (r *Runner) runSandboxCommand(ctx context.Context, sandboxID, command string, timeout time.Duration) error {
+	result, err := r.provider.RunCommand(ctx, sandboxID, e2bruntime.CommandRequest{Command: command, Timeout: timeout})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf(
+			"sandbox command exited with code %d: stdout=%q stderr=%q",
+			result.ExitCode,
+			truncateSandboxCommandOutput(result.Stdout),
+			truncateSandboxCommandOutput(result.Stderr),
+		)
+	}
+	return nil
+}
+
+func truncateSandboxCommandOutput(value []byte) string {
+	trimmed := strings.TrimSpace(strings.ToValidUTF8(string(value), "\uFFFD"))
+	const limit = 2048
+	if len(trimmed) <= limit {
+		return trimmed
+	}
+	end := limit
+	for end > 0 && !utf8.RuneStart(trimmed[end]) {
+		end--
+	}
+	return trimmed[:end] + "...[truncated]"
 }
 
 func (r *Runner) logRcloneStageFailure(ctx context.Context, stage string, publicError, cause error) error {
@@ -611,7 +719,7 @@ func (r *Runner) prepareManagedAgentNetworkMetadata(ctx context.Context, env db.
 		if !ok {
 			return fmt.Errorf("limited managed-agent MCP policy requires session work identity")
 		}
-		session, err := r.db.GetSession(ctx, work.WorkspaceID, sessionID)
+		session, err := r.db.GetSession(ctx, work.WorkspaceUUID, sessionID)
 		if err != nil {
 			return err
 		}
@@ -629,7 +737,7 @@ func (r *Runner) prepareManagedAgentNetworkMetadata(ctx context.Context, env db.
 	}
 	updatedWork, err := r.db.UpdateEnvironmentWorkMetadata(
 		ctx,
-		work.WorkspaceID,
+		work.WorkspaceUUID,
 		work.EnvironmentExternalID,
 		work.ExternalID,
 		nextMetadata,
@@ -642,23 +750,22 @@ func (r *Runner) prepareManagedAgentNetworkMetadata(ctx context.Context, env db.
 }
 
 func (r *Runner) resolveRuntimeSkills(ctx context.Context, session db.Session) ([]skillsapi.RuntimeSkill, error) {
-	return r.skills.ResolveAgentSnapshot(ctx, session.WorkspaceID, session.AgentSnapshot)
+	return r.skills.ResolveAgentSnapshot(ctx, session.WorkspaceUUID, session.AgentSnapshot)
 }
 
 // replaceRuntimeSkillArchives 使用已解析的不可变 skill archive，完整替换 Managed Agent
-// Session 的 /skills archive entries。
+// Session 的 /skills Skill Archive Resources。
 //
-// runtimeSkills 必须已经包含具体的版本 UUID 和可信对象元数据；"latest" 会在调用本函数
-// 前解析为确定版本。本函数只保留将 zip 映射为 /skills/<directory> 所需的字段，不下载、
-// 复制或解压 archive。每个 zip 作为 kind=archive 的受管 entry 写入
-// /skills/<directory>，来源保存在通用 metadata 中。
+// runtimeSkills 必须已经包含具体 Version UUID 和可信对象元数据；"latest" 会在调用本函数
+// 前解析为确定内容。Version UUID 只用于写入时校验，持久化结果是一条 File 快照和引用它的
+// /skills/<directory> Resource，不下载、复制或解压 archive。
 //
-// DB 操作会校验来源、目录、版本 UUID、对象大小和 SHA-256。它在同一个事务中锁定 Session
-// filesystem 记录及其命名空间，确保固定根目录存在，然后软删除旧 entries 并插入新集合。
+// DB 操作会校验来源、Version UUID、目录、对象大小和 SHA-256。它在同一个事务中锁定 Session
+// filesystem 记录及其命名空间，确保固定根目录存在，然后软删除旧 Resource/File 并插入新集合。
 // 采用全量替换，是为了让已从 Agent snapshot 移除的 skill 同步消失，并避免读取方或并发的
 // 命名空间写入方看到只更新了一部分的视图；软删除则保留历史投影供审计。
 //
-// 成功时返回 nil，确保固定根目录存在并替换 archive entries；catalog 对象仍归 skill
+// 成功时返回 nil，确保固定根目录存在并替换 Skill Archive Resources；catalog 对象仍归 skill
 // catalog 所有。runtimeSkills 为空时会清空 archive 子目录，但保留 /skills 根目录。元数据无效、
 // Session filesystem 不存在、目录重复，或事务、加锁、写入失败时，函数返回包装后的
 // 错误，并回滚整个替换操作。
@@ -672,9 +779,9 @@ func (r *Runner) replaceRuntimeSkillArchives(
 	session db.Session,
 	runtimeSkills []skillsapi.RuntimeSkill,
 ) error {
-	archives := make([]db.FilestoreSkillArchiveEntryInput, 0, len(runtimeSkills))
+	archives := make([]db.SessionSkillArchiveResourceInput, 0, len(runtimeSkills))
 	for _, skill := range runtimeSkills {
-		archives = append(archives, db.FilestoreSkillArchiveEntryInput{
+		archives = append(archives, db.SessionSkillArchiveResourceInput{
 			Source:           skill.Source,
 			SkillVersionUUID: skill.VersionUUID,
 			Directory:        skill.Directory,
@@ -684,35 +791,10 @@ func (r *Runner) replaceRuntimeSkillArchives(
 			SHA256:           skill.SHA256,
 		})
 	}
-	if err := r.db.ReplaceFilestoreSkillArchiveEntries(ctx, session.WorkspaceID, session.ExternalID, archives); err != nil {
-		return fmt.Errorf("replace managed agent skill archive entries: %w", err)
+	if err := r.db.ReplaceSessionSkillArchiveResources(ctx, session.WorkspaceUUID, session.ExternalID, archives); err != nil {
+		return fmt.Errorf("replace managed agent Skill Archive Resources: %w", err)
 	}
 	return nil
-}
-
-func (r *Runner) sessionEventPayloads(ctx context.Context, session db.Session) ([]json.RawMessage, error) {
-	var out []json.RawMessage
-	var cursor *db.SessionEventPageCursor
-	for {
-		events, hasMore, err := r.db.ListSessionEventsPage(ctx, db.ListSessionEventsPageParams{
-			WorkspaceID:       session.WorkspaceID,
-			SessionExternalID: session.ExternalID,
-			Limit:             100,
-			Cursor:            cursor,
-			Order:             "asc",
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, event := range events {
-			out = append(out, append(json.RawMessage(nil), event.Payload...))
-		}
-		if !hasMore || len(events) == 0 {
-			return out, nil
-		}
-		last := events[len(events)-1]
-		cursor = &db.SessionEventPageCursor{CreatedAt: last.CreatedAt, ID: last.ID}
-	}
 }
 
 func sessionIDFromEnvironmentWork(work db.EnvironmentWork) (string, bool) {

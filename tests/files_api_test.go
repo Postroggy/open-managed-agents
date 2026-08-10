@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,10 +31,12 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/filestore"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
+	"github.com/superduck-ai/open-managed-agents/internal/secrets"
 	"github.com/superduck-ai/open-managed-agents/internal/storage"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const defaultTestKey = config.DefaultAPIKey
@@ -42,13 +45,46 @@ const onePixelGIFBase64 = "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
 type testApp struct {
 	cfg                  config.Config
 	db                   *db.DB
+	pool                 *pgxpool.Pool
 	store                storage.ObjectStore
 	sessions             *platformsession.MemoryStore
 	credentials          *codesessions.SessionCredentials
 	filestoreCredentials *filestore.TokenCredentials
+	vaultSecrets         *secrets.Service
+	sandboxTimeouts      *recordingSandboxTimeoutExtender
 	server               *httptest.Server
 	baseURL              string
 	client               *http.Client
+}
+
+type sandboxTimeoutCall struct {
+	sandboxID string
+	timeout   time.Duration
+}
+
+type recordingSandboxTimeoutExtender struct {
+	mu    sync.Mutex
+	calls []sandboxTimeoutCall
+	err   error
+}
+
+func (e *recordingSandboxTimeoutExtender) SetTimeout(_ context.Context, sandboxID string, timeout time.Duration) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.calls = append(e.calls, sandboxTimeoutCall{sandboxID: sandboxID, timeout: timeout})
+	return e.err
+}
+
+func (e *recordingSandboxTimeoutExtender) setError(err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.err = err
+}
+
+func (e *recordingSandboxTimeoutExtender) snapshotCalls() []sandboxTimeoutCall {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]sandboxTimeoutCall(nil), e.calls...)
 }
 
 type errorResponse struct {
@@ -183,7 +219,7 @@ func TestPlatformUploadB64FilesAPI(t *testing.T) {
 	app := newTestAppWithStore(t, nil, newFakeStore("platform-upload-b64-bucket"))
 	defer app.close()
 
-	defaultIDs := getDefaultDBIDs(t, app.db)
+	defaultIDs := getDefaultDBIDs(t, app.pool)
 	workspacePath := "/api/" + defaultIDs.WorkspaceUUID
 	organizationPath := "/api/" + defaultIDs.OrganizationUUID
 	sessionKey := "session-platform-upload-" + strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -246,7 +282,7 @@ func TestPlatformUploadB64FilesAPI(t *testing.T) {
 			t.Fatalf("preview asset = %+v, want 800x600 preview", uploaded.PreviewAsset)
 		}
 
-		record, err := app.db.GetFileByUUID(context.Background(), defaultIDs.WorkspaceID, uploaded.FileUUID)
+		record, err := app.db.GetFileByUUID(context.Background(), defaultIDs.WorkspaceUUID, uploaded.FileUUID)
 		if err != nil {
 			t.Fatalf("get uploaded file by uuid: %v", err)
 		}
@@ -310,7 +346,7 @@ func TestPlatformUploadB64FilesAPI(t *testing.T) {
 		var uploaded platformUploadResponse
 		decodeJSON(t, resp.Body, &uploaded)
 
-		record, err := app.db.GetFileByUUID(context.Background(), defaultIDs.WorkspaceID, uploaded.FileUUID)
+		record, err := app.db.GetFileByUUID(context.Background(), defaultIDs.WorkspaceUUID, uploaded.FileUUID)
 		if err != nil {
 			t.Fatalf("get gif file by uuid: %v", err)
 		}
@@ -419,7 +455,7 @@ func TestFilesAPI(t *testing.T) {
 
 	t.Run("failure cross workspace access", func(t *testing.T) {
 		otherKey := "sk-ant-local-other"
-		seedWorkspaceKey(t, app.db, "org_other_test", "workspace_other_test", "api_key_other_test", otherKey)
+		seedWorkspaceKey(t, app.pool, "org_other_test", "workspace_other_test", "api_key_other_test", otherKey)
 
 		uploaded := uploadFile(t, app, "cross-workspace.txt", "text/plain", []byte("private"))
 		defer deleteFile(t, app, uploaded.ID)
@@ -444,7 +480,7 @@ func TestFilesAPI(t *testing.T) {
 		defer fakeApp.close()
 
 		fileID, objectKey := createDownloadableFile(t, fakeApp, "truncated.txt", "text/plain", []byte("complete"))
-		defer softDeleteFile(t, fakeApp.db, fileID)
+		defer softDeleteFile(t, fakeApp, fileID)
 
 		store.getOverride = storage.Object{
 			Body:        &errorReadCloser{data: []byte("abc"), err: errors.New("stream reset")},
@@ -477,7 +513,7 @@ func TestFilesAPI(t *testing.T) {
 		defer fakeApp.close()
 
 		uploaded := uploadFile(t, fakeApp, "delete-cleanup.txt", "text/plain", []byte("cleanup later"))
-		defer fakeApp.db.Pool.Exec(context.Background(), `delete from jobs where payload->>'file_id' = $1`, uploaded.ID)
+		defer fakeApp.pool.Exec(context.Background(), `delete from jobs where payload->>'file_id' = $1`, uploaded.ID)
 		resp := fakeApp.do(t, http.MethodDelete, "/v1/files/"+uploaded.ID+"?beta=true", nil, defaultTestKey, true, "")
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
@@ -485,7 +521,7 @@ func TestFilesAPI(t *testing.T) {
 		}
 
 		var jobCount int
-		if err := fakeApp.db.Pool.QueryRow(context.Background(), `
+		if err := fakeApp.pool.QueryRow(context.Background(), `
 			select count(*)
 			from jobs
 			where type = 'object_cleanup'
@@ -519,10 +555,10 @@ func TestFilesAPI(t *testing.T) {
 		for key := range store.objects {
 			objectKey = key
 		}
-		defer fakeApp.db.Pool.Exec(context.Background(), `delete from jobs where payload->>'key' = $1`, objectKey)
+		defer fakeApp.pool.Exec(context.Background(), `delete from jobs where payload->>'key' = $1`, objectKey)
 
 		var fileRows int
-		if err := fakeApp.db.Pool.QueryRow(context.Background(), `
+		if err := fakeApp.pool.QueryRow(context.Background(), `
 			select count(*)
 			from files
 			where s3_key = $1
@@ -534,7 +570,7 @@ func TestFilesAPI(t *testing.T) {
 		}
 
 		var jobCount int
-		if err := fakeApp.db.Pool.QueryRow(context.Background(), `
+		if err := fakeApp.pool.QueryRow(context.Background(), `
 			select count(*)
 			from jobs
 			where type = 'object_cleanup'
@@ -585,7 +621,7 @@ func TestFilesAPI(t *testing.T) {
 		content := []byte("docs download")
 		downloadableID, objectKey := createDownloadableFile(t, app, "docs-download.txt", "text/plain", content)
 		defer func() {
-			softDeleteFile(t, app.db, downloadableID)
+			softDeleteFile(t, app, downloadableID)
 			_ = app.store.Delete(context.Background(), objectKey, storage.DeleteOptions{})
 		}()
 		resp = app.do(t, http.MethodGet, "/v1/files/"+downloadableID+"/content", nil, defaultTestKey, true, "")
@@ -672,9 +708,9 @@ func TestFilesAPI(t *testing.T) {
 			t.Fatalf("before_id page length = %d, want 1", len(pageBefore.Data))
 		}
 
-		scopeID := "session_scope_test"
+		scopeID := "session_scope_" + uuid.NewString()
 		scopedID := createMetadataOnlyFile(t, app, scopeID)
-		defer softDeleteFile(t, app.db, scopedID)
+		defer softDeleteFile(t, app, scopedID)
 		scopedPage := listFiles(t, app, "scope_id="+scopeID)
 		if len(scopedPage.Data) != 1 || scopedPage.Data[0].ID != scopedID {
 			t.Fatalf("unexpected scoped page: %+v", scopedPage)
@@ -690,7 +726,7 @@ func TestFilesAPI(t *testing.T) {
 		fileIDs := make([]string, 6)
 		for index := range fileIDs {
 			fileIDs[index] = createMetadataOnlyFile(t, app, scopeID)
-			defer softDeleteFile(t, app.db, fileIDs[index])
+			defer softDeleteFile(t, app, fileIDs[index])
 		}
 
 		assertPageIDs := func(page pageResponse, want ...string) {
@@ -728,7 +764,7 @@ func TestFilesAPI(t *testing.T) {
 		content := []byte("generated content")
 		fileID, objectKey := createDownloadableFile(t, app, "generated.txt", "text/plain", content)
 		defer func() {
-			softDeleteFile(t, app.db, fileID)
+			softDeleteFile(t, app, fileID)
 			_ = app.store.Delete(context.Background(), objectKey, storage.DeleteOptions{})
 		}()
 
@@ -750,16 +786,17 @@ func TestDatabaseMigrationDropsForeignKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	database, err := db.Open(ctx, cfg)
+	database, err := db.Open(ctx, cfg, nil)
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
 	defer database.Close()
+	pool := openTestPool(t, cfg)
 
 	if err := database.Migrate(ctx); err != nil {
 		t.Fatalf("initial migrate database: %v", err)
 	}
-	if _, err := database.Pool.Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		drop table if exists fk_guard_child_test;
 		drop table if exists fk_guard_parent_test;
 		create table fk_guard_parent_test (
@@ -774,7 +811,7 @@ func TestDatabaseMigrationDropsForeignKeys(t *testing.T) {
 	`); err != nil {
 		t.Fatalf("create foreign key guard tables: %v", err)
 	}
-	defer database.Pool.Exec(ctx, `
+	defer pool.Exec(ctx, `
 		drop table if exists fk_guard_child_test;
 		drop table if exists fk_guard_parent_test;
 	`)
@@ -784,7 +821,7 @@ func TestDatabaseMigrationDropsForeignKeys(t *testing.T) {
 	}
 
 	var foreignKeyCount int
-	if err := database.Pool.QueryRow(ctx, `
+	if err := pool.QueryRow(ctx, `
 		select count(*)
 		from pg_constraint con
 		join pg_namespace ns on ns.oid = con.connamespace
@@ -804,11 +841,12 @@ func TestDatabaseMigrationRecordsGooseBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	database, err := db.Open(ctx, cfg)
+	database, err := db.Open(ctx, cfg, nil)
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
 	defer database.Close()
+	pool := openTestPool(t, cfg)
 
 	if err := database.Migrate(ctx); err != nil {
 		t.Fatalf("first migrate database: %v", err)
@@ -818,7 +856,7 @@ func TestDatabaseMigrationRecordsGooseBaseline(t *testing.T) {
 	}
 
 	var appliedCount int
-	if err := database.Pool.QueryRow(ctx, `
+	if err := pool.QueryRow(ctx, `
 		select count(*)
 		from goose_db_version
 		where version_id = 1
@@ -836,13 +874,13 @@ func TestObjectCleanupJobAttemptsIncrementOnFailure(t *testing.T) {
 	defer app.close()
 
 	ctx := context.Background()
-	defaultIDs := getDefaultDBIDs(t, app.db)
+	defaultIDs := getDefaultDBIDs(t, app.pool)
 	objectKey := "attempts-test/" + uuid.NewString()
-	if err := app.db.EnqueueObjectCleanupJob(ctx, defaultIDs.WorkspaceID, app.store.Name(), objectKey, "file_attempts_test"); err != nil {
+	if err := app.db.EnqueueObjectCleanupJob(ctx, defaultIDs.WorkspaceUUID, app.store.Name(), objectKey, "file_attempts_test"); err != nil {
 		t.Fatalf("enqueue cleanup job: %v", err)
 	}
-	defer app.db.Pool.Exec(ctx, `delete from jobs where payload->>'key' = $1`, objectKey)
-	if _, err := app.db.Pool.Exec(ctx, `
+	defer app.pool.Exec(ctx, `delete from jobs where payload->>'key' = $1`, objectKey)
+	if _, err := app.pool.Exec(ctx, `
 		update jobs
 		set run_after = '2000-01-01T00:00:00Z', created_at = '2000-01-01T00:00:00Z'
 		where payload->>'key' = $1
@@ -861,23 +899,23 @@ func TestObjectCleanupJobAttemptsIncrementOnFailure(t *testing.T) {
 			break
 		}
 	}
-	if job.ID == 0 {
+	if job.UUID == "" {
 		t.Fatalf("leased jobs did not include %s: %+v", objectKey, jobs)
 	}
 	if job.Attempts != 0 {
 		t.Fatalf("leased attempts = %d, want 0 before first failure", job.Attempts)
 	}
 
-	if err := app.db.FailObjectCleanupJob(ctx, job.ID, job.Attempts, "delete failed", 0, 10); err != nil {
+	if err := app.db.FailObjectCleanupJob(ctx, job.UUID, job.Attempts, "delete failed", 0, 10); err != nil {
 		t.Fatalf("fail cleanup job: %v", err)
 	}
 	var status string
 	var attempts int
-	if err := app.db.Pool.QueryRow(ctx, `
+	if err := app.pool.QueryRow(ctx, `
 		select status, attempts
 		from jobs
-		where id = $1
-	`, job.ID).Scan(&status, &attempts); err != nil {
+		where uuid = $1
+	`, job.UUID).Scan(&status, &attempts); err != nil {
 		t.Fatalf("load cleanup job: %v", err)
 	}
 	if status != "retry" || attempts != 1 {
@@ -894,7 +932,7 @@ func TestObjectCleanupWorkerContinuesAfterJobFailure(t *testing.T) {
 	defer app.close()
 
 	ctx := context.Background()
-	defaultIDs := getDefaultDBIDs(t, app.db)
+	defaultIDs := getDefaultDBIDs(t, app.pool)
 	jobs := []struct {
 		bucket storage.ObjectStore
 		key    string
@@ -903,12 +941,12 @@ func TestObjectCleanupWorkerContinuesAfterJobFailure(t *testing.T) {
 		{bucket: successfulBucket, key: "cleanup-worker/succeed"},
 	}
 	for _, job := range jobs {
-		if err := app.db.EnqueueObjectCleanupJob(ctx, defaultIDs.WorkspaceID, job.bucket.Name(), job.key, "file_"+strings.ReplaceAll(job.key, "/", "_")); err != nil {
+		if err := app.db.EnqueueObjectCleanupJob(ctx, defaultIDs.WorkspaceUUID, job.bucket.Name(), job.key, "file_"+strings.ReplaceAll(job.key, "/", "_")); err != nil {
 			t.Fatalf("enqueue cleanup job %s: %v", job.key, err)
 		}
-		defer app.db.Pool.Exec(ctx, `delete from jobs where payload->>'key' = $1`, job.key)
+		defer app.pool.Exec(ctx, `delete from jobs where payload->>'key' = $1`, job.key)
 	}
-	if _, err := app.db.Pool.Exec(ctx, `
+	if _, err := app.pool.Exec(ctx, `
 		update jobs
 		set run_after = '2000-01-01T00:00:00Z', created_at = '2000-01-01T00:00:00Z'
 		where payload->>'key' in ($1, $2)
@@ -922,7 +960,7 @@ func TestObjectCleanupWorkerContinuesAfterJobFailure(t *testing.T) {
 	}
 
 	statusByKey := make(map[string]string)
-	rows, err := app.db.Pool.Query(ctx, `
+	rows, err := app.pool.Query(ctx, `
 		select payload->>'key', status
 		from jobs
 		where payload->>'key' in ($1, $2)
@@ -996,7 +1034,7 @@ func newTestAppWithStoreAndLogger(t *testing.T, override *config.Config, store s
 	if override != nil {
 		cfg = *override
 	}
-	database, err := db.Open(ctx, cfg)
+	database, err := db.Open(ctx, cfg, logger.With("component", "database"))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
@@ -1023,6 +1061,18 @@ func newTestAppWithStoreAndLogger(t *testing.T, override *config.Config, store s
 		database.Close()
 		t.Fatalf("ensure object store bucket: %v", err)
 	}
+	kek, err := secrets.GenerateKEK()
+	if err != nil {
+		database.Close()
+		t.Fatalf("generate vault KEK: %v", err)
+	}
+	vaultSecrets, err := secrets.NewLocalService(ctx, kek)
+	if err != nil {
+		database.Close()
+		t.Fatalf("create vault secrets service: %v", err)
+	}
+	pool := openTestPool(t, cfg)
+	sandboxTimeouts := &recordingSandboxTimeoutExtender{}
 	server := httptest.NewServer(api.NewServer(api.ServerDeps{
 		Config:                 cfg,
 		DB:                     database,
@@ -1030,19 +1080,34 @@ func newTestAppWithStoreAndLogger(t *testing.T, override *config.Config, store s
 		Logger:                 logger,
 		PlatformStore:          platformSessions,
 		CodeSessionCredentials: credentials,
+		SandboxTimeoutExtender: sandboxTimeouts,
 		FilestoreCredentials:   filestoreCredentials,
+		VaultSecrets:           vaultSecrets,
 	}))
 	return &testApp{
 		cfg:                  cfg,
 		db:                   database,
+		pool:                 pool,
 		store:                store,
 		sessions:             platformSessions,
 		credentials:          credentials,
 		filestoreCredentials: filestoreCredentials,
+		vaultSecrets:         vaultSecrets,
+		sandboxTimeouts:      sandboxTimeouts,
 		server:               server,
 		baseURL:              server.URL,
 		client:               server.Client(),
 	}
+}
+
+func openTestPool(t *testing.T, cfg config.Config) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), cfg.Database.URL)
+	if err != nil {
+		t.Fatalf("open test database pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
 }
 
 func (a *testApp) close() {
@@ -1052,10 +1117,14 @@ func (a *testApp) close() {
 
 func (a *testApp) seedPlatformSession(t *testing.T, sessionKey string) {
 	t.Helper()
+	userExternalID, orgUUID, err := a.db.FindBootstrapUserContext(context.Background(), "")
+	if err != nil {
+		t.Fatalf("find bootstrap user context: %v", err)
+	}
 	session, err := a.db.ResolvePlatformSessionIdentity(context.Background(), platformsession.CreateInput{
 		SessionKey: sessionKey,
-		UserUUID:   a.cfg.Bootstrap.UserExternalID,
-		OrgUUID:    a.cfg.Bootstrap.OrganizationExternalID,
+		UserUUID:   userExternalID,
+		OrgUUID:    orgUUID,
 	})
 	if err != nil {
 		t.Fatalf("resolve platform session identity: %v", err)
@@ -1222,37 +1291,36 @@ func containsFile(files []metadataResponse, id string) bool {
 	return false
 }
 
-func seedWorkspaceKey(t *testing.T, database *db.DB, orgID, workspaceID, keyID, apiKey string) {
+func seedWorkspaceKey(t *testing.T, pool *pgxpool.Pool, organizationName, workspaceID, keyID, apiKey string) {
 	t.Helper()
 	ctx := context.Background()
-	var organizationRowID int64
-	if err := database.Pool.QueryRow(ctx, `
-		insert into organizations (external_id, name)
-		values ($1, $1)
-		on conflict (external_id) do update set name = excluded.name
-		returning id
-	`, orgID).Scan(&organizationRowID); err != nil {
+	var organizationUUID string
+	if err := pool.QueryRow(ctx, `
+		insert into organizations (name)
+		values ($1)
+		returning uuid::text
+	`, organizationName).Scan(&organizationUUID); err != nil {
 		t.Fatalf("seed org: %v", err)
 	}
-	var workspaceRowID int64
-	if err := database.Pool.QueryRow(ctx, `
-		insert into workspaces (external_id, organization_id, name)
+	var workspaceUUID string
+	if err := pool.QueryRow(ctx, `
+		insert into workspaces (external_id, organization_uuid, name)
 		values ($1, $2, $1)
 		on conflict (external_id) do update set
-			organization_id = excluded.organization_id,
+			organization_uuid = excluded.organization_uuid,
 			name = excluded.name
-		returning id
-	`, workspaceID, organizationRowID).Scan(&workspaceRowID); err != nil {
+		returning uuid::text
+	`, workspaceID, organizationUUID).Scan(&workspaceUUID); err != nil {
 		t.Fatalf("seed workspace: %v", err)
 	}
-	if _, err := database.Pool.Exec(ctx, `
-		insert into api_keys (external_id, workspace_id, key_hash, status)
+	if _, err := pool.Exec(ctx, `
+		insert into api_keys (external_id, workspace_uuid, key_hash, status)
 		values ($1, $2, $3, 'active')
 		on conflict (external_id) do update set
-			workspace_id = excluded.workspace_id,
+			workspace_uuid = excluded.workspace_uuid,
 			key_hash = excluded.key_hash,
 			status = 'active'
-	`, keyID, workspaceRowID, auth.HashAPIKey(apiKey)); err != nil {
+	`, keyID, workspaceUUID, auth.HashAPIKey(apiKey)); err != nil {
 		t.Fatalf("seed api key: %v", err)
 	}
 }
@@ -1263,23 +1331,23 @@ func createMetadataOnlyFile(t *testing.T, app *testApp, scopeID string) string {
 	if err != nil {
 		t.Fatalf("new file id: %v", err)
 	}
-	defaultIDs := getDefaultDBIDs(t, app.db)
+	defaultIDs := getDefaultDBIDs(t, app.pool)
 	scopeType := "session"
 	if err := app.db.CreateFile(context.Background(), db.FileRecord{
-		UUID:              uuid.NewString(),
-		ExternalID:        fileExternalID,
-		WorkspaceID:       defaultIDs.WorkspaceID,
-		Filename:          "scoped.txt",
-		MimeType:          "text/plain",
-		SizeBytes:         1,
-		SHA256:            "00",
-		S3Bucket:          app.store.Name(),
-		S3Key:             "metadata-only/" + fileExternalID,
-		Downloadable:      false,
-		ScopeType:         &scopeType,
-		ScopeID:           &scopeID,
-		CreatedByAPIKeyID: defaultIDs.APIKeyID,
-		CreatedAt:         time.Now().UTC(),
+		UUID:                uuid.NewString(),
+		ExternalID:          fileExternalID,
+		WorkspaceUUID:       defaultIDs.WorkspaceUUID,
+		Filename:            "scoped.txt",
+		MimeType:            "text/plain",
+		SizeBytes:           1,
+		SHA256:              "00",
+		S3Bucket:            app.store.Name(),
+		S3Key:               "metadata-only/" + fileExternalID,
+		Downloadable:        false,
+		ScopeType:           &scopeType,
+		ScopeID:             &scopeID,
+		CreatedByAPIKeyUUID: defaultIDs.APIKeyUUID,
+		CreatedAt:           time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("create metadata-only file: %v", err)
 	}
@@ -1293,25 +1361,25 @@ func createDownloadableFile(t *testing.T, app *testApp, filename, contentType st
 		t.Fatalf("new file id: %v", err)
 	}
 	fileUUID := uuid.NewString()
-	defaultIDs := getDefaultDBIDs(t, app.db)
+	defaultIDs := getDefaultDBIDs(t, app.pool)
 	objectKey := "workspaces/" + defaultIDs.WorkspaceUUID + "/files/" + fileUUID + "/" + filename
 	if _, err := app.store.Upload(context.Background(), objectKey, bytes.NewReader(content), storage.UploadOptions{Size: int64(len(content)), ContentType: contentType}); err != nil {
 		t.Fatalf("put downloadable object: %v", err)
 	}
 	sum := sha256.Sum256(content)
 	if err := app.db.CreateFile(context.Background(), db.FileRecord{
-		UUID:              fileUUID,
-		ExternalID:        fileExternalID,
-		WorkspaceID:       defaultIDs.WorkspaceID,
-		Filename:          filename,
-		MimeType:          contentType,
-		SizeBytes:         int64(len(content)),
-		SHA256:            fmt.Sprintf("%x", sum),
-		S3Bucket:          app.store.Name(),
-		S3Key:             objectKey,
-		Downloadable:      true,
-		CreatedByAPIKeyID: defaultIDs.APIKeyID,
-		CreatedAt:         time.Now().UTC(),
+		UUID:                fileUUID,
+		ExternalID:          fileExternalID,
+		WorkspaceUUID:       defaultIDs.WorkspaceUUID,
+		Filename:            filename,
+		MimeType:            contentType,
+		SizeBytes:           int64(len(content)),
+		SHA256:              fmt.Sprintf("%x", sum),
+		S3Bucket:            app.store.Name(),
+		S3Key:               objectKey,
+		Downloadable:        true,
+		CreatedByAPIKeyUUID: defaultIDs.APIKeyUUID,
+		CreatedAt:           time.Now().UTC(),
 	}); err != nil {
 		_ = app.store.Delete(context.Background(), objectKey, storage.DeleteOptions{})
 		t.Fatalf("create downloadable metadata: %v", err)
@@ -1319,17 +1387,17 @@ func createDownloadableFile(t *testing.T, app *testApp, filename, contentType st
 	return fileExternalID, objectKey
 }
 
-func softDeleteFile(t *testing.T, database *db.DB, fileID string) {
+func softDeleteFile(t *testing.T, app *testApp, fileID string) {
 	t.Helper()
-	var workspaceID int64
-	if err := database.Pool.QueryRow(context.Background(), `
-		select workspace_id from files where external_id = $1 and deleted_at is null
-	`, fileID).Scan(&workspaceID); errors.Is(err, pgx.ErrNoRows) {
+	var workspaceUUID string
+	if err := app.pool.QueryRow(context.Background(), `
+		select workspace_uuid::text from files where external_id = $1 and deleted_at is null
+	`, fileID).Scan(&workspaceUUID); errors.Is(err, pgx.ErrNoRows) {
 		return
 	} else if err != nil {
 		t.Fatalf("load file %s before soft delete: %v", fileID, err)
 	}
-	if err := database.SoftDeleteFile(context.Background(), workspaceID, fileID); err != nil {
+	if err := app.db.SoftDeleteFile(context.Background(), workspaceUUID, fileID); err != nil {
 		t.Fatalf("soft delete file %s: %v", fileID, err)
 	}
 }
@@ -1339,19 +1407,20 @@ type defaultDBIDs struct {
 	WorkspaceID      int64
 	WorkspaceUUID    string
 	APIKeyID         int64
+	APIKeyUUID       string
 }
 
-func getDefaultDBIDs(t *testing.T, database *db.DB) defaultDBIDs {
+func getDefaultDBIDs(t *testing.T, pool *pgxpool.Pool) defaultDBIDs {
 	t.Helper()
 	var ids defaultDBIDs
-	if err := database.Pool.QueryRow(context.Background(), `
-		select o.uuid::text, w.id, w.uuid::text, ak.id
+	if err := pool.QueryRow(context.Background(), `
+		select o.uuid::text, w.id, w.uuid::text, ak.id, ak.uuid::text
 		from workspaces w
-		join organizations o on o.id = w.organization_id
-		join api_keys ak on ak.workspace_id = w.id
+		join organizations o on o.uuid = w.organization_uuid
+		join api_keys ak on ak.workspace_uuid = w.uuid
 		where w.external_id = 'workspace_default'
 			and ak.external_id = 'api_key_default'
-	`).Scan(&ids.OrganizationUUID, &ids.WorkspaceID, &ids.WorkspaceUUID, &ids.APIKeyID); err != nil {
+	`).Scan(&ids.OrganizationUUID, &ids.WorkspaceID, &ids.WorkspaceUUID, &ids.APIKeyID, &ids.APIKeyUUID); err != nil {
 		t.Fatalf("load default db ids: %v", err)
 	}
 	return ids

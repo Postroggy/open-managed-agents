@@ -2,29 +2,28 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/superduck-ai/open-managed-agents/internal/sessioncontract"
+	"github.com/superduck-ai/yourbatis"
 )
 
 type Session struct {
-	ID                    int64
 	UUID                  string
 	ExternalID            string
-	OrganizationID        int64
-	WorkspaceID           int64
-	CreatedByAPIKeyID     int64
-	EnvironmentID         int64
+	OrganizationUUID      string
+	WorkspaceUUID         string
+	CreatedByAPIKeyUUID   string
+	EnvironmentUUID       string
 	EnvironmentExternalID string
-	AgentID               int64
+	AgentUUID             string
 	AgentExternalID       string
 	AgentVersion          int
 	AgentSnapshot         json.RawMessage
+	DeploymentUUID        *string
 	DeploymentID          *string
 	Title                 *string
 	Metadata              json.RawMessage
@@ -40,14 +39,13 @@ type Session struct {
 }
 
 type SessionThread struct {
-	ID                     int64
 	UUID                   string
 	ExternalID             string
-	OrganizationID         int64
-	WorkspaceID            int64
-	SessionID              int64
+	OrganizationUUID       string
+	WorkspaceUUID          string
+	SessionUUID            string
 	SessionExternalID      string
-	ParentThreadID         *int64
+	ParentThreadUUID       *string
 	ParentThreadExternalID *string
 	AgentSnapshot          json.RawMessage
 	Status                 string
@@ -70,12 +68,11 @@ const (
 )
 
 type SessionResource struct {
-	ID                int64
 	UUID              string
 	ExternalID        string
-	OrganizationID    int64
-	WorkspaceID       int64
-	SessionID         int64
+	OrganizationUUID  string
+	WorkspaceUUID     string
+	SessionUUID       string
 	SessionExternalID string
 	ResourceType      string
 	Payload           json.RawMessage
@@ -86,14 +83,13 @@ type SessionResource struct {
 }
 
 type SessionEvent struct {
-	ID                int64
 	UUID              string
 	ExternalID        string
-	OrganizationID    int64
-	WorkspaceID       int64
-	SessionID         int64
+	OrganizationUUID  string
+	WorkspaceUUID     string
+	SessionUUID       string
 	SessionExternalID string
-	ThreadID          *int64
+	ThreadUUID        *string
 	ThreadExternalID  *string
 	EventType         string
 	Payload           json.RawMessage
@@ -104,21 +100,21 @@ type SessionEvent struct {
 
 type SessionPageCursor struct {
 	CreatedAt time.Time
-	ID        int64
+	UUID      string
 }
 
 type SessionEventPageCursor struct {
 	CreatedAt time.Time
-	ID        int64
+	UUID      string
 }
 
 type SessionThreadPageCursor struct {
 	CreatedAt time.Time
-	ID        int64
+	UUID      string
 }
 
 type ListSessionsPageParams struct {
-	WorkspaceID     int64
+	WorkspaceUUID   string
 	Limit           int
 	Cursor          *SessionPageCursor
 	Order           string
@@ -135,7 +131,7 @@ type ListSessionsPageParams struct {
 }
 
 type ListSessionEventsPageParams struct {
-	WorkspaceID       int64
+	WorkspaceUUID     string
 	SessionExternalID string
 	ThreadExternalID  string
 	PrimaryOnly       bool
@@ -150,7 +146,7 @@ type ListSessionEventsPageParams struct {
 }
 
 type ListSessionThreadsPageParams struct {
-	WorkspaceID       int64
+	WorkspaceUUID     string
 	SessionExternalID string
 	Limit             int
 	Cursor            *SessionThreadPageCursor
@@ -206,59 +202,52 @@ func (e *SessionFileMountConflictError) Error() string {
 }
 
 func (d *DB) CreateSession(ctx context.Context, input CreateSessionInput) (Session, SessionThread, []SessionResource, EnvironmentWork, error) {
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return Session{}, SessionThread{}, nil, EnvironmentWork{}, err
-	}
-	defer tx.Rollback()
-
-	session, thread, resources, work, err := insertSessionSQLXTx(ctx, tx, input)
-	if err != nil {
-		return Session{}, SessionThread{}, nil, EnvironmentWork{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return Session{}, SessionThread{}, nil, EnvironmentWork{}, err
-	}
-	return session, thread, resources, work, nil
-}
-
-func (d *DB) GetSession(ctx context.Context, workspaceID int64, externalID string) (Session, error) {
-	return getSessionSQLX(ctx, d.sql, getSessionQuery, sessionLookupArguments(workspaceID, externalID))
-}
-
-func (d *DB) UpdateSession(ctx context.Context, workspaceID int64, externalID string, next Session) (Session, error) {
-	return getSessionSQLX(ctx, d.sql, updateSessionQuery, map[string]any{
-		"workspace_id":        workspaceID,
-		"session_external_id": externalID,
-		"agent_snapshot":      jsonArg(next.AgentSnapshot),
-		"title":               next.Title,
-		"metadata":            jsonArg(next.Metadata),
-		"updated_at":          next.UpdatedAt,
+	var session Session
+	var thread SessionThread
+	var resources []SessionResource
+	var work EnvironmentWork
+	err := d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		var txErr error
+		session, thread, resources, work, txErr = insertSessionTx(ctx, executor, input)
+		return txErr
 	})
+	return session, thread, resources, work, err
 }
 
-func (d *DB) PatchSessionMetadata(ctx context.Context, workspaceID int64, externalID string, patch json.RawMessage) (Session, error) {
-	return getSessionSQLX(ctx, d.sql, patchSessionMetadataQuery, map[string]any{
-		"workspace_id":        workspaceID,
-		"session_external_id": externalID,
-		"metadata_patch":      jsonArg(patch),
-	})
+func (d *DB) GetSession(ctx context.Context, workspaceUUID string, externalID string) (Session, error) {
+	mapper := NewSessionMapper(d.mapperDB)
+	row, err := mapper.FindByExternalID(ctx, workspaceUUID, externalID)
+	return row.session(), mapNoRows(err)
 }
 
-func (d *DB) SetSessionOutcomeEvaluations(ctx context.Context, workspaceID int64, externalID string, evaluations json.RawMessage) (Session, error) {
-	return getSessionSQLX(ctx, d.sql, setSessionOutcomeEvaluationsQuery, map[string]any{
-		"workspace_id":        workspaceID,
-		"session_external_id": externalID,
-		"outcome_evaluations": jsonArg(evaluations),
+func (d *DB) UpdateSession(ctx context.Context, workspaceUUID string, externalID string, next Session) (Session, error) {
+	mapper := NewSessionMapper(d.mapperDB)
+	row, err := mapper.UpdateByExternalID(ctx, sessionUpdateParams{
+		WorkspaceUUID: workspaceUUID,
+		ExternalID:    externalID,
+		AgentSnapshot: agentJSONArg(next.AgentSnapshot),
+		Title:         next.Title,
+		Metadata:      agentJSONArg(next.Metadata),
+		UpdatedAt:     next.UpdatedAt,
 	})
+	return row.session(), mapNoRows(err)
 }
 
-func (d *DB) SetSessionStatus(ctx context.Context, workspaceID int64, externalID, status string) error {
-	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, setSessionStatusQuery, map[string]any{
-		"workspace_id":        workspaceID,
-		"session_external_id": externalID,
-		"status":              status,
-	})
+func (d *DB) PatchSessionMetadata(ctx context.Context, workspaceUUID string, externalID string, patch json.RawMessage) (Session, error) {
+	mapper := NewSessionMapper(d.mapperDB)
+	row, err := mapper.PatchMetadata(ctx, workspaceUUID, externalID, agentJSONArg(patch))
+	return row.session(), mapNoRows(err)
+}
+
+func (d *DB) SetSessionOutcomeEvaluations(ctx context.Context, workspaceUUID string, externalID string, evaluations json.RawMessage) (Session, error) {
+	mapper := NewSessionMapper(d.mapperDB)
+	row, err := mapper.SetOutcomeEvaluations(ctx, workspaceUUID, externalID, agentJSONArg(evaluations))
+	return row.session(), mapNoRows(err)
+}
+
+func (d *DB) SetSessionStatus(ctx context.Context, workspaceUUID string, externalID, status string) error {
+	mapper := NewSessionMapper(d.mapperDB)
+	rowsAffected, err := mapper.SetStatus(ctx, workspaceUUID, externalID, status)
 	if err != nil {
 		return err
 	}
@@ -268,13 +257,9 @@ func (d *DB) SetSessionStatus(ctx context.Context, workspaceID int64, externalID
 	return nil
 }
 
-func (d *DB) SetSessionThreadStatus(ctx context.Context, workspaceID int64, sessionExternalID, threadExternalID, status string) error {
-	rowsAffected, err := namedExecRowsAffected(ctx, d.sql, setSessionThreadStatusQuery, map[string]any{
-		"workspace_id":        workspaceID,
-		"session_external_id": sessionExternalID,
-		"thread_external_id":  threadExternalID,
-		"status":              status,
-	})
+func (d *DB) SetSessionThreadStatus(ctx context.Context, workspaceUUID string, sessionExternalID, threadExternalID, status string) error {
+	mapper := NewSessionThreadMapper(d.mapperDB)
+	rowsAffected, err := mapper.SetStatus(ctx, workspaceUUID, sessionExternalID, threadExternalID, status)
 	if err != nil {
 		return err
 	}
@@ -285,141 +270,65 @@ func (d *DB) SetSessionThreadStatus(ctx context.Context, workspaceID int64, sess
 }
 
 func (d *DB) CreateSessionThreadIfAbsent(ctx context.Context, thread SessionThread) (SessionThread, error) {
-	inserted, err := insertSessionThreadWithQuerySQLX(
-		ctx,
-		d.sql,
-		createSessionThreadIfAbsentQuery,
-		createSessionThreadArguments(thread),
-	)
-	if err == nil {
-		return inserted, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	mapper := NewSessionThreadMapper(d.mapperDB)
+	row, found, err := mapper.InsertIfAbsent(ctx, sessionThreadWriteParameters(thread))
+	if err != nil {
 		return SessionThread{}, err
 	}
-	return d.GetSessionThread(ctx, thread.WorkspaceID, thread.SessionExternalID, thread.ExternalID)
+	if found {
+		return row.thread(), nil
+	}
+	return d.GetSessionThread(ctx, thread.WorkspaceUUID, thread.SessionExternalID, thread.ExternalID)
 }
 
-func (d *DB) ArchiveSession(ctx context.Context, workspaceID int64, externalID string) (Session, error) {
-	return getSessionSQLX(ctx, d.sql, archiveSessionQuery, sessionLookupArguments(workspaceID, externalID))
+func (d *DB) ArchiveSession(ctx context.Context, workspaceUUID string, externalID string) (Session, error) {
+	mapper := NewSessionMapper(d.mapperDB)
+	row, err := mapper.Archive(ctx, workspaceUUID, externalID)
+	return row.session(), mapNoRows(err)
 }
 
-func (d *DB) DeleteSession(ctx context.Context, workspaceID int64, externalID string) (Session, error) {
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return Session{}, err
-	}
-	defer tx.Rollback()
+func (d *DB) DeleteSession(ctx context.Context, workspaceUUID string, externalID string) (Session, error) {
+	var session Session
+	err := d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		sessionMapper := NewSessionMapper(executor)
+		threadMapper := NewSessionThreadMapper(executor)
+		resourceMapper := NewSessionResourceMapper(executor)
+		eventMapper := NewSessionEventMapper(executor)
+		workMapper := NewEnvironmentWorkMapper(executor)
 
-	arguments := sessionLookupArguments(workspaceID, externalID)
-	session, err := getSessionSQLX(ctx, tx, deleteSessionQuery, arguments)
-	if err != nil {
-		return Session{}, err
-	}
-	if err := retireSessionFilesystemTx(ctx, tx, session); err != nil {
-		return Session{}, err
-	}
-	if _, err := namedExecContext(ctx, tx, deleteSessionThreadsQuery, arguments); err != nil {
-		return Session{}, err
-	}
-	if _, err := namedExecContext(ctx, tx, deleteSessionResourcesQuery, arguments); err != nil {
-		return Session{}, err
-	}
-	if _, err := namedExecContext(ctx, tx, deleteSessionEventsQuery, arguments); err != nil {
-		return Session{}, err
-	}
-	arguments["environment_external_id"] = session.EnvironmentExternalID
-	if _, err := namedExecContext(ctx, tx, stopDeletedSessionEnvironmentWorkQuery, arguments); err != nil {
-		return Session{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return Session{}, err
-	}
-	return session, nil
+		row, txErr := sessionMapper.SoftDelete(ctx, workspaceUUID, externalID)
+		if txErr != nil {
+			return mapNoRows(txErr)
+		}
+		session = row.session()
+		if txErr = retireSessionFilesystemTx(ctx, executor, session); txErr != nil {
+			return txErr
+		}
+		if _, txErr = threadMapper.SoftDeleteBySession(ctx, workspaceUUID, externalID); txErr != nil {
+			return txErr
+		}
+		if _, txErr = resourceMapper.SoftDeleteBySession(ctx, workspaceUUID, externalID); txErr != nil {
+			return txErr
+		}
+		if _, txErr = eventMapper.SoftDeleteBySession(ctx, workspaceUUID, externalID); txErr != nil {
+			return txErr
+		}
+		_, txErr = workMapper.StopForDeletedSession(ctx, workspaceUUID, session.EnvironmentExternalID, externalID)
+		return txErr
+	})
+	return session, err
 }
 
 func (d *DB) ListSessionsPage(ctx context.Context, params ListSessionsPageParams) ([]Session, bool, error) {
 	if params.Limit <= 0 {
 		params.Limit = 20
 	}
-	order := "desc"
-	if params.Order == "asc" {
-		order = "asc"
-	}
-	comparison := "<"
-	if order == "asc" {
-		comparison = ">"
-	}
-	query := `
-		select ` + sessionSQLXColumns + `
-		from sessions s
-		where s.workspace_id = :workspace_id and s.deleted_at is null
-	`
-	arguments := map[string]any{
-		"workspace_id": params.WorkspaceID,
-		"limit":        params.Limit + 1,
-	}
-	if !params.IncludeArchived {
-		query += " and s.archived_at is null"
-	}
-	if params.AgentExternalID != "" {
-		query += " and s.agent_external_id = :agent_external_id"
-		arguments["agent_external_id"] = params.AgentExternalID
-	}
-	if params.AgentVersion != nil {
-		query += " and s.agent_version = :agent_version"
-		arguments["agent_version"] = *params.AgentVersion
-	}
-	if params.DeploymentID != "" {
-		query += " and s.deployment_id = :deployment_id"
-		arguments["deployment_id"] = params.DeploymentID
-	}
-	if params.MemoryStoreID != "" {
-		query += ` and exists (
-			select 1 from session_resources sr
-			where sr.workspace_id = s.workspace_id
-				and sr.session_external_id = s.external_id
-				and sr.deleted_at is null
-				and sr.resource_type = 'memory_store'
-				and (
-					sr.payload->>'memory_store_id' = :memory_store_id
-					or sr.payload->>'id' = :memory_store_id
-				)
-		)`
-		arguments["memory_store_id"] = params.MemoryStoreID
-	}
-	if len(params.Statuses) > 0 {
-		query += " and s.status = any(CAST(:statuses AS text[]))"
-		arguments["statuses"] = params.Statuses
-	}
-	if params.CreatedAtGT != nil {
-		query += " and s.created_at > :created_at_gt"
-		arguments["created_at_gt"] = *params.CreatedAtGT
-	}
-	if params.CreatedAtGTE != nil {
-		query += " and s.created_at >= :created_at_gte"
-		arguments["created_at_gte"] = *params.CreatedAtGTE
-	}
-	if params.CreatedAtLT != nil {
-		query += " and s.created_at < :created_at_lt"
-		arguments["created_at_lt"] = *params.CreatedAtLT
-	}
-	if params.CreatedAtLTE != nil {
-		query += " and s.created_at <= :created_at_lte"
-		arguments["created_at_lte"] = *params.CreatedAtLTE
-	}
-	if params.Cursor != nil {
-		query += " and (s.created_at " + comparison + ` :cursor_created_at
-			or (s.created_at = :cursor_created_at and s.id ` + comparison + ` :cursor_id))`
-		arguments["cursor_created_at"] = params.Cursor.CreatedAt
-		arguments["cursor_id"] = params.Cursor.ID
-	}
-	query += " order by s.created_at " + order + ", s.id " + order + " limit :limit"
-
-	sessions, err := listSessionsSQLX(ctx, d.sql, query, arguments)
+	mapper := NewSessionMapper(d.mapperDB)
+	rows, err := mapper.ListPage(ctx, sessionPageParameters(params))
 	if err != nil {
 		return nil, false, err
 	}
+	sessions := sessionsFromRows(rows)
 	hasMore := len(sessions) > params.Limit
 	if hasMore {
 		sessions = sessions[:params.Limit]
@@ -427,40 +336,33 @@ func (d *DB) ListSessionsPage(ctx context.Context, params ListSessionsPageParams
 	return sessions, hasMore, nil
 }
 
-func (d *DB) GetPrimarySessionThread(ctx context.Context, workspaceID int64, sessionExternalID string) (SessionThread, error) {
-	return getSessionThreadSQLX(ctx, d.sql, primarySessionThreadQuery, sessionLookupArguments(workspaceID, sessionExternalID))
+func (d *DB) GetPrimarySessionThread(ctx context.Context, workspaceUUID string, sessionExternalID string) (SessionThread, error) {
+	mapper := NewSessionThreadMapper(d.mapperDB)
+	row, err := mapper.FindPrimary(ctx, workspaceUUID, sessionExternalID)
+	return row.thread(), mapNoRows(err)
 }
 
-func (d *DB) GetSessionThread(ctx context.Context, workspaceID int64, sessionExternalID, threadExternalID string) (SessionThread, error) {
-	arguments := sessionLookupArguments(workspaceID, sessionExternalID)
-	arguments["thread_external_id"] = threadExternalID
-	return getSessionThreadSQLX(ctx, d.sql, sessionThreadByExternalIDQuery, arguments)
+func (d *DB) GetSessionThread(ctx context.Context, workspaceUUID string, sessionExternalID, threadExternalID string) (SessionThread, error) {
+	mapper := NewSessionThreadMapper(d.mapperDB)
+	row, err := mapper.FindByExternalID(ctx, workspaceUUID, sessionExternalID, threadExternalID)
+	return row.thread(), mapNoRows(err)
 }
 
 func (d *DB) ListSessionThreadsPage(ctx context.Context, params ListSessionThreadsPageParams) ([]SessionThread, bool, error) {
 	if params.Limit <= 0 {
 		params.Limit = 20
 	}
-	query := `
-		select ` + sessionThreadSQLXColumns + `
-		from session_threads
-		where workspace_id = :workspace_id
-			and session_external_id = :session_external_id
-			and deleted_at is null
-	`
-	arguments := sessionLookupArguments(params.WorkspaceID, params.SessionExternalID)
-	arguments["limit"] = params.Limit + 1
-	if params.Cursor != nil {
-		query += ` and (created_at < :cursor_created_at
-			or (created_at = :cursor_created_at and id < :cursor_id))`
-		arguments["cursor_created_at"] = params.Cursor.CreatedAt
-		arguments["cursor_id"] = params.Cursor.ID
-	}
-	query += " order by created_at desc, id desc limit :limit"
-	threads, err := listSessionThreadsSQLX(ctx, d.sql, query, arguments)
+	mapper := NewSessionThreadMapper(d.mapperDB)
+	rows, err := mapper.ListPage(ctx, sessionThreadPageMapperParams{
+		WorkspaceUUID:     params.WorkspaceUUID,
+		SessionExternalID: params.SessionExternalID,
+		FetchLimit:        params.Limit + 1,
+		Cursor:            params.Cursor,
+	})
 	if err != nil {
 		return nil, false, err
 	}
+	threads := sessionThreadsFromRows(rows)
 	hasMore := len(threads) > params.Limit
 	if hasMore {
 		threads = threads[:params.Limit]
@@ -468,32 +370,16 @@ func (d *DB) ListSessionThreadsPage(ctx context.Context, params ListSessionThrea
 	return threads, hasMore, nil
 }
 
-func (d *DB) ListSessionThreads(ctx context.Context, workspaceID int64, sessionExternalID string) ([]SessionThread, error) {
-	return listSessionThreadsSQLX(ctx, d.sql, `
-		select `+sessionThreadSQLXColumns+`
-		from session_threads
-		where workspace_id = :workspace_id
-			and session_external_id = :session_external_id
-			and deleted_at is null
-		order by created_at asc, id asc
-	`, sessionLookupArguments(workspaceID, sessionExternalID))
+func (d *DB) ListSessionThreads(ctx context.Context, workspaceUUID string, sessionExternalID string) ([]SessionThread, error) {
+	mapper := NewSessionThreadMapper(d.mapperDB)
+	rows, err := mapper.List(ctx, workspaceUUID, sessionExternalID)
+	return sessionThreadsFromRows(rows), err
 }
 
-func (d *DB) ArchiveSessionThread(ctx context.Context, workspaceID int64, sessionExternalID, threadExternalID string) (SessionThread, error) {
-	arguments := sessionLookupArguments(workspaceID, sessionExternalID)
-	arguments["thread_external_id"] = threadExternalID
-	return getSessionThreadSQLX(ctx, d.sql, `
-		update session_threads
-		set archived_at = coalesce(archived_at, now()),
-			status = 'terminated',
-			updated_at = now()
-		where workspace_id = :workspace_id
-			and session_external_id = :session_external_id
-			and external_id = :thread_external_id
-			and deleted_at is null
-			and status not in ('running', 'rescheduling')
-		returning `+sessionThreadSQLXColumns+`
-	`, arguments)
+func (d *DB) ArchiveSessionThread(ctx context.Context, workspaceUUID string, sessionExternalID, threadExternalID string) (SessionThread, error) {
+	mapper := NewSessionThreadMapper(d.mapperDB)
+	row, err := mapper.Archive(ctx, workspaceUUID, sessionExternalID, threadExternalID)
+	return row.thread(), mapNoRows(err)
 }
 
 func (d *DB) CreateSessionResource(
@@ -501,267 +387,163 @@ func (d *DB) CreateSessionResource(
 	input CreateSessionResourceInput,
 ) (SessionResource, error) {
 	resource := input.Resource
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return SessionResource{}, err
-	}
-	defer tx.Rollback()
+	var created SessionResource
+	err := d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		sessionMapper := NewSessionMapper(executor)
+		row, txErr := sessionMapper.LockForResourceMutation(ctx, resource.WorkspaceUUID, resource.SessionExternalID)
+		if txErr != nil {
+			return mapNoRows(txErr)
+		}
+		session := row.session()
+		if session.ArchivedAt != nil {
+			return ErrInvalidState
+		}
+		if session.OrganizationUUID != resource.OrganizationUUID {
+			return ErrPreconditionFailed
+		}
+		if resource.ResourceType == SessionResourceTypeFile {
+			if txErr = enforceSessionFileResourceCapacityTx(ctx, executor, resource.WorkspaceUUID, resource.SessionExternalID, 1); txErr != nil {
+				return txErr
+			}
+		}
+		created, txErr = createSessionResource(ctx, executor, resource)
+		if txErr != nil {
+			return txErr
+		}
+		if created.ResourceType != SessionResourceTypeFile {
+			if input.FileMount != nil {
+				return ErrPreconditionFailed
+			}
+			return nil
+		}
+		filesystem, txErr := lockSessionFilestoreMutationTx(ctx, executor, session)
+		if txErr != nil {
+			return txErr
+		}
+		_, txErr = bindSessionFileResourceWithLockedFilesystemTx(ctx, executor, session, filesystem, created, input.FileMount)
+		return txErr
+	})
+	return created, err
+}
 
-	session, err := getSessionSQLX(
-		ctx,
-		tx,
-		lockSessionForResourceMutationQuery,
-		sessionLookupArguments(resource.WorkspaceID, resource.SessionExternalID),
-	)
-	if err != nil {
-		return SessionResource{}, err
-	}
-	if session.ArchivedAt != nil {
-		return SessionResource{}, ErrInvalidState
-	}
-	if session.OrganizationID != resource.OrganizationID {
-		return SessionResource{}, ErrPreconditionFailed
-	}
-	if resource.ResourceType == SessionResourceTypeFile {
-		if err := enforceSessionFileResourceCapacityTx(
-			ctx,
-			tx,
-			resource.WorkspaceID,
-			resource.SessionExternalID,
-			1,
-		); err != nil {
-			return SessionResource{}, err
-		}
-	}
-	created, err := createSessionResourceSQLX(ctx, tx, resource)
-	if err != nil {
-		return SessionResource{}, err
-	}
-	if created.ResourceType != SessionResourceTypeFile {
-		if input.FileMount != nil {
-			return SessionResource{}, ErrPreconditionFailed
-		}
-	} else {
-		filesystem, err := lockSessionFilestoreMutationTx(ctx, tx, session)
+func (d *DB) GetSessionResource(ctx context.Context, workspaceUUID string, sessionExternalID, resourceExternalID string) (SessionResource, error) {
+	mapper := NewSessionResourceMapper(d.mapperDB)
+	row, err := mapper.FindByExternalID(ctx, workspaceUUID, sessionExternalID, resourceExternalID)
+	return row.resource(), mapNoRows(err)
+}
+
+func (d *DB) ListSessionResources(ctx context.Context, workspaceUUID string, sessionExternalID string) ([]SessionResource, error) {
+	mapper := NewSessionResourceMapper(d.mapperDB)
+	rows, err := mapper.List(ctx, workspaceUUID, sessionExternalID)
+	return sessionResourcesFromRows(rows), err
+}
+
+func (d *DB) UpdateSessionResource(ctx context.Context, workspaceUUID string, sessionExternalID, resourceExternalID string, payload, secretPayload json.RawMessage) (SessionResource, error) {
+	mapper := NewSessionResourceMapper(d.mapperDB)
+	row, err := mapper.Update(ctx, sessionResourceUpdateParams{
+		WorkspaceUUID:      workspaceUUID,
+		SessionExternalID:  sessionExternalID,
+		ResourceExternalID: resourceExternalID,
+		Payload:            agentJSONArg(payload),
+		SecretPayload:      agentJSONArg(secretPayload),
+	})
+	return row.resource(), mapNoRows(err)
+}
+
+func (d *DB) DeleteSessionResource(ctx context.Context, workspaceUUID string, sessionExternalID, resourceExternalID string) error {
+	return d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		sessionMapper := NewSessionMapper(executor)
+		row, err := sessionMapper.LockForResourceMutation(ctx, workspaceUUID, sessionExternalID)
 		if err != nil {
-			return SessionResource{}, err
+			return mapNoRows(err)
 		}
-		if err := bindSessionFileResourceWithLockedFilesystemTx(
-			ctx,
-			tx,
-			session,
-			filesystem,
-			created,
-			input.FileMount,
-		); err != nil {
-			return SessionResource{}, err
+		session := row.session()
+		if session.ArchivedAt != nil {
+			return ErrInvalidState
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return SessionResource{}, err
-	}
-	return created, nil
+		resource, err := getSessionResourceForMutation(ctx, executor, workspaceUUID, sessionExternalID, resourceExternalID)
+		if err != nil {
+			return err
+		}
+		if err = unbindSessionFileResourceTx(ctx, executor, session, resource); err != nil {
+			return err
+		}
+		return softDeleteSessionResource(ctx, executor, workspaceUUID, sessionExternalID, resourceExternalID)
+	})
 }
 
-func (d *DB) GetSessionResource(ctx context.Context, workspaceID int64, sessionExternalID, resourceExternalID string) (SessionResource, error) {
-	arguments := sessionLookupArguments(workspaceID, sessionExternalID)
-	arguments["resource_external_id"] = resourceExternalID
-	return getSessionResourceSQLX(ctx, d.sql, getSessionResourceQuery, arguments)
+func (d *DB) AppendSessionEvents(
+	ctx context.Context,
+	workspaceUUID string,
+	sessionExternalID string,
+	events []SessionEvent,
+	outcomeEvaluations json.RawMessage,
+) ([]SessionEvent, error) {
+	var created []SessionEvent
+	err := d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		sessionMapper := NewSessionMapper(executor)
+		row, found, txErr := sessionMapper.LockSessionForEvents(ctx, workspaceUUID, sessionExternalID)
+		if txErr != nil {
+			return txErr
+		}
+		if !found {
+			return ErrNotFound
+		}
+		session := row.session()
+		if session.ArchivedAt != nil {
+			return ErrInvalidState
+		}
+		created, txErr = insertSessionEventsTx(ctx, executor, session, events, false)
+		if txErr != nil || len(outcomeEvaluations) == 0 {
+			return txErr
+		}
+		_, txErr = sessionMapper.SetOutcomeEvaluations(ctx, session.WorkspaceUUID, session.ExternalID, agentJSONArg(outcomeEvaluations))
+		return mapNoRows(txErr)
+	})
+	return created, err
 }
 
-func (d *DB) ListSessionResources(ctx context.Context, workspaceID int64, sessionExternalID string) ([]SessionResource, error) {
-	return listSessionResourcesSQLX(
-		ctx,
-		d.sql,
-		listSessionResourcesQuery,
-		sessionLookupArguments(workspaceID, sessionExternalID),
-	)
+func (d *DB) AppendSessionEventsIfAbsent(ctx context.Context, workspaceUUID string, sessionExternalID string, events []SessionEvent) ([]SessionEvent, error) {
+	var created []SessionEvent
+	err := d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		sessionMapper := NewSessionMapper(executor)
+		row, found, txErr := sessionMapper.LockSessionForEvents(ctx, workspaceUUID, sessionExternalID)
+		if txErr != nil {
+			return txErr
+		}
+		if !found {
+			return ErrNotFound
+		}
+		session := row.session()
+		if session.ArchivedAt != nil {
+			return ErrInvalidState
+		}
+		created, txErr = insertSessionEventsTx(ctx, executor, session, events, true)
+		return txErr
+	})
+	return created, err
 }
 
-func (d *DB) UpdateSessionResource(ctx context.Context, workspaceID int64, sessionExternalID, resourceExternalID string, payload, secretPayload json.RawMessage) (SessionResource, error) {
-	arguments := sessionLookupArguments(workspaceID, sessionExternalID)
-	arguments["resource_external_id"] = resourceExternalID
-	arguments["payload"] = jsonArg(payload)
-	arguments["secret_payload"] = jsonArg(secretPayload)
-	return getSessionResourceSQLX(ctx, d.sql, updateSessionResourceQuery, arguments)
-}
-
-func (d *DB) DeleteSessionResource(ctx context.Context, workspaceID int64, sessionExternalID, resourceExternalID string) error {
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	session, err := getSessionSQLX(
-		ctx,
-		tx,
-		lockSessionForResourceMutationQuery,
-		sessionLookupArguments(workspaceID, sessionExternalID),
-	)
-	if err != nil {
-		return err
-	}
-	if session.ArchivedAt != nil {
-		return ErrInvalidState
-	}
-	resource, err := getSessionResourceForMutationSQLX(
-		ctx,
-		tx,
-		workspaceID,
-		sessionExternalID,
-		resourceExternalID,
-	)
-	if err != nil {
-		return err
-	}
-	if err := unbindSessionFileResourceTx(ctx, tx, session, resource); err != nil {
-		return err
-	}
-	if err := softDeleteSessionResourceSQLX(
-		ctx,
-		tx,
-		workspaceID,
-		sessionExternalID,
-		resourceExternalID,
-	); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func (d *DB) AppendSessionEvents(ctx context.Context, workspaceID int64, sessionExternalID string, events []SessionEvent) ([]SessionEvent, error) {
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	session, err := getSessionSQLX(ctx, tx, lockSessionForEventsQuery, sessionLookupArguments(workspaceID, sessionExternalID))
-	if err != nil {
-		return nil, err
-	}
-	if session.ArchivedAt != nil {
-		return nil, ErrInvalidState
-	}
-	created, err := insertSessionEventsSQLXTx(ctx, tx, session, events, false)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return created, nil
-}
-
-func (d *DB) AppendSessionEventsIfAbsent(ctx context.Context, workspaceID int64, sessionExternalID string, events []SessionEvent) ([]SessionEvent, error) {
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	session, err := getSessionSQLX(ctx, tx, lockSessionForEventsQuery, sessionLookupArguments(workspaceID, sessionExternalID))
-	if err != nil {
-		return nil, err
-	}
-	if session.ArchivedAt != nil {
-		return nil, ErrInvalidState
-	}
-	created, err := insertSessionEventsSQLXTx(ctx, tx, session, events, true)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return created, nil
-}
-
-func (d *DB) GetSessionEvent(ctx context.Context, workspaceID int64, sessionExternalID string, eventExternalID string) (SessionEvent, error) {
+func (d *DB) GetSessionEvent(ctx context.Context, workspaceUUID string, sessionExternalID string, eventExternalID string) (SessionEvent, error) {
 	eventExternalID = strings.TrimSpace(eventExternalID)
 	if eventExternalID == "" {
 		return SessionEvent{}, ErrNotFound
 	}
-	arguments := sessionLookupArguments(workspaceID, sessionExternalID)
-	arguments["event_external_id"] = eventExternalID
-	return getSessionEventSQLX(ctx, d.sql, `
-		select `+sessionEventSQLXColumns+`
-		from session_events
-		where workspace_id = :workspace_id
-			and session_external_id = :session_external_id
-			and external_id = :event_external_id
-			and deleted_at is null
-	`, arguments)
+	mapper := NewSessionEventMapper(d.mapperDB)
+	row, err := mapper.FindByExternalID(ctx, workspaceUUID, sessionExternalID, eventExternalID)
+	return row.event(), mapNoRows(err)
 }
 
 func (d *DB) ListSessionEventsPage(ctx context.Context, params ListSessionEventsPageParams) ([]SessionEvent, bool, error) {
 	if params.Limit <= 0 {
 		params.Limit = 20
 	}
-	order := "asc"
-	if params.Order == "desc" {
-		order = "desc"
-	}
-	comparison := ">"
-	if order == "desc" {
-		comparison = "<"
-	}
-	query := `
-		select ` + sessionEventSQLXColumns + `
-		from session_events
-		where workspace_id = :workspace_id
-			and session_external_id = :session_external_id
-			and deleted_at is null
-	`
-	arguments := sessionLookupArguments(params.WorkspaceID, params.SessionExternalID)
-	arguments["limit"] = params.Limit + 1
-	if params.ThreadExternalID != "" {
-		query += " and thread_external_id = :thread_external_id"
-		arguments["thread_external_id"] = params.ThreadExternalID
-	} else if params.PrimaryOnly {
-		query += ` and thread_external_id = (
-			select external_id
-			from session_threads
-			where workspace_id = :workspace_id
-				and session_external_id = :session_external_id
-				and parent_thread_id is null
-				and deleted_at is null
-			order by created_at asc, id asc
-			limit 1
-		)`
-	}
-	if len(params.Types) > 0 {
-		query += " and event_type = any(CAST(:event_types AS text[]))"
-		arguments["event_types"] = params.Types
-	}
-	if params.CreatedAtGT != nil {
-		query += " and created_at > :created_at_gt"
-		arguments["created_at_gt"] = *params.CreatedAtGT
-	}
-	if params.CreatedAtGTE != nil {
-		query += " and created_at >= :created_at_gte"
-		arguments["created_at_gte"] = *params.CreatedAtGTE
-	}
-	if params.CreatedAtLT != nil {
-		query += " and created_at < :created_at_lt"
-		arguments["created_at_lt"] = *params.CreatedAtLT
-	}
-	if params.CreatedAtLTE != nil {
-		query += " and created_at <= :created_at_lte"
-		arguments["created_at_lte"] = *params.CreatedAtLTE
-	}
-	if params.Cursor != nil {
-		query += " and (created_at " + comparison + ` :cursor_created_at
-			or (created_at = :cursor_created_at and id ` + comparison + ` :cursor_id))`
-		arguments["cursor_created_at"] = params.Cursor.CreatedAt
-		arguments["cursor_id"] = params.Cursor.ID
-	}
-	query += " order by created_at " + order + ", id " + order + " limit :limit"
-	events, err := listSessionEventsSQLX(ctx, d.sql, query, arguments)
+	mapper := NewSessionEventMapper(d.mapperDB)
+	rows, err := mapper.ListPage(ctx, sessionEventPageParameters(params))
 	if err != nil {
 		return nil, false, err
 	}
+	events := sessionEventsFromRows(rows)
 	hasMore := len(events) > params.Limit
 	if hasMore {
 		events = events[:params.Limit]
@@ -769,41 +551,18 @@ func (d *DB) ListSessionEventsPage(ctx context.Context, params ListSessionEvents
 	return events, hasMore, nil
 }
 
-func (d *DB) ChildSessionToolUseIDs(ctx context.Context, workspaceID int64, sessionExternalID string, toolUseIDs []string) (map[string]struct{}, error) {
+func (d *DB) ChildSessionToolUseIDs(ctx context.Context, workspaceUUID string, sessionExternalID string, toolUseIDs []string) (map[string]struct{}, error) {
 	if len(toolUseIDs) == 0 {
 		return map[string]struct{}{}, nil
 	}
-	var toolUseIDRows []string
-	err := namedSelectContext(ctx, d.sql, &toolUseIDRows, `
-		select distinct coalesce(
-			e.payload->>'tool_use_id',
-			e.payload->>'mcp_tool_use_id',
-			e.payload->>'custom_tool_use_id',
-			e.payload->>'id'
-		) as tool_use_id
-		from session_events e
-		join session_threads t
-			on t.workspace_id = e.workspace_id
-			and t.session_external_id = e.session_external_id
-			and t.external_id = e.thread_external_id
-			and t.deleted_at is null
-		where e.workspace_id = :workspace_id
-			and e.session_external_id = :session_external_id
-			and e.deleted_at is null
-			and t.parent_thread_id is not null
-			and e.event_type = any(CAST(:event_types AS text[]))
-			and coalesce(
-				e.payload->>'tool_use_id',
-				e.payload->>'mcp_tool_use_id',
-				e.payload->>'custom_tool_use_id',
-				e.payload->>'id'
-			) = any(CAST(:tool_use_ids AS text[]))
-	`, map[string]any{
-		"workspace_id":        workspaceID,
-		"session_external_id": sessionExternalID,
-		"event_types":         []string{"agent.tool_use", "agent.mcp_tool_use", "agent.custom_tool_use"},
-		"tool_use_ids":        toolUseIDs,
-	})
+	mapper := NewSessionEventMapper(d.mapperDB)
+	toolUseIDRows, err := mapper.ChildSessionToolUseIDs(
+		ctx,
+		workspaceUUID,
+		sessionExternalID,
+		[]string{"agent.tool_use", "agent.mcp_tool_use", "agent.custom_tool_use"},
+		toolUseIDs,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -461,13 +461,13 @@ export function CostPage() {
 export function LogsPage() {
   const { msg } = useI18n();
   const routeWorkspaceId = getWorkspaceIdFromPath();
-  const workspaceLabel = useWorkspaceLabel(routeWorkspaceId);
+  const { workspaces } = useWorkspace();
   const allWorkspacesLabel = msg('workspace.all', 'All workspaces');
   const workspaceOptions: FilterOption[] = routeWorkspaceId
-    ? [{ value: 'current', label: workspaceLabel }]
+    ? [{ value: routeWorkspaceId, label: workspaces.find((w) => w.id === routeWorkspaceId)?.name ?? routeWorkspaceId }]
     : [
         { value: 'all-workspaces', label: allWorkspacesLabel },
-        { value: 'default', label: workspaceLabel },
+        ...workspaces.map((w) => ({ value: w.id, label: w.name })),
       ];
   const modelOptions: FilterOption[] = [{ value: 'all', label: msg('common.all', 'All') }, ...analyticsModelOptions];
   const serviceAccountOptions: FilterOption[] = [
@@ -519,7 +519,7 @@ export function LogsPage() {
         <FilterBar compact>
           <FilterControl
             label={msg('analytics.filter.workspace', 'Workspace')}
-            value={filters.workspace}
+            value={routeWorkspaceId ?? filters.workspace}
             options={workspaceOptions}
             disabled={Boolean(routeWorkspaceId)}
             onValueChange={(workspace) => setFilters((current) => ({ ...current, workspace }))}

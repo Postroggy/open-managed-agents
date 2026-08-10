@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os/user"
 	"slices"
@@ -12,42 +13,43 @@ import (
 
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
+	"github.com/superduck-ai/open-managed-agents/internal/logging"
 	"github.com/superduck-ai/open-managed-agents/internal/platform"
+	"github.com/superduck-ai/yourbatis"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/jmoiron/sqlx"
 )
 
 var (
-	ErrNotFound              = platform.ErrNotFound
-	ErrInvalidState          = errors.New("invalid state")
-	ErrPreconditionFailed    = errors.New("precondition failed")
-	ErrDuplicate             = errors.New("duplicate")
-	ErrVersionConflict       = errors.New("version conflict")
-	ErrWorkerEpochMismatch   = errors.New("worker epoch mismatch")
-	ErrWorkerNotRegistered   = errors.New("worker not registered")
-	ErrWorkerLeaseExpired    = errors.New("worker lease expired")
-	ErrStorageLimitExceeded  = errors.New("storage limit exceeded")
-	ErrStorageUsageUnderflow = errors.New("storage usage underflow")
-	ErrLimitExceeded         = errors.New("limit exceeded")
-	ErrFileInUse             = errors.New("file is in use")
-	ErrFileReferenceNotFound = errors.New("file reference not found")
+	ErrNotFound                 = platform.ErrNotFound
+	ErrInvalidState             = errors.New("invalid state")
+	ErrPreconditionFailed       = errors.New("precondition failed")
+	ErrDuplicate                = errors.New("duplicate")
+	ErrVersionConflict          = errors.New("version conflict")
+	ErrIncompleteSecretEnvelope = errors.New("incomplete vault credential secret envelope")
+	ErrWorkerEpochMismatch      = errors.New("worker epoch mismatch")
+	ErrWorkerNotRegistered      = errors.New("worker not registered")
+	ErrWorkerLeaseExpired       = errors.New("worker lease expired")
+	ErrStorageLimitExceeded     = errors.New("storage limit exceeded")
+	ErrStorageUsageUnderflow    = errors.New("storage usage underflow")
+	ErrLimitExceeded            = errors.New("limit exceeded")
+	ErrFileInUse                = errors.New("file is in use")
+	ErrFileReferenceNotFound    = errors.New("file reference not found")
 )
 
 type DB struct {
-	Pool *pgxpool.Pool
-	sql  *sqlx.DB
+	pool     *pgxpool.Pool
+	mapperDB *yourbatis.DB
 }
 
 type APIKey struct {
-	ID                     int64
-	ExternalID             string
-	OrganizationID         int64
-	OrganizationExternalID string
-	WorkspaceID            int64
-	WorkspaceUUID          string
-	WorkspaceExternalID    string
+	UUID                uuid.UUID
+	ExternalID          string
+	OrganizationUUID    uuid.UUID
+	WorkspaceUUID       uuid.UUID
+	WorkspaceExternalID string
 }
 
 type foreignKeyRow struct {
@@ -55,109 +57,27 @@ type foreignKeyRow struct {
 	Name  string `db:"constraint_name"`
 }
 
-type apiKeyRow struct {
-	ID                     int64  `db:"id"`
-	ExternalID             string `db:"external_id"`
-	OrganizationID         int64  `db:"organization_id"`
-	OrganizationExternalID string `db:"organization_external_id"`
-	WorkspaceID            int64  `db:"workspace_id"`
-	WorkspaceUUID          string `db:"workspace_uuid"`
-	WorkspaceExternalID    string `db:"workspace_external_id"`
-}
-
 const (
-	maintenanceRoleExistsQuery     = `select exists(select 1 from pg_roles where rolname = :role)`
+	maintenanceRoleExistsQuery     = `select exists(select 1 from pg_roles where rolname = $1)`
 	maintenanceDatabaseExistsQuery = `
-		select exists(select 1 from pg_database where datname = :database_name)
+		select exists(select 1 from pg_database where datname = $1)
 	`
 	idColumnDataTypeQuery = `
 		select coalesce((
 			select data_type
 			from information_schema.columns
 			where table_schema = current_schema()
-				and table_name = :table_name
+				and table_name = $1
 				and column_name = 'id'
 		), '')
 	`
-	legacyTableExistsQuery = `select to_regclass(:table_name) is not null`
-	seedOrganizationQuery  = `
-		insert into organizations (external_id, name)
-		values (:external_id, :name)
-		on conflict (external_id) do update set name = excluded.name
-		returning id
-	`
-	seedWorkspaceQuery = `
-		insert into workspaces (external_id, organization_id, name)
-		values (:external_id, :organization_id, :name)
-		on conflict (external_id) do update set
-			organization_id = excluded.organization_id,
-			name = excluded.name
-		returning id
-	`
-	seedUserQuery = `
-		insert into users (external_id, organization_id, email, name, role)
-		values (:external_id, :organization_id, :email, :name, 'admin')
-		on conflict (external_id) do update set
-			organization_id = excluded.organization_id,
-			email = excluded.email,
-			name = excluded.name,
-			role = excluded.role,
-			deleted_at = null,
-			updated_at = now()
-		returning id
-	`
-	seedWorkspaceMemberQuery = `
-		insert into workspace_members (
-			external_id, organization_id, workspace_id, workspace_external_id,
-			user_id, user_external_id, workspace_role
-		)
-		values (
-			:external_id, :organization_id, :workspace_id, :workspace_external_id,
-			:user_id, :user_external_id, 'workspace_admin'
-		)
-		on conflict (external_id) do update set
-			organization_id = excluded.organization_id,
-			workspace_id = excluded.workspace_id,
-			workspace_external_id = excluded.workspace_external_id,
-			user_id = excluded.user_id,
-			user_external_id = excluded.user_external_id,
-			workspace_role = excluded.workspace_role,
-			deleted_at = null,
-			updated_at = now()
-	`
-	seedAPIKeyQuery = `
-		insert into api_keys (external_id, workspace_id, key_hash, status, created_by_user_id, name, partial_key_hint)
-		values (
-			:external_id, :workspace_id, :key_hash, 'active',
-			:created_by_user_id, :name, :partial_key_hint
-		)
-		on conflict (external_id) do update set
-			workspace_id = excluded.workspace_id,
-			key_hash = excluded.key_hash,
-			status = 'active',
-			created_by_user_id = excluded.created_by_user_id,
-			name = excluded.name,
-			partial_key_hint = excluded.partial_key_hint,
-			updated_at = now()
-	`
-	getAPIKeyQuery = `
-		select ak.id, ak.external_id,
-			o.id as organization_id, o.external_id as organization_external_id,
-			w.id as workspace_id, CAST(w.uuid AS text) as workspace_uuid,
-			w.external_id as workspace_external_id
-		from api_keys ak
-		join workspaces w on w.id = ak.workspace_id
-		join organizations o on o.id = w.organization_id
-		where ak.key_hash = :key_hash
-			and ak.status = 'active'
-			and (ak.expires_at is null or ak.expires_at > now())
-	`
+	legacyTableExistsQuery = `select to_regclass($1) is not null`
 )
 
-func Open(ctx context.Context, cfg config.Config) (*DB, error) {
+func Open(ctx context.Context, cfg config.Config, logger *slog.Logger) (*DB, error) {
 	pool, err := openPool(ctx, cfg.Database.URL)
 	if err == nil {
-		return newDB(pool), nil
+		return newDB(pool, logger), nil
 	}
 
 	if bootstrapErr := EnsureDatabase(ctx, cfg.Database.URL); bootstrapErr != nil {
@@ -168,22 +88,29 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connect database after bootstrap: %w", err)
 	}
-	return newDB(pool), nil
+	return newDB(pool, logger), nil
 }
 
-func newDB(pool *pgxpool.Pool) *DB {
+func newDB(pool *pgxpool.Pool, logger *slog.Logger) *DB {
+	sqlDB := newStandardDB(pool)
+	mapperDB := yourbatis.NewDB(
+		sqlDB,
+		yourbatis.DialectPostgres,
+		yourbatis.WithDatabaseID("postgres"),
+		yourbatis.WithLogger(yourbatis.SlogLogger{
+			Logger: logging.LoggerOrDefault(logger),
+		}),
+	)
 	return &DB{
-		Pool: pool,
-		sql:  newSQLXDB(pool),
+		pool:     pool,
+		mapperDB: mapperDB,
 	}
 }
 
-func newSQLXDB(pool *pgxpool.Pool) *sqlx.DB {
-	// sqlx 只提供命名参数与结构体映射，物理连接仍统一由 pgxpool 管理。
+func newStandardDB(pool *pgxpool.Pool) *sql.DB {
 	// OpenDBFromPool 会把 database/sql 的 MaxIdleConns 固定为 0，避免包装层长期占住
 	// pgxpool 连接；最大连接数与连接寿命继续由上面的唯一 pgxpool 约束。
-	standardDB := stdlib.OpenDBFromPool(pool)
-	return sqlx.NewDb(standardDB, "pgx")
+	return stdlib.OpenDBFromPool(pool)
 }
 
 func openPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
@@ -207,11 +134,11 @@ func (d *DB) Close() {
 	if d == nil {
 		return
 	}
-	if d.sql != nil {
-		_ = d.sql.Close()
+	if d.mapperDB != nil {
+		_ = d.mapperDB.Close()
 	}
-	if d.Pool != nil {
-		d.Pool.Close()
+	if d.pool != nil {
+		d.pool.Close()
 	}
 }
 
@@ -259,14 +186,11 @@ func ensureDatabaseWithMaintenanceConnection(ctx context.Context, databaseURL, m
 		return fmt.Errorf("connect maintenance database: %w", err)
 	}
 	defer maintenancePool.Close()
-	maintenanceSQL := newSQLXDB(maintenancePool)
+	maintenanceSQL := newStandardDB(maintenancePool)
 	defer maintenanceSQL.Close()
 
 	var roleExists bool
-	if err := namedGetContext(ctx, maintenanceSQL, &roleExists,
-		maintenanceRoleExistsQuery,
-		map[string]any{"role": role},
-	); err != nil {
+	if err := maintenanceSQL.QueryRowContext(ctx, maintenanceRoleExistsQuery, role).Scan(&roleExists); err != nil {
 		return fmt.Errorf("check role: %w", err)
 	}
 	if !roleExists {
@@ -280,10 +204,7 @@ func ensureDatabaseWithMaintenanceConnection(ctx context.Context, databaseURL, m
 	}
 
 	var dbExists bool
-	if err := namedGetContext(ctx, maintenanceSQL, &dbExists,
-		maintenanceDatabaseExistsQuery,
-		map[string]any{"database_name": dbName},
-	); err != nil {
+	if err := maintenanceSQL.QueryRowContext(ctx, maintenanceDatabaseExistsQuery, dbName).Scan(&dbExists); err != nil {
 		return fmt.Errorf("check database: %w", err)
 	}
 	if !dbExists {
@@ -334,14 +255,14 @@ func redactPassword(raw string) string {
 	return parsed.String()
 }
 
-func (d *DB) idColumnDataType(ctx context.Context, table string) (string, error) {
+func idColumnDataType(ctx context.Context, database *sql.DB, table string) (string, error) {
 	var dataType string
-	err := namedGetContext(ctx, d.sql, &dataType, idColumnDataTypeQuery, map[string]any{"table_name": table})
+	err := database.QueryRowContext(ctx, idColumnDataTypeQuery, table).Scan(&dataType)
 	return dataType, err
 }
 
-func (d *DB) migrateLegacyTextIDSchema(ctx context.Context) error {
-	tx, err := d.sql.BeginTxx(ctx, nil)
+func migrateLegacyTextIDSchema(ctx context.Context, database *sql.DB) error {
+	tx, err := database.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -351,10 +272,7 @@ func (d *DB) migrateLegacyTextIDSchema(ctx context.Context) error {
 	for _, table := range tables {
 		legacy := table + "_legacy_text_ids"
 		var exists bool
-		if err := namedGetContext(ctx, tx, &exists,
-			legacyTableExistsQuery,
-			map[string]any{"table_name": legacy},
-		); err != nil {
+		if err := tx.QueryRowContext(ctx, legacyTableExistsQuery, legacy).Scan(&exists); err != nil {
 			return err
 		}
 		if exists {
@@ -431,24 +349,32 @@ func (d *DB) migrateLegacyTextIDSchema(ctx context.Context) error {
 }
 
 func (d *DB) Migrate(ctx context.Context) error {
-	dataType, err := d.idColumnDataType(ctx, "organizations")
+	standardDB := newStandardDB(d.pool)
+	defer standardDB.Close()
+
+	dataType, err := idColumnDataType(ctx, standardDB, "organizations")
 	if err != nil {
 		return err
 	}
 	if dataType == "text" {
-		if err := d.migrateLegacyTextIDSchema(ctx); err != nil {
+		if err := migrateLegacyTextIDSchema(ctx, standardDB); err != nil {
 			return err
 		}
 	}
-	if err := d.runGooseMigrations(ctx); err != nil {
+	if err := runGooseMigrations(ctx, standardDB); err != nil {
 		return err
 	}
-	return d.DropForeignKeyConstraints(ctx)
+	return dropForeignKeyConstraints(ctx, standardDB)
 }
 
 func (d *DB) DropForeignKeyConstraints(ctx context.Context) error {
-	var constraints []foreignKeyRow
-	if err := d.sql.SelectContext(ctx, &constraints, `
+	standardDB := newStandardDB(d.pool)
+	defer standardDB.Close()
+	return dropForeignKeyConstraints(ctx, standardDB)
+}
+
+func dropForeignKeyConstraints(ctx context.Context, database *sql.DB) error {
+	rows, err := database.QueryContext(ctx, `
 		select cls.relname as table_name, con.conname as constraint_name
 		from pg_constraint con
 		join pg_class cls on cls.oid = con.conrelid
@@ -456,12 +382,26 @@ func (d *DB) DropForeignKeyConstraints(ctx context.Context) error {
 		where con.contype = 'f'
 			and ns.oid = CAST(current_schema() AS regnamespace)
 		order by cls.relname, con.conname
-	`); err != nil {
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var constraints []foreignKeyRow
+	for rows.Next() {
+		var constraint foreignKeyRow
+		if err := rows.Scan(&constraint.Table, &constraint.Name); err != nil {
+			return err
+		}
+		constraints = append(constraints, constraint)
+	}
+	if err := rows.Err(); err != nil {
 		return err
 	}
 
 	for _, fk := range constraints {
-		if _, err := d.sql.ExecContext(ctx, fmt.Sprintf("alter table %s drop constraint %s", quoteIdent(fk.Table), quoteIdent(fk.Name))); err != nil {
+		if _, err := database.ExecContext(ctx, fmt.Sprintf("alter table %s drop constraint %s", quoteIdent(fk.Table), quoteIdent(fk.Name))); err != nil {
 			return fmt.Errorf("drop foreign key %s on %s: %w", fk.Name, fk.Table, err)
 		}
 	}
@@ -469,87 +409,87 @@ func (d *DB) DropForeignKeyConstraints(ctx context.Context) error {
 }
 
 func (d *DB) Seed(ctx context.Context, seedAPIKeys []config.SeedAPIKey) error {
-	tx, err := d.sql.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+	return d.mapperDB.Transaction(ctx, func(executor yourbatis.Executor) error {
+		organizationMapper := NewAdminOrganizationMapper(executor)
+		workspaceMapper := NewAdminWorkspaceMapper(executor)
+		userMapper := NewAdminUserMapper(executor)
+		memberMapper := NewAdminWorkspaceMemberMapper(executor)
+		apiKeyMapper := NewAdminAPIKeyMapper(executor)
 
-	var organizationID int64
-	if err := namedGetContext(ctx, tx, &organizationID, seedOrganizationQuery, map[string]any{
-		"external_id": "org_default",
-		"name":        "default",
-	}); err != nil {
-		return err
-	}
-	var workspaceID int64
-	if err := namedGetContext(ctx, tx, &workspaceID, seedWorkspaceQuery, map[string]any{
-		"external_id":     "workspace_default",
-		"organization_id": organizationID,
-		"name":            "default",
-	}); err != nil {
-		return err
-	}
-	var userID int64
-	if err := namedGetContext(ctx, tx, &userID, seedUserQuery, map[string]any{
-		"external_id":     "user_default",
-		"organization_id": organizationID,
-		"email":           "admin@example.local",
-		"name":            "Local Admin",
-	}); err != nil {
-		return err
-	}
-	if _, err := namedExecContext(ctx, tx, seedWorkspaceMemberQuery, map[string]any{
-		"external_id":           "wmem_default",
-		"organization_id":       organizationID,
-		"workspace_id":          workspaceID,
-		"workspace_external_id": "workspace_default",
-		"user_id":               userID,
-		"user_external_id":      "user_default",
-	}); err != nil {
-		return err
-	}
-
-	for _, key := range seedAPIKeys {
-		if strings.TrimSpace(key.ExternalID) == "" || key.Key == "" {
-			return errors.New("seed api keys must include external_id and key")
+		if _, err := organizationMapper.LockSeed(ctx); err != nil {
+			return err
 		}
-		if _, err := namedExecContext(ctx, tx, seedAPIKeyQuery, map[string]any{
-			"external_id":        key.ExternalID,
-			"workspace_id":       workspaceID,
-			"key_hash":           auth.HashAPIKey(key.Key),
-			"created_by_user_id": userID,
-			"name":               key.ExternalID,
-			"partial_key_hint":   partialAPIKeyHint(key.Key),
+		organizationUUID, err := organizationMapper.SeedDefault(ctx, "workspace_default", "default")
+		if err != nil {
+			return err
+		}
+		workspaceUUID, err := workspaceMapper.SeedDefault(ctx, "workspace_default", organizationUUID, "default")
+		if err != nil {
+			return err
+		}
+		userUUID, err := userMapper.SeedDefault(ctx, "user_default", organizationUUID, "admin@example.local", "Local Admin")
+		if err != nil {
+			return err
+		}
+		if err := memberMapper.SeedDefault(ctx, seedAdminWorkspaceMemberParams{
+			ExternalID:          "wmem_default",
+			OrganizationUUID:    organizationUUID,
+			WorkspaceUUID:       workspaceUUID,
+			WorkspaceExternalID: "workspace_default",
+			UserUUID:            userUUID,
+			UserExternalID:      "user_default",
 		}); err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+
+		for _, key := range seedAPIKeys {
+			if strings.TrimSpace(key.ExternalID) == "" || key.Key == "" {
+				return errors.New("seed api keys must include external_id and key")
+			}
+			if err := apiKeyMapper.SeedDefault(ctx, seedAdminAPIKeyParams{
+				ExternalID:        key.ExternalID,
+				WorkspaceUUID:     workspaceUUID,
+				KeyHash:           auth.HashAPIKey(key.Key),
+				CreatedByUserUUID: userUUID,
+				Name:              key.ExternalID,
+				PartialKeyHint:    partialAPIKeyHint(key.Key),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (d *DB) GetAPIKey(ctx context.Context, keyHash string) (APIKey, error) {
-	var row apiKeyRow
-	err := namedGetContext(ctx, d.sql, &row, getAPIKeyQuery, map[string]any{"key_hash": keyHash})
-	if errors.Is(err, sql.ErrNoRows) {
-		return APIKey{}, ErrNotFound
+	mapper := NewAdminAPIKeyMapper(d.mapperDB)
+	row, err := mapper.FindActiveByKeyHash(ctx, keyHash)
+	if err != nil {
+		return APIKey{}, mapNoRows(err)
 	}
+	return row.apiKey()
+}
+
+func (r apiKeyAuthRow) apiKey() (APIKey, error) {
+	keyUUID, err := parseDBUUID("api_key_uuid", r.UUID)
 	if err != nil {
 		return APIKey{}, err
 	}
-	return row.apiKey(), nil
-}
-
-func (r apiKeyRow) apiKey() APIKey {
-	return APIKey{
-		ID:                     r.ID,
-		ExternalID:             r.ExternalID,
-		OrganizationID:         r.OrganizationID,
-		OrganizationExternalID: r.OrganizationExternalID,
-		WorkspaceID:            r.WorkspaceID,
-		WorkspaceUUID:          r.WorkspaceUUID,
-		WorkspaceExternalID:    r.WorkspaceExternalID,
+	organizationUUID, err := parseDBUUID("organization_uuid", r.OrganizationUUID)
+	if err != nil {
+		return APIKey{}, err
 	}
+	workspaceUUID, err := parseDBUUID("workspace_uuid", r.WorkspaceUUID)
+	if err != nil {
+		return APIKey{}, err
+	}
+	return APIKey{
+		UUID:                keyUUID,
+		ExternalID:          r.ExternalID,
+		OrganizationUUID:    organizationUUID,
+		WorkspaceUUID:       workspaceUUID,
+		WorkspaceExternalID: r.WorkspaceExternalID,
+	}, nil
 }
 
 func partialAPIKeyHint(key string) string {

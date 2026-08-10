@@ -74,12 +74,11 @@ func normalizeFixtureEvent(raw json.RawMessage, now time.Time) (json.RawMessage,
 func (h *Handler) fixtureDBSession(principal auth.Principal) db.Session {
 	now := time.Now().UTC()
 	return db.Session{
-		ID:                    1,
 		UUID:                  uuid.NewString(),
 		ExternalID:            h.cfg.SDKFixtures.SessionID,
-		OrganizationID:        principal.OrganizationID,
-		WorkspaceID:           principal.WorkspaceID,
-		CreatedByAPIKeyID:     principal.APIKeyID,
+		OrganizationUUID:      principal.OrganizationUUID,
+		WorkspaceUUID:         principal.WorkspaceUUID,
+		CreatedByAPIKeyUUID:   principal.APIKeyUUID,
 		EnvironmentExternalID: h.cfg.SDKFixtures.EnvironmentID,
 		AgentExternalID:       h.cfg.SDKFixtures.AgentID,
 		AgentVersion:          1,
@@ -143,8 +142,7 @@ func (h *Handler) fixtureResource(now time.Time) json.RawMessage {
 		"id":         h.cfg.SDKFixtures.SessionResourceID,
 		"created_at": httpapi.FormatTime(now),
 		"file_id":    "file_011CNha8iCJcU1wXNR6q4V8w",
-		"mount_path": "/receipt.pdf",
-		"source":     "/uploads",
+		"mount_path": "/uploads/receipt.pdf",
 		"type":       "file",
 		"updated_at": httpapi.FormatTime(now),
 	})

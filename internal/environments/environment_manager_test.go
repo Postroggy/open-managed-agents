@@ -31,6 +31,25 @@ func TestCodeSessionSandboxAPIBaseURLUsesConfiguredValue(t *testing.T) {
 	}
 }
 
+func TestCodeSessionMCPProxyURLRejectsIncompleteInputs(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		apiBaseURL  string
+		sessionID   string
+		upstreamURL string
+	}{
+		{name: "relative API base", apiBaseURL: "/api", sessionID: "cse_test", upstreamURL: "https://mcp.example/mcp"},
+		{name: "missing session", apiBaseURL: "https://api.example", upstreamURL: "https://mcp.example/mcp"},
+		{name: "missing upstream", apiBaseURL: "https://api.example", sessionID: "cse_test"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := codeSessionMCPProxyURL(test.apiBaseURL, test.sessionID, test.upstreamURL); err == nil {
+				t.Fatal("codeSessionMCPProxyURL() error = nil, want error")
+			}
+		})
+	}
+}
+
 func managedAgentRuntimeSourceValues(
 	t *testing.T,
 	sources []json.RawMessage,
@@ -70,12 +89,12 @@ func TestManagedAgentWorkDirIgnoresNonRepositoryResources(t *testing.T) {
 func TestManagedAgentWorkDirSkipsInvalidRepositoryCandidates(t *testing.T) {
 	resources := []db.SessionResource{
 		{
-			ID:           1,
+			UUID:         "00000000-0000-0000-0000-000000000001",
 			ResourceType: "github_repository",
 			Payload:      json.RawMessage(`{"type":"github_repository","mount_path":`),
 		},
 		{
-			ID:           2,
+			UUID:         "00000000-0000-0000-0000-000000000002",
 			ResourceType: "github_repository",
 			Payload:      json.RawMessage(`{"type":"github_repository","mount_path":"  "}`),
 		},
@@ -85,7 +104,7 @@ func TestManagedAgentWorkDirSkipsInvalidRepositoryCandidates(t *testing.T) {
 	}
 
 	resources = append(resources, db.SessionResource{
-		ID:           3,
+		UUID:         "00000000-0000-0000-0000-000000000003",
 		ResourceType: "github_repository",
 		Payload:      json.RawMessage(`{"type":"github_repository","mount_path":"/workspace/valid"}`),
 	})
@@ -96,17 +115,17 @@ func TestManagedAgentWorkDirSkipsInvalidRepositoryCandidates(t *testing.T) {
 
 func TestManagedAgentWorkDirUsesRepositoryRegardlessOfResourceOrder(t *testing.T) {
 	repository := db.SessionResource{
-		ID:           2,
+		UUID:         "00000000-0000-0000-0000-000000000002",
 		ResourceType: "github_repository",
 		Payload:      json.RawMessage(`{"type":"github_repository","mount_path":" /workspace/repository "}`),
 	}
 	file := db.SessionResource{
-		ID:           1,
+		UUID:         "00000000-0000-0000-0000-000000000001",
 		ResourceType: "file",
 		Payload:      json.RawMessage(`{"type":"file","mount_path":"/workspace/data.csv"}`),
 	}
 	memoryStore := db.SessionResource{
-		ID:           3,
+		UUID:         "00000000-0000-0000-0000-000000000003",
 		ResourceType: "memory_store",
 		Payload:      json.RawMessage(`{"type":"memory_store","mount_path":"/workspace/memory"}`),
 	}
@@ -125,14 +144,14 @@ func TestManagedAgentWorkDirUsesRepositoryRegardlessOfResourceOrder(t *testing.T
 func TestManagedAgentWorkDirUsesEarliestAttachedRepository(t *testing.T) {
 	createdAt := time.Date(2026, time.July, 23, 12, 0, 0, 0, time.UTC)
 	first := db.SessionResource{
-		ID:           10,
+		UUID:         "00000000-0000-0000-0000-000000000010",
 		ExternalID:   "sesrsc_first",
 		ResourceType: "github_repository",
 		Payload:      json.RawMessage(`{"type":"github_repository","mount_path":"/workspace/first"}`),
 		CreatedAt:    createdAt,
 	}
 	later := db.SessionResource{
-		ID:           11,
+		UUID:         "00000000-0000-0000-0000-000000000011",
 		ExternalID:   "sesrsc_later",
 		ResourceType: "github_repository",
 		Payload:      json.RawMessage(`{"type":"github_repository","mount_path":"/workspace/later"}`),
@@ -142,10 +161,10 @@ func TestManagedAgentWorkDirUsesEarliestAttachedRepository(t *testing.T) {
 	sameTimeLater.CreatedAt = createdAt
 
 	for name, resources := range map[string][]db.SessionResource{
-		"reverse list order":      {later, first},
-		"forward list order":      {first, later},
-		"same timestamp uses id":  {sameTimeLater, first},
-		"same timestamp reversed": {first, sameTimeLater},
+		"reverse list order":       {later, first},
+		"forward list order":       {first, later},
+		"same timestamp uses uuid": {sameTimeLater, first},
+		"same timestamp reversed":  {first, sameTimeLater},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if workDir := resolveManagedAgentRuntimeResources(resources).workDir; workDir != "/workspace/first" {
@@ -256,6 +275,10 @@ func TestBuildEnvironmentManagerPayloadAndCommand(t *testing.T) {
 	if startup["api_base_url"] != "http://host.docker.internal:18081" || startup["session_id"] != "cse_test" || startup["use_code_sessions"] != true {
 		t.Fatalf("unexpected startup context: %#v", startup)
 	}
+	claudeArgs := startup["claude_code_args"].(map[string]any)
+	if claudeArgs["settings"] != launcherSettingsPath {
+		t.Fatalf("unexpected Claude args: %#v", claudeArgs)
+	}
 	startupEnv := startup["environment_variables"].(map[string]any)
 	if startupEnv["CLAUDE_CODE_REMOTE"] != "true" ||
 		startupEnv["CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2"] != "1" ||
@@ -343,6 +366,50 @@ func TestBuildEnvironmentManagerPayloadAndCommand(t *testing.T) {
 	if strings.Contains(allCommands, "installed managed agent skills") ||
 		strings.Contains(allCommands, "$HOME/.claude/skills") {
 		t.Fatalf("command should not install managed agent skills directly:\n%s", allCommands)
+	}
+}
+
+func TestBuildEnvironmentManagerPayloadProxiesMCPConfig(t *testing.T) {
+	cfg := config.Config{CodeSession: config.CodeSessionConfig{SandboxAPIBaseURL: "http://host.docker.internal:18081/"}}
+	sessionConfig := json.RawMessage(`{
+		"mcp_config":{"mcpServers":{"ms-api":{"type":"http","url":"https://learn.microsoft.com/api/mcp?view=azure"}}},
+		"mcp_config_file":{"path":"/tmp/stale.json","content":"stale","mode":384},
+		"claude_code_args":{"mcp-config":"/tmp/managed-agent-mcp-config.json"}
+	}`)
+	payload, err := buildEnvironmentManagerV0Payload("cse_test", "sk-ant-si-test-token", "sk-ant-oat01-test-token", "", sessionConfig, cfg)
+	if err != nil {
+		t.Fatalf("build payload: %v", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(payload, &body); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	startup := body["startup_context"].(map[string]any)
+	claudeArgs := startup["claude_code_args"].(map[string]any)
+	if claudeArgs["settings"] != launcherSettingsPath || claudeArgs["mcp-config"] != managedAgentMCPConfigPath {
+		t.Fatalf("unexpected Claude args: %#v", claudeArgs)
+	}
+	mcpConfig := startup["mcp_config"].(map[string]any)
+	server := mcpConfig["mcpServers"].(map[string]any)["ms-api"].(map[string]any)
+	wantURL := "http://host.docker.internal:18081/v2/ccr-sessions/cse_test/mcp?mcp_url=https%3A%2F%2Flearn.microsoft.com%2Fapi%2Fmcp%3Fview%3Dazure"
+	if server["url"] != wantURL || server["type"] != "http" {
+		t.Fatalf("proxied MCP server = %#v, want url %q", server, wantURL)
+	}
+	headers := server["headers"].(map[string]any)
+	if headers["Authorization"] != "Bearer sk-ant-si-test-token" {
+		t.Fatalf("MCP proxy headers = %#v", headers)
+	}
+	mcpConfigFile := startup["mcp_config_file"].(map[string]any)
+	content, err := base64.StdEncoding.DecodeString(mcpConfigFile["content"].(string))
+	if err != nil {
+		t.Fatalf("decode MCP config file: %v", err)
+	}
+	var fileConfig map[string]any
+	if err := json.Unmarshal(content, &fileConfig); err != nil {
+		t.Fatalf("decode MCP config file JSON: %v", err)
+	}
+	if !reflect.DeepEqual(fileConfig, mcpConfig) {
+		t.Fatalf("MCP config file = %#v, want %#v", fileConfig, mcpConfig)
 	}
 }
 
