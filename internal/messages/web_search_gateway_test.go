@@ -104,6 +104,22 @@ func TestWebSearchGatewayLiteralWebSearchTypeIsTransparent(t *testing.T) {
 	}
 }
 
+func TestProjectWebSearchFieldsWithoutToolsReturnsOriginalFields(t *testing.T) {
+	fields := map[string]json.RawMessage{
+		"model": json.RawMessage(`"model"`),
+	}
+
+	projected, _, err := projectWebSearchFields(fields)
+	if err != nil {
+		t.Fatalf("project web search fields: %v", err)
+	}
+
+	projected["messages"] = json.RawMessage(`[]`)
+	if got := string(fields["messages"]); got != `[]` {
+		t.Fatalf("fields did not reflect the projected update: %s", got)
+	}
+}
+
 func TestProjectWebSearchFieldsPreservesUnmanagedToolDefinitions(t *testing.T) {
 	fields := map[string]json.RawMessage{
 		"tools": json.RawMessage(`[{

@@ -68,11 +68,11 @@ func hasWebSearchTool(raw json.RawMessage) bool {
 }
 
 func projectWebSearchFields(fields map[string]json.RawMessage) (map[string]json.RawMessage, webSearchPolicy, error) {
-	projected := cloneRawMap(fields)
 	rawTools, ok := fields["tools"]
 	if !ok {
-		return projected, webSearchPolicy{}, nil
+		return fields, webSearchPolicy{}, nil
 	}
+	projected := cloneRawMap(fields)
 	var tools []json.RawMessage
 	if err := json.Unmarshal(rawTools, &tools); err != nil {
 		return nil, webSearchPolicy{}, fmt.Errorf("tools must be an array: %w", err)
