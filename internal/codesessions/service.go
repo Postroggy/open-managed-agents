@@ -205,7 +205,7 @@ func (s *Service) AppendWorkerOutputEventsForEpoch(ctx context.Context, codeSess
 		if !ok {
 			continue
 		}
-		if err := s.publishPublicPayloads(ctx, codeSessionID, publicPayloads); err != nil {
+		if err := s.publishWorkerPublicPayloads(ctx, codeSessionID, publicPayloads); err != nil {
 			return err
 		}
 	}
@@ -271,7 +271,7 @@ func (s *Service) appendWorkerEvent(ctx context.Context, codeSessionID string, r
 	if !ok {
 		return nil
 	}
-	return s.publishPublicPayloads(ctx, codeSessionID, publicPayloads)
+	return s.publishWorkerPublicPayloads(ctx, codeSessionID, publicPayloads)
 }
 
 func (s *Service) queueInitialize(ctx context.Context, codeSession db.CodeSession, configRaw json.RawMessage, now time.Time) error {
@@ -334,35 +334,42 @@ func newInboundEventInput(codeSessionID string, payload json.RawMessage, source 
 	}, nil
 }
 
-func (s *Service) publishPublicPayloads(ctx context.Context, codeSessionID string, payloads []json.RawMessage) error {
-	codeSession, err := s.publishPublicPayloadsToSink(ctx, codeSessionID, payloads)
-	if err != nil {
+func (s *Service) publishWorkerPublicPayloads(ctx context.Context, codeSessionID string, payloads []json.RawMessage) error {
+	if err := s.publishPublicPayloads(ctx, codeSessionID, payloads); err != nil {
 		return err
 	}
-	if codeSession.ExternalID == "" {
-		return nil
-	}
-	if err := s.publishSubagentInternalEvents(ctx, codeSession); err != nil {
-		s.logger.ErrorContext(ctx, "publish subagent internal events", "code_session_id", codeSession.ExternalID, "session_id", codeSession.SessionExternalID, "error", err)
-	}
+	s.reconcileSubagentEvents(ctx, codeSessionID)
 	return nil
 }
 
-func (s *Service) publishPublicPayloadsToSink(ctx context.Context, codeSessionID string, payloads []json.RawMessage) (db.CodeSession, error) {
+func (s *Service) publishPublicPayloads(ctx context.Context, codeSessionID string, payloads []json.RawMessage) error {
 	if len(payloads) == 0 {
-		return db.CodeSession{}, nil
+		return nil
 	}
-	codeSession, err := s.db.GetCodeSession(ctx, codeSessionID)
+	codeSession, found, err := s.db.GetCodeSession(ctx, codeSessionID)
 	if err != nil {
-		return db.CodeSession{}, err
+		return err
+	}
+	if !found {
+		return db.ErrNotFound
 	}
 	s.sinkMu.Lock()
 	sink := s.sink
 	s.sinkMu.Unlock()
 	if sink == nil {
-		return codeSession, nil
+		return nil
 	}
-	return codeSession, sink.PublishCodeSessionEvents(ctx, codeSession, payloads)
+	return sink.PublishCodeSessionEvents(ctx, codeSession, payloads)
+}
+
+func (s *Service) reconcileSubagentEvents(ctx context.Context, codeSessionID string) {
+	codeSession, found, err := s.db.GetCodeSession(ctx, codeSessionID)
+	if err == nil && found {
+		err = s.publishSubagentInternalEvents(ctx, codeSession)
+	}
+	if err != nil {
+		s.logger.ErrorContext(ctx, "publish subagent internal events", "code_session_id", codeSessionID, "error", err)
+	}
 }
 
 func (s *Service) publishSubagentInternalEvents(ctx context.Context, codeSession db.CodeSession) error {
@@ -407,8 +414,7 @@ func (s *Service) publishSubagentInternalEvents(ctx context.Context, codeSession
 	if len(payloads) == 0 {
 		return nil
 	}
-	_, err = s.publishPublicPayloadsToSink(ctx, codeSession.ExternalID, payloads)
-	return err
+	return s.publishPublicPayloads(ctx, codeSession.ExternalID, payloads)
 }
 
 func (s *Service) PublishSubagentInternalEvents(ctx context.Context, codeSession db.CodeSession) error {
@@ -488,7 +494,7 @@ func requestIDString(requestID *string) string {
 }
 
 func stablePublicEventID(codeSessionID, seed string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(codeSessionID) + "\x00public\x00" + strings.TrimSpace(seed)))
+	sum := sha256.Sum256([]byte(codeSessionID + "\x00public\x00" + seed))
 	return "sevt_" + hex.EncodeToString(sum[:16])
 }
 
