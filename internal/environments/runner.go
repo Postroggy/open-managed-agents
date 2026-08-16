@@ -332,6 +332,13 @@ func (r *Runner) RunOnce(ctx context.Context, workerID string) (bool, error) {
 			r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
 			return true, fmt.Errorf("create managed-agent runtime launch: %w", err)
 		}
+		// Claude Code 通过 --settings 读取 launcher-settings.json；文件不存在时
+		// Claude 直接退出（Settings file not found）。sandbox 镜像不预置该文件，
+		// 这里在启动 environment-manager 前写入最小可用配置。
+		if err := r.writeLauncherSettings(ctx, providerSandboxID); err != nil {
+			r.failCreatedSandbox(ctx, record, work, providerSandboxID, err)
+			return true, fmt.Errorf("write launcher settings: %w", err)
+		}
 		// rclone 和固定挂载已就绪；manager 随后通过 stdin 取得双凭证，
 		// 并在启动 Claude 前 register worker，建立首个 CCR lease。
 		if err := r.provider.StartBackgroundCommand(ctx, providerSandboxID, launch.Manager.ShellCommand, launch.Manager.Payload); err != nil {
@@ -575,6 +582,13 @@ func (r *Runner) publishManagedAgentRuntime(
 		metadataPatch,
 		metadataPatch,
 	)
+}
+
+// writeLauncherSettings 在 sandbox 内写入 Claude Code 的 launcher-settings.json。
+// 镜像不预置该文件，而 Claude 启动时 --settings 指向它；缺失会导致 Claude 直接退出。
+// 最小可用配置为 {}（权限绕过通过 --dangerously-skip-permissions 传递，不走 settings）。
+func (r *Runner) writeLauncherSettings(ctx context.Context, sandboxID string) error {
+	return r.provider.WriteFile(ctx, sandboxID, launcherSettingsPath, []byte(`{}`))
 }
 
 func (r *Runner) startRcloneFilestore(ctx context.Context, sandboxID string, launch rcloneFilestoreLaunch) error {
