@@ -6,6 +6,7 @@ import (
 
 	"github.com/superduck-ai/open-managed-agents/internal/apperr"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
+	"github.com/superduck-ai/open-managed-agents/internal/sessioncontract"
 )
 
 func invalidRequest(err error) error {
@@ -80,9 +81,17 @@ func mapResourceBuildError(err error) error {
 	)
 }
 
+// memoryStoreLimitMessage 统一 session 侧 memory store 限额文案，数字与常量绑定。
+func memoryStoreLimitMessage() string {
+	return fmt.Sprintf("at most %d memory stores are supported per session", sessioncontract.MaxMemoryStoresPerSession)
+}
+
 func mapSessionLoadError(err error, sessionID string) error {
 	if mapped, ok := mapFileResourcePersistenceError(err); ok {
 		return mapped
+	}
+	if errors.Is(err, db.ErrMemoryStoreLimit) {
+		return apperr.New(apperr.InvalidArgument, memoryStoreLimitMessage(), err)
 	}
 	if errors.Is(err, db.ErrNotFound) {
 		return sessionNotFound(sessionID, err)

@@ -331,6 +331,7 @@ export function initialFormValues(
     timezone: entity ? entityTimezone(entity) : localTimezone(),
     vaultIds: entity ? entityVaultIds(entity) : [],
     memoryStoreIds: entity ? entityMemoryStoreIds(entity) : [],
+    memoryAccess: 'read_write',
     fileResources: [],
   };
 }

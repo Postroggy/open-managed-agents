@@ -1,7 +1,10 @@
 package sessions
 
 import (
+	"errors"
+
 	"github.com/superduck-ai/open-managed-agents/internal/db"
+	"github.com/superduck-ai/open-managed-agents/internal/sessioncontract"
 	"github.com/superduck-ai/open-managed-agents/internal/sessionresource"
 )
 
@@ -15,10 +18,17 @@ type normalizedSessionResource struct {
 
 func validateNormalizedSessionResources(resources []normalizedSessionResource) error {
 	specs := make([]sessionresource.FileSpec, 0, len(resources))
+	memoryStoreCount := 0
 	for _, resource := range resources {
 		if resource.fileSpec != nil {
 			specs = append(specs, *resource.fileSpec)
 		}
+		if resource.resource.ResourceType == "memory_store" {
+			memoryStoreCount++
+		}
+	}
+	if memoryStoreCount > sessioncontract.MaxMemoryStoresPerSession {
+		return errors.New(memoryStoreLimitMessage())
 	}
 	return sessionresource.ValidateFileSpecs(specs)
 }

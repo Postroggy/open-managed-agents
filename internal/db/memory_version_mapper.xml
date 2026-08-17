@@ -163,6 +163,13 @@
         <include refid="columns"/>
     </update>
 
+    <delete id="DeleteOlderThan" result="rows">
+        DELETE FROM memory_versions
+        WHERE workspace_uuid = #{params.WorkspaceUUID}
+        AND memory_store_external_id = #{params.MemoryStoreExternalID}
+        AND created_at &lt; #{params.CreatedBefore}
+    </delete>
+
     <delete id="DeleteByStoreUUID" result="exec">
         DELETE FROM memory_versions
         WHERE workspace_uuid = #{workspaceUUID}
