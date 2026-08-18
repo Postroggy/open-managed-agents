@@ -407,7 +407,10 @@ export function registerManagedAgentsResourceTests() {
     await waitFor(() =>
       expect(api.requests.some((request) => request.url === '/v1/sessions/sesn_one123456?beta=true')).toBe(true),
     );
-    expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/resources?'))).toBe(true);
+    expect(api.requests.some((request) => request.url.startsWith('/v1/files?'))).toBe(false);
+    expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/resources?'))).toBe(
+      false,
+    );
     expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/threads?'))).toBe(true);
     expect(api.requests.some((request) => request.url.startsWith('/v1/sessions/sesn_one123456/events?'))).toBe(true);
     expect(
@@ -610,7 +613,24 @@ export function registerManagedAgentsResourceTests() {
     const workspaceTabs = screen.getByRole('tablist', { name: 'Session workspace' });
     fireEvent.click(within(workspaceTabs).getByRole('tab', { name: /Resources/ }));
     expect((await screen.findByText('Mounted resources')).closest('[data-session-workspace-card]')).toBeTruthy();
-    expect(screen.getByText('orders.zip')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Type' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'File ID' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Mount path' })).toBeTruthy();
+    expect(await screen.findByText('source-orders.zip')).toBeTruthy();
+    expect(screen.getByText('file_orders123456')).toBeTruthy();
+    expect(screen.getByText('/uploads/orders.zip')).toBeTruthy();
+    expect(
+      api.requests.some(
+        (request) => request.url === '/v1/files/file_orders123456?beta=true' && request.method === 'GET',
+      ),
+    ).toBe(true);
+    expect(api.requests.some((request) => request.url.startsWith('/v1/files?'))).toBe(false);
+    expect(
+      api.requests.some(
+        (request) => request.url.startsWith('/v1/sessions/sesn_one123456/resources?') && request.method === 'GET',
+      ),
+    ).toBe(false);
 
     fireEvent.click(within(workspaceTabs).getByRole('tab', { name: 'Agent' }));
     const agentHeadings = await screen.findAllByText('Ecommerce Basket Analysis Agent');
@@ -633,7 +653,7 @@ export function registerManagedAgentsResourceTests() {
     expect(screen.getByText(/Secret values are never shown here/)).toBeTruthy();
   });
 
-  test('shows a sent message without refreshing an idle session page', async () => {
+  test('refreshes session resources from Get Session only when the Resources tab is clicked', async () => {
     resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
     const api = mockManagedResourceApi();
     api.resources.sessions[0].status = 'idle';
@@ -658,6 +678,7 @@ export function registerManagedAgentsResourceTests() {
     const fetchSessionEvents = globalThis.fetch;
     let staleReadAfterPost = false;
     let messagePosted = false;
+    let outputAdded = false;
     globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
       const method = requestMethod(input, init);
@@ -669,6 +690,16 @@ export function registerManagedAgentsResourceTests() {
       }
       if (messagePosted && url.startsWith('/v1/sessions/sesn_one123456/events/stream?') && method === 'GET') {
         const now = new Date().toISOString();
+        if (!outputAdded) {
+          api.resources.sessions[0].resources.push({
+            id: 'sesrsc_report123456',
+            type: 'file',
+            created_at: now,
+            file_id: 'file_report123456',
+            mount_path: '/outputs/report.csv',
+          });
+          outputAdded = true;
+        }
         const frames = [
           { id: 'evt_running_after_send', type: 'session.status_running', created_at: now },
           {
@@ -701,6 +732,8 @@ export function registerManagedAgentsResourceTests() {
       renderManagedAgentsPage('sessions');
 
       expect(await screen.findByText('Existing message.')).toBeTruthy();
+      const sessionURL = '/v1/sessions/sesn_one123456?beta=true';
+      const initialSessionRequestCount = api.requests.filter((request) => request.url === sessionURL).length;
       const composer = await screen.findByRole('textbox', { name: 'Message' });
       fireEvent.change(composer, { target: { value: 'Render this message immediately.' } });
       fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false });
@@ -708,8 +741,63 @@ export function registerManagedAgentsResourceTests() {
       await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe(''));
       expect(await screen.findByText('Render this message immediately.')).toBeTruthy();
       expect(await screen.findByText('Agent reply arrived live.')).toBeTruthy();
+      expect(api.requests.filter((request) => request.url === sessionURL)).toHaveLength(initialSessionRequestCount);
+      const workspaceTabs = screen.getByRole('tablist', { name: 'Session workspace' });
+      fireEvent.click(within(workspaceTabs).getByRole('tab', { name: /Resources/ }));
+      expect(await screen.findByText('file_report123456')).toBeTruthy();
+      expect(await screen.findByText('/outputs/report.csv')).toBeTruthy();
+      expect(api.requests.filter((request) => request.url === sessionURL).length).toBeGreaterThan(
+        initialSessionRequestCount,
+      );
+      expect(api.requests.some((request) => request.url.startsWith('/v1/files?'))).toBe(false);
     } finally {
       globalThis.fetch = fetchSessionEvents;
+    }
+  });
+
+  test('preserves live session state and reports Get Session failures when refreshing resources', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+    const api = mockManagedResourceApi();
+    api.resources.sessionEvents = api.resources.sessionEvents.filter((event) => event.type !== 'session.status_idle');
+    const baseFetch = globalThis.fetch;
+    let failResourceRefresh = false;
+    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (
+        failResourceRefresh &&
+        requestUrl(input) === '/v1/sessions/sesn_one123456?beta=true' &&
+        requestMethod(input, init) === 'GET'
+      ) {
+        return new Response(JSON.stringify({ error: { message: 'resource refresh failed' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+
+    try {
+      renderManagedAgentsPage('sessions');
+
+      expect((await screen.findAllByText('Running')).length).toBeGreaterThan(0);
+      api.resources.sessions[0].status = 'idle';
+      api.resources.sessions[0].resources.push({
+        id: 'sesrsc_new_output123456',
+        type: 'file',
+        created_at: new Date().toISOString(),
+        file_id: 'file_new_output123456',
+        mount_path: '/outputs/new-output.txt',
+      });
+      const resourcesTab = screen.getByRole('tab', { name: /Resources/ });
+      fireEvent.click(resourcesTab);
+
+      expect(await screen.findByText('file_new_output123456')).toBeTruthy();
+      expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
+
+      failResourceRefresh = true;
+      fireEvent.click(resourcesTab);
+      expect(await screen.findByText('resource refresh failed')).toBeTruthy();
+    } finally {
+      globalThis.fetch = baseFetch;
     }
   });
 

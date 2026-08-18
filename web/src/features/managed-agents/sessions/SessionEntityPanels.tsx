@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '../../../shared/i18n';
 import { Badge } from '../../../shared/ui/badge';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/ui/table';
 import { TabsContent } from '../../../shared/ui/tabs';
-import { listVaultCredentials, retrieveAgent, retrieveManagedEntity } from '../api';
+import { listVaultCredentials, retrieveAgent, retrieveFileMetadata, retrieveManagedEntity } from '../api';
 import { agentModelName } from '../agents/model';
 import { environmentPackageRows, credentialAuthLabel } from '../resources/model';
 import {
@@ -37,12 +38,10 @@ const emptyRelatedEntities: RelatedEntities = {
 
 export function SessionEntityPanels({
   refreshKey,
-  resources,
   session,
   workspaceId,
 }: {
   refreshKey: number;
-  resources: SessionResourceApiResponse[];
   session: SessionApiResponse;
   workspaceId: string;
 }) {
@@ -51,6 +50,7 @@ export function SessionEntityPanels({
   const agentVersion = typeof agentReference.version === 'number' ? agentReference.version : null;
   const vaultKey = (Array.isArray(session.vault_ids) ? session.vault_ids.filter(isNonEmptyString) : []).join('\0');
   const related = useRelatedEntities(agentId, agentVersion, session.environment_id, vaultKey, workspaceId, refreshKey);
+  const filenamesByFileId = useSessionFileNames(session.resources, workspaceId);
   const { msg } = useI18n();
   const emptyText = related.loading
     ? msg('common.loading', 'Loading...')
@@ -66,8 +66,8 @@ export function SessionEntityPanels({
             'Files, repositories, and memory stores available inside this session.',
           )}
         >
-          {resources.length ? (
-            <ResourceGrid resources={resources} />
+          {session.resources.length ? (
+            <ResourceTable filenamesByFileId={filenamesByFileId} resources={session.resources} />
           ) : (
             <EmptyText>{msg('managedAgents.sessions.nested.noResources', 'No resources mounted')}</EmptyText>
           )}
@@ -83,6 +83,42 @@ export function SessionEntityPanels({
       />
     </>
   );
+}
+
+function useSessionFileNames(resources: SessionResourceApiResponse[], workspaceId: string) {
+  const [filenamesByFileId, setFilenamesByFileId] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    const fileIds = [
+      ...new Set(
+        resources
+          .filter((resource) => resource.type === 'file')
+          .map((resource) => resource.file_id)
+          .filter(isNonEmptyString),
+      ),
+    ];
+    void Promise.allSettled(
+      fileIds.map(async (fileId) => {
+        const file = await retrieveFileMetadata(fileId, workspaceId);
+        return [fileId, file.filename] as const;
+      }),
+    ).then((results) => {
+      if (!active) return;
+      setFilenamesByFileId(
+        Object.fromEntries(
+          results
+            .filter(
+              (result): result is PromiseFulfilledResult<readonly [string, string]> => result.status === 'fulfilled',
+            )
+            .map((result) => result.value),
+        ),
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [resources, workspaceId]);
+  return filenamesByFileId;
 }
 
 function useRelatedEntities(
@@ -355,30 +391,68 @@ function DetailSection({ children, empty, title }: { children: React.ReactNode; 
   );
 }
 
-function ResourceGrid({ resources }: { resources: SessionResourceApiResponse[] }) {
+function ResourceTable({
+  filenamesByFileId,
+  resources,
+}: {
+  filenamesByFileId: Record<string, string>;
+  resources: SessionResourceApiResponse[];
+}) {
+  const { msg } = useI18n();
+
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {resources.map((resource, index) => (
-        <div key={String(resource.id ?? index)} className="rounded-lg border border-border p-4">
-          <div className="font-medium">{resourceName(resource)}</div>
-          <div className="mt-1 font-mono text-xs text-muted-foreground">{String(resource.id ?? '—')}</div>
-          <Badge variant="secondary" className="mt-3">
-            {titleCase(String(resource.type ?? 'resource').replaceAll('_', ' '))}
-          </Badge>
-        </div>
-      ))}
+    <div className="overflow-hidden rounded-lg border border-border">
+      <Table className="min-w-[760px] table-fixed text-left">
+        <colgroup>
+          <col className="w-[26%]" />
+          <col className="w-[16%]" />
+          <col className="w-[29%]" />
+          <col className="w-[29%]" />
+        </colgroup>
+        <TableHeader className="bg-card-raised text-muted-foreground">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="px-5 text-muted-foreground">{msg('common.name', 'Name')}</TableHead>
+            <TableHead className="px-5 text-muted-foreground">
+              {msg('managedAgents.sessions.trace.type', 'Type')}
+            </TableHead>
+            <TableHead className="px-5 text-muted-foreground">
+              {msg('managedAgents.sessions.resources.fileId', 'File ID')}
+            </TableHead>
+            <TableHead className="px-5 text-muted-foreground">
+              {msg('managedAgents.sessions.resources.mountPath', 'Mount path')}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {resources.map((resource, index) => {
+            const fileId = resource.file_id ?? '—';
+            const filename = resource.file_id ? (filenamesByFileId[resource.file_id] ?? '—') : '—';
+            const mountPath = resource.mount_path ?? '—';
+            return (
+              <TableRow key={resource.id ?? index} className="bg-card text-foreground">
+                <TableCell className="h-14 truncate px-5" title={filename}>
+                  {filename}
+                </TableCell>
+                <TableCell className="h-14 px-5">
+                  <Badge variant="secondary">{titleCase((resource.type ?? 'resource').replaceAll('_', ' '))}</Badge>
+                </TableCell>
+                <TableCell className="h-14 truncate px-5 font-mono text-xs text-muted-foreground" title={fileId}>
+                  {fileId}
+                </TableCell>
+                <TableCell className="h-14 truncate px-5 font-mono text-xs text-muted-foreground" title={mountPath}>
+                  {mountPath}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
 function EmptyText({ children }: { children: React.ReactNode }) {
   return <div className="py-12 text-center text-sm text-muted-foreground">{children}</div>;
-}
-
-function resourceName(resource: SessionResourceApiResponse) {
-  for (const key of ['filename', 'name', 'path', 'repository', 'url'])
-    if (typeof resource[key] === 'string' && resource[key]) return resource[key];
-  return String(resource.id ?? 'Resource');
 }
 
 function isNonEmptyString(value: unknown): value is string {

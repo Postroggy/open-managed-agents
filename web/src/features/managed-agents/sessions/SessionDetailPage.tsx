@@ -16,7 +16,6 @@ import {
   archiveManagedEntity,
   deleteManagedEntity,
   listAllSessionThreads,
-  listSessionResourcesForDetail,
   retrieveSessionDetailSession,
   SESSION_DETAIL_CHILD_REFETCH_INTERVAL_MS,
   sessionThreadListSignature,
@@ -31,7 +30,6 @@ import {
   type SessionApiResponse,
   type SessionDebugDetailTab,
   type SessionEventListEntry,
-  type SessionResourceApiResponse,
   type SessionThreadApiResponse,
   type SessionTraceFilterOption,
   type SessionTraceView,
@@ -103,11 +101,11 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
   const listHref = managedEntityListHref(activeWorkspaceId, 'sessions');
   const listLabel = resourceTitle(config, msg);
   const [session, setSession] = useState<SessionApiResponse | null>(null);
-  const [resources, setResources] = useState<SessionResourceApiResponse[]>([]);
   const [threads, setThreads] = useState<SessionThreadApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [metadataError, setMetadataError] = useState<string | null>(null);
+  const [resourceRefreshError, setResourceRefreshError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
@@ -152,14 +150,15 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
       })().catch(() => undefined);
     }, 600);
   }, [activeWorkspaceId, session?.id]);
-  const refreshSessionMetadata = useCallback(() => {
+  const refreshSessionResources = useCallback(() => {
     if (!session?.id) {
       return;
     }
     const activeSessionId = session.id;
+    setResourceRefreshError(null);
     void retrieveSessionDetailSession(activeSessionId, activeWorkspaceId)
-      .then((updatedSession) => setSession(updatedSession))
-      .catch(() => undefined);
+      .then((updatedSession) => setSession((currentSession) => mergeSessionResources(currentSession, updatedSession)))
+      .catch((error) => setResourceRefreshError(errorMessage(error)));
   }, [activeWorkspaceId, session?.id]);
   const activeSessionId = session?.id ?? null;
   const handlePrimaryStreamEvent = useCallback(
@@ -183,11 +182,9 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
       }
       if (type === 'session.thread_created') {
         refreshSessionThreads();
-      } else if (type === 'session.updated') {
-        refreshSessionMetadata();
       }
     },
-    [activeSessionId, refreshSessionMetadata, refreshSessionThreads],
+    [activeSessionId, refreshSessionThreads],
   );
 
   useEffect(() => {
@@ -195,7 +192,7 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
     setLoading(true);
     setLoadError(null);
     setMetadataError(null);
-    setResources([]);
+    setResourceRefreshError(null);
     setThreads([]);
     setMetadataLoaded(false);
     void (async () => {
@@ -207,26 +204,20 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
         setSession(loadedSession);
         setLoading(false);
 
-        const [resourcesResult, threadsResult] = await Promise.allSettled([
-          listSessionResourcesForDetail(loadedSession.id, activeWorkspaceId),
-          listAllSessionThreads(loadedSession.id, activeWorkspaceId),
-        ]);
-        if (!active) {
-          return;
+        try {
+          const threadsPage = await listAllSessionThreads(loadedSession.id, activeWorkspaceId);
+          if (active) {
+            setThreads(threadsPage.data ?? []);
+          }
+        } catch (error) {
+          if (active) {
+            setMetadataError(errorMessage(error));
+          }
+        } finally {
+          if (active) {
+            setMetadataLoaded(true);
+          }
         }
-        const loadedThreads = threadsResult.status === 'fulfilled' ? (threadsResult.value.data ?? []) : [];
-        if (resourcesResult.status === 'fulfilled') {
-          setResources(resourcesResult.value.data ?? []);
-        }
-        if (threadsResult.status === 'fulfilled') {
-          setThreads(loadedThreads);
-        }
-        setMetadataLoaded(true);
-        const settledResults = [resourcesResult, threadsResult] as PromiseSettledResult<unknown>[];
-        const firstRejected = settledResults.find(
-          (result): result is PromiseRejectedResult => result.status === 'rejected',
-        );
-        setMetadataError(firstRejected ? errorMessage(firstRejected.reason) : null);
       } catch (error) {
         if (active) {
           setSession(null);
@@ -379,8 +370,8 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
     [activeLane, entriesByLaneId, filteredEntries, query, selectedTypes, timeline, view],
   );
   const summary = useMemo(
-    () => (session ? buildSessionDetailSummary(session, resources, sortedEvents, formatters, msg) : null),
-    [formatters, msg, resources, session, sortedEvents],
+    () => (session ? buildSessionDetailSummary(session, session.resources, sortedEvents, formatters, msg) : null),
+    [formatters, msg, session, sortedEvents],
   );
   const copyPayload = useMemo(() => sessionDetailEventCopyPayload(filteredEntries, view), [filteredEntries, view]);
 
@@ -570,6 +561,7 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
 
   const archived = Boolean(session.archived_at);
   const conversationState = sessionConversationState(session);
+  const warningError = [resourceRefreshError, metadataError, eventError].find(Boolean);
 
   return (
     <TooltipProvider>
@@ -701,9 +693,7 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
         </header>
 
         {mutationError ? <ManagedErrorAlert className="mb-4 max-w-xl">{mutationError}</ManagedErrorAlert> : null}
-        {metadataError || eventError ? (
-          <ManagedWarningAlert className="mb-4 max-w-xl">{metadataError || eventError}</ManagedWarningAlert>
-        ) : null}
+        {warningError ? <ManagedWarningAlert className="mb-4 max-w-xl">{warningError}</ManagedWarningAlert> : null}
 
         <Tabs defaultValue="events" className="min-h-0 flex-1 gap-0">
           <div className="border-b border-border">
@@ -716,7 +706,7 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
                 <ListTree className="size-4" aria-hidden />
                 {msg('managedAgents.sessions.detail.eventsTab', 'Events')}
               </TabsTrigger>
-              <TabsTrigger value="resources" className="h-10 flex-none gap-2 px-1">
+              <TabsTrigger value="resources" className="h-10 flex-none gap-2 px-1" onClick={refreshSessionResources}>
                 <FolderOpen className="size-4" aria-hidden />
                 {msg('managedAgents.sessions.detail.resourcesTab', 'Resources')}
               </TabsTrigger>
@@ -811,12 +801,7 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
               />
             </SessionDetailDeltaFramesContext.Provider>
           </TabsContent>
-          <SessionEntityPanels
-            refreshKey={refreshKey}
-            resources={resources}
-            session={session}
-            workspaceId={activeWorkspaceId}
-          />
+          <SessionEntityPanels refreshKey={refreshKey} session={session} workspaceId={activeWorkspaceId} />
         </Tabs>
       </section>
     </TooltipProvider>
@@ -825,6 +810,12 @@ export function SessionDetailPage({ config, sessionId }: { config: ResourceConfi
 
 export function EventsTab(props: EventsTabProps) {
   return <EventsTabInner {...props} />;
+}
+
+function mergeSessionResources(currentSession: SessionApiResponse | null, updatedSession: SessionApiResponse) {
+  return currentSession?.id === updatedSession.id
+    ? { ...currentSession, resources: updatedSession.resources }
+    : currentSession;
 }
 
 function sessionConversationState(session: SessionApiResponse) {

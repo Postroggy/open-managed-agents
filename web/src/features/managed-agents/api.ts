@@ -23,6 +23,7 @@ import {
   type DeploymentRunApiResponse,
   type EnvironmentApiResponse,
   type EnvironmentWorkApiResponse,
+  type FileMetadataApiResponse,
   type ManagedEntityApiResponse,
   type ManagedEntityFormValues,
   type ManagedEntityListFilters,
@@ -555,6 +556,10 @@ export function listSessionResources(sessionId: string, workspaceId: string) {
   >;
 }
 
+export function retrieveFileMetadata(fileId: string, workspaceId: string) {
+  return anthropicBetaApi.files.retrieveMetadata<FileMetadataApiResponse>(fileId, workspaceId);
+}
+
 export const SESSION_DETAIL_EVENT_PAGE_LIMIT = 500;
 
 export const SESSION_DETAIL_STREAM_IDLE_TIMEOUT_MS = 90_000;
@@ -605,12 +610,6 @@ export async function listAllSessionThreads(sessionId: string, workspaceId: stri
     } while (page);
     return { data, next_page: null } satisfies PageResponse<SessionThreadApiResponse>;
   });
-}
-
-export function listSessionResourcesForDetail(sessionId: string, workspaceId: string) {
-  return sessionDetailSingleFlight(`resources:${workspaceId}:${sessionId}`, () =>
-    listSessionResources(sessionId, workspaceId),
-  );
 }
 
 export function listSessionEvents(
