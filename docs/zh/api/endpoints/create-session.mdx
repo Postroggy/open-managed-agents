@@ -4,7 +4,7 @@ description: "将智能体和环境组合为一次有状态任务。"
 api: "POST /v1/sessions?beta=true"
 ---
 
-创建会话，并为它创建主线程与排队中的 woker。该资源当前要求 `beta=true`。
+创建会话，并为它创建主线程与排队中的 worker。该资源当前要求 `beta=true`。
 
 <ParamField query="beta" type="boolean" required>
   必须为 `true`。
@@ -51,4 +51,4 @@ api: "POST /v1/sessions?beta=true"
 }
 ```
 
-创建成功后，会话初始状态通常为 `idle`，相关 woker 会进入队列。使用会话事件或线程流观察后续执行。
+创建成功后，会话初始状态通常为 `idle`，相关 worker 会进入队列。使用会话事件或线程流观察后续执行。

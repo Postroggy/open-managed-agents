@@ -1,6 +1,6 @@
 ---
 title: "环境"
-description: "管理执行环境和自托管 worker 的 woker 队列。"
+description: "管理执行环境和自托管 worker 的 worker 队列。"
 ---
 
 所有环境端点要求 `?beta=true`。
@@ -18,17 +18,17 @@ description: "管理执行环境和自托管 worker 的 woker 队列。"
 
 创建字段为 `name`、`description`、`scope`、`config` 和 `metadata`。`scope` 为 `organization` 或 `account`。`config.type` 为 `cloud` 或 `self_hosted`。
 
-## woker 端点
+## worker 端点
 
 | 方法 | 子路径 | 用途 |
 | --- | --- | --- |
-| `GET` | `/work` | 列出 woker |
+| `GET` | `/work` | 列出 worker |
 | `GET` | `/work/poll` | worker 长轮询 |
 | `GET` | `/work/stats` | 队列统计 |
-| `GET` | `/work/{work_id}` | 读取 woker |
+| `GET` | `/work/{work_id}` | 读取 worker |
 | `POST` | `/work/{work_id}` | 更新元数据 |
 | `POST` | `/work/{work_id}/ack` | 领取 |
 | `POST` | `/work/{work_id}/heartbeat` | 续约 |
 | `POST` | `/work/{work_id}/stop` | 请求停止 |
 
-woker 接口供环境运行器使用。普通应用只需创建环境并在会话中引用。
+worker 接口供环境运行器使用。普通应用只需创建环境并在会话中引用。

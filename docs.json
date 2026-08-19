@@ -342,7 +342,7 @@
                       "DELETE /v1/environments/{environment_id}",
                       "POST /v1/environments/{environment_id}/archive",
                       {
-                        "group": "woker",
+                        "group": "worker",
                         "pages": [
                           "GET /v1/environments/{environment_id}/work/stats",
                           "GET /v1/environments/{environment_id}/work/poll",

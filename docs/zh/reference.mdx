@@ -98,7 +98,7 @@ description: "Open Managed Agents 的事件类型、自托管 worker CLI 标志�
 | `--environment-id`     | 要轮询工作的环境。也可从 `ANTHROPIC_ENVIRONMENT_ID` 读取。                                                                          |
 | `--environment-key`    | 使用此环境对工作器进行身份验证。也可从 `ANTHROPIC_ENVIRONMENT_KEY` 读取。                                                                  |
 | `--workdir`            | 下载技能以及工具读写文件的目录。默认为 `.`（当前目录）；系统默认工作目录为 `/workspace`。                                                                |
-| `--on-work`            | 为每个已认领的 woker 调用的脚本，而不是在进程内运行工具。以环境变量的形式接收会话详细信息。                                                                        |
+| `--on-work`            | 为每个已认领的 worker 调用的脚本，而不是在进程内运行工具。以环境变量的形式接收会话详细信息。                                                                        |
 | `--unrestricted-paths` | 允许文件工具读写 `--workdir` 之外的路径。工作目录检查仅是文件工具的防护措施，而非沙箱；它不会约束 bash。                                                        |
 | `--max-idle`           | 会话因 `end_turn` 停止原因进入空闲状态后，在关闭之前等待的时长。默认为 `60s`。 |
 | `--log-format`         | 日志输出格式。使用 `json` 进行结构化日志摄取。默认为 `text`。                                                                               |

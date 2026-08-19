@@ -35,11 +35,11 @@ description: "在自托管沙箱中运行 Open Managed Agents 会话，将工具
   本指南介绍如何使用任何通用沙箱平台构建 worker。此外还提供了针对特定平台的指南：AWS Lambda MicroVMs、Blaxel、Cloudflare、Daytona、E2B、Fly.io、GKE Agent Sandbox、Modal、Namespace、Superserve 和 Vercel。
 </Tip>
 
-环境 worker 是您在自己的基础设施上运行的进程。它从 OMA 接收工具执行请求并在本地运行。`self_hosted` 环境充当工作队列：当[会话](/docs/zh/sessions)被分配到该环境时，OMA 会将该会话作为 woker 加入队列。您的 worker 从该队列中认领 woker，为每个 woker 派生一个执行上下文，下载智能体的[技能](/docs/zh/skills)（可复用的、基于文件系统的资源，为智能体提供特定领域的专业知识），运行工具调用，并将结果回传。
+环境 worker 是您在自己的基础设施上运行的进程。它从 OMA 接收工具执行请求并在本地运行。`self_hosted` 环境充当工作队列：当[会话](/docs/zh/sessions)被分配到该环境时，OMA 会将该会话作为 worker 加入队列。您的 worker 从该队列中认领 worker，为每个 worker 派生一个执行上下文，下载智能体的[技能](/docs/zh/skills)（可复用的、基于文件系统的资源，为智能体提供特定领域的专业知识），运行工具调用，并将结果回传。
 
-woker 通过轮询环境的队列来认领：可以使用持续轮询的**常驻 worker**，也可以使用在 `session.status_run_started` 时唤醒并开始轮询的 **webhook 触发式处理程序**。
+worker 通过轮询环境的队列来认领：可以使用持续轮询的**常驻 worker**，也可以使用在 `session.status_run_started` 时唤醒并开始轮询的 **webhook 触发式处理程序**。
 
-CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；SDK 同时支持常驻和 webhook 触发两种模式。两者均可配置：有关 CLI 标志，请参阅参考文档中的[自托管 worker](/docs/zh/reference#self-hosted-worker)；有关 SDK 选项，请参阅本页的 [SDK 辅助工具](/docs/zh/self-hosted-sandboxes#sdk-helpers)。如需更多控制，可直接调用[环境 woker 端点](/docs/zh/api/environment-work/list-work-items)并实现您自己的 worker。
+CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；SDK 同时支持常驻和 webhook 触发两种模式。两者均可配置：有关 CLI 标志，请参阅参考文档中的[自托管 worker](/docs/zh/reference#self-hosted-worker)；有关 SDK 选项，请参阅本页的 [SDK 辅助工具](/docs/zh/self-hosted-sandboxes#sdk-helpers)。如需更多控制，可直接调用[环境 worker 端点](/docs/zh/api/environment-work/list-work-items)并实现您自己的 worker。
 
 ### 沙箱文件系统
 
@@ -225,14 +225,14 @@ CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；
       <Step title="运行 worker">
         **进程内运行**
 
-        `ant beta:worker poll` 认领分配给该环境的 woker，下载技能，在工作目录中执行工具调用，并将结果回传。它从环境变量中读取 `ANTHROPIC_ENVIRONMENT_KEY` 和 `ANTHROPIC_ENVIRONMENT_ID`。
+        `ant beta:worker poll` 认领分配给该环境的 worker，下载技能，在工作目录中执行工具调用，并将结果回传。它从环境变量中读取 `ANTHROPIC_ENVIRONMENT_KEY` 和 `ANTHROPIC_ENVIRONMENT_ID`。
 
         ```bash
         ant beta:worker poll \
           --workdir "/workspace"
         ```
 
-        worker 在收到 SIGTERM 或 SIGINT 时会干净退出：它会取消任何正在进行的工具调用，发布其错误结果，并在停止前释放 woker。
+        worker 在收到 SIGTERM 或 SIGINT 时会干净退出：它会取消任何正在进行的工具调用，发布其错误结果，并在停止前释放 worker。
 
         **每个会话一个沙箱**
 
@@ -254,7 +254,7 @@ CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；
 
         ```bash
         #!/bin/bash
-        # spawn.sh：每个已认领的 woker 调用一次
+        # spawn.sh：每个已认领的 worker 调用一次
         mkdir -p "/host/outputs/$ANTHROPIC_SESSION_ID"
         exec docker run --rm \
           -e ANTHROPIC_SESSION_ID -e ANTHROPIC_ENVIRONMENT_KEY \
@@ -276,7 +276,7 @@ CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；
   <Tab title="常驻（SDK）">
     <Steps>
       <Step title="运行 worker">
-        `EnvironmentWorker` 认领分配给该环境的 woker，下载技能，在工作目录中执行工具调用，并将结果回传。使用您在[开始之前](/docs/zh/self-hosted-sandboxes#before-you-begin)中生成的环境密钥进行身份验证。
+        `EnvironmentWorker` 认领分配给该环境的 worker，下载技能，在工作目录中执行工具调用，并将结果回传。使用您在[开始之前](/docs/zh/self-hosted-sandboxes#before-you-begin)中生成的环境密钥进行身份验证。
 
         <CodeGroup exclude="shell">
           ```python Python
@@ -391,7 +391,7 @@ CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；
       </Step>
 
       <Step title="实现 webhook 处理程序">
-        `EnvironmentWorker` 认领 woker，下载技能，在工作目录中执行工具调用，将结果回传，然后退出。在 `session.status_run_started` 触发时调用它。
+        `EnvironmentWorker` 认领 worker，下载技能，在工作目录中执行工具调用，将结果回传，然后退出。在 `session.status_run_started` 触发时调用它。
 
         <CodeGroup exclude="shell">
           ```python Python
@@ -468,7 +468,7 @@ CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；
 
           ```csharp C#
           // EnvironmentWorker 目前在 C# SDK 中不可用。
-          // 如需直接处理 woker，请参阅环境 woker 端点。
+          // 如需直接处理 worker，请参阅环境 worker 端点。
           ```
 
           ```go Go
@@ -561,17 +561,17 @@ CLI 和 SDK 都附带了预构建的 worker。`ant` CLI 仅支持常驻模式；
 
           ```java Java
           // EnvironmentWorker 目前在 Java SDK 中不可用。
-          // 如需直接处理 woker，请参阅环境 woker 端点。
+          // 如需直接处理 worker，请参阅环境 worker 端点。
           ```
 
           ```php PHP
           // EnvironmentWorker 目前在 PHP SDK 中不可用。
-          // 如需直接处理 woker，请参阅环境 woker 端点。
+          // 如需直接处理 worker，请参阅环境 worker 端点。
           ```
 
           ```ruby Ruby
           # EnvironmentWorker 目前在 Ruby SDK 中不可用。
-          # 如需直接处理 woker，请参阅环境 woker 端点。
+          # 如需直接处理 worker，请参阅环境 worker 端点。
           ```
         </CodeGroup>
       </Step>
@@ -586,14 +586,14 @@ SDK 提供了三个不同控制级别的辅助工具。`EnvironmentWorker` 涵�
 * **`EnvironmentWorker`：** 开箱即用的 worker。端到端处理轮询、设置和执行。
 
   * `.run()`：无限期运行，在会话到达时拾取它们。
-  * `.handle_item()`：处理单个已认领的 woker 并退出。显式传递工作、会话和环境标识符，或让它读取 `ant beta:worker poll --on-work` 为其派生的进程设置的 `ANTHROPIC_*` 变量。
+  * `.handle_item()`：处理单个已认领的 worker 并退出。显式传递工作、会话和环境标识符，或让它读取 `ant beta:worker poll --on-work` 为其派生的进程设置的 `ANTHROPIC_*` 变量。
 
 * **`work.poller()`：** 代表您轮询工作队列，并将每个已认领的会话交给您。当您想要决定每个会话的处理方式时使用此方法，例如启动沙箱而不是在进程内运行工具。
 
   * `drain`：是否在队列为空后停止轮询，而不是等待新工作。
   * `block_ms`：等待工作到达的时长（毫秒），超时后返回。必须在 1 到 999 之间（单次轮询等待；辅助工具会自动重新轮询）。传递 `null`（Python 中为 `None`，Go 中为 `param.Null[int64]()`）进行非阻塞检查；省略该参数则使用默认的 999 毫秒长轮询。
-  * `reclaim_older_than_ms`：重新认领在此毫秒数内已被认领但从未确认的 woker。
-  * `auto_stop`：是否在您的循环体处理完每个 woker 后为其发布停止信号。Go 轮询器没有退出选项，始终会发布停止信号，因此请在循环体中阻塞直到会话完成，而不是分离。
+  * `reclaim_older_than_ms`：重新认领在此毫秒数内已被认领但从未确认的 worker。
+  * `auto_stop`：是否在您的循环体处理完每个 worker 后为其发布停止信号。Go 轮询器没有退出选项，始终会发布停止信号，因此请在循环体中阻塞直到会话完成，而不是分离。
 
 * **`client.beta.sessions.events.tool_runner()`：** 给定会话 ID 和工具列表，为单个会话运行工具调用。当您已经认领了工作且只需要执行层时使用。
 
@@ -672,7 +672,7 @@ SDK 提供了三个不同控制级别的辅助工具。`EnvironmentWorker` 涵�
 
   ```csharp C#
   // C# SDK 目前不提供工作轮询辅助工具。
-  // 如需直接认领 woker，请参阅环境 woker 端点。
+  // 如需直接认领 worker，请参阅环境 worker 端点。
   ```
 
   ```go Go
@@ -722,17 +722,17 @@ SDK 提供了三个不同控制级别的辅助工具。`EnvironmentWorker` 涵�
 
   ```java Java
   // Java SDK 目前不提供工作轮询辅助工具。
-  // 如需直接认领 woker，请参阅环境 woker 端点。
+  // 如需直接认领 worker，请参阅环境 worker 端点。
   ```
 
   ```php PHP
   // PHP SDK 目前不提供工作轮询辅助工具。
-  // 如需直接认领 woker，请参阅环境 woker 端点。
+  // 如需直接认领 worker，请参阅环境 worker 端点。
   ```
 
   ```ruby Ruby
   # Ruby SDK 目前尚未提供工作轮询辅助工具。
-  # 如需直接认领 woker，请参阅环境 woker 端点。
+  # 如需直接认领 worker，请参阅环境 worker 端点。
   ```
 </CodeGroup>
 
@@ -852,7 +852,7 @@ ant beta:environments:work stats --environment-id "$ANTHROPIC_ENVIRONMENT_ID"
 
 worker 运行后，创建一个指向该环境的会话。将 `AGENT_ID` 设置为您在[开始之前](/docs/zh/self-hosted-sandboxes#before-you-begin)中记下的智能体 ID。会话进入环境的工作队列并在那里等待，直到有 worker 认领它；如果没有 worker 连接，会话会保持排队状态而不会失败。
 
-OMA 不会将文件或 GitHub 仓库挂载到自托管沙箱中。要使会话特定的文件可用，请在会话的 `metadata` 字段中传递文件引用（例如 S3 路径或提交 SHA）。已认领的 woker 不携带会话的元数据，但携带会话 ID：您的派生脚本或 `--on-work` 处理程序检索会话（`GET /v1/sessions/{session_id}`）以读取 `metadata` 字段，然后在工具执行开始之前将文件暂存到工作目录中。
+OMA 不会将文件或 GitHub 仓库挂载到自托管沙箱中。要使会话特定的文件可用，请在会话的 `metadata` 字段中传递文件引用（例如 S3 路径或提交 SHA）。已认领的 worker 不携带会话的元数据，但携带会话 ID：您的派生脚本或 `--on-work` 处理程序检索会话（`GET /v1/sessions/{session_id}`）以读取 `metadata` 字段，然后在工具执行开始之前将文件暂存到工作目录中。
 
 <CodeGroup>
   ```bash cURL
@@ -1677,9 +1677,9 @@ SDK 的[客户端 MCP 辅助工具](/docs/zh/mcp-connector)将服务器的工具
 
 ### 优雅地停止会话
 
-使用 `work.stop` 请求处理特定会话的工作进程将其关闭。默认情况下，woker 会进入 `stopping` 状态：工作进程在下一次租约心跳时会注意到这一变化，取消该会话正在进行的工具调用，并确认关闭，此时 woker 变为 `stopped` 状态。在请求正文中传递 `force: true`（使用 CLI 时传递 `--force`），可立即将 woker 标记为 `stopped`，而无需等待工作进程的确认。
+使用 `work.stop` 请求处理特定会话的工作进程将其关闭。默认情况下，worker 会进入 `stopping` 状态：工作进程在下一次租约心跳时会注意到这一变化，取消该会话正在进行的工具调用，并确认关闭，此时 worker 变为 `stopped` 状态。在请求正文中传递 `force: true`（使用 CLI 时传递 `--force`），可立即将 worker 标记为 `stopped`，而无需等待工作进程的确认。
 
-由于这些调用是从您的运维工具而非工作进程主机发起的，因此 `ANTHROPIC_WORK_ID` 不会被自动设置。在运行以下示例之前，请将其设置为目标 woker 的 ID。要查找 woker 的 ID，请通过[环境 woker 端点](/docs/zh/api/environment-work/list-work-items)列出该环境的 woker。
+由于这些调用是从您的运维工具而非工作进程主机发起的，因此 `ANTHROPIC_WORK_ID` 不会被自动设置。在运行以下示例之前，请将其设置为目标 worker 的 ID。要查找 worker 的 ID，请通过[环境 worker 端点](/docs/zh/api/environment-work/list-work-items)列出该环境的 worker。
 
 <CodeGroup>
   ```bash cURL
