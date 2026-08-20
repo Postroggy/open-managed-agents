@@ -406,6 +406,7 @@ export function SessionTraceSearch({ value, onChange }: { value: string; onChang
       </span>
       <Input
         ref={inputRef}
+        type="search"
         aria-label={msg('managedAgents.sessions.trace.filterEvents', 'Filter events')}
         value={value}
         placeholder={msg('managedAgents.sessions.trace.filterEvents', 'Filter events')}

@@ -107,6 +107,7 @@ export function ManagedSearchField({
       ) : null}
       <Input
         ref={inputRef}
+        type="search"
         id={id}
         value={value}
         placeholder={placeholder}
