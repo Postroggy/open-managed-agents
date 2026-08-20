@@ -37,6 +37,8 @@ var (
 	ErrLimitExceeded            = errors.New("limit exceeded")
 	ErrFileInUse                = errors.New("file is in use")
 	ErrFileReferenceNotFound    = errors.New("file reference not found")
+	ErrStaleSchedule            = errors.New("stale deployment schedule")
+	ErrWorkspaceArchived        = errors.New("workspace archived")
 )
 
 type DB struct {
@@ -140,6 +142,12 @@ func (d *DB) Close() {
 	if d.pool != nil {
 		d.pool.Close()
 	}
+}
+
+// SQLDB exposes the Yourbatis-owned database/sql wrapper to integrations.
+// Callers must not close it or use it for application queries.
+func (d *DB) SQLDB() *sql.DB {
+	return d.mapperDB.SQLDB()
 }
 
 func EnsureDatabase(ctx context.Context, databaseURL string) error {

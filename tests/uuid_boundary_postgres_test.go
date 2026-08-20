@@ -8,13 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/platform"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
 	"github.com/superduck-ai/open-managed-agents/internal/secrets"
-
-	"github.com/google/uuid"
 )
 
 // TestTypedUUIDAuthAndAdminPostgres is intentionally backed by PostgreSQL.
@@ -489,7 +488,6 @@ func TestTypedUUIDResourceFamiliesPostgres(t *testing.T) {
 		Resources:             []byte(`[]`),
 		ResourceSecrets:       []byte(`[]`),
 		VaultIDs:              []byte(`[]`),
-		Schedule:              []byte(`{}`),
 		Status:                "active",
 		CreatedAt:             now,
 		UpdatedAt:             now,
