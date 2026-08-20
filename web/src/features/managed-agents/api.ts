@@ -1633,6 +1633,9 @@ export function createManagedEntityBody(section: ManagedEntitySection, values: M
         environment_id: values.environmentId,
         vault_ids: values.vaultIds,
         metadata: {},
+        ...(values.budgetAmount.trim()
+          ? { budget: { type: 'limit', max_list_cost: { amount: values.budgetAmount.trim(), currency: 'USD' } } }
+          : {}),
         resources: values.fileResources.map((resource) => {
           const mountPath = sessionFileAPIMountPath(resource.mountPath);
           return {
