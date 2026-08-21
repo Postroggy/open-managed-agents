@@ -473,7 +473,6 @@
   "managedAgents.agents.editDialog.description": "保存会为此 Agent 创建下一个版本。",
   "managedAgents.agents.editDialog.modelsError": "无法加载可用模型。",
   "managedAgents.agents.editDialog.renderedUnavailable": "此配置包含无法在“表单”模式下安全编辑的字段，请继续使用“原始配置”。",
-  "managedAgents.agents.editDialog.saveNewVersion": "保存新版本",
   "managedAgents.agents.editDialog.title": "编辑 Agent",
   "managedAgents.agents.emptyAction": "开始使用 Agents",
   "managedAgents.agents.emptyTitle": "暂无 Agent",

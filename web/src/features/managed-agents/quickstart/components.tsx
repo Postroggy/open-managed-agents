@@ -1744,6 +1744,7 @@ export function BrowseTemplatesPanel({
           />
           <Input
             ref={searchRef}
+            type="search"
             id="agent-template-search"
             value={query}
             placeholder={msg('managedAgents.quickstart.searchTemplates', 'Search templates')}

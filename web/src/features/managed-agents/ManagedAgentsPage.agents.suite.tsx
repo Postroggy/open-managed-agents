@@ -82,6 +82,7 @@ export function registerManagedAgentsAgentsTests() {
     expect(within(dialog).getByRole('tab', { name: 'Rendered' }).getAttribute('aria-selected')).toBe('true');
     expect(within(dialog).getByText('General')).toBeTruthy();
     expect(within(dialog).getByDisplayValue('Untitled agent')).toBeTruthy();
+    expect(within(dialog).getByText('Description (optional)').closest('label')?.className).toContain('grid gap-2');
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Raw' }));
     expect(dialog.textContent).toContain('name: Untitled agent');
     expect(dialog.textContent).toContain('mcp_servers: []');
@@ -382,7 +383,17 @@ export function registerManagedAgentsAgentsTests() {
     const githubCard = within(dialog).getByText('GitHub').closest('[data-slot="card"]') as HTMLElement;
     expect(githubCard).toBeTruthy();
     fireEvent.click(within(githubCard).getByRole('button', { name: 'Tool permissions' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Always allow' }));
+    const alwaysAllowItem = screen.getByRole('menuitemradio', { name: 'Always allow' });
+    expect(alwaysAllowItem.className).toContain('whitespace-nowrap');
+    for (const label of ['Always allow', 'Always ask', 'Always deny']) {
+      expect(
+        screen.getByRole('menuitemradio', { name: label }).querySelector('[data-slot="permission-option-icon"]'),
+      ).toBeTruthy();
+    }
+    const permissionMenu = alwaysAllowItem.closest('[data-slot="dropdown-menu-content"]');
+    expect(permissionMenu?.className).toContain('w-max');
+    expect(permissionMenu?.className).toContain('min-w-40');
+    fireEvent.click(alwaysAllowItem);
 
     const addMcpButton = within(dialog).getByRole('combobox', { name: 'Add MCP server' });
     const addCustomToolButton = within(dialog).getByRole('button', { name: 'Add custom tool' });
@@ -1368,7 +1379,7 @@ export function registerManagedAgentsAgentsTests() {
     expect(within(dialog).getByText('General')).toBeTruthy();
     expect(within(dialog).getByDisplayValue('Editable agent')).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Close' })).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Save new version' }).hasAttribute('disabled')).toBe(true);
+    expect(within(dialog).getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Raw' }));
 
@@ -1413,7 +1424,10 @@ export function registerManagedAgentsAgentsTests() {
     const nameInput = within(dialog).getByDisplayValue('Historical config');
     expect(within(dialog).getByDisplayValue('Historical description')).toBeTruthy();
     fireEvent.change(nameInput, { target: { value: 'Historical config revised' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
+    const saveButton = within(dialog).getByRole('button', { name: 'Save' });
+    expect(saveButton.className).toContain('hover:bg-foreground/90');
+    expect(saveButton.className).not.toContain('hover:bg-muted');
+    fireEvent.click(saveButton);
 
     await waitFor(() =>
       expect(
@@ -1476,7 +1490,7 @@ export function registerManagedAgentsAgentsTests() {
 
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Raw' }));
     expect(within(dialog).getByText(/Name is required/i)).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Save new version' }).hasAttribute('disabled')).toBe(true);
+    expect(within(dialog).getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
   });
 
   test('validates JSON edit config and saves a canonicalized new version body', async () => {
@@ -1506,7 +1520,7 @@ export function registerManagedAgentsAgentsTests() {
     setAgentConfigEditorValue(dialog, '{', 'Agent config JSON');
 
     expect(within(dialog).getByText(/JSON is not valid/i)).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Save new version' }).hasAttribute('disabled')).toBe(true);
+    expect(within(dialog).getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
 
     setAgentConfigEditorValue(
       dialog,
@@ -1529,7 +1543,7 @@ export function registerManagedAgentsAgentsTests() {
     );
     expect(within(dialog).queryByText(/JSON is not valid/i)).toBeNull();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(
@@ -1582,7 +1596,7 @@ export function registerManagedAgentsAgentsTests() {
       fireEvent.change(within(dialog).getByDisplayValue(`Editable agent ${status}`), {
         target: { value: `Updated agent ${status}` },
       });
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
       expect(await within(dialog).findByText(message)).toBeTruthy();
       expect(within(dialog).getByDisplayValue(`Updated agent ${status}`)).toBeTruthy();
@@ -1656,7 +1670,7 @@ export function registerManagedAgentsAgentsTests() {
     expect(await within(dialog).findByText('Worker')).toBeTruthy();
 
     fireEvent.change(within(dialog).getByDisplayValue('Coordinator'), { target: { value: 'Coordinator updated' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(

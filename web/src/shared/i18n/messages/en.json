@@ -473,7 +473,6 @@
   "managedAgents.agents.editDialog.description": "Saving creates the next version for this agent.",
   "managedAgents.agents.editDialog.modelsError": "Could not load available models.",
   "managedAgents.agents.editDialog.renderedUnavailable": "This configuration contains fields that cannot be edited safely in Rendered mode. Continue in Raw.",
-  "managedAgents.agents.editDialog.saveNewVersion": "Save new version",
   "managedAgents.agents.editDialog.title": "Edit agent",
   "managedAgents.agents.emptyAction": "Get started with agents",
   "managedAgents.agents.emptyTitle": "No agents yet",
