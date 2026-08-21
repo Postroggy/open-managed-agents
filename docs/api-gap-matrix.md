@@ -44,17 +44,17 @@
 
 | 资源 | 缺失端点 | 官方文档 | 备注 |
 |---|---|---|---|
-| **Dreams** | `POST/GET /v1/dreams`、`GET /v1/dreams/{id}`、`POST .../cancel`、`POST .../archive`（5） | https://platform.claude.com/docs/en/api/python/beta/dreams/create | 官方较新能力面；OMA 有 issue #245（未实现） |
-| **User Profiles** | `POST/GET /v1/user_profiles`、`GET/POST .../{id}`、`POST .../enrollment_url`（5） | https://platform.claude.com/docs/en/api/python/beta/user_profiles | **疑似 OMA 有意不做**（未确认，待核实） |
-| **Tunnels（顶层）** | `POST/GET /v1/tunnels`、`GET/POST .../{id}`、`archive`、`reveal_token`、`rotate_token`、`certificates`×4（10） | https://platform.claude.com/docs/en/api/python/beta/tunnels | OMA 只实现旧版 admin `/v1/organizations/tunnels`（已 deprecated） |
+| **Dreams** | `POST/GET /v1/dreams`、`GET /v1/dreams/{id}`、`POST .../cancel`、`POST .../archive`（5） | [Dreams create](https://platform.claude.com/docs/en/api/python/beta/dreams/create) | 官方较新能力面；OMA 有 issue #245（未实现） |
+| **User Profiles** | `POST/GET /v1/user_profiles`、`GET/POST .../{id}`、`POST .../enrollment_url`（5） | [User Profiles](https://platform.claude.com/docs/en/api/python/beta/user_profiles) | **疑似 OMA 有意不做**（未确认，待核实） |
+| **Tunnels（顶层）** | `POST/GET /v1/tunnels`、`GET/POST .../{id}`、`archive`、`reveal_token`、`rotate_token`、`certificates`×4（10） | [Tunnels](https://platform.claude.com/docs/en/api/python/beta/tunnels) | OMA 只实现旧版 admin `/v1/organizations/tunnels`（已 deprecated） |
 
 ### 3.2 单端点缺失（3 个端点）
 
 | 端点 | 官方文档 | 备注 |
 |---|---|---|
-| `POST /v1/messages/count_tokens` | https://platform.claude.com/docs/en/api/messages-count-tokens | 官方 GA |
-| `GET /v1/models/{model_id}` | https://platform.claude.com/docs/en/api/models/retrieve | OMA 只有 list |
-| `POST /v1/complete` | https://platform.claude.com/docs/en/api/python/completions/create | 旧 Completions 端点，**时代弃子，不开 issue 不实现** |
+| `POST /v1/messages/count_tokens` | [count_tokens](https://platform.claude.com/docs/en/api/messages-count-tokens) | 官方 GA |
+| `GET /v1/models/{model_id}` | [models retrieve](https://platform.claude.com/docs/en/api/models/retrieve) | OMA 只有 list |
+| `POST /v1/complete` | [completions create](https://platform.claude.com/docs/en/api/python/completions/create) | 旧 Completions 端点，**时代弃子，不开 issue 不实现** |
 
 ## 四、契约层面缺口（路径对上、语义缺）
 
