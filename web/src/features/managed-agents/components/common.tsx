@@ -108,6 +108,7 @@ export function ManagedSearchField({
       <Input
         ref={inputRef}
         type="search"
+        data-custom-clear
         id={id}
         value={value}
         placeholder={placeholder}

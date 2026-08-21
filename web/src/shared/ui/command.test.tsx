@@ -22,11 +22,12 @@ describe('CommandInput', () => {
     expect(wrapper?.className).toContain('has-[[data-slot=command-input]:focus-visible]:ring-2');
   });
 
-  test('keeps command focus on its wrapper and hides the native search cancel button', async () => {
+  test('keeps command focus on its wrapper and scopes native search cancel suppression', async () => {
     const stylesheet = await Bun.file(new URL('../../styles/foundation.css', import.meta.url)).text();
 
     expect(stylesheet).toContain(":where([data-slot='input'], [data-slot='textarea'], [data-slot='command-input'])");
-    expect(stylesheet).toContain("input[type='search']::-webkit-search-cancel-button");
+    expect(stylesheet).toContain("input[type='search'][data-custom-clear]::-webkit-search-cancel-button");
+    expect(stylesheet).not.toContain("input[type='search']::-webkit-search-cancel-button");
     expect(stylesheet).toContain('-webkit-appearance: none');
   });
 });
