@@ -410,14 +410,15 @@ select {
 }
 
 :where(a, button, input, textarea, select, [role='button'], [role='combobox'], [tabindex]):focus-visible:not(
-    :where([data-slot='input'], [data-slot='textarea'])
+    :where([data-slot='input'], [data-slot='textarea'], [data-slot='command-input'])
   ) {
   outline: none;
   box-shadow: var(--focus-ring);
 }
 
-:where([data-slot='command-input'], input[type='search']):focus-visible {
-  box-shadow: none;
+input[type='search']::-webkit-search-cancel-button {
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 :where([data-slot='input-group-control']):focus-visible {

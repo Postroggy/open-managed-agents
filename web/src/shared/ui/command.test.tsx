@@ -7,22 +7,26 @@ const { cleanup, render, screen } = await import('@testing-library/react');
 afterEach(cleanup);
 
 describe('CommandInput', () => {
-  test('marks the nested input for the command-specific focus style', () => {
+  test('marks the nested input and wrapper for the command-specific focus style', () => {
     render(
       <Command>
         <CommandInput aria-label="搜索" />
       </Command>,
     );
 
-    expect(screen.getByRole('combobox').dataset.slot).toBe('command-input');
+    const input = screen.getByRole('combobox');
+    const wrapper = input.parentElement;
+
+    expect(input.dataset.slot).toBe('command-input');
+    expect(wrapper?.dataset.slot).toBe('command-input-wrapper');
+    expect(wrapper?.className).toContain('has-[[data-slot=command-input]:focus-visible]:ring-2');
   });
 
-  test('removes the global focus ring from command and search inputs', async () => {
+  test('keeps command focus on its wrapper and hides the native search cancel button', async () => {
     const stylesheet = await Bun.file(new URL('../../styles/foundation.css', import.meta.url)).text();
 
-    expect(stylesheet).toContain(":focus-visible:not(\n    :where([data-slot='input'], [data-slot='textarea'])\n  )");
-    expect(stylesheet).toContain(
-      ":where([data-slot='command-input'], input[type='search']):focus-visible {\n  box-shadow: none;\n}",
-    );
+    expect(stylesheet).toContain(":where([data-slot='input'], [data-slot='textarea'], [data-slot='command-input'])");
+    expect(stylesheet).toContain("input[type='search']::-webkit-search-cancel-button");
+    expect(stylesheet).toContain('-webkit-appearance: none');
   });
 });

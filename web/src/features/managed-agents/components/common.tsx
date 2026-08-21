@@ -112,7 +112,7 @@ export function ManagedSearchField({
         value={value}
         placeholder={placeholder}
         className={clsx(
-          'h-9 border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-border focus-visible:ring-0',
+          'h-9 border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-border',
           prefix ? 'pl-[64px]' : 'pl-9',
           value ? 'pr-9' : 'pr-3',
         )}
