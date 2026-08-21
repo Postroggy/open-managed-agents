@@ -14,6 +14,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/networkpolicy"
+	"github.com/superduck-ai/open-managed-agents/internal/runtime/sandboxruntime"
 
 	e2b "github.com/superduck-ai/e2b-go-sdk"
 )
@@ -57,7 +58,7 @@ type E2BProvider struct {
 	cfg config.E2BConfig
 }
 
-const defaultSandboxTimeout = 5 * time.Minute
+const defaultSandboxTimeout = 30 * time.Second
 
 func NewProvider(cfg config.E2BConfig) *E2BProvider {
 	return &E2BProvider{cfg: cfg}
@@ -129,6 +130,9 @@ func (p *E2BProvider) Create(ctx context.Context, env db.Environment, work *db.E
 		TimeoutMs:           &timeoutMs,
 		AllowInternetAccess: &allowInternet,
 		Network:             resolved.Network,
+		Lifecycle: &e2b.SandboxLifecycle{
+			OnTimeout: "pause",
+		},
 	}
 	sandbox, err := e2b.Create(ctx, resolved.Template, opts)
 	if err != nil {
@@ -160,9 +164,20 @@ func (p *E2BProvider) SetTimeout(ctx context.Context, sandboxID string, timeout 
 	}
 	sandbox, err := p.connect(ctx, sandboxID)
 	if err != nil {
-		return err
+		return classifySandboxError(err)
 	}
-	return sandbox.SetTimeout(ctx, int(timeout/time.Millisecond), nil)
+	return classifySandboxError(sandbox.SetTimeout(ctx, int(timeout/time.Millisecond), nil))
+}
+
+func classifySandboxError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var notFound *e2b.SandboxNotFoundError
+	if errors.As(err, &notFound) {
+		return fmt.Errorf("%w: %v", sandboxruntime.ErrSandboxNotFound, err)
+	}
+	return err
 }
 
 func (p *E2BProvider) WriteFile(ctx context.Context, sandboxID string, filePath string, data []byte) error {
