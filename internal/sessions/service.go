@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
@@ -16,7 +17,6 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/webhooks"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
@@ -87,7 +87,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 	}
 	created, thread, _, _, err := h.db.CreateSession(r.Context(), db.CreateSessionInput{
 		Session: db.Session{
-			UUID:                  uuid.NewString(),
+			UUID:                  uuid.NewV4().String(),
 			ExternalID:            sessionID,
 			OrganizationUUID:      principal.OrganizationUUID,
 			WorkspaceUUID:         principal.WorkspaceUUID,
@@ -109,7 +109,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 			UpdatedAt:             now,
 		},
 		Thread: db.SessionThread{
-			UUID:             uuid.NewString(),
+			UUID:             uuid.NewV4().String(),
 			ExternalID:       threadID,
 			OrganizationUUID: principal.OrganizationUUID,
 			WorkspaceUUID:    principal.WorkspaceUUID,
@@ -122,7 +122,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 		},
 		Resources: resourceInputs,
 		Work: db.EnvironmentWork{
-			UUID:                  uuid.NewString(),
+			UUID:                  uuid.NewV4().String(),
 			ExternalID:            workID,
 			OrganizationUUID:      principal.OrganizationUUID,
 			WorkspaceUUID:         principal.WorkspaceUUID,

@@ -9,12 +9,11 @@ import (
 	"testing"
 	"time"
 
+	e2b "github.com/superduck-ai/e2b-go-sdk"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/ids"
 	"github.com/superduck-ai/open-managed-agents/internal/runtime/e2bruntime"
-
-	e2b "github.com/superduck-ai/e2b-go-sdk"
 )
 
 func TestE2BProviderLifecycleIntegration(t *testing.T) {

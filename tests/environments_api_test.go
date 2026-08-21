@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/superduck-ai/open-managed-agents/internal/auth"
 	"github.com/superduck-ai/open-managed-agents/internal/config"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -542,25 +542,25 @@ func createEnvironmentWork(t *testing.T, app *testApp, env db.Environment) (stri
 	if err != nil {
 		t.Fatalf("new work id: %v", err)
 	}
-	sessionID := "sesn_environment_work_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	sessionUUID := uuid.NewString()
+	sessionID := "sesn_environment_work_" + strings.ReplaceAll(uuid.NewV4().String(), "-", "")
+	sessionUUID := uuid.NewV4().String()
 	_, _, _, work, err := app.db.CreateSession(context.Background(), db.CreateSessionInput{
 		Session: db.Session{
 			UUID: sessionUUID, ExternalID: sessionID, OrganizationUUID: env.OrganizationUUID,
 			WorkspaceUUID: env.WorkspaceUUID, CreatedByAPIKeyUUID: dbIDs.APIKeyUUID,
 			EnvironmentUUID: env.UUID, EnvironmentExternalID: env.ExternalID,
-			AgentUUID: uuid.NewString(), AgentExternalID: "agent_environment_work_test", AgentVersion: 1,
+			AgentUUID: uuid.NewV4().String(), AgentExternalID: "agent_environment_work_test", AgentVersion: 1,
 			AgentSnapshot: json.RawMessage(`{}`), Metadata: json.RawMessage(`{}`), VaultIDs: json.RawMessage(`[]`),
 			Status: "idle", Usage: json.RawMessage(`{}`), Stats: json.RawMessage(`{}`),
 			OutcomeEvaluations: json.RawMessage(`[]`), CreatedAt: now, UpdatedAt: now,
 		},
 		Thread: db.SessionThread{
-			UUID: uuid.NewString(), ExternalID: "sthr_environment_work_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+			UUID: uuid.NewV4().String(), ExternalID: "sthr_environment_work_" + strings.ReplaceAll(uuid.NewV4().String(), "-", ""),
 			OrganizationUUID: env.OrganizationUUID, WorkspaceUUID: env.WorkspaceUUID,
 			AgentSnapshot: json.RawMessage(`{}`), Status: "idle", Usage: json.RawMessage(`{}`), Stats: json.RawMessage(`{}`), CreatedAt: now,
 		},
 		Work: db.EnvironmentWork{
-			UUID: uuid.NewString(), ExternalID: workID, OrganizationUUID: env.OrganizationUUID,
+			UUID: uuid.NewV4().String(), ExternalID: workID, OrganizationUUID: env.OrganizationUUID,
 			WorkspaceUUID: env.WorkspaceUUID, EnvironmentUUID: env.UUID, EnvironmentExternalID: env.ExternalID,
 			Metadata: json.RawMessage(`{}`), State: "queued", CreatedAt: now,
 		},
