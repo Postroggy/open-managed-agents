@@ -11,18 +11,18 @@
 > - **标准 Anthropic API 面**（messages/models/files 等 GA 端点，无 beta header）：OMA 兼容层，**需要对齐**（含已实现的 batches 等）。
 > - **Admin API 面**（`/v1/organizations/*`，含 Enterprise-only 的 RBAC）：独立组织管理面，**OMA 未声明此定位**，缺口不构成必须对齐项。
 > - **Compliance API 面**（`/v1/compliance/*`，无 beta header、独立合规审计面）：**OMA 未声明此定位**，缺口不构成必须对齐项。
-> 因此下述"缺口"按归属分层：**OMA 定位相关缺口 = 19 端点（15 整组 + 4 单端点）+ User Profiles 5（跨面待确认）+ 1 契约项**；其余 92 端点为独立 API 面，记录备查但不作为对齐任务。
+> 因此下述"缺口"按归属分层：**OMA 定位相关缺口 = 17 端点（15 整组 + 2 单端点）+ 1 契约项**；其余 92 端点为独立 API 面，记录备查但不作为对齐任务。
 
 ## 一、结论速览
 
 | 项 | 数量 |
 |---|---|
 | 官方唯一端点（方法+路径去重） | 255 |
-| 官方有、OMA 缺（全部） | 116（整组 112 + 单端点 4） |
-| 其中：**OMA 定位相关缺口** | **19 = Tunnels 10 + Dreams 5 + messages create 1 + count_tokens 1 + models retrieve 1 + complete 1**（+ User Profiles 5 跨面待确认；+ webhook 45 种事件为契约项） |
+| 官方有、OMA 缺（全部） | 114（整组 112 + 单端点 2） |
+| 其中：**OMA 定位相关缺口** | **17 = Tunnels 10 + Dreams 5 + count_tokens 1 + models retrieve 1**（+ webhook 45 种事件为契约项） |
 | 其中：独立 API 面缺口（Admin 56 + Compliance 36，不必须对齐） | 92 |
 | OMA 有、官方无（OMA 扩展） | 10 |
-| 完全对齐（官方 ∩ OMA） | 139 |
+| 完全对齐（官方 ∩ OMA） | 141 |
 | 契约层面缺口（路径对上、语义缺） | 若干（见第四节） |
 
 > 注：官方端点从 `docs/api-reference/` 各页正文 `**method** \`/path\`` 提取并去重；`beta-headers.md` 等通用页的示例端点不计入。
@@ -51,11 +51,11 @@
 
 | 资源 | 端点数 | 对齐 | 说明 |
 |---|---|---|---|
-| Messages | 8 | 6 | create、count_tokens + batches 6 个 |
+| Messages | 8 | 7 | create、count_tokens + batches 6 个 |
 | Models | 2 | 1 | list + retrieve（缺） |
 | Completions | 1 | 0 | `POST /v1/complete`（旧端点） |
 
-小计：11 端点，OMA 对齐 7，缺 4（messages create、count_tokens、models retrieve、complete）。
+小计：11 端点，OMA 对齐 8，缺 3（count_tokens、models retrieve、complete）。
 
 ### 2.3 Admin API 面（独立组织管理面，OMA 未声明定位）
 
@@ -75,7 +75,7 @@
 
 小计：36 端点，OMA 对齐 0，缺 36。
 
-## 三、官方有、OMA 缺（116 个端点）
+## 三、官方有、OMA 缺（114 个端点）
 
 ### 3.1 整组缺失：OMA 定位相关（15 个端点）
 
@@ -92,20 +92,18 @@
 | **Compliance** | `compliance/activities`、`compliance/apps/*`（chats 含 files/generated-files、projects 含 documents/attachments/collaborators、sessions local/remote、code artifacts）、`compliance/groups`、`compliance/organizations`（roles/users/settings） | 36 | Compliance API（独立合规审计面） | 未开 issue；OMA 未声明定位 |
 | **Admin Analytics** | `organizations/analytics/*`（usage_report、cost_report、user_usage_report、user_cost_report、users、artifacts、connectors、plugins、skills、apps/chat/projects、summaries） | 11 | Admin API | 未开 issue；OMA 未声明定位 |
 
-### 3.3 整组缺失：跨面（5 个端点，待确认是否有意不做）
+### 3.4 整组缺失：跨面（5 个端点，待确认是否有意不做）
 
 | 资源 | 缺失端点 | 端点数 | beta/状态 | 备注 |
 |---|---|---|---|---|
-| **User Profiles** | `POST/GET /v1/user_profiles`、`GET/POST .../{id}`、`POST .../enrollment_url` | 5 | beta `user-profiles-2026-03-24` / `user-profiles-2026-08-18` | **疑似 OMA 有意不做**（未确认，待核实）；该面与 Messages（`user_profiles` 参数引用）联动 |
+| **User Profiles** | `POST/GET /v1/user_profiles`、`GET/POST .../{id}`、`POST .../enrollment_url` | 5 | beta `user-profiles-2026-03-24` / `user-profiles-2026-08-18` | **疑似 OMA 有意不做**（未确认，待核实）；官方文档未发现 Messages create 对 user_profiles 的引用，联动关系待确认 |
 
-### 3.4 单端点缺失（4 个端点，OMA 定位相关）
+### 3.5 单端点缺失（2 个端点，OMA 定位相关）
 
 | 端点 | 官方文档 | 归属 | 备注 |
 |---|---|---|---|
-| `POST /v1/messages` | [messages create](https://platform.claude.com/docs/en/api/messages/create) | 标准 API 面（GA） | 官方 GA；OMA 未注册（batches 已实现；`/proxy/v1/messages` 仅平台代理，非自有端点） |
 | `POST /v1/messages/count_tokens` | [count_tokens](https://platform.claude.com/docs/en/api/messages/count_tokens) | 标准 API 面（GA） | **#286** |
 | `GET /v1/models/{model_id}` | [models retrieve](https://platform.claude.com/docs/en/api/models/retrieve) | 标准 API 面（GA） | OMA 只有 list；**#287** |
-| `POST /v1/complete` | [completions create](https://platform.claude.com/docs/en/api/completions/create) | 标准 API 面（旧） | 旧 Completions 端点，**时代弃子，不开 issue 不实现** |
 
 ## 四、契约层面缺口（路径对上、语义缺）
 
@@ -149,9 +147,9 @@
 >
 > **注意**：`internal/codesessions/upstream_proxy_mitm.go` 的 "tunnel" 指 **CCRv2 的 WebSocket CONNECT 隧道**（内部网络机制），与 Tunnels API **无关**，不计入 gap。
 
-## 六、完全对齐（139 个端点）
+## 六、完全对齐（141 个端点）
 
-Agents（6）、Sessions（19，含 events/resources/threads 全子资源）、Environments（14，含 work 全子资源）、Deployments（8）+ Deployment Runs（2）、Vaults（13，含 credentials 全子资源）、Memory Stores（14，含 memories/memory_versions）、Files（5）、Skills（9，含 versions/content）、Messages batches（6）、Models list（1）、Organizations 基础管理（42）——路径与方法全部匹配。合计 6+19+14+8+2+13+14+5+9+6+1+42 = **139**。
+Agents（6）、Sessions（19，含 events/resources/threads 全子资源）、Environments（14，含 work 全子资源）、Deployments（8）+ Deployment Runs（2）、Vaults（13，含 credentials 全子资源）、Memory Stores（14，含 memories/memory_versions）、Files（5）、Skills（9，含 versions/content）、Messages create（1）+ batches（6）、Models list（1）、Organizations 基础管理（42）——路径与方法全部匹配。合计 6+19+14+8+2+13+14+5+9+7+1+42 = **141**。
 
 ## 七、已开 issue 索引
 
@@ -164,7 +162,9 @@ Agents（6）、Sessions（19，含 events/resources/threads 全子资源）、E
 | #288 | `[Tunnels] 实现官方顶层 /v1/tunnels API（当前只实现了 deprecated 的 admin 版）` | Tunnels |
 | #245 | `[Dreams] 实现 Dreams 能力面后端（memory store 精炼 job，dreaming-2026-04-21）` | Dreams |
 
-> **OMA 定位相关缺口 = 19 端点**（已开 issue 17：Tunnels 10 + Dreams 5 + count_tokens 1 + models retrieve 1；未开 2：messages create 1 + complete 1）+ **User Profiles 5**（跨面待确认）+ **webhook 45 种事件**（契约项，P1 #8）。Admin（56）、Compliance（36）为独立 API 面，**不构成 OMA 对齐任务**。
+> **OMA 定位相关缺口 = 17 端点**（已开 issue 15：Tunnels 10 → #288、Dreams 5 → #245、count_tokens → #286、models retrieve → #287；**17 个端点全部已开 issue**）+ **User Profiles 5**（跨面待确认）+ **webhook 45 种事件**（契约项，P1 #8）。Admin（56）、Compliance（36）为独立 API 面，**不构成 OMA 对齐任务**。
+
+> **缺口与 issue 对照结论（2026-08-22 复核，基于 main @ 9dca1a5）**：OMA 定位相关的 17 个缺口端点**已全部开 issue**，无遗漏；其余未开项均非必须：User Profiles 5（跨面，疑似有意不做，待确认）、`POST /v1/complete` 1（时代弃子，明确不开）、Admin 56 + Compliance 36（独立 API 面）、webhook 45 种事件（契约项 P1 #8 待定）。**复核同时修正两处误判**：`POST /v1/messages` 在 main 上已实现（`internal/messages/handler.go`，`server.go:245`，此前基于落后的 docs/api-gap 分支误列为缺口）；CCRv2 CONNECT 隧道（`internal/codesessions/upstream_proxy*.go`）实现完整、与 MCP Tunnels API 无关（详见 `managed-agents-gap-analysis.md` 4.7）。
 
 ## 八、方法
 
