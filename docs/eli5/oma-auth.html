@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 前台与鉴权 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdf4e8 0%, #f9f6ff 45%, #ffffff 100%);
+    color: #1c2333;
+    line-height: 1.75;
+    font-size: 19px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 30px 130px; }
+
+  .cover { text-align: center; padding: 90px 0 66px; }
+  .cover .kicker {
+    display: inline-block; background: #ffe9c9; color: #b05c00;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+    letter-spacing: 2px; margin-bottom: 26px;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; }
+  .cover .one-line {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #f0a95c; border-radius: 20px;
+    padding: 20px 30px; max-width: 760px;
+  }
+  .cover .one-line b { color: #d9710a; }
+
+  section { margin-top: 92px; }
+  .tag {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  h2 .arrow { color: #d9710a; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 12px 40px rgba(217, 113, 10, .10), 0 2px 6px rgba(0,0,0,.04);
+    border: 1px solid #f3e2c8;
+  }
+  .card p { margin-bottom: 15px; }
+  .card p:last-child { margin-bottom: 0; }
+  .hl { background: #fff3e0; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #d9710a; }
+  .dim { color: #7a8196; font-size: 17px; }
+  code.k { background: #f5f2ea; border-radius: 8px; padding: 2px 9px; font-size: .85em; font-family: ui-monospace, monospace; }
+
+  /* ---------- 前台大厅 ---------- */
+  .hall { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .hall .floor {
+    width: 100%; border-radius: 18px; padding: 26px 28px; text-align: center;
+    background: #fff; border: 2px solid #f0d9b5;
+  }
+  .hall .floor .t { font-size: 21px; font-weight: 900; }
+  .hall .floor .s { font-size: 15.5px; color: #5a6280; margin-top: 4px; }
+  .hall .floor.main { background: linear-gradient(160deg, #ffc46e, #f09c3a); border: none; }
+  .hall .floor.main .t { font-size: 26px; }
+  .hall .floor.main .s { color: #5c3300; }
+  .hall .floor.door { background: linear-gradient(160deg, #1c2333, #2a3350); color: #fff; border: none; }
+  .hall .floor.door .s { color: #b9c2e0; }
+  .down { font-size: 30px; color: #d9710a; font-weight: 900; }
+
+  /* ---------- 三道门 ---------- */
+  .doors { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .door {
+    flex: 1; min-width: 280px; border-radius: 20px; padding: 26px 24px;
+    background: #fff; border: 2px solid #f0d9b5; text-align: center;
+  }
+  .door .icon { font-size: 40px; }
+  .door .t { font-size: 21px; font-weight: 900; margin: 8px 0 6px; }
+  .door .p { font-size: 14px; color: #5a6280; text-align: left; margin-top: 10px; line-height: 1.65; }
+  .door .p b { color: #1c2333; }
+  .door.a { border-color: #34b57a; background: #f0fbf5; }
+  .door.b { border-color: #8a6df0; background: #f6f2ff; }
+  .door.c { border-color: #3b9ae0; background: #f0f7fd; }
+
+  /* ---------- 请求旅程（泳道） ---------- */
+  .pipeline { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .pipe {
+    flex: 1; min-width: 150px; background: #fff; border-radius: 18px;
+    border: 2px solid #f0d9b5; padding: 18px 16px; text-align: center;
+  }
+  .pipe .n { font-size: 13px; font-weight: 800; color: #d9710a; letter-spacing: 1px; }
+  .pipe .t { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
+  .pipe .s { font-size: 14px; color: #5a6280; }
+  .pipe.gate { border-color: #f0a95c; background: #fff8ec; }
+  .pipe.hash { border-color: #34b57a; background: #f0fbf5; }
+  .pipe.db { border-color: #3b9ae0; background: #f0f7fd; }
+  .pipe.ctx { border-color: #8a6df0; background: #f6f2ff; }
+  .pipe-arrow { align-self: center; font-size: 24px; color: #d9710a; }
+
+  /* ---------- 身份卡 ---------- */
+  .idcard {
+    margin: 0 auto; max-width: 680px; background: #fff; border-radius: 24px;
+    border: 3px solid #1c2333; padding: 28px 32px;
+    box-shadow: 8px 8px 0 rgba(28, 35, 51, .12);
+  }
+  .idcard .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .idcard .head .t { font-size: 20px; font-weight: 900; }
+  .idcard .head .chip { background: #1c2333; color: #ffc46e; border-radius: 999px; padding: 4px 14px; font-size: 14px; font-weight: 700; }
+  .idgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+  .idcell { background: #faf6ee; border-radius: 12px; padding: 10px 14px; font-size: 15px; }
+  .idcell .k { font-size: 12.5px; color: #a08a63; font-weight: 700; }
+  .idcell .v { font-family: ui-monospace, monospace; font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+  .idcell.gold { background: #fff3e0; }
+  .idcell.wide { grid-column: 1 / -1; }
+
+  /* ---------- 钥匙串（三种凭证对比） ---------- */
+  .keys { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .key {
+    flex: 1; min-width: 290px; border-radius: 20px; padding: 26px 24px;
+    background: #fff; border: 2px solid #f0d9b5;
+  }
+  .key .k { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: #a08a63; }
+  .key .t { font-size: 21px; font-weight: 900; margin: 6px 0 8px; }
+  .key .who { font-size: 15px; margin-bottom: 10px; }
+  .key ul { margin: 10px 0 0 20px; font-size: 14.5px; color: #5a6280; }
+  .key li { margin-bottom: 6px; }
+  .key code { background: #f5f2ea; border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, monospace; font-size: .9em; }
+  .key.api { border-color: #34b57a; }
+  .key.plat { border-color: #8a6df0; }
+  .key.env { border-color: #3b9ae0; }
+
+  /* ---------- 楼层 ---------- */
+  .floors { display: flex; flex-direction: column; gap: 16px; }
+  .floor {
+    border-radius: 20px; padding: 26px 30px; display: flex; gap: 22px; align-items: flex-start;
+  }
+  .floor .num {
+    flex: 0 0 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 900; color: #fff; background: #1c2333;
+  }
+  .floor .body { flex: 1; }
+  .floor .t { font-size: 21px; font-weight: 900; margin-bottom: 6px; }
+  .floor .s { font-size: 15.5px; color: #5a6280; }
+  .floor .s b { color: #1c2333; }
+  .floor.g1 { background: #fff; border: 2px solid #f0d9b5; }
+  .floor.g2 { background: #f6f2ff; border: 2px solid #d8ccf7; }
+  .floor.g3 { background: #f0fbf5; border: 2px solid #b8e6cf; }
+  .floor.g4 { background: #fff8ec; border: 2px solid #f0d9b5; }
+
+  /* ---------- 小抄 / 表 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+  th, td { border: 1.5px solid #f0d9b5; padding: 12px 16px; text-align: left; }
+  th { background: #1c2333; color: #ffc46e; font-size: 14px; }
+  td code { background: #f5f2ea; border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, monospace; }
+  tr:nth-child(even) td { background: #fdfaf4; }
+
+  .hint {
+    background: #fff8ec; border: 2px dashed #f0a95c; border-radius: 16px;
+    padding: 20px 26px; margin-top: 26px; font-size: 16px;
+  }
+  .hint b { color: #d9710a; }
+
+  .outro { text-align: center; margin-top: 120px; }
+  .outro .box {
+    background: linear-gradient(160deg, #1c2333, #2a3350); color: #fff;
+    border-radius: 28px; padding: 48px 40px;
+  }
+  .outro h3 { font-size: 34px; margin-bottom: 16px; }
+  .outro p { font-size: 19px; color: #b9c2e0; max-width: 720px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= 封面 ================= -->
+  <div class="cover">
+    <span class="kicker">OMA 内部参观 · 第 2 站</span>
+    <h1>🏢 前台接待处 &amp; 查票的保安</h1>
+    <p class="one-line">每一个请求走进大楼，都要过两道关：<br>
+      <b>前台（server.go）告诉它往哪走</b> · <b>保安（auth）决定放不放行</b></p>
+  </div>
+
+  <!-- ================= 1. 大楼只有一个大门 ================= -->
+  <section>
+    <span class="tag">第 1 章</span>
+    <h2>整栋大楼，只有 <span class="arrow">一</span> 个大门</h2>
+    <p class="lead">不管什么请求 —— SDK 调来的、浏览器点来的、登录用的 —— 都从 <b>同一个门</b> 进来。</p>
+
+    <div class="hall">
+      <div class="floor door">
+        <div class="t">🚪 大门 = <code style="color:#ffc46e">internal/api/server.go</code></div>
+        <div class="s">你写的 Server 只有一个方法：<code style="color:#ffc46e">ServeHTTP(w, r)</code> —— 全部请求都从这里进</div>
+      </div>
+      <div class="down">▼</div>
+      <div class="floor main">
+        <div class="t">🎛️ 前台大厅（chi router）</div>
+        <div class="s">先是 <b>3 个通用中间件</b>（所有人都过），再按 URL 前缀 <b>分流</b> 到 3 个区域</div>
+      </div>
+      <div class="down">▼</div>
+      <div class="floor">
+        <div class="t">🧾 <code>request-id</code> 中间件 → 📋 <code>requestLogging</code> → 🛡️ <code>recover</code></div>
+        <div class="s">先给每个请求发一张编号纸条（没有就用 <code>req_xxx</code> 现场生成）→ 记账 → 万一里面程序崩溃（panic），保安兜住，客人只看到"内部错误"，不会看到堆栈</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. 三条走廊 ================= -->
+  <section>
+    <span class="tag">第 2 章</span>
+    <h2>进了大厅，分流到 <span class="arrow">3</span> 条走廊</h2>
+    <p class="lead">前台只看 URL 开头，把请求扔给三条不同的走廊。</p>
+
+    <div class="hall">
+      <div class="floor main">
+        <div class="t">🎟️ 分流规则（server.go 第 113~124 行）</div>
+      </div>
+      <div class="floors" style="width:100%">
+        <div class="floor g1">
+          <div class="num">A</div>
+          <div class="body">
+            <div class="t"><code>/v1</code> → 安thropic 兼容入口（双通道路由器）</div>
+            <div class="s">这是给 <b>SDK 和代码</b> 用的门。它自己不鉴权，而是先看请求身上带的是 <b>哪种门票</b>，再决定走哪条内线（见第 4 章）。</div>
+          </div>
+        </div>
+        <div class="floor g2">
+          <div class="num">B</div>
+          <div class="body">
+            <div class="t"><code>/api</code> <code>/auth</code> <code>/oauth</code> <code>/web-api</code> → 控制台走廊</div>
+            <div class="s">这是给 <b>浏览器网页</b> 用的门：登录、注册、组织管理、MCP 目录、工作台，全部挂在这里。</div>
+          </div>
+        </div>
+        <div class="floor g3">
+          <div class="num">C</div>
+          <div class="body">
+            <div class="t"><code>/healthz</code> → 健康检查（不用门票）</div>
+            <div class="s">运维探活的，直接回 <code>{"status":"ok"}</code>。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hint">
+      💡 <b>为什么只在大门口拦？</b> 因为里面是一棵 chi 路由树：<code>/v1</code> 走廊里又挂满了
+      <code>/agents</code>、<code>/files</code>、<code>/sessions</code>、<code>/webhooks</code> ……
+      每个资源是一个 handler（第 11 行起的各种 <code>Handler</code> 字段）。
+      在大门口统一鉴权一次，里面所有部门就都 <b>默认安全</b>，不用每个部门自己再查一遍门票。
+    </div>
+  </section>
+
+  <!-- ================= 3. 三种门票 ================= -->
+  <section>
+    <span class="tag">第 3 章</span>
+    <h2>三种门票：<span class="arrow">谁</span> 在敲门？</h2>
+    <p class="lead">保安问的第一句话是：你出示的是哪种门票？</p>
+
+    <div class="keys">
+      <div class="key api">
+        <div class="k">API 钥匙 · SDK / 代码</div>
+        <div class="t">🗝️ <code>sk-ant-xxx</code></div>
+        <div class="who">放在请求头 <code>X-Api-Key</code> 或 <code>Authorization: Bearer ...</code></div>
+        <ul>
+          <li>是 <b>Anthropic 风格</b> 的钥匙，发给"机器"用</li>
+          <li>只在 <code>/v1</code> 走廊有效（走廊 A 的内部鉴定逻辑）</li>
+          <li>丢了也不怕：数据库里存的是 <b>哈希</b>，不是原文</li>
+        </ul>
+      </div>
+      <div class="key plat">
+        <div class="k">平台会话 · 浏览器</div>
+        <div class="t">🍪 <code>sessionKey</code> Cookie</div>
+        <div class="who">登录后浏览器自动随身携带</div>
+        <ul>
+          <li>有效期 <b>300 天</b>（<code>DefaultTTL</code>），存在 Redis 或内存</li>
+          <li>是"人"的凭证：能知道你 <b>是谁</b>（user）</li>
+          <li>在 <code>/v1</code> 走平台通道，在 <code>/api</code> 走控制台</li>
+        </ul>
+      </div>
+      <div class="key env">
+        <div class="k">环境钥匙 · 特殊任务</div>
+        <div class="t">🔑 <code>env_key</code></div>
+        <div class="who">给沙箱环境（environment）跑任务用的</div>
+        <ul>
+          <li>是"兜底"票：只对 <code>/v1/environments/.../work</code>、<code>/v1/sessions</code>、<code>/v1/skills</code> 生效</li>
+          <li>API 钥匙查不到时，才会试这张票（见第 4 章）</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. 双通道路由器 ================= -->
+  <section>
+    <span class="tag">第 4 章</span>
+    <h2>最妙的机关：<span class="arrow">按门票</span> 决定走哪条内线</h2>
+    <p class="lead">同一个 <code>/v1</code>，两种客人（SDK 钥匙 vs 浏览器登录），走的不是同一条鉴权路。</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe">
+          <div class="n">STEP 1</div>
+          <div class="t">看请求</div>
+          <div class="s">身上有没有 <code>X-Api-Key</code>？</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate">
+          <div class="n">有钥匙</div>
+          <div class="t">service 通道</div>
+          <div class="s">走 <code>authenticateService</code>：查 API key 哈希</div>
+        </div>
+        <div class="pipe gate">
+          <div class="n">没有</div>
+          <div class="t">platform 通道</div>
+          <div class="s">查 <code>sessionKey</code> Cookie（<code>authenticatePlatformSession</code>）</div>
+        </div>
+      </div>
+      <p style="margin-top:20px">这就是 <code>apiEntrypointRouter</code>（第 144 行）：它只看"带没带钥匙"，<b>不做真鉴定</b>，鉴定留给里面的中间件 —— 判断与执行分离。</p>
+      <p class="dim">顺带一提：两条通道挂的 <b>资源完全一样</b>（第 235 行 <code>mountSharedV1Resources</code>）—— SDK 和网页能用的 API 面是同一套，只是"验票方式"不同。</p>
+    </div>
+  </section>
+
+  <!-- ================= 5. 保安验票：哈希 → 查库 → 发身份卡 ================= -->
+  <section>
+    <span class="tag">第 5 章</span>
+    <h2>保安验票三步：<span class="arrow">不读原文</span>，只对指纹</h2>
+    <p class="lead">保安很聪明：他不看钥匙长什么样，只看 <b>指纹</b> 对不对。</p>
+
+    <div class="pipeline">
+      <div class="pipe hash">
+        <div class="n">STEP 1 · 打指纹</div>
+        <div class="t">SHA-256</div>
+        <div class="s"><code>auth.HashAPIKey(key)</code> → 64 位十六进制哈希</div>
+      </div>
+      <div class="pipe-arrow">➡️</div>
+      <div class="pipe db">
+        <div class="n">STEP 2 · 对指纹</div>
+        <div class="t">查数据库</div>
+        <div class="s"><code>GetAPIKey(keyHash)</code> 一条 SQL 连查 3 张表（见下）</div>
+      </div>
+      <div class="pipe-arrow">➡️</div>
+      <div class="pipe ctx">
+        <div class="n">STEP 3 · 发身份卡</div>
+        <div class="t">Principal</div>
+        <div class="s">塞进 <code>context</code>，整条链路都认得它</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:26px">
+      <h3 style="font-size:22px;margin-bottom:14px">🔍 一条 SQL 查到"你是谁"（db.go 第 437 行）</h3>
+      <div class="idgrid" style="grid-template-columns:1fr; gap:8px">
+        <div class="idcell">
+          <div class="k">SQL 做了什么</div>
+          <div class="v">api_keys JOIN workspaces JOIN organizations<br>WHERE key_hash = ? AND status = 'active' AND (expires_at IS NULL OR expires_at &gt; now())</div>
+        </div>
+      </div>
+      <p style="margin-top:16px">一张表查清 <b>钥匙 → 工作区 → 组织</b> 三层归属；同时把 <b>停用（status）和过期（expires_at）</b> 都挡在门口。没查到 → <code>ErrNotFound</code> → 401。</p>
+      <div class="hint" style="margin-top:16px">
+        🧠 <b>为什么存哈希不存原文？</b> 数据库泄露了，小偷也只拿到指纹，没法反推钥匙。
+        但指纹是"确定性"的（同一钥匙永远同一指纹），所以数据库不存明文、日志里也别出现明文 —— 这是安全底线。
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 6. 身份卡 Principal ================= -->
+  <section>
+    <span class="tag">第 6 章</span>
+    <h2>身份卡 <span class="arrow">Principal</span>：一卡走全楼</h2>
+    <p class="lead">验完票，保安发一张身份卡。之后所有部门都从 <code>context</code> 里掏卡认人，<b>不再问第二遍</b>。</p>
+
+    <div class="idcard">
+      <div class="head">
+        <span class="t">🎫 身份卡 · Principal</span>
+        <span class="chip">internal/auth/auth.go</span>
+      </div>
+      <div class="idgrid">
+        <div class="idcell gold wide"><div class="k">怎么来的</div><div class="v">auth.WithPrincipal(ctx, principal) → 后面用 auth.PrincipalFromContext(ctx) 取</div></div>
+        <div class="idcell gold"><div class="k">CredentialType</div><div class="v">api_key / platform_session / environment_key</div></div>
+        <div class="idcell"><div class="k">APIKeyID / ExternalID</div><div class="v">用哪把钥匙进的</div></div>
+        <div class="idcell gold"><div class="k">OrganizationID / UUID / ExternalID</div><div class="v">哪个组织（租户）</div></div>
+        <div class="idcell"><div class="k">WorkspaceID / UUID / ExternalID</div><div class="v">哪个工作区</div></div>
+        <div class="idcell"><div class="k">UserID / UserExternalID</div><div class="v">哪个人（仅登录会话有）</div></div>
+        <div class="idcell"><div class="k">EnvironmentID / ExternalID</div><div class="v">哪个沙箱环境（仅环境钥匙有）</div></div>
+      </div>
+    </div>
+
+    <div class="hint">
+      💡 <b>多租户的根</b>：所有"看自己的数据"的查询都带着
+      <code>organization_id</code> / <code>workspace_id</code>（项目规则：<b>显式</b> 多租户边界）。
+      身份卡上的 ID 就是这条边界的第一来源 —— 漏了它，就是越权漏洞。
+    </div>
+  </section>
+
+  <!-- ================= 7. 三道闸门对比 ================= -->
+  <section>
+    <span class="tag">第 7 章</span>
+    <h2>三道闸门：<span class="arrow">严 → 松</span> 三个等级</h2>
+    <p class="lead">不是所有走廊都同样严格。保安有几套不同的闸门。</p>
+
+    <div class="floors">
+      <div class="floor g4">
+        <div class="num">🔒</div>
+        <div class="body">
+          <div class="t">闸门 1 · 必须验票（service / platform 通道）</div>
+          <div class="s"><code>serviceAuthMiddleware</code> / <code>platformAuthMiddleware</code>：验不过 → 401，请求结束。
+          平台通道还会尝试<b>镜像会话恢复</b>（cookie 失效但能凭数据库身份重建会话），并检查
+          <code>X-Organization-UUID</code> / <code>X-Workspace-ID</code> 覆盖头 —— 前端切组织/工作区靠它。</div>
+        </div>
+      </div>
+      <div class="floor g2">
+        <div class="num">🧸</div>
+        <div class="body">
+          <div class="t">闸门 2 · 可选验票（部分控制台路由）</div>
+          <div class="s"><code>optionalPlatformAuthMiddleware</code>：有 cookie 就验、验失败就清除，没有/失败也放行 ——
+          登录页、目录页这种"没登录也能看"的地方用。</div>
+        </div>
+      </div>
+      <div class="floor g3">
+        <div class="num">🫖</div>
+        <div class="body">
+          <div class="t">闸门 3 · 不验票（healthz / 登录接口本身）</div>
+          <div class="s">健康检查和"登录这个动作"当然不能先验票 —— 登录接口本身就是发门票的地方。</div>
+        </div>
+      </div>
+    </div>
+
+    <table style="margin-top:30px">
+      <tr><th>错误场景</th><th>状态码</th><th>错误类型</th><th>谁能看到</th></tr>
+      <tr><td>没带钥匙</td><td><code>401</code></td><td><code>authentication_error</code></td><td>任何人</td></tr>
+      <tr><td>钥匙是假的 / 已停用 / 已过期</td><td><code>401</code></td><td><code>authentication_error</code></td><td>任何人</td></tr>
+      <tr><td>钥匙真的，但组织/工作区没权限</td><td><code>403</code></td><td><code>permission_error</code></td><td>只有持真票者能触发</td></tr>
+      <tr><td>内部错误（数据库挂了等）</td><td><code>500</code></td><td><code>api_error</code></td><td>任何人（但不泄露细节）</td></tr>
+    </table>
+    <p class="dim" style="margin-top:14px">401 = 你是谁？· 403 = 我知道你是谁，但你不许进。· 这是 Anthropic 兼容错误结构（<code>internal/httpapi.WriteError</code>）。</p>
+  </section>
+
+  <!-- ================= 8. 边界 ================= -->
+  <section>
+    <span class="tag">第 8 章</span>
+    <h2>保安的<span class="arrow">边界</span>：管验票，不管业务</h2>
+    <p class="lead">"这扇门你能不能进"由保安管；"进来看哪个柜子"由各部门自己管。</p>
+
+    <div class="card">
+      <div class="floors" style="gap:12px">
+        <div class="floor g1">
+          <div class="num">✅</div>
+          <div class="body">
+            <div class="t">auth 层只做三件事</div>
+            <div class="s">提取凭证（头 / cookie）→ 哈希比对（<code>HashSecret</code>）→ 产出 <code>Principal</code>。
+            db 层只做数据查询（<code>GetAPIKey</code>），<b>不含</b>"这个用户能不能删这个文件"这种决策。</div>
+          </div>
+        </div>
+        <div class="floor g4">
+          <div class="num">🚫</div>
+          <div class="body">
+            <div class="t">不归保安管</div>
+            <div class="s">业务授权（谁能删谁的文件）→ 各资源 handler 自己查；
+            权限决策不得沉到 <code>internal/db</code> —— db 不认识 HTTP，也不认识"用户能不能干这事"。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 9. 完整旅程 ================= -->
+  <section>
+    <span class="tag">第 9 章</span>
+    <h2>走一遍：SDK 上传文件的<span class="arrow">完整旅程</span></h2>
+    <p class="lead">把前面所有章节串成一条故事线。</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe">
+          <div class="n">0</div>
+          <div class="t">SDK 发请求</div>
+          <div class="s">POST /v1/files + 头 <code>X-Api-Key: sk-ant-...</code></div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate">
+          <div class="n">1</div>
+          <div class="t">大门 3 件套</div>
+          <div class="s">发 request-id → 记账 → 装好崩溃兜底</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate">
+          <div class="n">2</div>
+          <div class="t">双通道路由器</div>
+          <div class="s">有 API Key → 走 service 通道</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe hash">
+          <div class="n">3</div>
+          <div class="t">保安验票</div>
+          <div class="s">SHA-256 指纹 → 查库 → 通过</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe ctx">
+          <div class="n">4</div>
+          <div class="t">发身份卡</div>
+          <div class="s">Principal 进 context，传下去</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe db">
+          <div class="n">5</div>
+          <div class="t">files 部门干活</div>
+          <div class="s">从 context 掏卡 → 按 org/workspace 存文件</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 结尾 ================= -->
+  <div class="outro">
+    <div class="box">
+      <h3>🎯 三句话记住本章</h3>
+      <p>① 一个大门（server.go）+ 三件套中间件 + 按前缀分流到 3 条走廊；<br>
+      ② 验票 = 取凭证 → SHA-256 哈希 → 查库 → 发 Principal 身份卡；<br>
+      ③ 身份卡进 context 全楼通行，多租户边界从卡上的 org/workspace ID 开始。</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

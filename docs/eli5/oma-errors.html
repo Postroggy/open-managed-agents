@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 错误处理 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdeeee 0%, #f9f6ff 45%, #ffffff 100%);
+    color: #1c2333;
+    line-height: 1.75;
+    font-size: 19px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 30px 130px; }
+
+  .cover { text-align: center; padding: 90px 0 66px; }
+  .cover .kicker {
+    display: inline-block; background: #ffe0e0; color: #c53030;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+    letter-spacing: 2px; margin-bottom: 26px;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; }
+  .cover .one-line {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #f0a0a0; border-radius: 20px;
+    padding: 20px 30px; max-width: 780px;
+  }
+  .cover .one-line b { color: #c53030; }
+
+  section { margin-top: 92px; }
+  .tag {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  h2 .arrow { color: #c53030; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 12px 40px rgba(197, 48, 48, .10), 0 2px 6px rgba(0,0,0,.04);
+    border: 1px solid #f3d0d0;
+  }
+  .card p { margin-bottom: 15px; }
+  .card p:last-child { margin-bottom: 0; }
+  .hl { background: #fdeaea; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .dim { color: #7a8196; font-size: 17px; }
+  code.k { background: #f7f0f0; border-radius: 8px; padding: 2px 9px; font-size: .85em; font-family: ui-monospace, monospace; }
+
+  /* ---------- 错误的一生（泳道） ---------- */
+  .pipeline { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .pipe {
+    flex: 1; min-width: 150px; background: #fff; border-radius: 18px;
+    border: 2px solid #f0d0d0; padding: 18px 16px; text-align: center;
+  }
+  .pipe .n { font-size: 13px; font-weight: 800; color: #c53030; letter-spacing: 1px; }
+  .pipe .t { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
+  .pipe .s { font-size: 14px; color: #5a6280; }
+  .pipe.db { border-color: #3b9ae0; background: #f0f7fd; }
+  .pipe.map { border-color: #8a6df0; background: #f6f2ff; }
+  .pipe.json { border-color: #34b57a; background: #f0fbf5; }
+  .pipe-arrow { align-self: center; font-size: 24px; color: #c53030; }
+
+  /* ---------- 错误三兄弟 ---------- */
+  .errors3 { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .err3 {
+    flex: 1; min-width: 280px; border-radius: 20px; padding: 26px 24px;
+    background: #fff; border: 2px solid #f0d0d0; text-align: center;
+  }
+  .err3 .icon { font-size: 42px; }
+  .err3 .t { font-size: 21px; font-weight: 900; margin: 8px 0 6px; }
+  .err3 .p { font-size: 14px; color: #5a6280; text-align: left; margin-top: 10px; line-height: 1.65; }
+  .err3 .p b { color: #1c2333; }
+  .err3.a { border-color: #f0a95c; background: #fff8ec; }
+  .err3.b { border-color: #8a6df0; background: #f6f2ff; }
+  .err3.c { border-color: #e2534f; background: #fdeeee; }
+
+  /* ---------- 双层模型 ---------- */
+  .layers { display: flex; flex-direction: column; gap: 16px; }
+  .layer {
+    border-radius: 20px; padding: 26px 30px; display: flex; gap: 22px; align-items: flex-start;
+  }
+  .layer .num {
+    flex: 0 0 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 900; color: #fff; background: #1c2333;
+  }
+  .layer .body { flex: 1; }
+  .layer .t { font-size: 21px; font-weight: 900; margin-bottom: 6px; }
+  .layer .s { font-size: 15.5px; color: #5a6280; }
+  .layer .s b { color: #1c2333; }
+  .layer.db { background: #f0f7fd; border: 2px solid #cfe0f5; }
+  .layer.map { background: #f6f2ff; border: 2px solid #e0d8f7; }
+
+  /* ---------- 对照表 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { border: 1.5px solid #f0d0d0; padding: 12px 16px; text-align: left; vertical-align: top; }
+  th { background: #1c2333; color: #ffb0b0; font-size: 14px; }
+  td code { background: #f7f0f0; border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, monospace; }
+  tr:nth-child(even) td { background: #fdf8f8; }
+  td .ok { color: #0d9e5f; font-weight: 800; }
+  td .bad { color: #c53030; font-weight: 800; }
+
+  /* ---------- 错误码小抄 ---------- */
+  .errgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .ecell {
+    background: #fff; border-radius: 14px; border: 2px solid #f0d0d0; padding: 16px 20px;
+  }
+  .ecell .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .ecell .code { font-family: ui-monospace, monospace; font-weight: 900; font-size: 17px; }
+  .ecell .code.c401 { color: #e2534f; }
+  .ecell .code.c403 { color: #d9710a; }
+  .ecell .code.c404 { color: #8a6df0; }
+  .ecell .code.c400 { color: #3b9ae0; }
+  .ecell .code.c500 { color: #c53030; }
+  .ecell .code.c413 { color: #e2534f; }
+  .ecell .code.c422 { color: #b05c00; }
+  .ecell .who { font-size: 13px; color: #a08a63; font-weight: 700; }
+  .ecell .s { font-size: 13.5px; color: #5a6280; }
+
+  .hint {
+    background: #fdeeee; border: 2px dashed #f0a0a0; border-radius: 16px;
+    padding: 20px 26px; margin-top: 26px; font-size: 16px;
+  }
+  .hint b { color: #c53030; }
+
+  .outro { text-align: center; margin-top: 120px; }
+  .outro .box {
+    background: linear-gradient(160deg, #1c2333, #2a3350); color: #fff;
+    border-radius: 28px; padding: 48px 40px;
+  }
+  .outro h3 { font-size: 34px; margin-bottom: 16px; }
+  .outro p { font-size: 19px; color: #b9c2e0; max-width: 760px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= 封面 ================= -->
+  <div class="cover">
+    <span class="kicker">OMA 内部参观 · 第 3 站</span>
+    <h1>🧯 出错以后，全楼怎么反应</h1>
+    <p class="one-line">一个请求出错，它 <b>不会静悄悄死掉</b>，而是：<br>
+    有人<b>把错误说出来</b>（error）· 有人<b>决定客人看到什么</b>（handler）· 有人<b>兜底</b>（中间件）</p>
+  </div>
+
+  <!-- ================= 1. Go 的哲学 ================= -->
+  <section>
+    <span class="tag">第 1 章</span>
+    <h2>先看 Go 的<span class="arrow">总哲学</span>：错误是值，不是异常</h2>
+    <p class="lead">别的语言（Java/Python）出错会"扔"出去（异常），Go 不扔，它把错误当成一个<b>普通的值</b>，走完整个流程。</p>
+
+    <div class="card">
+      <div class="layers">
+        <div class="layer db">
+          <div class="num">A</div>
+          <div class="body">
+            <div class="t">Java / Python：异常（throw）</div>
+            <div class="s">错误发生时"扔"出去，程序一路往上弹，直到被 catch 接住。<b>错误是流程的中断</b>。
+            好处：不用每个函数都写检查；坏处：错误路径藏在控制流里，经常被忘记接。</div>
+          </div>
+        </div>
+        <div class="layer map">
+          <div class="num">B</div>
+          <div class="body">
+            <div class="t">Go：错误是返回值（error）</div>
+            <div class="s">每个函数最后返回 <code>(结果, error)</code>，调用者<b>必须亲手接住</b>（不接编译期没强制，但代码规范强制）。
+            <b>错误是流程的一部分</b>，走完整个函数链。哲学：<b>显式优于隐式</b> —— 错误路径和正常路径一样清晰可见，不搞魔法。</div>
+          </div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:20px">
+        🎯 <b>哲学一句话</b>：异常是"出错就逃跑"，error 是"出错也上班"。
+        Go 让你无处可逃 —— 每层都得明明白白处理错误，这是 Go 刻意牺牲写码速度换来的<b>可读性与可靠性</b>。
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. 错误的一生 ================= -->
+  <section>
+    <span class="tag">第 2 章</span>
+    <h2>一个错误在 OMA 里的<span class="arrow">一生</span>（5 站）</h2>
+    <p class="lead">以"上传文件超限"为例，跟着错误走一遍。</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe db">
+          <div class="n">① 产生</div>
+          <div class="t">db 报错</div>
+          <div class="s">pgx 返回 <code>pgx.ErrNoRows</code> 或存储超限</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe">
+          <div class="n">② 翻译</div>
+          <div class="t">db 包包装</div>
+          <div class="s"><code>errors.Is(err, pgx.ErrNoRows)</code> → 转成自有哨兵 <code>ErrNotFound</code> / <code>ErrStorageLimitExceeded</code>（db 层不认识 HTTP）</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe map">
+          <div class="n">③ 判断</div>
+          <div class="t">handler 分类</div>
+          <div class="s"><code>errors.Is(err, db.ErrStorageLimitExceeded)</code> → 决定：这是 403 还是 500？</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe">
+          <div class="n">④ 包裹</div>
+          <div class="t">包装成 API 错误</div>
+          <div class="s"><code>httpapi.NewError(403, "permission_error", "Workspace storage limit exceeded")</code></div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe json">
+          <div class="n">⑤ 写出</div>
+          <div class="t">JSON 响应</div>
+          <div class="s"><code>WriteError</code> → <code>{"type":"error","request_id":"req_...","error":{"type":"permission_error","message":"..."}}</code></div>
+        </div>
+      </div>
+      <p class="dim" style="margin-top:20px">每一站只做一件事：db 层只管"把错误说清楚"，handler 层只管"翻译成 HTTP 语义"，httpapi 只管"按 Anthropic 格式写出去"。</p>
+    </div>
+  </section>
+
+  <!-- ================= 3. 错误三兄弟 ================= -->
+  <section>
+    <span class="tag">第 3 章</span>
+    <h2>Go 的"错误三兄弟"：<span class="arrow">包装</span> 的艺术</h2>
+    <p class="lead">一个错误在链路里走，需要保留"我是什么 + 我在哪 + 原始细节"，Go 用三种姿势组合实现。</p>
+
+    <div class="errors3">
+      <div class="err3 a">
+        <div class="icon">🚩</div>
+        <div class="t">哨兵错误（sentinel）</div>
+        <div class="p">包级别定义的"信号值"：<b><code>var ErrNotFound = errors.New("not found")</code></b>。<br>
+        作用：<b>跨层识别</b>。db 层返回它，handler 层用 <code>errors.Is</code> 认出来 → 决定 404 还是 500。<br>
+        <b>为什么叫哨兵</b>：像哨兵站岗，一看就知道"是这个错"。</div>
+      </div>
+      <div class="err3 b">
+        <div class="icon">🧅</div>
+        <div class="t">包装（wrap）</div>
+        <div class="p"><code>fmt.Errorf("get file %q: %w", id, err)</code><br>
+        作用：<b>保留链路</b>。往上抛时把"当时在干什么"拼进去，但用 <code>%w</code> 保住底层错误身份。<br>
+        <b>为什么重要</b>：日志里你能看到"get file xxx: not found"——上下文和根因都在。而 <code>%v</code> 只保留字面量、丢身份（识别不了）——所以规范要求 wrap 必须用 <code>%w</code>。</div>
+      </div>
+      <div class="err3 c">
+        <div class="icon">🔎</div>
+        <div class="t">判定（errors.Is / As）</div>
+        <div class="p"><code>errors.Is(err, db.ErrNotFound)</code> / <code>errors.As(err, &target)</code><br>
+        作用：<b>穿透包装链</b>。不管包了几层 <code>%w</code>，Is 一路解开检查是不是同一个哨兵；As 把特定类型捞出来（比如 <code>*http.MaxBytesError</code>）。<br>
+        <b>为什么必须用它们</b>：直接 <code>err == db.ErrNotFound</code> 在包装后永远 false —— 这是新手最常见的坑。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. 双层模型 ================= -->
+  <section>
+    <span class="tag">第 4 章</span>
+    <h2>OMA 的双层错误模型：<span class="arrow">db 说人话</span>，<span class="arrow">handler 定脸色</span></h2>
+    <p class="lead">这是整个 OMA 后端设计边界的核心（CLAUDE.md 里明确写的规则）。</p>
+
+    <div class="layers">
+      <div class="layer db">
+        <div class="num">1</div>
+        <div class="body">
+          <div class="t">internal/db —— 只认错误，不认识 HTTP</div>
+          <div class="s">db 层<b>绝不构造</b> HTTP 状态码、绝不写 Anthropic 错误 JSON。它只返回：
+          <b>普通 error</b>（如 "storage limit exceeded"）、<b>哨兵错误</b>（<code>ErrNotFound</code> / <code>ErrStorageLimitExceeded</code>）、或结果状态。<br>
+          依赖方向：<b>db 不知道上面有谁</b>，所以它永远能被测试、被复用、不会和某套 API 耦合。</div>
+        </div>
+      </div>
+      <div class="layer map">
+        <div class="num">2</div>
+        <div class="body">
+          <div class="t">handler / 资源层 —— 翻译官</div>
+          <div class="s">handler 拿到 db 的错误，用 <code>errors.Is</code> 判断类型，然后<b>在这里做映射</b>：
+          <code>ErrStorageLimitExceeded</code> → 403 <code>permission_error</code>；<code>ErrNotFound</code> → 404 <code>not_found_error</code>；
+          其它 → 500 <code>api_error</code>。错误响应用统一的 <code>httpapi.WriteError</code>，Anthropic 兼容格式。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hint">
+      💡 <b>为什么要拆成两层？</b> 让 <b>"是什么错"（事实）</b> 和 <b>"客人该看到什么"（表达）</b> 分离。
+      db 只管事实，handler 管表达。这样换 API 协议（比如再开一个 gRPC 面）时，db 层一行都不用动。
+      这也是依赖方向规则：api 层可以依赖 db 层，db 层<b>绝不反向依赖</b>。
+    </div>
+  </section>
+
+  <!-- ================= 5. 兜底 ================= -->
+  <section>
+    <span class="tag">第 5 章</span>
+    <h2>最后一道网：<span class="arrow">panic 兜底</span>（recover）</h2>
+    <p class="lead">Go 哲学是"错误都该显式返回"，但人总会犯错——panic 是"炸了"，不是"错了"。炸了谁来接？</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe">
+          <div class="n">恐慌发生</div>
+          <div class="t">💥 某个 handler panic</div>
+          <div class="s">比如空指针、数组越界、断言失败</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe">
+          <div class="n">中间件接住</div>
+          <div class="t">🛡️ recoverMiddleware</div>
+          <div class="s"><code>defer func(){ recover() }()</code> 在 panic 冒泡时接管（server.go:268）</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe">
+          <div class="n">记日志</div>
+          <div class="t">📝 带上 request_id</div>
+          <div class="s"><code>log.Printf("panic request_id=%s: %v", ...)</code> —— 事后能查是哪笔请求炸的</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe json">
+          <div class="n">回 500</div>
+          <div class="t">🤫 客人只见"内部错误"</div>
+          <div class="s">绝不把堆栈抛给客户端 —— 那是信息泄露（能帮攻击者找漏洞）</div>
+        </div>
+      </div>
+      <p class="dim" style="margin-top:20px">
+        <b>关键区别</b>：panic 是<b>程序 bug</b>（不该发生却发生）；error 是<b>业务现实</b>（必然发生：用户传错、数据库慢）。
+        OMA 不把 panic 当错误处理 —— 它只兜底、记日志、回 500，服务不崩溃、别的请求不受影响。
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= 6. 错误码小抄 ================= -->
+  <section>
+    <span class="tag">第 6 章</span>
+    <h2>客人看到的<span class="arrow">脸色</span>：错误码小抄</h2>
+    <p class="lead">从 <code>WriteError</code> 出来的响应，永远是同一个形状：</p>
+
+    <div class="card">
+      <div class="idcard" style="max-width:680px;margin:0 auto;background:#fff;border-radius:24px;border:3px solid #1c2333;padding:28px 32px;box-shadow:8px 8px 0 rgba(28,35,51,.12)">
+        <div class="top" style="display:flex;justify-content:space-between;margin-bottom:12px">
+          <b style="font-size:18px">📦 错误 JSON（Anthropic 兼容）</b>
+          <span style="background:#1c2333;color:#ffb0b0;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700">httpapi/errors.go</span>
+        </div>
+        <div style="background:#f7f0f0;border-radius:12px;padding:16px 20px;font-family:ui-monospace,monospace;font-size:15px;line-height:1.8;overflow-x:auto">
+{<br>
+&nbsp;&nbsp;"type":&nbsp;"error",<br>
+&nbsp;&nbsp;"request_id":&nbsp;"req_xxx",&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#a08a63">// 串日志用的</span><br>
+&nbsp;&nbsp;"error":&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"type":&nbsp;&nbsp;&nbsp;&nbsp;"permission_error",&nbsp;&nbsp;<span style="color:#a08a63">// 机器可读</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;"message":&nbsp;"Workspace storage limit exceeded"&nbsp;&nbsp;<span style="color:#a08a63">// 人可读</span><br>
+&nbsp;&nbsp;}<br>
+}
+        </div>
+      </div>
+
+      <div class="errgrid" style="margin-top:26px">
+        <div class="ecell">
+          <div class="top"><span class="code c401">401</span><span class="who">authentication_error</span></div>
+          <div class="s">钥匙缺失 / 无效 / 已停用 —— 你是谁？</div>
+        </div>
+        <div class="ecell">
+          <div class="top"><span class="code c403">403</span><span class="who">permission_error</span></div>
+          <div class="s">身份有效但无权（组织不对、存储超限、工作区已归档）—— 你不行。</div>
+        </div>
+        <div class="ecell">
+          <div class="top"><span class="code c404">404</span><span class="who">not_found_error</span></div>
+          <div class="s">资源不存在（故意不区分"存在但无权"）—— 查无此人。</div>
+        </div>
+        <div class="ecell">
+          <div class="top"><span class="code c400">400</span><span class="who">invalid_request_error</span></div>
+          <div class="s">请求本身有毛病：缺字段、JSON 坏、缺 beta header。</div>
+        </div>
+        <div class="ecell">
+          <div class="top"><span class="code c413">413</span><span class="who">invalid_request_error</span></div>
+          <div class="s">文件太大 / body 超限（<code>MaxBytesReader</code> 拦下的）。</div>
+        </div>
+        <div class="ecell">
+          <div class="top"><span class="code c500">500</span><span class="who">api_error</span></div>
+          <div class="s">服务器内部错误 —— 细节藏起来，只留 request_id 让管理员查。</div>
+        </div>
+      </div>
+      <p class="dim" style="margin-top:18px">
+        注意 <b>404 的哲学</b>：找不到 = 不存在（无论你有没有权限），避免给攻击者探路（"哦这个资源存在但我没权限"）。
+        这是 Anthropic 兼容 API 的标准语义，也是 OMA 的故意选择。
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= 7. 最佳实践对照 ================= -->
+  <section>
+    <span class="tag">第 7 章</span>
+    <h2>对照 Go 官方最佳实践：<span class="arrow">OMA 做对了什么</span>，<span class="arrow">哪里偏了</span></h2>
+    <p class="lead">用 Go 社区共识（Error handling 指南）给 OMA 打分。</p>
+
+    <div class="card">
+      <table>
+        <tr><th>最佳实践</th><th>OMA 的做法</th><th>评价</th></tr>
+        <tr>
+          <td>错误是值，显式返回</td>
+          <td>所有函数 <code>(result, error)</code>，handler 逐个 <code>if err != nil</code> 接住</td>
+          <td><span class="ok">✅ 完全遵循</span></td>
+        </tr>
+        <tr>
+          <td>哨兵 + errors.Is/As，不比较字符串</td>
+          <td><code>ErrNotFound</code> / <code>ErrStorageLimitExceeded</code> + <code>errors.Is</code>；<code>errors.As(&http.MaxBytesError)</code> 识别超限</td>
+          <td><span class="ok">✅ 完全遵循</span></td>
+        </tr>
+        <tr>
+          <td>包装错误用 %w 保留链路</td>
+          <td><code>fmt.Errorf("put object %q: %w", ...)</code> 普遍使用</td>
+          <td><span class="ok">✅ 完全遵循</span></td>
+        </tr>
+        <tr>
+          <td>只处理错误一次（不重复打日志）</td>
+          <td>大部分场景：handler 顶部统一 <code>log.Printf</code> + 返回，干净</td>
+          <td><span class="ok">✅ 遵循</span></td>
+        </tr>
+        <tr>
+          <td>panic 只用于不可恢复，recover 在边界</td>
+          <td>业务代码不 panic；<code>recoverMiddleware</code> 在 API 边界兜底 + 带 request_id 记日志</td>
+          <td><span class="ok">✅ 遵循</span></td>
+        </tr>
+        <tr>
+          <td>db 层不泄露 HTTP 语义</td>
+          <td>db 返回哨兵/普通 error；handler 负责映射成 400/403/404/500</td>
+          <td><span class="ok">✅ 遵循</span></td>
+        </tr>
+        <tr>
+          <td>错误类型携带结构化信息（建议型）</td>
+          <td>部分场景用哨兵判断分支，少数场景（如 413/403 需要分支）用 As 拿类型</td>
+          <td><span class="ok">✅ 符合实际</span>（哨兵方案在分层简单时足够）</td>
+        </tr>
+        <tr>
+          <td>每个错误都有用户可读文案（建议型）</td>
+          <td>有些内部错误 message 直接透传（如 <code>err.Error()</code> 拼进 400），对终端用户可能不够友好</td>
+          <td><span class="bad">⚠️ 可优化</span>：message 可能暴露内部细节（如 SQL 相关），建议统一"对外友好文案 + 内部细节进日志"</td>
+        </tr>
+        <tr>
+          <td>错误分类可扩展（大型项目可选）</td>
+          <td>靠散落的哨兵变量 + handler 里 if 判断，无集中注册表</td>
+          <td><span class="bad">⚠️ 可优化</span>：资源多了之后，容易漏分类导致 500 兜底；可考虑集中式错误映射</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 8. 哲学总结 ================= -->
+  <section>
+    <span class="tag">第 8 章</span>
+    <h2>哲学：<span class="arrow">三句话</span> 看懂整套机制</h2>
+
+    <div class="errors3">
+      <div class="err3 a">
+        <div class="icon">💬</div>
+        <div class="t">显式优于隐式</div>
+        <div class="p">错误是返回值，不是异常。<b>每条出错路径都看得见</b>，没人能在不看代码的情况下偷偷吞掉错误 —— Go 的哲学，OMA 严格执行。</div>
+      </div>
+      <div class="err3 b">
+        <div class="icon">🧱</div>
+        <div class="t">事实与表达分离</div>
+        <div class="p">db 只报"事实"（什么错了），handler 只定"脸色"（客人看到什么）。<b>换协议不动数据层，换文案不动逻辑层</b> —— 依赖方向规则的副产品。</div>
+      </div>
+      <div class="err3 c">
+        <div class="icon">🛡️</div>
+        <div class="t">边界兜底，细节保密</div>
+        <div class="p">panic 在边界接住、带 request_id 记日志、客人只见"内部错误"。<b>服务不崩、日志可查、敌人无料</b> —— 容错与安全的平衡点。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 结尾 ================= -->
+  <div class="outro">
+    <div class="box">
+      <h3>🎯 一句话记住本章</h3>
+      <p>错误是值，不逃跑；哨兵认错，包装留痕；db 说事实，handler 定脸色；panic 兜底，客人只见 500。</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

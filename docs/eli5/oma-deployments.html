@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA Deployments · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef9f0 0%, #f7f9ff 45%, #ffffff 100%);
+    color: #1c2333;
+    line-height: 1.75;
+    font-size: 19px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 30px 130px; }
+
+  .cover { text-align: center; padding: 90px 0 66px; }
+  .cover .kicker {
+    display: inline-block; background: #d8f0de; color: #0d7a3d;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+    letter-spacing: 2px; margin-bottom: 26px;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; }
+  .cover .one-line {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #7fd8a0; border-radius: 20px;
+    padding: 20px 30px; max-width: 780px;
+  }
+  .cover .one-line b { color: #0d7a3d; }
+
+  section { margin-top: 92px; }
+  .tag {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  h2 .arrow { color: #0d9e5f; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 12px 40px rgba(13, 158, 95, .10), 0 2px 6px rgba(0,0,0,.04);
+    border: 1px solid #cfe8d8;
+  }
+  .card p { margin-bottom: 15px; }
+  .card p:last-child { margin-bottom: 0; }
+  .hl { background: #e6f5ea; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #0d7a3d; }
+  .dim { color: #7a8196; font-size: 17px; }
+  code.k { background: #eef5ef; border-radius: 8px; padding: 2px 9px; font-size: .85em; font-family: ui-monospace, monospace; }
+
+  /* ---------- 浇花装置比喻 ---------- */
+  .garden { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .garden .stage {
+    width: 100%; border-radius: 18px; padding: 26px 28px; text-align: center;
+    background: #fff; border: 2px solid #cfe8d8;
+  }
+  .garden .stage .t { font-size: 21px; font-weight: 900; }
+  .garden .stage .s { font-size: 15.5px; color: #5a6280; margin-top: 4px; }
+  .garden .stage.main { background: linear-gradient(160deg, #7fd8a0, #34b57a); border: none; }
+  .garden .stage.main .t { font-size: 26px; }
+  .garden .stage.main .s { color: #0c3d20; }
+  .down { font-size: 30px; color: #0d9e5f; font-weight: 900; }
+
+  /* ---------- 三件套 ---------- */
+  .triple { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .tri {
+    flex: 1; min-width: 280px; border-radius: 20px; padding: 26px 24px;
+    background: #fff; border: 2px solid #cfe8d8; text-align: center;
+  }
+  .tri .icon { font-size: 42px; }
+  .tri .t { font-size: 21px; font-weight: 900; margin: 8px 0 6px; }
+  .tri .p { font-size: 14px; color: #5a6280; text-align: left; margin-top: 10px; line-height: 1.65; }
+  .tri .p b { color: #1c2333; }
+  .tri.t1 { border-color: #34b57a; background: #f0fbf5; }
+  .tri.t2 { border-color: #8a6df0; background: #f6f2ff; }
+  .tri.t3 { border-color: #3b9ae0; background: #f0f7fd; }
+
+  /* ---------- 路由 ---------- */
+  .routes { display: flex; flex-direction: column; gap: 10px; }
+  .route {
+    display: flex; align-items: center; gap: 14px; background: #fff;
+    border-radius: 14px; border: 2px solid #cfe8d8; padding: 12px 18px;
+  }
+  .route .m { flex: 0 0 58px; text-align: center; border-radius: 10px; padding: 6px 0; font-weight: 900; font-size: 14px; }
+  .route .m.post { background: #0d9e5f; color: #fff; }
+  .route .m.get { background: #3b9ae0; color: #fff; }
+  .route .path { font-family: ui-monospace, monospace; font-size: 15.5px; font-weight: 700; }
+  .route .desc { flex: 1; font-size: 14px; color: #5a6280; }
+  .route.star { border-color: #f0a95c; background: #fff8ec; }
+  .route.star .m { background: #d9710a; }
+
+  /* ---------- 生命周期 ---------- */
+  .lifecycle { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .stage {
+    flex: 1; min-width: 150px; background: #fff; border-radius: 18px;
+    border: 2px solid #cfe8d8; padding: 18px 16px; text-align: center;
+  }
+  .stage .n { font-size: 13px; font-weight: 800; color: #0d9e5f; letter-spacing: 1px; }
+  .stage .t { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
+  .stage .s { font-size: 14px; color: #5a6280; }
+  .stage.active { border-color: #34b57a; background: #f0fbf5; }
+  .stage.paused { border-color: #f0a95c; background: #fff8ec; }
+  .stage.archived { border-color: #a0a8bc; background: #f2f4f8; }
+  .stage-arrow { align-self: center; font-size: 24px; color: #0d9e5f; }
+
+  /* ---------- 管道 ---------- */
+  .pipeline { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .pipe {
+    flex: 1; min-width: 150px; background: #fff; border-radius: 18px;
+    border: 2px solid #cfe8d8; padding: 18px 16px; text-align: center;
+  }
+  .pipe .n { font-size: 13px; font-weight: 800; color: #0d9e5f; letter-spacing: 1px; }
+  .pipe .t { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
+  .pipe .s { font-size: 14px; color: #5a6280; }
+  .pipe.check { border-color: #f0a95c; background: #fff8ec; }
+  .pipe.gen { border-color: #8a6df0; background: #f6f2ff; }
+  .pipe.q { border-color: #3b9ae0; background: #f0f7fd; }
+  .pipe.done { border-color: #34b57a; background: #f0fbf5; }
+  .pipe-arrow { align-self: center; font-size: 24px; color: #0d9e5f; }
+
+  /* ---------- 依赖图 ---------- */
+  .deps { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .dep { border-radius: 16px; padding: 18px 22px; text-align: center; color: #fff; min-width: 150px; }
+  .dep .t { font-size: 19px; font-weight: 800; }
+  .dep .s { font-size: 13px; opacity: .9; margin-top: 3px; }
+  .dep-a { background: #1c2333; }
+  .dep-b { background: linear-gradient(160deg, #34b57a, #0d9e5f); }
+  .dep-c { background: linear-gradient(160deg, #3b9ae0, #2563b8); }
+  .dep-d { background: linear-gradient(160deg, #8a6df0, #6a46d8); }
+  .dep-arrow { font-size: 26px; color: #0d9e5f; font-weight: 900; }
+
+  /* ---------- 表格 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { border: 1.5px solid #cfe8d8; padding: 12px 16px; text-align: left; vertical-align: top; }
+  th { background: #1c2333; color: #7fd8a0; font-size: 14px; }
+  td code { background: #eef5ef; border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, monospace; }
+  tr:nth-child(even) td { background: #f5fbf7; }
+
+  .hint {
+    background: #eef9f0; border: 2px dashed #7fd8a0; border-radius: 16px;
+    padding: 20px 26px; margin-top: 26px; font-size: 16px;
+  }
+  .hint b { color: #0d7a3d; }
+
+  /* ---------- 全家桶 ---------- */
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .stack .row {
+    display: flex; align-items: center; gap: 14px; background: #fff;
+    border-radius: 14px; border: 2px solid #cfe8d8; padding: 12px 18px;
+  }
+  .stack .row .icon { flex: 0 0 44px; text-align: center; font-size: 26px; }
+  .stack .row .name { flex: 0 0 130px; font-weight: 900; font-size: 16px; }
+  .stack .row .desc { flex: 1; font-size: 14px; color: #5a6280; }
+  .stack .row .port { flex: 0 0 130px; text-align: right; font-family: ui-monospace, monospace; font-size: 13px; color: #a08a63; }
+  .stack .row.inf { background: #f5fbf7; border-color: #cfe8d8; }
+  .stack .row.app { background: #fff8ec; border-color: #f0d9b5; }
+  .stack .row.edge { background: #f6f2ff; border-color: #e0d8f7; }
+
+  .twolayers { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .tl {
+    flex: 1; min-width: 400px; border-radius: 20px; padding: 26px 24px;
+    background: #fff; border: 2px solid #cfe8d8; text-align: center;
+  }
+  .tl .icon { font-size: 40px; }
+  .tl .t { font-size: 21px; font-weight: 900; margin: 8px 0 6px; }
+  .tl .p { font-size: 14px; color: #5a6280; text-align: left; margin-top: 10px; line-height: 1.65; }
+  .tl .p b { color: #1c2333; }
+  .tl.a { border-color: #34b57a; background: #f0fbf5; }
+  .tl.b { border-color: #3b9ae0; background: #f0f7fd; }
+
+  .outro { text-align: center; margin-top: 120px; }
+  .outro .box {
+    background: linear-gradient(160deg, #1c2333, #2a3350); color: #fff;
+    border-radius: 28px; padding: 48px 40px;
+  }
+  .outro h3 { font-size: 34px; margin-bottom: 16px; }
+  .outro p { font-size: 19px; color: #b9c2e0; max-width: 780px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= 封面 ================= -->
+  <div class="cover">
+    <span class="kicker">OMA 内部参观 · 第 5 站</span>
+    <h1>🚿 Deployments &amp; docker-compose：两套"一键装置"</h1>
+    <p class="one-line">这页讲 <b>两个"deploy"</b>，一个是产品功能，一个是运维工具：<br>
+    <b>上集</b> deployment —— 把 agent 配成"一键浇花装置"，按一下（run）就开跑<br>
+    <b>下集</b> docker-compose —— 把整套 OMA 服务配成"一键全家桶"，一条命令全开工</p>
+  </div>
+
+  <!-- ================= 1. 大比喻 ================= -->
+  <section>
+    <span class="tag">第 1 章</span>
+    <h2>核心比喻：<span class="arrow">浇花装置</span></h2>
+    <p class="lead">想象你在院子里装了一套自动浇花装置——这就是 deployment。</p>
+
+    <div class="garden">
+      <div class="stage main">
+        <div class="t">🚿 Deployment = 装好的浇花装置</div>
+        <div class="s">里面配好了：浇什么花（agent）、用哪块地（environment）、水管接哪（resources）、几号水龙头（vault）、要不要定时（schedule）</div>
+      </div>
+      <div class="down">▼ 按一下按钮</div>
+      <div class="stage">
+        <div class="t">▶️ Run = 一次浇花</div>
+        <div class="s">按按钮 → 装置照模板"复制"出一套实际浇水任务 → 开浇（= 生成一个会话去干活）</div>
+      </div>
+      <div class="down">▼ 装置本体还在</div>
+      <div class="stage">
+        <div class="t">🔁 Deployment 可以反复按，每次都是一次新 run</div>
+        <div class="s">模板永不消耗，按一次复制一次 —— 这就是"部署"与"会话"的关系</div>
+      </div>
+    </div>
+
+    <div class="hint">
+      🎯 <b>一句话</b>：deployment 是<b>模板</b>（配置 + 生命周期），run 是<b>实例</b>（按模板生成的真实任务）。
+      模板可以暂停（pause）、归档（archive）、反复使用 —— 每次 run 都是一次独立的会话。
+    </div>
+  </section>
+
+  <!-- ================= 2. 三件套 ================= -->
+  <section>
+    <span class="tag">第 2 章</span>
+    <h2>三个概念，<span class="arrow">一张表</span>分清</h2>
+    <p class="lead">deployment 系统里其实有"三兄弟"。</p>
+
+    <div class="triple">
+      <div class="tri t1">
+        <div class="icon">📄</div>
+        <div class="t">Deployment</div>
+        <div class="p">一份<b>运行配置模板</b>：agent 快照 + 环境 + 资源 + 计划 + 状态。<br><b>ID：<code>dep_xxx</code></b><br>生命周期：active / paused / archived</div>
+      </div>
+      <div class="tri t2">
+        <div class="icon">▶️</div>
+        <div class="t">Run</div>
+        <div class="p">按一次按钮的<b>记录</b>：谁按的（trigger）、啥时候、结果如何（成功 / 失败留 error）。<br><b>ID：<code>drun_xxx</code></b><br>类型：manual（手动触发）</div>
+      </div>
+      <div class="tri t3">
+        <div class="icon">💬</div>
+        <div class="t">Session（run 背后的真身）</div>
+        <div class="p">run 本质上就是<b>创建一套会话</b>：session + thread + work 入队，交给环境执行。<br><b>ID：<code>sess_xxx</code> + <code>thread_xxx</code> + <code>work_xxx</code></b></div>
+      </div>
+    </div>
+
+    <p class="dim" style="margin-top:18px">一次 run 一口气生成 <b>4 个 ID</b>（session / thread / work / run），像四联单一样成套开出。</p>
+  </section>
+
+  <!-- ================= 3. 路由地图 ================= -->
+  <section>
+    <span class="tag">第 3 章</span>
+    <h2>API 地图：<span class="arrow">7 + 2</span> 个入口</h2>
+    <p class="lead">一个文件（handler.go，1921 行）挂了两个 router。</p>
+
+    <div class="routes">
+      <div class="route"><span class="m post">POST</span><span class="path">/v1/deployments</span><span class="desc">创建部署（配装置）</span></div>
+      <div class="route"><span class="m get">GET</span><span class="path">/v1/deployments</span><span class="desc">列表（分页 + 按 status/agent 过滤）</span></div>
+      <div class="route"><span class="m get">GET</span><span class="path">/v1/deployments/{id}</span><span class="desc">查看详情</span></div>
+      <div class="route"><span class="m post">POST</span><span class="path">/v1/deployments/{id}</span><span class="desc">更新配置（改了要重新预热技能）</span></div>
+      <div class="route"><span class="m post">POST</span><span class="path">/v1/deployments/{id}/archive</span><span class="desc">归档（软删除，不能再 run）</span></div>
+      <div class="route"><span class="m post">POST</span><span class="path">/v1/deployments/{id}/pause</span><span class="desc">暂停（带 reason，不能再 run）</span></div>
+      <div class="route"><span class="m post">POST</span><span class="path">/v1/deployments/{id}/unpause</span><span class="desc">恢复</span></div>
+      <div class="route star"><span class="m post">POST</span><span class="path">/v1/deployments/{id}/run</span><span class="desc">⭐ 按按钮：触发一次运行</span></div>
+      <div class="route"><span class="m get">GET</span><span class="path">/v1/deployment_runs</span><span class="desc">运行历史列表</span></div>
+      <div class="route"><span class="m get">GET</span><span class="path">/v1/deployment_runs/{id}</span><span class="desc">单次运行详情</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 4. 生命周期 ================= -->
+  <section>
+    <span class="tag">第 4 章</span>
+    <h2>部署的<span class="arrow">一生</span>：三种状态</h2>
+
+    <div class="lifecycle">
+      <div class="stage active">
+        <div class="n">状态 1</div>
+        <div class="t">active ✅</div>
+        <div class="s">创建即 active，可以 run、可以更新</div>
+      </div>
+      <div class="stage-arrow">⇄</div>
+      <div class="stage paused">
+        <div class="n">状态 2</div>
+        <div class="t">paused ⏸️</div>
+        <div class="s">暂停（带 reason），不能 run；unpause 可回 active</div>
+      </div>
+      <div class="stage-arrow">→</div>
+      <div class="stage archived">
+        <div class="n">状态 3</div>
+        <div class="t">archived 🗄️</div>
+        <div class="s">归档（软删除），终态，不能 run / 更新</div>
+      </div>
+    </div>
+
+    <p class="dim" style="margin-top:18px">闸门在 run 入口：archived → 拒绝；status ≠ active → 拒绝（runRoute 前 5 行检查）。</p>
+  </section>
+
+  <!-- ================= 5. 创建部署 ================= -->
+  <section>
+    <span class="tag">第 5 章</span>
+    <h2>创建一个部署：<span class="arrow">10 道闸门</span></h2>
+    <p class="lead">create 像是"配装置"，每个部件都要验一遍才装上去。</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe check"><div class="n">①</div><div class="t">鉴权</div><div class="s">必须 API key</div></div>
+        <div class="pipe check"><div class="n">②</div><div class="t">解析 body</div><div class="s">JSON + 限 4MB</div></div>
+        <div class="pipe check"><div class="n">③</div><div class="t">agent</div><div class="s">解析出快照 + 引用</div></div>
+        <div class="pipe check"><div class="n">④</div><div class="t">environment</div><div class="s">必须存在且未归档</div></div>
+        <div class="pipe check"><div class="n">⑤</div><div class="t">name / desc</div><div class="s">必填 / 可空</div></div>
+        <div class="pipe check"><div class="n">⑥</div><div class="t">metadata</div><div class="s">规范化 + 限条目</div></div>
+        <div class="pipe check"><div class="n">⑦</div><div class="t">initial_events</div><div class="s">标准化预置事件</div></div>
+        <div class="pipe check"><div class="n">⑧</div><div class="t">resources</div><div class="s">归一化，secret 抽离</div></div>
+        <div class="pipe check"><div class="n">⑨</div><div class="t">vault_ids</div><div class="s">绑定密钥库</div></div>
+        <div class="pipe check"><div class="n">⑩</div><div class="t">schedule</div><div class="s">可选定时计划</div></div>
+      </div>
+      <p style="margin-top:20px">写库（status=active）→ <span class="hl">enqueueSkillPrewarm</span>：把 agent 快照里的技能入队预热 —— 提前加载好，run 时不现场拉。</p>
+    </div>
+  </section>
+
+  <!-- ================= 6. Run 的旅程 ================= -->
+  <section>
+    <span class="tag">第 6 章</span>
+    <h2>按按钮之后：<span class="arrow">run 的完整旅程</span></h2>
+    <p class="lead">这是整个 deployment 系统的心脏 —— 模板变实例。</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe check">
+          <div class="n">STEP 1 · 闸门</div>
+          <div class="t">校验部署</div>
+          <div class="s">存在？未归档？active？</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe check">
+          <div class="n">STEP 2 · 验引用</div>
+          <div class="t">validateRunReferences</div>
+          <div class="s">agent / 环境 / vault / resources 现在还都在吗？有一个挂了 → 记一次失败的 run</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gen">
+          <div class="n">STEP 3 · 开单</div>
+          <div class="t">一次生成 4 个 ID</div>
+          <div class="s">session + thread + work + run</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gen">
+          <div class="n">STEP 4 · 装配</div>
+          <div class="t">照模板复制</div>
+          <div class="s">从 initial_events 生成会话事件<br>从 resources 解析会话资源</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe q">
+          <div class="n">STEP 5 · 一个事务</div>
+          <div class="t">四连写</div>
+          <div class="s">Session + Thread + EnvironmentWork（queued）+ Run —— 全在一个事务里，要么全成要么全不成</div>
+        </div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe done">
+          <div class="n">STEP 6 · 广播</div>
+          <div class="t">发 webhook 事件</div>
+          <div class="s">session.created / pending / status_idled / thread_created ...</div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:20px">
+        🧠 <b>关键洞察</b>：run 不执行任何 agent 逻辑 —— 它只负责<b>把模板复制成一套会话</b>，
+        work 入队（queued），真正的活儿由 <b>environments runner</b> 消费执行。deployments 是<b>编排壳</b>，不是执行者。
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 7. 依赖图 ================= -->
+  <section>
+    <span class="tag">第 7 章</span>
+    <h2>它和别的模块怎么<span class="arrow">配合</span></h2>
+
+    <div class="card">
+      <div class="deps">
+        <div class="dep dep-a"><div class="t">deployments</div><div class="s">模板层：配置 + 生命周期</div></div>
+        <div class="dep-arrow">➡️</div>
+        <div class="dep dep-b"><div class="t">sessions</div><div class="s">执行层：session + thread</div></div>
+        <div class="dep-arrow">➡️</div>
+        <div class="dep dep-c"><div class="t">environments</div><div class="s">队列层：work 入队</div></div>
+        <div class="dep-arrow">➡️</div>
+        <div class="dep dep-d"><div class="t">runner</div><div class="s">真正干活</div></div>
+      </div>
+      <p class="dim" style="margin-top:20px">另外：创建 / 更新部署时入队 <b>skillprewarm</b>（技能预热）；run 时广播 <b>webhook</b> 事件。</p>
+    </div>
+  </section>
+
+  <!-- ================= 8. 彩蛋：SDK fixture ================= -->
+  <section>
+    <span class="tag">第 8 章</span>
+    <h2>一个有意思的细节：<span class="arrow">测试替身</span></h2>
+    <p class="lead">create 和 run 里都有一行"魔法分支"。</p>
+
+    <div class="card">
+      <p>如果 principal 是<b>官方 SDK fixture 测试账号</b>（<code>isOfficialSDKFixturePrincipal</code>）：</p>
+      <p style="margin-top:10px">不碰数据库，直接返回<b>写死的假数据</b>（<code>fixtureDeployment</code> / <code>fixtureDeploymentRun</code>）。</p>
+      <p style="margin-top:10px">作用：跑 Anthropic <b>官方 SDK 测试套件</b>时，不需要真环境就能过 —— 这是"兼容层替身"，正式业务请求不经过它。</p>
+      <p class="dim" style="margin-top:10px">顺带：run 的引用校验失败也会<b>记录一次失败的 run</b>（不是直接 500 丢请求）—— 运行历史里有据可查。</p>
+    </div>
+  </section>
+
+  <!-- ================= 下集 · 全家桶 ================= -->
+  <section>
+    <span class="tag">下集 · docker-compose</span>
+    <h2>另一个"deploy"：<span class="arrow">一键拉起全家桶</span></h2>
+    <p class="lead">产品里的 deployment 是"一键浇花"；仓库根目录的 docker-compose.yml 是"一键开店"—— 一条命令把整个 OMA 服务全家开起来。</p>
+
+    <div class="card">
+      <h3 style="font-size:22px;margin-bottom:14px">🏪 全家桶里有 7 个成员（docker-compose.yml）</h3>
+      <div class="stack">
+        <div class="row inf"><span class="icon">🗄️</span><span class="name">postgres</span><span class="desc">数据库（Postgres 17），存一切业务数据</span><span class="port">5432</span></div>
+        <div class="row inf"><span class="icon">⚡</span><span class="name">redis</span><span class="desc">会话缓存（platform session store）</span><span class="port">6379</span></div>
+        <div class="row inf"><span class="icon">🪣</span><span class="name">minio</span><span class="desc">对象存储（S3 兼容，存文件 + 技能包）</span><span class="port">9000/9001</span></div>
+        <div class="row app"><span class="icon">🤖</span><span class="name">oma-server</span><span class="desc">主 API 服务 —— 就是前面几站讲的单体进程</span><span class="port">38080</span></div>
+        <div class="row app"><span class="icon">🏖️</span><span class="name">e2b-local</span><span class="desc">沙箱网关 —— 用 host 网络管理宿主机 sandbox 容器</span><span class="port">3099</span></div>
+        <div class="row edge"><span class="icon">🌐</span><span class="name">caddy</span><span class="desc">Web 服务器：前端静态文件 + API 反代</span><span class="port">28080</span></div>
+        <div class="row"><span class="icon">📦</span><span class="name">init-web / init-envd</span><span class="desc">一次性初始化容器（干完活就退，restart: no）</span><span class="port">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 下集 · 启动顺序 ================= -->
+  <section>
+    <span class="tag">下集 · 启动顺序</span>
+    <h2>开店的<span class="arrow">讲究</span>：谁先谁后不能乱</h2>
+    <p class="lead">不是 7 个容器一起 up 就完事 —— 有依赖链。</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe done"><div class="n">STEP 1</div><div class="t">init-web / init-envd</div><div class="s">从镜像提取前端产物 + envd 二进制</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe q"><div class="n">STEP 2</div><div class="t">postgres / redis / minio</div><div class="s">基础设施先就绪（healthcheck 探活）</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe check"><div class="n">STEP 3</div><div class="t">oma-server</div><div class="s">依赖 3 个基础设施健康后才启动</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe check"><div class="n">STEP 4</div><div class="t">e2b-local</div><div class="s">等 init-envd 提取完（service_completed_successfully）</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe done"><div class="n">STEP 5</div><div class="t">caddy</div><div class="s">最后起：等 init-web 完成 + oma-server 健康</div></div>
+      </div>
+      <p style="margin-top:20px">配套的健康检查体系：postgres 用 <code>pg_isready</code>、redis 用 <code>redis-cli ping</code>、minio 用 <code>mc ready</code>、oma-server 用 <code>curl /healthz</code> —— 等到的信号是"<span class="hl">真的能干活</span>"，不是"进程起来了"。</p>
+      <div class="hint" style="margin-top:20px">
+        🧠 <b>为什么 e2b-local 必须 host 网络？</b> 它要管理宿主机上的 sandbox 容器（挂载 docker.sock），
+        必须和 Docker daemon 同网络。所以 compose 注释里写明：<b>Docker Desktop（macOS/Windows）不支持</b>，只有 Linux / OrbStack 能跑 —— 这是平台的硬约束。
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 下集 · 两个 deploy 对照 ================= -->
+  <section>
+    <span class="tag">下集 · 对照</span>
+    <h2>两个 deploy 的<span class="arrow">对照表</span>：别搞混</h2>
+
+    <div class="twolayers">
+      <div class="tl a">
+        <div class="icon">🚿</div>
+        <div class="t">产品内 deployment</div>
+        <div class="p"><b>是什么</b>：agent 的运行模板<br>
+        <b>哪来的</b>：代码里 <code>internal/deployments</code><br>
+        <b>操作</b>：create / run / pause / archive<br>
+        <b>产物</b>：run → session + thread + work<br>
+        <b>面向谁</b>：API 用户（通过 SDK 调用）</div>
+      </div>
+      <div class="tl b">
+        <div class="icon">🏪</div>
+        <div class="t">docker-compose</div>
+        <div class="p"><b>是什么</b>：整套服务编排<br>
+        <b>哪来的</b>：仓库根目录 <code>docker-compose.yml</code><br>
+        <b>操作</b>：up / down / down -v<br>
+        <b>产物</b>：7 个容器跑起来<br>
+        <b>面向谁</b>：运维 / 部署者（docker CLI）</div>
+      </div>
+    </div>
+
+    <div class="hint">
+      🎯 <b>本质区别</b>：产品 deployment 是 <b>业务功能</b>（给用户用的 API），
+      docker-compose 是 <b>交付方式</b>（把整个系统跑起来的手段）。一个在系统内部，一个在系统外面。
+    </div>
+  </section>
+
+  <!-- ================= 结尾 ================= -->
+  <div class="outro">
+    <div class="box">
+      <h3>🎯 一句话记住本章</h3>
+      <p>上集：deployment 是"agent 运行模板"，run 一次 = 复制出 session + thread + work 入队 + 广播 webhook；<br>
+      下集：docker-compose 是"整套服务编排"，一条命令拉起 7 个容器，依赖链 + 健康检查保证顺序；<br>
+      一个管 agent 怎么跑，一个管系统怎么起 —— 都是"一键"，但一个是产品功能，一个是运维工具。</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

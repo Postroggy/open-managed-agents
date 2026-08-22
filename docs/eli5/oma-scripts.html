@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA scripts 目录 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef2ff 0%, #f7f9ff 45%, #ffffff 100%);
+    color: #1c2333;
+    line-height: 1.75;
+    font-size: 19px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 30px 130px; }
+
+  .cover { text-align: center; padding: 90px 0 66px; }
+  .cover .kicker {
+    display: inline-block; background: #e0e6ff; color: #3b4fae;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+    letter-spacing: 2px; margin-bottom: 26px;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; }
+  .cover .one-line {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #9db4f2; border-radius: 20px;
+    padding: 20px 30px; max-width: 780px;
+  }
+  .cover .one-line b { color: #3b4fae; }
+
+  section { margin-top: 92px; }
+  .tag {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  h2 .arrow { color: #3b6bff; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 12px 40px rgba(59, 107, 255, .10), 0 2px 6px rgba(0,0,0,.04);
+    border: 1px solid #dfe7fb;
+  }
+  .card p { margin-bottom: 15px; }
+  .card p:last-child { margin-bottom: 0; }
+  .hl { background: #edf2ff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #3b4fae; }
+  .dim { color: #7a8196; font-size: 17px; }
+  code.k { background: #f0f3fb; border-radius: 8px; padding: 2px 9px; font-size: .85em; font-family: ui-monospace, monospace; }
+
+  /* ---------- 三大类 ---------- */
+  .three { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .kind {
+    flex: 1; min-width: 290px; border-radius: 20px; padding: 26px 24px;
+    background: #fff; border: 2px solid #dfe7fb; text-align: center;
+  }
+  .kind .icon { font-size: 42px; }
+  .kind .t { font-size: 21px; font-weight: 900; margin: 8px 0 6px; }
+  .kind .who { font-size: 14px; color: #a08a63; font-weight: 700; }
+  .kind .p { font-size: 14px; color: #5a6280; text-align: left; margin-top: 10px; line-height: 1.65; }
+  .kind.a { border-color: #e2534f; background: #fdeeee; }
+  .kind.b { border-color: #34b57a; background: #f0fbf5; }
+  .kind.c { border-color: #8a6df0; background: #f6f2ff; }
+
+  /* ---------- 文件列表 ---------- */
+  .filelist { display: flex; flex-direction: column; gap: 8px; }
+  .file {
+    display: flex; align-items: center; gap: 14px; background: #fff;
+    border-radius: 14px; border: 2px solid #dfe7fb; padding: 12px 18px;
+  }
+  .file .nm { flex: 0 0 230px; font-family: ui-monospace, monospace; font-size: 14.5px; font-weight: 700; }
+  .file .desc { flex: 1; font-size: 14px; color: #5a6280; }
+  .file.red { border-color: #f0c4c4; background: #fef8f8; }
+  .file.green { border-color: #b8e6cf; background: #f8fdf9; }
+  .file.purple { border-color: #d8ccf7; background: #faf8ff; }
+  .file.gray { border-color: #d5d9e5; background: #fafbfe; }
+
+  /* ---------- 门禁流水线 ---------- */
+  .pipeline { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .pipe {
+    flex: 1; min-width: 150px; background: #fff; border-radius: 18px;
+    border: 2px solid #dfe7fb; padding: 18px 16px; text-align: center;
+  }
+  .pipe .n { font-size: 13px; font-weight: 800; color: #3b6bff; letter-spacing: 1px; }
+  .pipe .t { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
+  .pipe .s { font-size: 14px; color: #5a6280; }
+  .pipe.gate { border-color: #e2534f; background: #fdeeee; }
+  .pipe-arrow { align-self: center; font-size: 24px; color: #3b6bff; }
+
+  /* ---------- 对照表 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { border: 1.5px solid #dfe7fb; padding: 12px 16px; text-align: left; vertical-align: top; }
+  th { background: #1c2333; color: #9db4f2; font-size: 14px; }
+  td code { background: #f0f3fb; border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, monospace; }
+  tr:nth-child(even) td { background: #f7f9fe; }
+  td .ok { color: #0d9e5f; font-weight: 800; }
+
+  .hint {
+    background: #eef2ff; border: 2px dashed #9db4f2; border-radius: 16px;
+    padding: 20px 26px; margin-top: 26px; font-size: 16px;
+  }
+  .hint b { color: #3b4fae; }
+
+  .outro { text-align: center; margin-top: 120px; }
+  .outro .box {
+    background: linear-gradient(160deg, #1c2333, #2a3350); color: #fff;
+    border-radius: 28px; padding: 48px 40px;
+  }
+  .outro h3 { font-size: 34px; margin-bottom: 16px; }
+  .outro p { font-size: 19px; color: #b9c2e0; max-width: 780px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= 封面 ================= -->
+  <div class="cover">
+    <span class="kicker">OMA 内部参观 · 第 6 站</span>
+    <h1>🔧 scripts/：仓库的"工具架"</h1>
+    <p class="one-line">这个目录装的全是 <b>bash 小工具</b>，不参与业务逻辑，却撑起整个开发体验：<br>
+    <b>一套质量门禁</b>（不让坏代码进仓库）· <b>一批开发助手</b>（重启服务、手动测试）· <b>一份测试脚本</b></p>
+  </div>
+
+  <!-- ================= 1. 三大类 ================= -->
+  <section>
+    <span class="tag">第 1 章</span>
+    <h2>工具架上有 <span class="arrow">3</span> 层架子</h2>
+    <p class="lead">scripts/ 里 15 个文件，按用途分成三堆。</p>
+
+    <div class="three">
+      <div class="kind a">
+        <div class="icon">🛡️</div>
+        <div class="t">质量门禁</div>
+        <div class="who">给"提交前"和 CI 用</div>
+        <div class="p"><b>不是给人跑的</b>，是给机器跑的：pre-commit 钩子 + GitHub Actions 都调它们。<br>
+        <b>作用</b>：坏代码（超行数 / 重复 / 死代码 / 复杂度过高）在进门之前被拦下。</div>
+      </div>
+      <div class="kind b">
+        <div class="icon">🚀</div>
+        <div class="t">开发助手</div>
+        <div class="who">给人跑的</div>
+        <div class="p">重启后端 / 前端、用 <code>ant</code> CLI 手动测 API。<br>
+        <b>作用</b>：把繁琐操作（杀端口进程、配环境变量）封装成一条命令，省得每次手动敲。</div>
+      </div>
+      <div class="kind c">
+        <div class="icon">🧪</div>
+        <div class="t">脚本自测</div>
+        <div class="who">给门禁脚本自己做的体检</div>
+        <div class="p"><code>scripts/tests/</code> —— 门禁脚本自己的单元测试。<br>
+        <b>作用</b>：管质量的工具，自身也要被测试。</div>
+      </div>
+    </div>
+
+    <div class="hint">
+      🎯 <b>门道 1</b>：质量门禁脚本同时被 <b>pre-commit 钩子</b>（本地）和 <b>.github/workflows</b>（CI）调用 ——
+      本地没跑过，CI 也会跑；本地跑过了，CI 一定过。一套脚本两处用，保证本地体验 = 线上标准。
+    </div>
+  </section>
+
+  <!-- ================= 2. 门禁全家福 ================= -->
+  <section>
+    <span class="tag">第 2 章</span>
+    <h2>门禁文件<span class="arrow">全家福</span>：6 个门卫 + 1 本账本</h2>
+
+    <div class="card">
+      <div class="filelist">
+        <div class="file red"><span class="nm">pre-commit.sh</span><span class="desc">启动器：用 uv 装固定版本 pre-commit（4.6.0）再执行 —— 保证大家版本一致</span></div>
+        <div class="file red"><span class="nm">pre-commit-go-lint.sh</span><span class="desc">门卫 1：Go 静态检查（gofmt + golangci-lint + 不可达声明）</span></div>
+        <div class="file red"><span class="nm">pre-commit-web-format.sh</span><span class="desc">门卫 2：前端格式检查（项目固定版本 Prettier）</span></div>
+        <div class="file red"><span class="nm">check-go-file-lines.sh</span><span class="desc">门卫 3：行数上限 —— 生产 500 行 / 测试 1000 行（历史热点单独记账）</span></div>
+        <div class="file red"><span class="nm">go-file-line-budgets.txt</span><span class="desc">📒 账本：历史热点文件的行数预算（必须与当前行数精确一致）</span></div>
+        <div class="file red"><span class="nm">check-duplicates.sh</span><span class="desc">门卫 4：重复代码检测（jscpd，Go ≤3.75% / 前端 ≤1.1%）</span></div>
+        <div class="file red"><span class="nm">go-dead-code.sh</span><span class="desc">门卫 5：死代码检测（unused 分析器）</span></div>
+        <div class="file red"><span class="nm">go-complexity.sh</span><span class="desc">门卫 6：复杂度检测（cyclop 圈复杂度 ≤30 + funlen）</span></div>
+        <div class="file gray"><span class="nm">tests/check-go-file-lines_test.sh</span><span class="desc">门卫脚本自己的单元测试</span></div>
+      </div>
+      <p style="margin-top:20px" class="dim">哲学：<b>预算即契约</b> —— 行数、重复率、复杂度全有硬数字（500 / 1000 / 3.75% / 1.1% / 30），用 <code>just</code> 命令复跑（<code>just hooks-run</code> / <code>just dead-code</code> / <code>just duplicates</code> / <code>just complexity</code>）。</p>
+    </div>
+  </section>
+
+  <!-- ================= 3. 提交流水线 ================= -->
+  <section>
+    <span class="tag">第 3 章</span>
+    <h2>你提交时，<span class="arrow">6 个门卫</span>依次盘查</h2>
+    <p class="lead">git commit 不是瞬间完成的事 —— 先过六关。</p>
+
+    <div class="card">
+      <div class="pipeline">
+        <div class="pipe"><div class="n">STEP 0</div><div class="t">git commit</div><div class="s">你敲下回车</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate"><div class="n">门 1</div><div class="t">文件卫生</div><div class="s">通用检查（大文件 / 残留等）</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate"><div class="n">门 2</div><div class="t">Go 检查</div><div class="s">gofmt + lint + 不可达声明</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate"><div class="n">门 3</div><div class="t">行数预算</div><div class="s">生产 ≤500 行 / 测试 ≤1000 行</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate"><div class="n">门 4</div><div class="t">重复检测</div><div class="s">jscpd 严格模式</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate"><div class="n">门 5</div><div class="t">死代码</div><div class="s">unused 分析器</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe gate"><div class="n">门 6</div><div class="t">复杂度</div><div class="s">圈复杂度 ≤30 + 函数长度</div></div>
+        <div class="pipe-arrow">➡️</div>
+        <div class="pipe"><div class="n">过了</div><div class="t">提交成功</div><div class="s">进仓库</div></div>
+      </div>
+      <p class="dim" style="margin-top:20px">门 2-4 对前端文件还有 Prettier + TS 重复/命名/复杂度的套餐（pre-commit-web-format.sh 等）。</p>
+    </div>
+  </section>
+
+  <!-- ================= 4. 开发助手 ================= -->
+  <section>
+    <span class="tag">第 4 章</span>
+    <h2>开发助手<span class="arrow">全家福</span>：4 个趁手工具</h2>
+
+    <div class="card">
+      <div class="filelist">
+        <div class="file green"><span class="nm">restart-server.sh</span><span class="desc">重启后端：找占用端口的进程 → kill → 等释放 → 必要时 kill -9 → 前台 <code>go run .</code>（可 PORT= 覆盖）</span></div>
+        <div class="file green"><span class="nm">restart-web.sh</span><span class="desc">重启前端：只杀<b>本仓库</b>启动的 Vite；端口被别的路径占用就自动选新端口（最多扫 50 个）</span></div>
+        <div class="file green"><span class="nm">ant-files</span><span class="desc">Files API 测试助手：upload / list / get / delete / download，包装 Anthropic 官方 <code>ant</code> CLI 指向本地服务</span></div>
+        <div class="file green"><span class="nm">ant-batches</span><span class="desc">Batches API 测试助手：run / create / poll / results / cancel，支持 --stable/--beta 变体 + fixture 模式</span></div>
+        <div class="file green"><span class="nm">upload-platform-files</span><span class="desc">批量上传文件到本地服务（可 --dry-run / --list-after），带 "scrub" 选项清洗敏感信息</span></div>
+      </div>
+      <p style="margin-top:20px" class="dim">门道：ant-* 三个脚本的默认 <code>ANT_BIN</code> 指向 <b>Anthropic 官方 CLI</b>（<code>~/GolandProjects/anthropic-sdk-all/...</code>），
+      配 <code>ANT_BASE_URL=http://127.0.0.1:38080</code> 打本地服务 —— <b>用官方客户端测自己的实现</b>，这才是真正的兼容性测试。</p>
+    </div>
+  </section>
+
+  <!-- ================= 5. 一处细节 ================= -->
+  <section>
+    <span class="tag">第 5 章</span>
+    <h2>一处值得注意的<span class="arrow">门道</span></h2>
+
+    <div class="card">
+      <table>
+        <tr><th>门道</th><th>细节</th><th>为什么</th></tr>
+        <tr>
+          <td><b>一套脚本，本地 + CI 双用</b></td>
+          <td>check-*.sh 同时被 pre-commit 钩子和 .github/workflows 调用</td>
+          <td>本地过了 CI 必过；CI 的门禁 = 本地体验</td>
+        </tr>
+        <tr>
+          <td><b>版本固定</b></td>
+          <td>pre-commit 4.6.0、Prettier 项目固定版本、jscpd 从 web/node_modules 取</td>
+          <td>所有机器（含 CI）跑同一个版本，无"我本地能过"差异</td>
+        </tr>
+        <tr>
+          <td><b>budgets.txt 是账本</b></td>
+          <td>历史热点文件的行数预算精确记账，改文件必须同步改账本</td>
+          <td>行数只降不升，杜绝"大文件合法化"</td>
+        </tr>
+        <tr>
+          <td><b>restart-web 会认"爹"</b></td>
+          <td>只杀本仓库起的 Vite；别的进程占端口就换端口</td>
+          <td>不误伤他人正在跑的前端</td>
+        </tr>
+        <tr>
+          <td><b>ant 系列默认有"脏"钥匙</b></td>
+          <td>ant-batches 默认 API key 是明文硬编码（sk-ant-api03-...）</td>
+          <td>开发便利；生产靠真实密钥，本地无碍</td>
+        </tr>
+        <tr>
+          <td><b>上传脚本带 scrub</b></td>
+          <td>上传前清洗 base URL / auth token</td>
+          <td>上传到平台的文件不泄露本地配置</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 6. 全景 ================= -->
+  <section>
+    <span class="tag">第 6 章</span>
+    <h2>一句话全景</h2>
+
+    <div class="card">
+      <p>scripts/ 是 OMA 的<b>开发运维工具箱</b>：</p>
+      <p style="margin-top:10px">🛡️ <b>质量门禁</b>（6 个脚本 + 1 账本）—— 把"行数 / 重复率 / 复杂度 / 死代码"变成硬数字，本地与 CI 共用；</p>
+      <p style="margin-top:6px">🚀 <b>开发助手</b>（restart-server / restart-web / ant-files / ant-batches / upload-platform-files）—— 把"重启服务、手动测 API"封装成一条命令；</p>
+      <p style="margin-top:6px">🧪 <b>脚本自测</b>（tests/）—— 管质量的工具自身也有测试。</p>
+      <div class="hint" style="margin-top:20px">
+        💡 <b>门道总结</b>：这些脚本不写业务，但定义了仓库的"卫生标准"—— 它们把质量规则<b>代码化</b>，
+        让每个贡献者（包括 AI）在 commit 前就收到反馈，而不是等 CI 打回。对开源项目来说，这是"社区协作纪律"的落地工具。
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 结尾 ================= -->
+  <div class="outro">
+    <div class="box">
+      <h3>🎯 一句话记住本章</h3>
+      <p>scripts/ = 质量门禁（6 门卫 + 账本，本地 CI 双用）+ 开发助手（重启 / 官方 CLI 测试）+ 脚本自测。<br>
+      它把仓库的卫生标准写成了可执行的代码 —— 好代码不是靠自觉，是靠门禁。</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Open Managed Agents 是什么？——用大白话讲给你听</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdf6ec 0%, #fff8f0 40%, #ffffff 100%);
+    color: #1f2430;
+    line-height: 1.7;
+    font-size: 20px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 28px 120px; }
+
+  /* ---------- 封面 ---------- */
+  .cover { text-align: center; padding: 96px 0 72px; }
+  .cover .kicker {
+    display: inline-block; background: #ffe8d6; color: #c2410c;
+    border-radius: 999px; padding: 8px 22px; font-size: 17px; font-weight: 700;
+    letter-spacing: 2px; margin-bottom: 28px;
+  }
+  .cover h1 { font-size: 58px; line-height: 1.25; letter-spacing: 1px; }
+  .cover .one-line {
+    margin: 30px auto 0; font-size: 26px; color: #444;
+    background: #fff; border: 3px dashed #f3a26b; border-radius: 20px;
+    padding: 22px 30px; max-width: 720px;
+  }
+  .cover .one-line b { color: #c2410c; }
+
+  /* ---------- 章节 ---------- */
+  section { margin-top: 90px; }
+  .tag {
+    display: inline-block; background: #1f2430; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 16px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  h2 { font-size: 40px; margin-bottom: 26px; line-height: 1.3; }
+  h2 .arrow { color: #ff6b35; }
+  .lead { font-size: 24px; color: #333; margin-bottom: 30px; }
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 12px 40px rgba(194, 65, 12, .10), 0 2px 6px rgba(0,0,0,.04);
+    border: 1px solid #f3e3d3;
+  }
+  .card p { margin-bottom: 16px; }
+  .card p:last-child { margin-bottom: 0; }
+  .hl { background: #fff3e8; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c2410c; }
+  .dim { color: #777; font-size: 18px; }
+
+  /* ---------- 比喻 ---------- */
+  .story-row { display: flex; gap: 24px; align-items: stretch; margin: 26px 0; }
+  .story-box {
+    flex: 1; border-radius: 22px; padding: 26px 24px; text-align: center;
+    font-size: 21px; font-weight: 700; color: #fff;
+    display: flex; flex-direction: column; justify-content: center; gap: 10px;
+  }
+  .story-box .big { font-size: 46px; }
+  .story-box .sub { font-size: 16px; font-weight: 500; opacity: .92; }
+  .kitchen  { background: linear-gradient(160deg, #ff9a5a, #ff6b35); }
+  .home     { background: linear-gradient(160deg, #5aa9ff, #2f6bff); }
+  .menu     { background: linear-gradient(160deg, #34c77b, #0d9e5f); }
+  .robot    { background: linear-gradient(160deg, #b07bff, #7a3ff2); }
+  .vs { align-self: center; font-size: 34px; color: #1f2430; font-weight: 900; }
+
+  /* ---------- 三大原因 ---------- */
+  .why-row { display: flex; gap: 24px; }
+  .why {
+    flex: 1; background: #fff; border-radius: 24px; padding: 30px 26px;
+    border: 1px solid #f3e3d3; box-shadow: 0 8px 26px rgba(194,65,12,.08);
+  }
+  .why .num {
+    font-size: 60px; font-weight: 900; color: #ff6b35; line-height: 1; margin-bottom: 14px;
+  }
+  .why h3 { font-size: 26px; margin-bottom: 12px; }
+  .why p { font-size: 18px; color: #555; }
+
+  /* ---------- 架构大图 ---------- */
+  .arch { background: #1f2430; border-radius: 28px; padding: 40px 34px; color: #fff; }
+  .arch-row { display: flex; align-items: center; gap: 14px; justify-content: center; }
+  .node {
+    border-radius: 16px; padding: 18px 20px; text-align: center; min-width: 170px;
+  }
+  .node .t { font-size: 20px; font-weight: 800; }
+  .node .s { font-size: 15px; opacity: .85; margin-top: 4px; }
+  .node-client { background: #3a4152; border: 3px solid #626d85; }
+  .node-server { background: linear-gradient(160deg, #ff9a5a, #ff6b35); }
+  .node-kitchen { background: linear-gradient(160deg, #b07bff, #7a3ff2); }
+  .node-store { background: #3a4152; border: 3px solid #626d85; }
+  .arrow { font-size: 30px; color: #ffb38f; }
+  .arch-sub { margin-top: 34px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  .store {
+    border-radius: 16px; padding: 20px 24px; text-align: center; width: 200px;
+    background: #2b3140; border: 2px solid #4a5268;
+  }
+  .store .big { font-size: 38px; }
+  .store .t { font-size: 18px; font-weight: 800; margin-top: 6px; }
+  .store .s { font-size: 14px; opacity: .8; margin-top: 4px; }
+  .store-hot { border-color: #ff6b35; }
+
+  /* ---------- 两张菜单 ---------- */
+  .menu-row { display: flex; gap: 26px; }
+  .menu-card {
+    flex: 1; border-radius: 24px; padding: 32px 30px; background: #fff;
+    border: 2px solid #f3e3d3; box-shadow: 0 8px 26px rgba(194,65,12,.08);
+  }
+  .menu-card .name { font-size: 30px; font-weight: 900; margin-bottom: 6px; }
+  .menu-card .who { font-size: 17px; color: #666; margin-bottom: 16px; }
+  .menu-card .ticket {
+    background: #fff3e8; border-radius: 12px; padding: 12px 16px; font-size: 16px;
+    font-family: ui-monospace, monospace; color: #c2410c; margin-bottom: 16px;
+  }
+  .menu-card ul { list-style: none; }
+  .menu-card li { padding: 8px 0 8px 30px; position: relative; font-size: 19px; }
+  .menu-card li::before { content: "•"; position: absolute; left: 10px; color: #ff6b35; font-size: 22px; }
+  .menu-card.v1 { border-color: #ff6b35; }
+  .menu-card.console { border-color: #2f6bff; }
+  .gate {
+    margin-top: 26px; background: #1f2430; color: #fff; border-radius: 20px;
+    padding: 22px 28px; font-size: 20px; text-align: center;
+  }
+  .gate .k { color: #ffb38f; font-weight: 800; }
+
+  /* ---------- 时间线 ---------- */
+  .timeline { position: relative; padding-left: 44px; }
+  .timeline::before {
+    content: ""; position: absolute; left: 14px; top: 8px; bottom: 8px;
+    width: 5px; border-radius: 3px; background: linear-gradient(180deg, #ff6b35, #b07bff);
+  }
+  .step { position: relative; margin-bottom: 26px; }
+  .step::before {
+    content: ""; position: absolute; left: -38px; top: 12px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #ff6b35; border: 5px solid #ffe8d6;
+  }
+  .step h3 { font-size: 23px; margin-bottom: 6px; }
+  .step p { color: #555; font-size: 19px; }
+  .step p code { background: #f2ede4; border-radius: 8px; padding: 2px 10px; font-size: 17px; }
+
+  /* ---------- 代码地图 ---------- */
+  .code-map {
+    background: #1f2430; border-radius: 24px; padding: 34px 38px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 18px; line-height: 2; color: #e8e6e3; overflow-x: auto;
+  }
+  .code-map .c-orange { color: #ffb38f; }
+  .code-map .c-purple { color: #c9a8ff; }
+  .code-map .c-blue   { color: #8ec5ff; }
+  .code-map .c-green  { color: #7fe0a8; }
+  .code-map .c-grey   { color: #8a90a3; }
+  .code-map .note { color: #ffd9a8; }
+  .dir-rule {
+    margin-top: 26px; background: #fff; border: 3px solid #ff6b35; border-radius: 20px;
+    padding: 24px 30px; font-size: 22px; text-align: center; font-weight: 700;
+  }
+  .dir-rule .d { color: #c2410c; }
+
+  /* ---------- 学习路线 ---------- */
+  .road { display: flex; gap: 22px; }
+  .road-step {
+    flex: 1; background: #fff; border-radius: 24px; padding: 28px 24px;
+    border: 2px solid #f3e3d3; text-align: center;
+  }
+  .road-step .n {
+    width: 56px; height: 56px; border-radius: 50%; background: #1f2430; color: #fff;
+    font-size: 28px; font-weight: 900; display: inline-flex; align-items: center;
+    justify-content: center; margin-bottom: 16px;
+  }
+  .road-step h3 { font-size: 23px; margin-bottom: 10px; }
+  .road-step p { font-size: 17px; color: #555; }
+  .road-step code { background: #f2ede4; border-radius: 8px; padding: 2px 8px; font-size: 15px; }
+
+  footer { margin-top: 90px; text-align: center; color: #999; font-size: 16px; }
+
+  @media (max-width: 760px) {
+    body { font-size: 18px; }
+    .cover h1 { font-size: 38px; }
+    .cover .one-line { font-size: 21px; }
+    h2 { font-size: 30px; }
+    .story-row, .why-row, .menu-row, .road { flex-direction: column; }
+    .arch-row { flex-direction: column; }
+    .arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= 封面 ================= -->
+  <header class="cover">
+    <div class="kicker">五岁小孩也能看懂版</div>
+    <h1>Open Managed Agents<br>是什么？</h1>
+    <p class="one-line">一句话：<b>把别人家的米其林菜单，<br>搬进你自己家的厨房。</b></p>
+  </header>
+
+  <!-- ================= 这是什么 ================= -->
+  <section>
+    <div class="tag">第 1 章 · 这是什么？</div>
+    <h2>Anthropic 有一家"云餐厅"<span class="arrow">→</span> OMA 是你家的厨房</h2>
+
+    <div class="story-row">
+      <div class="story-box kitchen">
+        <div class="big">🏙️</div>
+        <div>Anthropic 云餐厅<br>（Managed Agents 云服务）</div>
+        <div class="sub">厨房在别人的大楼里<br>要联网、要付钱、要排队</div>
+      </div>
+      <div class="vs">vs</div>
+      <div class="story-box home">
+        <div class="big">🏠</div>
+        <div>OMA 本地厨房<br>（你电脑上跑的服务）</div>
+        <div class="sub">免费、离线、随开随用<br>菜谱完全开源</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p>Anthropic 的云服务有一套<span class="hl">菜单（API）</span>：点一个 agent、开一个 session、传一个文件……</p>
+      <p>OMA 把这份菜单<span class="hl">原封不动地抄了一份</span>，然后在你自己电脑上开灶。</p>
+      <p>关键是：<b>点菜机器人（SDK）不用改！</b>——用 Anthropic 官方 Go / Python / TypeScript SDK 写好的程序，只要把地址改成 localhost，立刻就能在家里跑起来。</p>
+      <p class="dim">"菜单一模一样" = API 兼容 = 这是整个项目最重要的一件事。</p>
+    </div>
+  </section>
+
+  <!-- ================= 为什么 ================= -->
+  <section>
+    <div class="tag">第 2 章 · 为什么要有它？</div>
+    <h2>三个理由<span class="arrow">→</span></h2>
+    <div class="why-row">
+      <div class="why">
+        <div class="num">01</div>
+        <h3>本地开发</h3>
+        <p>不联网、不花钱、不用等云端。改代码 → 重启 → 马上试。</p>
+      </div>
+      <div class="why">
+        <div class="num">02</div>
+        <h3>SDK 验证</h3>
+        <p>官方 SDK 直接对着它跑测试，确认你的程序与 Anthropic API 完全兼容。</p>
+      </div>
+      <div class="why">
+        <div class="num">03</div>
+        <h3>产品化</h3>
+        <p>它不止是个测试台——自带的网页控制台和全套资源管理，可以一路升级成真产品。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 架构大图 ================= -->
+  <section>
+    <div class="tag">第 3 章 · 整体长什么样？</div>
+    <h2>一个请求在 OMA 里走一圈<span class="arrow">→</span></h2>
+
+    <div class="arch">
+      <div class="arch-row">
+        <div class="node node-client">
+          <div class="t">🤖 SDK 程序</div>
+          <div class="s">Go / Python / TS 官方 SDK</div>
+        </div>
+        <div class="node node-client">
+          <div class="t">🖥️ 网页控制台</div>
+          <div class="s">web/ · React</div>
+        </div>
+        <div class="arrow">➜</div>
+        <div class="node node-server">
+          <div class="t">🚪 OMA 服务器</div>
+          <div class="s">Go · 入口 + 鉴权<br>internal/api + main.go</div>
+        </div>
+        <div class="arrow">➜</div>
+        <div class="node node-kitchen">
+          <div class="t">👨‍🍳 资源小厨房</div>
+          <div class="s">一个资源一个包<br>agents / sessions / files …</div>
+        </div>
+        <div class="arrow">➜</div>
+        <div class="node node-store">
+          <div class="t">📦 三个仓库</div>
+          <div class="s">PostgreSQL / Redis / MinIO</div>
+        </div>
+      </div>
+      <div class="arch-sub">
+        <div class="store">
+          <div class="big">📒</div>
+          <div class="t">PostgreSQL 记账本</div>
+          <div class="s">所有"记录"：谁建的 agent、session 状态…</div>
+        </div>
+        <div class="store store-hot">
+          <div class="big">🧻</div>
+          <div class="t">Redis 便利贴</div>
+          <div class="s">临时登录会话，丢了也无所谓</div>
+        </div>
+        <div class="store">
+          <div class="big">🏬</div>
+          <div class="t">MinIO / S3 大仓库</div>
+          <div class="s">大件物品：文件、skill 包、批量结果</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 26px;">
+      <p><b>记账本只记"东西放哪了"，不放东西本身。</b>文件内容存进 MinIO 仓库，PostgreSQL 里只写一行："这个文件叫啥、放在哪个仓库角落、谁传的"。</p>
+    </div>
+  </section>
+
+  <!-- ================= 两张菜单 ================= -->
+  <section>
+    <div class="tag">第 4 章 · 餐厅有两份菜单</div>
+    <h2>一份给"点菜机器人"，一份给"自家平板"<span class="arrow">→</span></h2>
+
+    <div class="menu-row">
+      <div class="menu-card v1">
+        <div class="name">🥡 /v1/* 菜单</div>
+        <div class="who">给点菜机器人（SDK）用 —— 和 Anthropic 官方一模一样的菜单</div>
+        <div class="ticket">门票：Bearer sk-ant-xxx（API key）</div>
+        <ul>
+          <li>/v1/agents</li>
+          <li>/v1/sessions</li>
+          <li>/v1/files</li>
+          <li>/v1/skills</li>
+          <li>/v1/deployments</li>
+          <li>/v1/vaults / webhooks …</li>
+        </ul>
+      </div>
+      <div class="menu-card console">
+        <div class="name">🖥️ /api、/auth、/web-api 菜单</div>
+        <div class="who">给自家平板（网页控制台）用 —— 组织管理、登录、工作区</div>
+        <div class="ticket">门票：cookie session（登录后发放）</div>
+        <ul>
+          <li>/api/organizations/…</li>
+          <li>/api/console/organizations/…</li>
+          <li>/auth/…（登录）</li>
+          <li>/oauth/…</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="gate">
+      门口的保安看<span class="k">门票</span>分路：拿着 API key 的 → 走 /v1 服务通道；<br>
+      拿着 session cookie 的 → 走平台通道。看 server.go 的 <span class="k">apiEntrypointRouter</span> 就是这个保安。
+    </div>
+  </section>
+
+  <!-- ================= 代码地图 ================= -->
+  <section>
+    <div class="tag">第 5 章 · 想学代码？先看地图</div>
+    <h2>仓库结构 —— 每个文件夹是干什么的<span class="arrow">→</span></h2>
+
+    <div class="code-map">
+      <div><span class="c-grey">├──</span> <span class="c-orange">main.go</span> <span class="c-grey"># 大门：加载配置、连数据库、启动服务器</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-orange">internal/api</span> <span class="c-grey"># 前台大堂：组装 + 路由 + 鉴权入口（先读这个！）</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-purple">internal/agents</span> <span class="c-grey"># 👨‍🍳 小厨房1：agent 资源</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-purple">internal/sessions</span> <span class="c-grey"># 👨‍🍳 小厨房2：session 资源</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-purple">internal/files</span> <span class="c-grey"># 👨‍🍳 小厨房3：文件资源（最好上手的一个）</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-purple">internal/…skills、memory、vaults、batches…</span> <span class="c-grey"># 每个资源一个包</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-blue">internal/db</span> <span class="c-grey"># 📒 记账本管理员：只存取数据，不懂 HTTP</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-blue">internal/httpapi</span> <span class="c-grey"># 统一"话术"：Anthropic 兼容的错误格式</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-blue">internal/storage</span> <span class="c-grey"># 🏬 仓库管理员：S3/MinIO 存取</span></div>
+      <div><span class="c-grey">├──</span> <span class="c-green">web/</span> <span class="c-grey"># 🖥️ 自家平板：React 控制台</span></div>
+      <div><span class="c-grey">└──</span> <span class="c-green">tests/</span> <span class="c-grey"># 验收员：SDK 兼容测试</span></div>
+      <div style="margin-top:14px;"><span class="note">🏷️ 铁律（依赖方向）：api → 资源包 → db，只准往下，不准往上。<br>&nbsp;&nbsp;&nbsp;记账本管理员永远不需要知道大堂长什么样。</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 小故事 ================= -->
+  <section>
+    <div class="tag">第 6 章 · 听个小故事</div>
+    <h2>"上传一个文件"是怎么完成的<span class="arrow">→</span></h2>
+
+    <div class="card">
+      <div class="timeline">
+        <div class="step">
+          <h3>第 1 步 · 点菜</h3>
+          <p>SDK 发出 <code>POST /v1/files</code>，口袋里揣着门票 <code>Bearer sk-ant-local-default</code>（默认开发 key）。</p>
+        </div>
+        <div class="step">
+          <h3>第 2 步 · 保安查票</h3>
+          <p>入口把门票哈希后去数据库核对 → 通过。查到是谁之后，把"他是哪个组织的"写进请求里随身带着。</p>
+        </div>
+        <div class="step">
+          <h3>第 3 步 · 送到小厨房</h3>
+          <p>路由把请求交给 <code>internal/files</code> 的 handler。</p>
+        </div>
+        <div class="step">
+          <h3>第 4 步 · 存东西</h3>
+          <p>文件内容 → 存进 MinIO 大仓库；"文件名、放哪了、谁传的" → 记进 PostgreSQL 记账本。</p>
+        </div>
+        <div class="step">
+          <h3>第 5 步 · 回话</h3>
+          <p>用 Anthropic 兼容的格式回答："好了，这是你的文件 ID：<code>file_xxx</code>"。SDK 完全听不懂区别。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 学习路线 ================= -->
+  <section>
+    <div class="tag">第 7 章 · 动手学</div>
+    <h2>三步走<span class="arrow">→</span></h2>
+    <div class="road">
+      <div class="road-step">
+        <div class="n">1</div>
+        <h3>先跑起来</h3>
+        <p><code>just restart-server</code><br>然后 <code>curl /v1/models</code><br>看到模型列表 = 成功入门</p>
+      </div>
+      <div class="road-step">
+        <div class="n">2</div>
+        <h3>读地图</h3>
+        <p><code>internal/api/server.go</code><br>667 行，整个项目的完整地图。<br>每个资源在哪挂载，一目了然</p>
+      </div>
+      <div class="road-step">
+        <div class="n">3</div>
+        <h3>跟一个资源</h3>
+        <p>挑 <code>internal/files</code> 从头读到尾：<br>handler → service → db。<br>看懂一个，其他资源都长一样</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>Open Managed Agents · 大白话入门 · 祝你学得开心 🎉</footer>
+
+</div>
+</body>
+</html>

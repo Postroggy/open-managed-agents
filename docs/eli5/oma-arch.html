@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 后端架构 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #f0f4ff 0%, #f7f9ff 45%, #ffffff 100%);
+    color: #1c2333;
+    line-height: 1.75;
+    font-size: 19px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 30px 130px; }
+
+  .cover { text-align: center; padding: 90px 0 66px; }
+  .cover .kicker {
+    display: inline-block; background: #e6edff; color: #2f5bd9;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+    letter-spacing: 2px; margin-bottom: 26px;
+  }
+  .cover h1 { font-size: 54px; line-height: 1.25; }
+  .cover .one-line {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #7d9ef0; border-radius: 20px;
+    padding: 20px 30px; max-width: 760px;
+  }
+  .cover .one-line b { color: #2f5bd9; }
+
+  section { margin-top: 92px; }
+  .tag {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  h2 .arrow { color: #3b6bff; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 12px 40px rgba(47, 91, 217, .10), 0 2px 6px rgba(0,0,0,.04);
+    border: 1px solid #dfe7fb;
+  }
+  .card p { margin-bottom: 15px; }
+  .card p:last-child { margin-bottom: 0; }
+  .hl { background: #edf2ff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2f5bd9; }
+  .dim { color: #7a8196; font-size: 17px; }
+  code.k { background: #f0f3fb; border-radius: 8px; padding: 2px 9px; font-size: .85em; font-family: ui-monospace, monospace; }
+
+  /* ---------- 洋葱图（嵌套盒） ---------- */
+  .onion-box {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  .obox {
+    width: 100%; border-radius: 18px; padding: 24px 28px;
+    text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .obox .t { font-size: 21px; font-weight: 900; }
+  .obox .s { font-size: 15.5px; opacity: .93; max-width: 560px; }
+  .obox.l1 { background: linear-gradient(160deg, #c9d6ff, #9db4f2); color: #1c2333; }
+  .obox.l1 .s { color: #3b4a75; }
+  .obox.l2 { background: linear-gradient(160deg, #6d8df0, #4766d8); color: #fff; }
+  .obox.l3 { background: linear-gradient(160deg, #8a6df0, #6a46d8); color: #fff; }
+  .obox.l4 { background: linear-gradient(160deg, #ffb35c, #f0883a); color: #1c2333; }
+  .obox.l4 .s { color: #6b3a05; }
+
+  /* ---------- 请求旅程 ---------- */
+  .pipeline { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .pipe {
+    flex: 1; min-width: 150px; background: #fff; border-radius: 18px;
+    border: 2px solid #dfe7fb; padding: 18px 16px; text-align: center;
+  }
+  .pipe .n { font-size: 13px; font-weight: 800; color: #3b6bff; letter-spacing: 1px; }
+  .pipe .t { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
+  .pipe .s { font-size: 14px; color: #5a6280; }
+  .pipe.gate { border-color: #ffb35c; background: #fff8ec; }
+  .pipe.kitchen { border-color: #8a6df0; background: #f6f2ff; }
+  .pipe.store { border-color: #34b57a; background: #f0fbf5; }
+  .pipe-arrow { align-self: center; font-size: 24px; color: #3b6bff; }
+
+  /* ---------- 依赖方向 ---------- */
+  .deps { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .dep {
+    border-radius: 16px; padding: 18px 22px; text-align: center; color: #fff; min-width: 150px;
+  }
+  .dep .t { font-size: 19px; font-weight: 800; }
+  .dep .s { font-size: 13px; opacity: .9; margin-top: 3px; }
+  .dep-a { background: #1c2333; }
+  .dep-b { background: linear-gradient(160deg, #6d8df0, #4766d8); }
+  .dep-c { background: linear-gradient(160deg, #8a6df0, #6a46d8); }
+  .dep-d { background: linear-gradient(160deg, #34b57a, #0d9e5f); }
+  .dep-arrow { font-size: 26px; color: #3b6bff; font-weight: 900; }
+  .dep-x { font-size: 22px; color: #e2534f; font-weight: 900; }
+
+  /* ---------- Principal 名片 ---------- */
+  .badge-row { display: flex; gap: 20px; align-items: stretch; }
+  .badge {
+    flex: 1; background: #fff; border-radius: 20px; padding: 26px 24px;
+    border: 2px solid #dfe7fb; text-align: center;
+  }
+  .badge .emoji { font-size: 40px; }
+  .badge .name { font-size: 20px; font-weight: 900; margin-top: 8px; }
+  .badge .who { font-size: 15px; color: #5a6280; margin-top: 4px; }
+  .badge .ticket {
+    margin-top: 12px; background: #f0f3fb; border-radius: 10px; padding: 10px;
+    font-size: 14px; font-family: ui-monospace, monospace; color: #2f5bd9;
+  }
+  .badge.hot { border-color: #ffb35c; background: #fff8ec; }
+  .badge.hot .ticket { background: #ffe9cc; }
+
+  /* ---------- 请求处理代码流 ---------- */
+  .code {
+    background: #1c2333; border-radius: 24px; padding: 32px 36px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 16.5px; line-height: 2.05; color: #e9e7f2; overflow-x: auto;
+  }
+  .code .c1 { color: #ffb35c; }  /* orange */
+  .code .c2 { color: #8ec5ff; }  /* blue */
+  .code .c3 { color: #c9a8ff; }  /* purple */
+  .code .c4 { color: #7fe0a8; }  /* green */
+  .code .cm { color: #8a90a3; }  /* grey comment */
+
+  /* ---------- DB 双写说明 ---------- */
+  .twin { display: flex; gap: 22px; }
+  .twin .half { flex: 1; border-radius: 22px; padding: 26px 24px; color: #fff; }
+  .twin .half .big { font-size: 40px; }
+  .twin .half .t { font-size: 23px; font-weight: 900; margin: 8px 0; }
+  .twin .half ul { list-style: none; margin-top: 8px; }
+  .twin .half li { padding: 6px 0 6px 24px; position: relative; font-size: 17px; }
+  .twin .half li::before { content: "•"; position: absolute; left: 8px; font-size: 20px; }
+  .twin .pg { background: linear-gradient(160deg, #3a4152, #262b38); }
+  .twin .pg li::before { color: #8ec5ff; }
+  .twin .s3 { background: linear-gradient(160deg, #2d8a5f, #1e6b46); }
+  .twin .s3 li::before { color: #a8f0c8; }
+
+  /* ---------- 状态机 ---------- */
+  .fsm { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .fsm-state {
+    border-radius: 999px; padding: 12px 22px; font-weight: 800; font-size: 17px;
+    border: 3px solid; background: #fff;
+  }
+  .fsm-state.s0 { color: #5a6280; border-color: #b9c2dc; }
+  .fsm-state.s1 { color: #2f5bd9; border-color: #6d8df0; }
+  .fsm-state.s2 { color: #7a3ff2; border-color: #8a6df0; }
+  .fsm-state.s3 { color: #0d9e5f; border-color: #34b57a; }
+  .fsm-state.sx { color: #e2534f; border-color: #ef8f8b; }
+  .fsm-arrow { font-size: 22px; color: #8a90a3; }
+  .fsm-label { font-size: 13px; color: #8a90a3; text-align: center; }
+
+  /* ---------- worker 卡片 ---------- */
+  .worker-grid { display: flex; gap: 18px; flex-wrap: wrap; }
+  .worker {
+    flex: 1; min-width: 200px; background: #fff; border-radius: 20px; padding: 24px 22px;
+    border: 2px solid #dfe7fb;
+  }
+  .worker .emoji { font-size: 34px; }
+  .worker .t { font-size: 19px; font-weight: 900; margin-top: 8px; }
+  .worker .s { font-size: 15px; color: #5a6280; margin-top: 6px; }
+  .worker .trig { margin-top: 10px; font-size: 14px; color: #2f5bd9; background: #edf2ff; border-radius: 8px; padding: 6px 10px; display: inline-block; }
+
+  /* ---------- 规则清单 ---------- */
+  .rules { display: flex; flex-direction: column; gap: 14px; }
+  .rule {
+    display: flex; gap: 16px; align-items: flex-start; background: #fff;
+    border-radius: 18px; padding: 20px 24px; border: 2px solid #dfe7fb;
+  }
+  .rule .ic { font-size: 28px; flex-shrink: 0; }
+  .rule .rt { font-weight: 900; font-size: 19px; }
+  .rule .rd { color: #4a5170; font-size: 17px; }
+  .rule .rd code { background: #f0f3fb; border-radius: 7px; padding: 1px 8px; font-size: .85em; font-family: ui-monospace, monospace; }
+
+  /* ---------- 学习地图 ---------- */
+  .map { font-family: ui-monospace, Menlo, monospace; font-size: 16px; line-height: 2.05; color: #e9e7f2;
+    background: #1c2333; border-radius: 24px; padding: 30px 34px; overflow-x: auto; }
+  .map .o { color: #ffb35c; } .map .p { color: #c9a8ff; } .map .b { color: #8ec5ff; } .map .g { color: #7fe0a8; } .map .m { color: #8a90a3; }
+  .map .star { color: #ffd76e; }
+
+  footer { margin-top: 95px; text-align: center; color: #9aa1b5; font-size: 16px; }
+
+  @media (max-width: 760px) {
+    body { font-size: 17px; }
+    .cover h1 { font-size: 36px; }
+    .cover .one-line { font-size: 20px; }
+    h2 { font-size: 28px; }
+    .pipeline, .badge-row, .twin, .deps { flex-direction: column; }
+    .pipe-arrow, .dep-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ================= 封面 ================= -->
+  <header class="cover">
+    <div class="kicker">五岁小孩深度版 · 第 2 讲</div>
+    <h1>OMA 后端架构<br>是怎么搭起来的？</h1>
+    <p class="one-line">一句话：一座<b>一进门就发胸牌</b>的餐厅——<br>每个人都带着<b>身份卡</b>在<b>分工明确的厨房</b>里干活。</p>
+  </header>
+
+  <!-- ================= 洋葱 ================= -->
+  <section>
+    <div class="tag">第 1 章 · 总览</div>
+    <h2>整个后端像一颗洋葱<span class="arrow">→</span></h2>
+    <div class="card">
+      <div class="onion-box">
+        <div class="obox l1"><div class="t">🧅 外层 · 门（中间件）</div><div class="s">请求号 · 日志 · panic 兜底 —— 每个请求进门先过这三关</div></div>
+        <div class="obox l2"><div class="t">🗺️ 路由层</div><div class="s">internal/api/server.go —— 每个 URL 指向哪个小厨房</div></div>
+        <div class="obox l3"><div class="t">👨‍🍳 资源层</div><div class="s">internal/agents · sessions · files … —— Handler：验请求、调下层、回响应</div></div>
+        <div class="obox l4"><div class="t">📦 数据层</div><div class="s">internal/db + internal/storage —— 只存取，不懂 HTTP</div></div>
+      </div>
+      <p style="text-align:center; margin-top:22px;">请求从外往里钻，数据从里往外流。<b>每层只准跟相邻层说话。</b></p>
+    </div>
+  </section>
+
+  <!-- ================= 一个请求走完全程 ================= -->
+  <section>
+    <div class="tag">第 2 章 · 请求旅程</div>
+    <h2>一个请求进门后，走 6 站<span class="arrow">→</span></h2>
+    <div class="pipeline">
+      <div class="pipe gate"><div class="n">第 1 站</div><div class="t">保安查票</div><div class="s">提取 API key → 哈希 → 查库 → 验证身份</div></div>
+      <div class="pipe-arrow">➜</div>
+      <div class="pipe gate"><div class="n">第 2 站</div><div class="t">发胸牌</div><div class="s">把身份塞进 context → Principal</div></div>
+      <div class="pipe-arrow">➜</div>
+      <div class="pipe"><div class="n">第 3 站</div><div class="t">看菜单</div><div class="s">chi 路由：/v1/files → files.Handler</div></div>
+      <div class="pipe-arrow">➜</div>
+      <div class="pipe kitchen"><div class="n">第 4 站</div><div class="t">小厨房</div><div class="s">解析 multipart → 校验 → 算哈希</div></div>
+      <div class="pipe-arrow">➜</div>
+      <div class="pipe store"><div class="n">第 5 站</div><div class="t">两处存</div><div class="s">内容进 MinIO，元数据进 PostgreSQL（同一事务）</div></div>
+      <div class="pipe-arrow">➜</div>
+      <div class="pipe"><div class="n">第 6 站</div><div class="t">回话</div><div class="s">Anthropic 兼容格式：type=error + request_id</div></div>
+    </div>
+    <div class="card" style="margin-top:24px;">
+      <p><span class="hl">第 2 站是整个架构的心脏。</span>发完胸牌之后，<b>所有小厨房都不需要再问"你是谁"</b>——从 context 里掏胸牌就行。</p>
+      <p>每个小厨房里干活的步骤都一样：<code class="k">Principal → 校验 → 调 db/storage → 映射响应</code>。</p>
+    </div>
+  </section>
+
+  <!-- ================= 中间件洋葱圈 ================= -->
+  <section>
+    <div class="tag">第 3 章 · 外层三兄弟</div>
+    <h2>进门先过三关<span class="arrow">→</span></h2>
+    <div class="card">
+      <p><b>① 请求号中间件</b> —— 每个请求进门先发一个 <code class="k">req_xxx</code> 号码。出事后靠它把散落各处的日志串成一条线。<span class="dim">（server.go: requestIDMiddleware）</span></p>
+      <p><b>② 日志中间件</b> —— 进门前记一笔 <code class="k">&gt;&gt;&gt; POST /v1/files</code>，干完活再记一笔 <code class="k">&lt;&lt;&lt; 200 12.3ms</code>。还能识别客户端类型：SDK 来的 / curl 来的 / 控制台来的。<span class="dim">（http_log.go: requestLoggingMiddleware）</span></p>
+      <p><b>③ panic 兜底中间件</b> —— 如果某个小厨房当场晕倒（panic），它接住，记下请求号，返回一个规范的 500，而不是让整个服务器崩溃。<span class="dim">（server.go: recoverMiddleware）</span></p>
+      <p class="dim">这三兄弟是 <b>Go 标准库 + chi</b> 的"中间件"套路：一个函数包住下一个函数，像千层饼一样层层叠起来。</p>
+    </div>
+  </section>
+
+  <!-- ================= 身份系统 ================= -->
+  <section>
+    <div class="tag">第 4 章 · 身份系统</div>
+    <h2>两种客人，两种门票，一张胸牌<span class="arrow">→</span></h2>
+    <div class="badge-row">
+      <div class="badge">
+        <div class="emoji">🤖</div>
+        <div class="name">SDK 客人</div>
+        <div class="who">用 API key 进门的程序</div>
+        <div class="ticket">Authorization: Bearer sk-ant-xxx</div>
+      </div>
+      <div class="badge">
+        <div class="emoji">🧑‍💼</div>
+        <div class="name">控制台客人</div>
+        <div class="who">网页登录的用户（cookie session）</div>
+        <div class="ticket">Cookie: sessionKey=xxx</div>
+      </div>
+      <div class="badge hot">
+        <div class="emoji">🪪</div>
+        <div class="name">Principal 胸牌</div>
+        <div class="who">验证后统一发的身份卡</div>
+        <div class="ticket">OrgID + WorkspaceID + APIKeyID + CredentialType…</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:24px;">
+      <p><b>API key 从不明文存库。</b>只存它的 <span class="hl">SHA-256 哈希</span>。你每次出示门票，保安当场哈希，拿哈希去比对（db.go: GetAPIKey）。数据库被偷走也换不回钥匙。</p>
+      <p><b>胸牌是"多租户"的命根子。</b>它装着 <code class="k">OrganizationID + WorkspaceID</code>——之后<b>每一次</b>查库写库都带着这两个 ID，保证 A 公司永远看不到 B 公司的文件。这叫做<b>显式多租户边界</b>。</p>
+      <p class="dim">为什么是"显式"？因为数据库里可能有多条同名记录——比如两个组织各有一个叫 README.md 的文件。不带 scope 查就是越权事故。</p>
+    </div>
+  </section>
+
+  <!-- ================= 分层与依赖 ================= -->
+  <section>
+    <div class="tag">第 5 章 · 分层</div>
+    <h2>四层分工，箭头只准朝下<span class="arrow">→</span></h2>
+    <div class="deps">
+      <div class="dep dep-a"><div class="t">internal/api</div><div class="s">组装 + 路由 + 中间件<br>不写业务逻辑</div></div>
+      <div class="dep-arrow">⬇</div>
+      <div class="dep dep-b"><div class="t">资源包</div><div class="s">agents / sessions / files…<br>handler + 业务编排 + 响应映射</div></div>
+      <div class="dep-arrow">⬇</div>
+      <div class="dep dep-c"><div class="t">internal/db · internal/storage</div><div class="s">PostgreSQL 与 S3 的边界<br>纯数据访问</div></div>
+      <div class="dep-arrow">⬇</div>
+      <div class="dep dep-d"><div class="t">PostgreSQL · Redis · MinIO</div><div class="s">记账本 / 便利贴 / 大仓库</div></div>
+    </div>
+    <div class="card" style="margin-top:24px;">
+      <p><b>铁律：</b><code class="k">internal/db</code> 永远不能 import <code class="k">internal/api</code>。<span class="hl">DB 层不知道 HTTP 的存在</span>——它不认识状态码，不认识 JSON 错误，只认识 Go 的错误（ErrNotFound、ErrDuplicate…）。</p>
+      <p>好处：换掉 HTTP 框架、换数据库、单独测试，都不牵连别的层。坏处（故意为之）：小厨房必须自己处理"DB 错误 → HTTP 错误"的翻译，代码会多一点。</p>
+    </div>
+  </section>
+
+  <!-- ================= files 实战 ================= -->
+  <section>
+    <div class="tag">第 6 章 · 实战解剖</div>
+    <h2>拿 files 资源做一次"开胸手术"<span class="arrow">→</span></h2>
+    <div class="code">
+      <div><span class="cm">// ① Handler 自带一个小路由</span></div>
+      <div><span class="c1">router.Post("/", h.upload)</span></div>
+      <div><span class="c1">router.Get("/", h.list)</span></div>
+      <div><span class="c1">router.Get("/{file_id}", h.retrieve)</span></div>
+      <div><span class="c1">router.Delete("/{file_id}", h.delete)</span></div>
+      <div><span class="cm">// ② 整包先查 beta 头：</span> <span class="c2">anthropic-beta: files-api-2025-04-14</span></div>
+      <div><span class="cm">// ③ 上传：限大小 → 校验文件名 → 生成 ID → 流式上传到 S3</span></div>
+      <div><span class="c1">objectKey</span> = <span class="c3">"workspaces/{uuid}/files/{fileUUID}/{filename}"</span></div>
+      <div><span class="cm">// ④ 双写：MinIO 存内容 + PostgreSQL 存元数据（同一事务里做限额检查）</span></div>
+      <div><span class="c2">CreateFileIfWithinLimit(ctx, record, 限额)</span> <span class="cm">← pg_advisory_xact_lock 防并发超限</span></div>
+      <div><span class="cm">// ⑤ 翻译错误：DB 的 ErrStorageLimitExceeded → HTTP 403 permission_error</span></div>
+    </div>
+    <div class="card" style="margin-top:22px;">
+      <p><b>看到没？请求处理真的是"翻译官"：</b>把 HTTP 请求翻译成 DB 调用，再把 DB 的 Go error 翻译回 HTTP 错误。中间没有任何"全局状态"，全靠参数传来传去。</p>
+      <p><b>软删除：</b>点删除，数据库里只把 <code class="k">deleted_at</code> 打上时间戳（不是真删），同时去删 S3 对象；万一 S3 没删掉，就把任务丢给后台 cleanup worker 重试。删文件 = 记日志 + 发任务，两不误。</p>
+    </div>
+  </section>
+
+  <!-- ================= DB 双写 ================= -->
+  <section>
+    <div class="tag">第 7 章 · 数据放哪</div>
+    <h2>三个仓库各管什么<span class="arrow">→</span></h2>
+    <div class="twin">
+      <div class="half pg">
+        <div class="big">📒</div>
+        <div class="t">PostgreSQL 记账本</div>
+        <ul>
+          <li>一切元数据：文件、agent、session、key</li>
+          <li>所有查询都带 WorkspaceID 过滤</li>
+          <li>迁移用 goose（13 个版本文件）</li>
+          <li>表不用外键——靠应用层保证完整</li>
+        </ul>
+      </div>
+      <div class="half s3">
+        <div class="big">🏬</div>
+        <div class="t">MinIO / S3 大仓库</div>
+        <ul>
+          <li>大件：文件内容、skill 包、批量结果</li>
+          <li>key 按 workspace 分目录：workspaces/{uuid}/files/…</li>
+          <li>对象删除失败 → 进 cleanup job 队列</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card" style="margin-top:22px;">
+      <p><b>Redis 便利贴</b>：控制台登录会话（platformsession），有 <code class="k">Save / Get / Delete</code> 三个方法的小接口，默认 300 天过期。还有内存版实现，测试时不用起 Redis。</p>
+      <p><b>关键设计：存储后面藏着接口。</b><code class="k">ObjectStore</code> 是个 interface（Put/Get/Delete/Bucket）。MinIO 只是其中一个实现——想换任何 S3 兼容存储，改一行配置就行。接口 = 把"怎么存"和"在哪存"解耦。</p>
+    </div>
+  </section>
+
+  <!-- ================= 后台工人 ================= -->
+  <section>
+    <div class="tag">第 8 章 · 后台工人</div>
+    <h2>不睡觉的后台工人<span class="arrow">→</span></h2>
+    <div class="worker-grid">
+      <div class="worker"><div class="emoji">🧹</div><div class="t">cleanup worker</div><div class="s">每 30 秒扫一遍 job 表，把没删干净的 S3 对象删掉（重试最多 10 次）</div><div class="trig">main.go: StartObjectCleanupWorker</div></div>
+      <div class="worker"><div class="emoji">📦</div><div class="t">batch worker</div><div class="s">处理异步消息批任务 + 过期清理</div><div class="trig">batches.StartBatchWorker</div></div>
+      <div class="worker"><div class="emoji">🏃</div><div class="t">environments runner</div><div class="s">跑 environment 的 runner 进程</div><div class="trig">environments.StartRunnerWithStore</div></div>
+      <div class="worker"><div class="emoji">⚡</div><div class="t">skill prewarm</div><div class="s">预加载 skill，减少首次调用延迟</div><div class="trig">skillprewarm.StartWorker</div></div>
+      <div class="worker"><div class="emoji">🪝</div><div class="t">webhook worker</div><div class="s">把事件投递给用户注册的 webhook 地址</div><div class="trig">webhooks.StartWorker</div></div>
+    </div>
+    <div class="card" style="margin-top:22px;">
+      <p><b>Worker 模式：</b>数据库里的 <code class="k">jobs</code> 表是"待办清单"。谁有空谁领单（<b>租约</b>），干完标记完成。多个 worker 也不怕抢单——有租约机制兜底。这是典型的<b>异步任务队列</b>套路。</p>
+    </div>
+  </section>
+
+  <!-- ================= 设计规则 ================= -->
+  <section>
+    <div class="tag">第 9 章 · 设计规则</div>
+    <h2>代码里到处写着"不许"<span class="arrow">→</span></h2>
+    <div class="rules">
+      <div class="rule"><div class="ic">🚫</div><div><div class="rt">没有外键</div><div class="rd">不用 PostgreSQL 外键约束；完整性靠应用层代码 + 迁移 + 测试守卫（tests/files_api_test.go 专门守着这条）。</div></div></div>
+      <div class="rule"><div class="ic">🧬</div><div><div class="rt">三把 ID</div><div class="rd">每张核心表三件套：<code>id</code>（自增内部主键）、<code>uuid</code>（稳定业务标识）、<code>external_id</code>（对外 API 如 file_xxx）。各司其职。</div></div></div>
+      <div class="rule"><div class="ic">🕰️</div><div><div class="rt">迁移只加不改</div><div class="rd">schema 变更永远新增 migration 文件（00013_xxx.sql），绝不改已应用的文件。老表改名也不删数据。</div></div></div>
+      <div class="rule"><div class="ic">🔒</div><div><div class="rt">显式多租户</div><div class="rd">每条查询都带 organization_id / workspace_id，禁止只凭 external_id 全局查。</div></div></div>
+      <div class="rule"><div class="ic">🧅</div><div><div class="rt">依赖只朝下</div><div class="rd">api → 资源包 → db / storage → 基础设施。谁都不能反向依赖。db 不认识 HTTP。</div></div></div>
+      <div class="rule"><div class="ic">💬</div><div><div class="rt">对外说 Anthropic 的话</div><div class="rd">错误全部走 httpapi.WriteError，输出 <code>type:error</code> + <code>request_id</code>，让官方 SDK 读得懂。</div></div></div>
+    </div>
+  </section>
+
+  <!-- ================= 代码地图 ================= -->
+  <section>
+    <div class="tag">第 10 章 · 学习地图</div>
+    <h2>从哪读起<span class="arrow">→</span></h2>
+    <div class="map">
+      <div><span class="m">1️⃣ 读</span> <span class="o">main.go</span> <span class="m">— 大门：启动顺序一目了然（20 分钟）</span></div>
+      <div><span class="m">2️⃣ 读</span> <span class="o">internal/api/server.go</span> <span class="m">— 地图：路由/中间件/鉴权全在这（1 小时）</span></div>
+      <div><span class="m">3️⃣ 读</span> <span class="o">internal/auth/auth.go</span> <span class="m">— 胸牌长什么样（10 分钟）</span></div>
+      <div><span class="m">4️⃣ 读</span> <span class="o">internal/httpapi/errors.go</span> <span class="m">— 对外话术（5 分钟）</span></div>
+      <div><span class="m">5️⃣ 读</span> <span class="p">internal/files/handler.go</span> <span class="star">⭐</span> <span class="m">— 完整闭环样本：请求→S3→DB→错误翻译（30 分钟）</span></div>
+      <div><span class="m">6️⃣ 读</span> <span class="b">internal/db/files.go</span> <span class="m">— 数据层长啥样：事务、限额、软删除（30 分钟）</span></div>
+      <div><span class="m">7️⃣ 跳读</span> <span class="p">internal/sessions/</span> <span class="m">— 最复杂的资源：事件流、stream hub（进阶）</span></div>
+      <div><span class="m">8️⃣ 看</span> <span class="g">internal/cleanup/worker.go</span> <span class="m">— 后台工人样板（15 分钟）</span></div>
+    </div>
+    <div class="card" style="margin-top:22px;">
+      <p><b>心法：</b>每读一个资源包，问自己三个问题——① 它怎么从 context 拿胸牌？② 它调了 db 的哪些方法？③ DB 错误是怎么翻译成 HTTP 错误的？这三个问题答完，你就真的读懂了。</p>
+    </div>
+  </section>
+
+  <footer>OMA 后端架构 · 深度版 · 下一讲可以继续挖 session 事件流 / 权限 / worker 租约 🚀</footer>
+
+</div>
+</body>
+</html>
