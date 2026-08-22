@@ -22,7 +22,7 @@
 | # | 建议标题 | 核心判断 | 证据 | 决策 |
 |---|---|---|---|---|
 | 7 | `[Sessions] 支持 initial_events（创建即 running）` | 官方核心；OMA 创建后固定 idle | sessions/handler.go:81-88 | 待定 |
-| 8 | `[Webhooks] 补齐 agent/deployment/deployment_run/environment/memory_store 事件` | 官方 5 大类事件 OMA 只有 session/vault 两类，且**无发射点** | webhooks/handler.go:33-56 | 待定 |
+| 8 | `[Webhooks] 补齐 agent/deployment/deployment_run/environment/memory_store 事件` | 官方 `beta/webhooks.md` 定义 **45 种**事件域类型（agent/deployment/deployment_run/environment/memory_store/session/vault/vault_credential），OMA 只有 session/vault 两类，且**无发射点**（2026-08-22 镜像核实） | webhooks/handler.go:33-56 | 待定 |
 | 9 | `[Environments] 支持 init_script（云沙箱定制核心能力）` | 官方核心；OMA 请求侧丢弃不报错 | environments/handler.go:1082-1107 | 待定 |
 | 10 | `[Vaults] mcp_oauth 运行时自动 refresh + refresh_failed 事件` | 有 schema 无执行；token 过期静默失效 | vaults schema 有、执行无 | 待定 |
 | 11 | `[Events] model_usage 结构规整（cache_read/cache_creation 嵌套，模型名不靠猜）` | 原样透传 worker 结构，与官方 schema 不对齐 | mapper.go:404-421,713-727 | 待定 |

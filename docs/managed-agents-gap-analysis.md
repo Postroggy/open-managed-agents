@@ -163,7 +163,7 @@
 | API 面 | oma 端点 | 归属文档 | 核查状态 |
 |---|---|---|---|
 | **Managed Agents API** | `/v1/agents`、`/sessions`、`/deployments`、`/deployment_runs`、`/environments`、`/files`、`/memory_stores`、`/vaults`、`/skills`、`/webhooks`、`/models` | `managed-agents-reference/` | ✅ 逐页核查完成 |
-| **Admin API** | `/v1/organizations/{id}/`（me、invites、users、workspaces、workspace_members、api_keys、external_keys、rate_limits） | admin-api 文档（**未镜像**） | ⏳ 未核查 |
+| **Admin API** | `/v1/organizations/{id}/`（me、invites、users、workspaces、workspace_members、api_keys、external_keys、rate_limits） | admin-api 文档（2026-08-22 起已镜像于 `api-reference/admin/`） | ⏳ 端点面已核对（见 `api-gap-matrix.md` 第二节），语义未逐页核查 |
 | **标准 Anthropic API 兼容** | `/v1/messages/batches`、`/v1/files`、`/v1/models` | Messages API / Files API | batches 已确认完整 |
 | **oma 内部基础设施** | `/v1/code/sessions/*`、`/v1/session_ingress/*`、`/v2/*` | oma 独有 worker 桥接 | 非 API 面，是 host↔worker 协议 |
 
@@ -181,7 +181,7 @@
 
 **Rate limiting**：见 4.2（endpoint 级 300/1200 RPM 完全缺失，安全/稳定性 gap）。
 
-> **范围边界**：Admin API（organizations / users / invites / workspaces / api_keys / external_keys / rate_limits 管理端点）是独立 API 面，本分析未镜像其文档、未核查 oma 对 Admin API 的实现完整度。如需覆盖，需先下载 admin-api 文档。
+> **范围边界**：Admin API（organizations / users / invites / workspaces / api_keys / external_keys / rate_limits 管理端点）是独立 API 面。2026-08-22 起其文档已镜像于 `docs/api-reference/admin/`，端点面对照见 `api-gap-matrix.md`（官方 132 个 admin 端点中 OMA 对齐 42 个基础管理，缺 RBAC/Federation/Service Accounts/Spend Limits/Analytics 等 56 个）；Compliance API（`docs/api-reference/compliance/`，36 端点）全缺。语义级核查未做。
 
 ### 4.8 issue 揭示的盲区与"有意偏离官方"的产品决策（第四轮，对照 origin issues）
 
