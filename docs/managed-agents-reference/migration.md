@@ -1,18 +1,18 @@
-# Migration
-
-Move an existing agent built on the Messages API or the Claude Agent SDK to Claude Managed Agents.
-
+---
+title: Migration
+url: https://platform.claude.com/docs/en/managed-agents/migration
+description: Move an existing agent built on the Messages API or the Claude Agent SDK to Claude Managed Agents.
 ---
 
-Claude Managed Agents replaces your hand-written agent loop with managed infrastructure. This page covers what changes when you migrate from a custom loop built on the [Messages API](/docs/en/build-with-claude/working-with-messages) or from the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview).
+Claude Managed Agents replaces your hand-written agent loop with managed infrastructure. This page covers what changes when you migrate from a custom loop built on the [Messages API](https://platform.claude.com/docs/en/build-with-claude/working-with-messages) or from the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview).
 
 <Note>
-  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](/docs/en/api/beta-headers#endpoint-specific-headers).
+  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](https://platform.claude.com/docs/en/api/beta-headers#endpoint-specific-headers).
 </Note>
 
 ## From a Messages API agent loop
 
-If you built an agent by calling `messages.create` in a `while` loop, executing tool calls yourself, and appending results to the conversation history, most of that code goes away.
+If you built an agent by calling `messages.create` in a `while` loop, running tool calls yourself, and appending results to the conversation history, most of that code goes away.
 
 ### What you stop managing
 
@@ -32,7 +32,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   messages = [{"role": "user", "content": task}]
   while True:
       response = client.messages.create(
-          model="claude-opus-4-8",
+          model="claude-opus-5",
           max_tokens=1024,
           messages=messages,
           tools=tools,
@@ -61,7 +61,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: task }];
   while (true) {
     const response = await client.messages.create({
-      model: "claude-opus-4-8",
+      model: "claude-opus-5",
       max_tokens: 1024,
       messages,
       tools
@@ -94,7 +94,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   {
       var response = await client.Messages.Create(new()
       {
-          Model = Model.ClaudeOpus4_8,
+          Model = Model.ClaudeOpus5,
           MaxTokens = 1024,
           Messages = messages,
           Tools = tools,
@@ -129,7 +129,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   }
   for {
   	response, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-  		Model:     anthropic.ModelClaudeOpus4_8,
+  		Model:     anthropic.ModelClaudeOpus5,
   		MaxTokens: 1024,
   		Messages:  messages,
   		Tools:     tools,
@@ -160,7 +160,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
       .build());
   while (true) {
       var response = client.messages().create(MessageCreateParams.builder()
-          .model(Model.CLAUDE_OPUS_4_8)
+          .model(Model.CLAUDE_OPUS_5)
           .maxTokens(1024)
           .messages(messages)
           .tools(tools)
@@ -189,7 +189,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   $messages = [['role' => 'user', 'content' => $task]];
   while (true) {
       $response = $client->messages->create(
-          model: 'claude-opus-4-8',
+          model: 'claude-opus-5',
           maxTokens: 1024,
           messages: $messages,
           tools: $tools,
@@ -220,7 +220,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   messages = [{ role: "user", content: task }]
   loop do
     response = client.messages.create(
-      model: "claude-opus-4-8",
+      model: "claude-opus-5",
       max_tokens: 1024,
       messages: messages,
       tools: tools
@@ -256,7 +256,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
       -H "anthropic-beta: managed-agents-2026-04-01" \
       --json '{
         "name": "Task Runner",
-        "model": "claude-opus-4-8",
+        "model": "claude-opus-5",
         "tools": [{"type": "agent_toolset_20260401"}]
       }'
   )
@@ -300,37 +300,45 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   kill "${stream_pid}" 2>/dev/null || true
   ```
 
-  ```bash CLI
-  { read -r _ agent_id; read -r _ agent_version; } < <(ant beta:agents create \
-    --name "Task Runner" \
-    --model claude-opus-4-8 \
-    --tool '{type: agent_toolset_20260401}' \
-    --transform '{id,version}' --format yaml)
+  <MultiFileExample language="cli" label="CLI">
+    ```bash CLI
+    { read -r _ agent_id; read -r _ agent_version; } < <(ant beta:agents create \
+      --transform '{id,version}' --format yaml < task-runner.agent.yaml)
 
-  session_id=$(ant beta:sessions create \
-    --agent "{type: agent, id: $agent_id, version: $agent_version}" \
-    --environment-id "$environment_id" \
-    --transform id --raw-output)
+    session_id=$(ant beta:sessions create \
+      --agent "{type: agent, id: $agent_id, version: $agent_version}" \
+      --environment-id "$environment_id" \
+      --transform id --raw-output)
 
-  # Open the stream first, then send the user message
-  exec {stream}< <(ant beta:sessions:events stream \
-    --session-id "$session_id" \
-    --transform type --raw-output)
+    # Open the stream first, then send the user message
+    exec {stream}< <(ant beta:sessions:events stream \
+      --session-id "$session_id" \
+      --transform type --raw-output)
 
-  ant beta:sessions:events send \
-    --session-id "$session_id" \
-    --event "{type: user.message, content: [{type: text, text: \"$task\"}]}" \
-  > /dev/null
+    ant beta:sessions:events send \
+      --session-id "$session_id" \
+      --event "{type: user.message, content: [{type: text, text: \"$task\"}]}" \
+    > /dev/null
 
-  # Wait for the session to go idle (grep exits at the first match)
-  grep -m1 -x 'session.status_idle' <&"$stream" > /dev/null
-  exec {stream}<&-
-  ```
+    # Wait for the session to go idle (grep exits at the first match)
+    grep -m1 -x 'session.status_idle' <&"$stream" > /dev/null
+    exec {stream}<&-
+    ```
+
+    <File filename="task-runner.agent.yaml">
+      ```yaml
+      name: Task Runner
+      model: claude-opus-5
+      tools:
+        - type: agent_toolset_20260401
+      ```
+    </File>
+  </MultiFileExample>
 
   ```python Python
   agent = client.beta.agents.create(
       name="Task Runner",
-      model="claude-opus-4-8",
+      model="claude-opus-5",
       tools=[{"type": "agent_toolset_20260401"}],
   )
 
@@ -352,7 +360,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   ```typescript TypeScript
   const agent = await client.beta.agents.create({
     name: "Task Runner",
-    model: "claude-opus-4-8",
+    model: "claude-opus-5",
     tools: [{ type: "agent_toolset_20260401" }]
   });
 
@@ -383,7 +391,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   var agent = await client.Beta.Agents.Create(new()
   {
       Name = "Task Runner",
-      Model = BetaManagedAgentsModel.ClaudeOpus4_8,
+      Model = BetaManagedAgentsModel.ClaudeOpus5,
       Tools =
       [
           new BetaManagedAgentsAgentToolset20260401Params
@@ -431,7 +439,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   	agent, err := client.Beta.Agents.New(ctx, anthropic.BetaAgentNewParams{
   		Name: "Task Runner",
   		Model: anthropic.BetaManagedAgentsModelConfigParams{
-  			ID: anthropic.BetaManagedAgentsModelClaudeOpus4_8,
+  			ID: anthropic.BetaManagedAgentsModelClaudeOpus5,
   		},
   		Tools: []anthropic.BetaAgentNewParamsToolUnion{{
   			OfAgentToolset20260401: &anthropic.BetaManagedAgentsAgentToolset20260401Params{
@@ -492,7 +500,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
       var agent = client.beta().agents().create(
           AgentCreateParams.builder()
               .name("Task Runner")
-              .model(BetaManagedAgentsModel.CLAUDE_OPUS_4_8)
+              .model(BetaManagedAgentsModel.CLAUDE_OPUS_5)
               .addTool(
                   BetaManagedAgentsAgentToolset20260401Params.builder()
                       .type(BetaManagedAgentsAgentToolset20260401Params.Type.AGENT_TOOLSET_20260401)
@@ -535,7 +543,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   ```php PHP
   $agent = $client->beta->agents->create(
       name: 'Task Runner',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       tools: [
           BetaManagedAgentsAgentToolset20260401Params::with(
               type: 'agent_toolset_20260401',
@@ -574,7 +582,7 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
   ```ruby Ruby
   agent = client.beta.agents.create(
     name: "Task Runner",
-    model: "claude-opus-4-8",
+    model: "claude-opus-5",
     tools: [{type: "agent_toolset_20260401"}]
   )
 
@@ -597,129 +605,697 @@ If you built an agent by calling `messages.create` in a `while` loop, executing 
 ### What you still control
 
 * **System prompt and model:** Same fields, now on the agent definition.
-* **Custom tools:** Still declared with JSON Schema. Execution moves from inline handling to responding to `agent.custom_tool_use` events. See [Session event stream](/docs/en/managed-agents/events-and-streaming).
-* **Context:** You can still inject context through the system prompt, [file resources](/docs/en/managed-agents/files), or [skills](/docs/en/managed-agents/skills).
+* **Custom tools:** Still declared with JSON Schema. Execution moves from inline handling to responding to `agent.custom_tool_use` events. See [Session event stream](https://platform.claude.com/docs/en/managed-agents/events-and-streaming).
+* **Web search and web fetch settings:** Same `allowed_domains`, `blocked_domains`, `max_content_tokens`, and `user_location` fields, now set once on the `web_search` and `web_fetch` entries of the agent toolset's `configs` array instead of on every request. The `max_uses`, `citations`, and `cache_control` fields are not available. See [Restrict web search and web fetch domains](https://platform.claude.com/docs/en/managed-agents/tools#restrict-web-search-and-web-fetch-domains).
+* **Context:** You can still inject context through the system prompt, [file resources](https://platform.claude.com/docs/en/managed-agents/files), or [skills](https://platform.claude.com/docs/en/managed-agents/skills).
 
 ## From the Claude Agent SDK
 
-If you built with the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview), you're already working with agents, tools, and sessions as concepts. The difference is where they run: the SDK executes in a process you operate, while Managed Agents runs in Anthropic's infrastructure. Most of the migration is mapping SDK configuration objects to their API-side equivalents.
+If you built with the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview), you're already working with agents, tools, and sessions as concepts. The difference is where they run: the SDK runs in a process you operate, while Managed Agents runs in Anthropic's infrastructure. Most of the migration is mapping SDK configuration objects to their API-side equivalents.
 
 ### What changes
 
-| Agent SDK                                                       | Managed Agents                                                                                                                                                                                                              |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ClaudeAgentOptions(...)` constructed per run                   | `client.beta.agents.create(...)` once; the Agent is persisted and versioned server-side. See [Agent setup](/docs/en/managed-agents/agent-setup).                                                                            |
-| `async with ClaudeSDKClient(...)` or `query(...)`               | `client.beta.sessions.create(...)` then send and receive [events](/docs/en/managed-agents/events-and-streaming).                                                                                                            |
-| `@tool`-decorated functions dispatched automatically by the SDK | Declare as `{"type": "custom", ...}` on the Agent; your client handles `agent.custom_tool_use` events and replies with `user.custom_tool_result`. See [Tools](/docs/en/managed-agents/tools).                               |
-| Built-in tools run in your process against your filesystem      | `{"type": "agent_toolset_20260401"}` runs the same tools inside the session sandbox against `/workspace`.                                                                                                                   |
-| `cwd`, `add_dirs` point at local paths                          | Upload or mount [files](/docs/en/managed-agents/files) as session resources.                                                                                                                                                |
-| `system_prompt` and the `CLAUDE.md` hierarchy                   | A single `system` string on the Agent. Each update produces a new server-side version; pin sessions to a specific version to promote or roll back without a deploy. See [Agent setup](/docs/en/managed-agents/agent-setup). |
-| `mcp_servers` configured and authenticated in one place         | Declare servers on the Agent; provide credentials through a [Vault](/docs/en/managed-agents/vaults) on the Session.                                                                                                         |
-| `permission_mode`, `can_use_tool`                               | Per-tool [`permission_policy`](/docs/en/managed-agents/permission-policies); send `user.tool_confirmation` events for `always_ask` tools.                                                                                   |
+| Agent SDK                                                       | Managed Agents                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ClaudeAgentOptions(...)` constructed per run                   | `client.beta.agents.create(...)` once; the Agent is persisted and versioned server-side. See [Agent setup](https://platform.claude.com/docs/en/managed-agents/agent-setup).                                                                                                   |
+| `async with ClaudeSDKClient(...)` or `query(...)`               | `client.beta.sessions.create(...)` then send and receive [events](https://platform.claude.com/docs/en/managed-agents/events-and-streaming).                                                                                                                                   |
+| `@tool`-decorated functions dispatched automatically by the SDK | Declare as `{"type": "custom", ...}` on the Agent; your client handles `agent.custom_tool_use` events and replies with `user.custom_tool_result`. See [Tools](https://platform.claude.com/docs/en/managed-agents/tools).                                                      |
+| Built-in tools run in your process against your filesystem      | `{"type": "agent_toolset_20260401"}` runs the same tools inside the session sandbox against `/workspace`.                                                                                                                                                                     |
+| `cwd`, `add_dirs` point at local paths                          | Upload or mount [files](https://platform.claude.com/docs/en/managed-agents/files) as session resources.                                                                                                                                                                       |
+| `system_prompt` and the `CLAUDE.md` hierarchy                   | A single `system` string on the Agent. Each update that changes the agent produces a new server-side version; pin sessions to a specific version to promote or roll back without a deploy. See [Agent setup](https://platform.claude.com/docs/en/managed-agents/agent-setup). |
+| `mcp_servers` configured and authenticated in one place         | Declare servers on the Agent; provide credentials through a [Vault](https://platform.claude.com/docs/en/managed-agents/vaults) on the Session.                                                                                                                                |
+| `permission_mode`, `can_use_tool`                               | Per-tool [`permission_policy`](https://platform.claude.com/docs/en/managed-agents/permission-policies); send `user.tool_confirmation` events for `always_ask` tools.                                                                                                          |
 
 ### Code comparison
 
 **Before** (Agent SDK):
 
-```python
-from claude_agent_sdk import (
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-    create_sdk_mcp_server,
-    tool,
-)
+<CodeGroup exclude="shell, csharp, go, java, php, ruby">
+  ```python Python
+  from claude_agent_sdk import (
+      ClaudeAgentOptions,
+      ClaudeSDKClient,
+      create_sdk_mcp_server,
+      tool,
+  )
 
 
-@tool("get_weather", "Get the current weather for a city.", {"city": str})
-async def get_weather(args: dict) -> dict:
-    return {"content": [{"type": "text", "text": f"{args['city']}: 18°C, clear"}]}
+  @tool("get_weather", "Get the current weather for a city.", {"city": str})
+  async def get_weather(args: dict) -> dict:
+      return {"content": [{"type": "text", "text": f"{args['city']}: 18°C, clear"}]}
 
 
-options = ClaudeAgentOptions(
-    model="claude-opus-4-8",
-    system_prompt="You are a concise weather assistant.",
-    mcp_servers={
-        "weather": create_sdk_mcp_server("weather", "1.0", tools=[get_weather])
-    },
-)
+  options = ClaudeAgentOptions(
+      model="claude-opus-5",
+      system_prompt="You are a concise weather assistant.",
+      mcp_servers={
+          "weather": create_sdk_mcp_server("weather", "1.0", tools=[get_weather])
+      },
+  )
 
-async with ClaudeSDKClient(options=options) as agent:
-    await agent.query("What's the weather in Tokyo?")
-    async for msg in agent.receive_response():
-        print(msg)
-```
+  async with ClaudeSDKClient(options=options) as agent:
+      await agent.query("What's the weather in Tokyo?")
+      async for msg in agent.receive_response():
+          print(msg)
+  ```
+
+  ```typescript TypeScript
+  import { createSdkMcpServer, query, tool } from "@anthropic-ai/claude-agent-sdk";
+  import { z } from "zod";
+
+  const getWeather = tool(
+    "get_weather",
+    "Get the current weather for a city.",
+    { city: z.string() },
+    async (args) => ({
+      content: [{ type: "text", text: `${args.city}: 18°C, clear` }]
+    })
+  );
+
+  for await (const message of query({
+    prompt: "What's the weather in Tokyo?",
+    options: {
+      model: "claude-opus-5",
+      systemPrompt: "You are a concise weather assistant.",
+      mcpServers: {
+        weather: createSdkMcpServer({ name: "weather", version: "1.0", tools: [getWeather] })
+      }
+    }
+  })) {
+    console.log(message);
+  }
+  ```
+</CodeGroup>
 
 **After** (Managed Agents):
 
-```python
-from anthropic import Anthropic
+<CodeGroup exclude="shell">
+  ```python Python
+  from anthropic import Anthropic
 
-client = Anthropic()
+  client = Anthropic()
 
-agent = client.beta.agents.create(
-    name="weather-agent",
-    model="claude-opus-4-8",
-    system="You are a concise weather assistant.",
-    tools=[
-        {
-            "type": "custom",
-            "name": "get_weather",
-            "description": "Get the current weather for a city.",
-            "input_schema": {
-                "type": "object",
-                "properties": {"city": {"type": "string"}},
-                "required": ["city"],
-            },
+  agent = client.beta.agents.create(
+      name="weather-agent",
+      model="claude-opus-5",
+      system="You are a concise weather assistant.",
+      tools=[
+          {
+              "type": "custom",
+              "name": "get_weather",
+              "description": "Get the current weather for a city.",
+              "input_schema": {
+                  "type": "object",
+                  "properties": {"city": {"type": "string"}},
+                  "required": ["city"],
+              },
+          }
+      ],
+  )
+  environment = client.beta.environments.create(
+      name="weather-env",
+      config={"type": "cloud", "networking": {"type": "unrestricted"}},
+  )
+
+  session = client.beta.sessions.create(
+      agent={"type": "agent", "id": agent.id, "version": agent.version},
+      environment_id=environment.id,
+  )
+
+
+  def get_weather(city: str) -> str:
+      return f"{city}: 18°C, clear"
+
+
+  with client.beta.sessions.events.stream(session.id) as stream:
+      client.beta.sessions.events.send(
+          session.id,
+          events=[
+              {
+                  "type": "user.message",
+                  "content": [{"type": "text", "text": "What's the weather in Tokyo?"}],
+              }
+          ],
+      )
+      for event in stream:
+          if event.type == "agent.message":
+              print(
+                  "".join(block.text for block in event.content if block.type == "text")
+              )
+          elif event.type == "agent.custom_tool_use":
+              result = get_weather(**event.input)
+              client.beta.sessions.events.send(
+                  session.id,
+                  events=[
+                      {
+                          "type": "user.custom_tool_result",
+                          "custom_tool_use_id": event.id,
+                          "content": [{"type": "text", "text": result}],
+                      }
+                  ],
+              )
+          elif (
+              event.type == "session.status_idle"
+              and event.stop_reason
+              and event.stop_reason.type == "end_turn"
+          ):
+              break
+  ```
+
+  ```typescript TypeScript
+  import Anthropic from "@anthropic-ai/sdk";
+
+  const client = new Anthropic();
+
+  const agent = await client.beta.agents.create({
+    name: "weather-agent",
+    model: "claude-opus-5",
+    system: "You are a concise weather assistant.",
+    tools: [
+      {
+        type: "custom",
+        name: "get_weather",
+        description: "Get the current weather for a city.",
+        input_schema: {
+          type: "object",
+          properties: { city: { type: "string" } },
+          required: ["city"]
         }
-    ],
-)
-environment = client.beta.environments.create(
-    name="weather-env",
-    config={"type": "cloud", "networking": {"type": "unrestricted"}},
-)
+      }
+    ]
+  });
+  const environment = await client.beta.environments.create({
+    name: "weather-env",
+    config: { type: "cloud", networking: { type: "unrestricted" } }
+  });
 
-session = client.beta.sessions.create(
-    agent={"type": "agent", "id": agent.id, "version": agent.version},
-    environment_id=environment.id,
-)
+  const session = await client.beta.sessions.create({
+    agent: { type: "agent", id: agent.id, version: agent.version },
+    environment_id: environment.id
+  });
 
+  function getWeather({ city }: Record<string, unknown>): string {
+    return `${city}: 18°C, clear`;
+  }
 
-def get_weather(city: str) -> str:
-    return f"{city}: 18°C, clear"
+  const stream = await client.beta.sessions.events.stream(session.id);
 
+  await client.beta.sessions.events.send(session.id, {
+    events: [
+      {
+        type: "user.message",
+        content: [{ type: "text", text: "What's the weather in Tokyo?" }]
+      }
+    ]
+  });
 
-with client.beta.sessions.events.stream(session.id) as stream:
-    client.beta.sessions.events.send(
+  for await (const event of stream) {
+    if (event.type === "agent.message") {
+      for (const block of event.content) {
+        if (block.type === "text") {
+          console.log(block.text);
+        }
+      }
+    } else if (event.type === "agent.custom_tool_use") {
+      const result = getWeather(event.input);
+      await client.beta.sessions.events.send(session.id, {
+        events: [
+          {
+            type: "user.custom_tool_result",
+            custom_tool_use_id: event.id,
+            content: [{ type: "text", text: result }]
+          }
+        ]
+      });
+    } else if (event.type === "session.status_idle" && event.stop_reason?.type === "end_turn") {
+      break;
+    }
+  }
+  ```
+
+  ```csharp C#
+  using System.Text.Json;
+
+  using Anthropic.Models.Beta.Agents;
+  using Anthropic.Models.Beta.Environments;
+  using Anthropic.Models.Beta.Sessions;
+  using Anthropic.Models.Beta.Sessions.Events;
+
+  AnthropicClient client = new();
+
+  var agent = await client.Beta.Agents.Create(new()
+  {
+      Name = "weather-agent",
+      Model = BetaManagedAgentsModel.ClaudeOpus5,
+      System = "You are a concise weather assistant.",
+      Tools =
+      [
+          new BetaManagedAgentsCustomToolParams
+          {
+              Type = "custom",
+              Name = "get_weather",
+              Description = "Get the current weather for a city.",
+              InputSchema = new()
+              {
+                  Properties = new Dictionary<string, JsonElement>
+                  {
+                      ["city"] = JsonSerializer.SerializeToElement(new { type = "string" }),
+                  },
+                  Required = ["city"],
+              },
+          },
+      ],
+  });
+  var environment = await client.Beta.Environments.Create(new()
+  {
+      Name = "weather-env",
+      Config = new BetaCloudConfigParams
+      {
+          Networking = new BetaUnrestrictedNetwork(),
+      },
+  });
+
+  var session = await client.Beta.Sessions.Create(new()
+  {
+      Agent = new BetaManagedAgentsAgentParams
+      {
+          Type = "agent",
+          ID = agent.ID,
+          Version = agent.Version,
+      },
+      EnvironmentID = environment.ID,
+  });
+
+  static string GetWeather(string city) => $"{city}: 18°C, clear";
+
+  using var stream = await client.Beta.Sessions.Events.WithRawResponse.StreamStreaming(session.ID);
+
+  await client.Beta.Sessions.Events.Send(session.ID, new()
+  {
+      Events =
+      [
+          new BetaManagedAgentsUserMessageEventParams
+          {
+              Type = "user.message",
+              Content = [new BetaManagedAgentsTextBlock { Type = "text", Text = "What's the weather in Tokyo?" }],
+          },
+      ],
+  });
+
+  await foreach (var streamEvent in stream.Enumerate())
+  {
+      if (streamEvent.Value is BetaManagedAgentsAgentMessageEvent message)
+      {
+          Console.WriteLine(string.Concat(message.Content.Select(block => block.Text)));
+      }
+      else if (streamEvent.Value is BetaManagedAgentsAgentCustomToolUseEvent toolUse)
+      {
+          var result = GetWeather(toolUse.Input["city"].GetString()!);
+          await client.Beta.Sessions.Events.Send(session.ID, new()
+          {
+              Events =
+              [
+                  new BetaManagedAgentsUserCustomToolResultEventParams
+                  {
+                      Type = "user.custom_tool_result",
+                      CustomToolUseID = toolUse.ID,
+                      Content =
+                      [
+                          new BetaManagedAgentsTextBlock
+                          {
+                              Type = "text",
+                              Text = result,
+                          },
+                      ],
+                  },
+              ],
+          });
+      }
+      else if (streamEvent.Value is BetaManagedAgentsSessionStatusIdleEvent idle
+          && idle.StopReason?.Value is BetaManagedAgentsSessionEndTurn)
+      {
+          break;
+      }
+  }
+  ```
+
+  ```go Go
+  client := anthropic.NewClient()
+  ctx := context.Background()
+
+  agent, err := client.Beta.Agents.New(ctx, anthropic.BetaAgentNewParams{
+  	Name: "weather-agent",
+  	Model: anthropic.BetaManagedAgentsModelConfigParams{
+  		ID: anthropic.BetaManagedAgentsModelClaudeOpus5,
+  	},
+  	System: anthropic.String("You are a concise weather assistant."),
+  	Tools: []anthropic.BetaAgentNewParamsToolUnion{{
+  		OfCustom: &anthropic.BetaManagedAgentsCustomToolParams{
+  			Type:        anthropic.BetaManagedAgentsCustomToolParamsTypeCustom,
+  			Name:        "get_weather",
+  			Description: "Get the current weather for a city.",
+  			InputSchema: anthropic.BetaManagedAgentsCustomToolInputSchemaParam{
+  				Properties: map[string]any{
+  					"city": map[string]any{"type": "string"},
+  				},
+  				Required: []string{"city"},
+  			},
+  		},
+  	}},
+  })
+  if err != nil {
+  	panic(err)
+  }
+  environment, err := client.Beta.Environments.New(ctx, anthropic.BetaEnvironmentNewParams{
+  	Name: "weather-env",
+  	Config: anthropic.BetaEnvironmentNewParamsConfigUnion{
+  		OfCloud: &anthropic.BetaCloudConfigParams{
+  			Networking: anthropic.BetaCloudConfigParamsNetworkingUnion{
+  				OfUnrestricted: &anthropic.BetaUnrestrictedNetworkParam{},
+  			},
+  		},
+  	},
+  })
+  if err != nil {
+  	panic(err)
+  }
+
+  session, err := client.Beta.Sessions.New(ctx, anthropic.BetaSessionNewParams{
+  	Agent: anthropic.BetaSessionNewParamsAgentUnion{
+  		OfBetaManagedAgentsAgents: &anthropic.BetaManagedAgentsAgentParams{
+  			Type:    anthropic.BetaManagedAgentsAgentParamsTypeAgent,
+  			ID:      agent.ID,
+  			Version: anthropic.Int(agent.Version),
+  		},
+  	},
+  	EnvironmentID: environment.ID,
+  })
+  if err != nil {
+  	panic(err)
+  }
+
+  getWeather := func(city string) string {
+  	return fmt.Sprintf("%s: 18°C, clear", city)
+  }
+
+  stream := client.Beta.Sessions.Events.StreamEvents(ctx, session.ID, anthropic.BetaSessionEventStreamParams{})
+  defer stream.Close()
+
+  _, err = client.Beta.Sessions.Events.Send(ctx, session.ID, anthropic.BetaSessionEventSendParams{
+  	Events: []anthropic.BetaManagedAgentsEventParamsUnion{{
+  		OfUserMessage: &anthropic.BetaManagedAgentsUserMessageEventParams{
+  			Type: anthropic.BetaManagedAgentsUserMessageEventParamsTypeUserMessage,
+  			Content: []anthropic.BetaManagedAgentsUserMessageEventParamsContentUnion{{
+  				OfText: &anthropic.BetaManagedAgentsTextBlockParam{
+  					Type: anthropic.BetaManagedAgentsTextBlockTypeText,
+  					Text: "What's the weather in Tokyo?",
+  				},
+  			}},
+  		},
+  	}},
+  })
+  if err != nil {
+  	panic(err)
+  }
+
+  loop:
+  for stream.Next() {
+  	event := stream.Current()
+  	switch event.Type {
+  	case "agent.message":
+  		for _, block := range event.AsAgentMessage().Content {
+  			if block.Type == "text" {
+  				fmt.Println(block.Text)
+  			}
+  		}
+  	case "agent.custom_tool_use":
+  		toolUse := event.AsAgentCustomToolUse()
+  		result := getWeather(toolUse.Input["city"].(string))
+  		if _, err := client.Beta.Sessions.Events.Send(ctx, session.ID, anthropic.BetaSessionEventSendParams{
+  			Events: []anthropic.BetaManagedAgentsEventParamsUnion{{
+  				OfUserCustomToolResult: &anthropic.BetaManagedAgentsUserCustomToolResultEventParams{
+  					Type:            anthropic.BetaManagedAgentsUserCustomToolResultEventParamsTypeUserCustomToolResult,
+  					CustomToolUseID: toolUse.ID,
+  					Content: []anthropic.BetaManagedAgentsUserCustomToolResultEventParamsContentUnion{{
+  						OfText: &anthropic.BetaManagedAgentsTextBlockParam{
+  							Type: anthropic.BetaManagedAgentsTextBlockTypeText,
+  							Text: result,
+  						},
+  					}},
+  				},
+  			}},
+  		}); err != nil {
+  			panic(err)
+  		}
+  	case "session.status_idle":
+  		idle := event.AsSessionStatusIdle()
+  		if _, ok := idle.StopReason.AsAny().(anthropic.BetaManagedAgentsSessionEndTurn); ok {
+  			break loop
+  		}
+  	}
+  }
+  if err := stream.Err(); err != nil {
+  	panic(err)
+  }
+  ```
+
+  ```java Java
+  import java.util.Map;
+  import java.util.function.Function;
+
+  import com.anthropic.models.beta.agents.AgentCreateParams;
+  import com.anthropic.models.beta.agents.BetaManagedAgentsCustomToolInputSchema;
+  import com.anthropic.models.beta.agents.BetaManagedAgentsCustomToolParams;
+  import com.anthropic.models.beta.agents.BetaManagedAgentsModel;
+  import com.anthropic.models.beta.environments.BetaCloudConfigParams;
+  import com.anthropic.models.beta.environments.BetaUnrestrictedNetwork;
+  import com.anthropic.models.beta.environments.EnvironmentCreateParams;
+  import com.anthropic.models.beta.sessions.BetaManagedAgentsAgentParams;
+  import com.anthropic.models.beta.sessions.SessionCreateParams;
+  import com.anthropic.models.beta.sessions.events.BetaManagedAgentsStreamSessionEvents;
+  import com.anthropic.models.beta.sessions.events.BetaManagedAgentsUserCustomToolResultEventParams;
+  import com.anthropic.models.beta.sessions.events.BetaManagedAgentsUserMessageEventParams;
+  import com.anthropic.models.beta.sessions.events.EventSendParams;
+
+  var client = AnthropicOkHttpClient.fromEnv();
+
+  var agent = client.beta().agents().create(AgentCreateParams.builder()
+      .name("weather-agent")
+      .model(BetaManagedAgentsModel.CLAUDE_OPUS_5)
+      .system("You are a concise weather assistant.")
+      .addTool(BetaManagedAgentsCustomToolParams.builder()
+          .type(BetaManagedAgentsCustomToolParams.Type.CUSTOM)
+          .name("get_weather")
+          .description("Get the current weather for a city.")
+          .inputSchema(BetaManagedAgentsCustomToolInputSchema.builder()
+              .properties(BetaManagedAgentsCustomToolInputSchema.Properties.builder()
+                  .putAdditionalProperty("city", JsonValue.from(Map.of("type", "string")))
+                  .build())
+              .addRequired("city")
+              .build())
+          .build())
+      .build());
+  var environment = client.beta().environments().create(EnvironmentCreateParams.builder()
+      .name("weather-env")
+      .config(BetaCloudConfigParams.builder()
+          .networking(BetaUnrestrictedNetwork.builder().build())
+          .build())
+      .build());
+
+  var session = client.beta().sessions().create(SessionCreateParams.builder()
+      .agent(BetaManagedAgentsAgentParams.builder()
+          .type(BetaManagedAgentsAgentParams.Type.AGENT)
+          .id(agent.id())
+          .version(agent.version())
+          .build())
+      .environmentId(environment.id())
+      .build());
+
+  Function<String, String> getWeather = city -> city + ": 18°C, clear";
+
+  try (var stream = client.beta().sessions().events().streamStreaming(session.id())) {
+      client.beta().sessions().events().send(
+          session.id(),
+          EventSendParams.builder()
+              .addEvent(BetaManagedAgentsUserMessageEventParams.builder()
+                  .type(BetaManagedAgentsUserMessageEventParams.Type.USER_MESSAGE)
+                  .addTextContent("What's the weather in Tokyo?")
+                  .build())
+              .build());
+
+      for (var event : (Iterable<BetaManagedAgentsStreamSessionEvents>) stream.stream()::iterator) {
+          if (event.isAgentMessage()) {
+              for (var block : event.asAgentMessage().content()) {
+                  block.text().ifPresent(textBlock -> IO.println(textBlock.text()));
+              }
+          } else if (event.isAgentCustomToolUse()) {
+              var toolUse = event.asAgentCustomToolUse();
+              var city = toolUse.input()._additionalProperties().get("city").asStringOrThrow();
+              var result = getWeather.apply(city);
+              client.beta().sessions().events().send(
+                  session.id(),
+                  EventSendParams.builder()
+                      .addEvent(BetaManagedAgentsUserCustomToolResultEventParams.builder()
+                          .type(BetaManagedAgentsUserCustomToolResultEventParams.Type.USER_CUSTOM_TOOL_RESULT)
+                          .customToolUseId(toolUse.id())
+                          .addTextContent(result)
+                          .build())
+                      .build());
+          } else if (event.isSessionStatusIdle()
+              && event.asSessionStatusIdle().stopReason().isEndTurn()) {
+              break;
+          }
+      }
+  }
+  ```
+
+  ```php PHP
+  use Anthropic\Client;
+  use Anthropic\Beta\Agents\BetaManagedAgentsCustomToolInputSchema;
+  use Anthropic\Beta\Agents\BetaManagedAgentsCustomToolParams;
+  use Anthropic\Beta\Sessions\BetaManagedAgentsAgentParams;
+
+  $client = new Client();
+
+  $agent = $client->beta->agents->create(
+      name: 'weather-agent',
+      model: 'claude-opus-5',
+      system: 'You are a concise weather assistant.',
+      tools: [
+          BetaManagedAgentsCustomToolParams::with(
+              type: 'custom',
+              name: 'get_weather',
+              description: 'Get the current weather for a city.',
+              inputSchema: BetaManagedAgentsCustomToolInputSchema::with(
+                  properties: ['city' => ['type' => 'string']],
+                  required: ['city'],
+              ),
+          ),
+      ],
+  );
+  $environment = $client->beta->environments->create(
+      name: 'weather-env',
+      config: ['type' => 'cloud', 'networking' => ['type' => 'unrestricted']],
+  );
+
+  $session = $client->beta->sessions->create(
+      agent: BetaManagedAgentsAgentParams::with(
+          type: 'agent',
+          id: $agent->id,
+          version: $agent->version,
+      ),
+      environmentID: $environment->id,
+  );
+
+  function getWeather(string $city): string
+  {
+      return "{$city}: 18°C, clear";
+  }
+
+  $stream = $client->beta->sessions->events->streamStream($session->id);
+
+  $client->beta->sessions->events->send(
+      $session->id,
+      events: [
+          [
+              'type' => 'user.message',
+              'content' => [['type' => 'text', 'text' => "What's the weather in Tokyo?"]],
+          ],
+      ],
+  );
+
+  foreach ($stream as $event) {
+      if ($event->type === 'agent.message') {
+          foreach ($event->content as $block) {
+              if ($block->type === 'text') {
+                  echo $block->text . "\n";
+              }
+          }
+      } elseif ($event->type === 'agent.custom_tool_use') {
+          $result = getWeather($event->input['city']);
+          $client->beta->sessions->events->send(
+              $session->id,
+              events: [
+                  [
+                      'type' => 'user.custom_tool_result',
+                      'custom_tool_use_id' => $event->id,
+                      'content' => [['type' => 'text', 'text' => $result]],
+                  ],
+              ],
+          );
+      } elseif ($event->type === 'session.status_idle' && $event->stopReason?->type === 'end_turn') {
+          break;
+      }
+  }
+  $stream->close();
+  ```
+
+  ```ruby Ruby
+  require "anthropic"
+
+  client = Anthropic::Client.new
+
+  agent = client.beta.agents.create(
+    name: "weather-agent",
+    model: "claude-opus-5",
+    system_: "You are a concise weather assistant.",
+    tools: [
+      {
+        type: "custom",
+        name: "get_weather",
+        description: "Get the current weather for a city.",
+        input_schema: {
+          type: "object",
+          properties: {city: {type: "string"}},
+          required: ["city"]
+        }
+      }
+    ]
+  )
+  environment = client.beta.environments.create(
+    name: "weather-env",
+    config: {type: "cloud", networking: {type: "unrestricted"}}
+  )
+
+  session = client.beta.sessions.create(
+    agent: {type: "agent", id: agent.id, version: agent.version},
+    environment_id: environment.id
+  )
+
+  def get_weather(city)
+    "#{city}: 18°C, clear"
+  end
+
+  stream = client.beta.sessions.events.stream_events(session.id)
+  client.beta.sessions.events.send_(
+    session.id,
+    events: [{type: "user.message", content: [{type: "text", text: "What's the weather in Tokyo?"}]}]
+  )
+
+  stream.each do |event|
+    case event.type
+    when :"agent.message"
+      event.content.each do |block|
+        puts block.text if block.type == :text
+      end
+    when :"agent.custom_tool_use"
+      result = get_weather(event.input[:city])
+      client.beta.sessions.events.send_(
         session.id,
-        events=[
-            {
-                "type": "user.message",
-                "content": [{"type": "text", "text": "What's the weather in Tokyo?"}],
-            }
-        ],
-    )
-    for ev in stream:
-        if ev.type == "agent.message":
-            print("".join(block.text for block in ev.content if block.type == "text"))
-        elif ev.type == "agent.custom_tool_use":
-            result = get_weather(**ev.input)
-            client.beta.sessions.events.send(
-                session.id,
-                events=[
-                    {
-                        "type": "user.custom_tool_result",
-                        "custom_tool_use_id": ev.id,
-                        "content": [{"type": "text", "text": result}],
-                    }
-                ],
-            )
-        elif (
-            ev.type == "session.status_idle"
-            and ev.stop_reason
-            and ev.stop_reason.type == "end_turn"
-        ):
-            break
-```
+        events: [
+          {
+            type: "user.custom_tool_result",
+            custom_tool_use_id: event.id,
+            content: [{type: "text", text: result}]
+          }
+        ]
+      )
+    when :"session.status_idle"
+      break if event.stop_reason&.type == :end_turn
+    end
+  end
+  ```
+</CodeGroup>
 
 The Agent and Environment are created once and reused across sessions. The tool function still runs in your process; the difference is that you read the `agent.custom_tool_use` event and send the result explicitly instead of the SDK dispatching it for you.
 
@@ -736,16 +1312,16 @@ The tradeoff for Anthropic running the agent loop is that a few things the SDK h
 
 ## Migration checklist
 
-1. [Create an environment](/docs/en/managed-agents/environments) with the networking and runtimes your agent needs.
-2. Port your system prompt and tool selection to an [agent definition](/docs/en/managed-agents/agent-setup).
-3. Replace your loop with [`sessions.create`](/docs/en/managed-agents/sessions) and [`sessions.events.stream`](/docs/en/managed-agents/events-and-streaming).
-4. For any local files the agent reads, upload them through the [Files API](/docs/en/managed-agents/files) and mount them as `resources`.
+1. [Create an environment](https://platform.claude.com/docs/en/managed-agents/environments) with the networking and runtimes your agent needs.
+2. Port your system prompt and tool selection to an [agent definition](https://platform.claude.com/docs/en/managed-agents/agent-setup).
+3. Replace your loop with [`sessions.create`](https://platform.claude.com/docs/en/managed-agents/sessions) and [`sessions.events.stream`](https://platform.claude.com/docs/en/managed-agents/events-and-streaming).
+4. For any local files the agent reads, upload them through the [Files API](https://platform.claude.com/docs/en/managed-agents/files) and mount them as `resources`.
 5. For any custom tool handlers, move execution into your event loop as responses to `agent.custom_tool_use` events.
 6. Verify with a test session before pointing production traffic at the new flow.
 
 ## Migrating between model versions
 
-When a new Claude model is released, migrating a Claude Managed Agents integration is typically a one-field change: update `model` on your [agent definition](/docs/en/managed-agents/agent-setup) and the change takes effect on the next session you create.
+When a new Claude model is released, migrating a Claude Managed Agents integration is typically a one-field change: update `model` on your [agent definition](https://platform.claude.com/docs/en/managed-agents/agent-setup) and the change takes effect on the next session you create.
 
 <CodeGroup defaultLanguage="CLI">
   ```bash cURL
@@ -753,28 +1329,37 @@ When a new Claude model is released, migrating a Claude Managed Agents integrati
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
     -H "anthropic-beta: managed-agents-2026-04-01" \
-    --json "$(jq -n --argjson version "$AGENT_VERSION" '{version: $version, model: "claude-opus-4-8"}')"
+    --json "$(jq -n --argjson version "$AGENT_VERSION" '{version: $version, model: "claude-opus-5"}')"
   ```
 
-  ```bash CLI
-  ant beta:agents update \
-    --agent-id "$AGENT_ID" \
-    --version "$AGENT_VERSION" \
-    --model claude-opus-4-8
-  ```
+  <MultiFileExample language="cli" label="CLI">
+    ```bash CLI
+    ant beta:agents update --agent-id "$AGENT_ID" < agent.yaml
+    ```
+
+    <File filename="agent.yaml">
+      ```yaml
+      name: Task Runner
+      model: claude-opus-5
+      system: You are a task automation agent. Complete the task you are given end to end.
+      tools:
+        - type: agent_toolset_20260401
+      ```
+    </File>
+  </MultiFileExample>
 
   ```python Python
   client.beta.agents.update(
       agent.id,
       version=agent.version,
-      model="claude-opus-4-8",
+      model="claude-opus-5",
   )
   ```
 
   ```typescript TypeScript
   await client.beta.agents.update(agent.id, {
     version: agent.version,
-    model: "claude-opus-4-8"
+    model: "claude-opus-5"
   });
   ```
 
@@ -782,7 +1367,7 @@ When a new Claude model is released, migrating a Claude Managed Agents integrati
   await client.Beta.Agents.Update(agent.ID, new()
   {
       Version = agent.Version,
-      Model = BetaManagedAgentsModel.ClaudeOpus4_8,
+      Model = BetaManagedAgentsModel.ClaudeOpus5,
   });
   ```
 
@@ -790,7 +1375,7 @@ When a new Claude model is released, migrating a Claude Managed Agents integrati
   _, err = client.Beta.Agents.Update(ctx, agent.ID, anthropic.BetaAgentUpdateParams{
   	Version: agent.Version,
   	Model: anthropic.BetaManagedAgentsModelConfigParams{
-  		ID: anthropic.BetaManagedAgentsModelClaudeOpus4_8,
+  		ID: anthropic.BetaManagedAgentsModelClaudeOpus5,
   	},
   })
   if err != nil {
@@ -803,7 +1388,7 @@ When a new Claude model is released, migrating a Claude Managed Agents integrati
       agent.id(),
       AgentUpdateParams.builder()
           .version(agent.version())
-          .model(BetaManagedAgentsModel.CLAUDE_OPUS_4_8)
+          .model(BetaManagedAgentsModel.CLAUDE_OPUS_5)
           .build()
   );
   ```
@@ -812,7 +1397,7 @@ When a new Claude model is released, migrating a Claude Managed Agents integrati
   $client->beta->agents->update(
       $agent->id,
       version: $agent->version,
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
   );
   ```
 
@@ -820,12 +1405,12 @@ When a new Claude model is released, migrating a Claude Managed Agents integrati
   client.beta.agents.update(
     agent.id,
     version: agent.version,
-    model: "claude-opus-4-8"
+    model: "claude-opus-5"
   )
   ```
 </CodeGroup>
 
-Most model-level behavior changes documented in the [Messages API migration guide](/docs/en/about-claude/models/migration-guide) do not require action on your side:
+Most model-level behavior changes documented in the [Messages API migration guide](https://platform.claude.com/docs/en/about-claude/models/migration-guide) do not require action on your side:
 
 * **Request parameter changes** (`max_tokens` defaults, `thinking` configuration) are handled by the Claude Managed Agents runtime. These fields are not exposed on the agent definition.
 * **Assistant message prefilling** does not exist in the event-based session model, so its removal on newer models is a no-op.

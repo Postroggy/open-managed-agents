@@ -1,7 +1,7 @@
-# Get started with Claude Managed Agents
-
-Create your first autonomous agent.
-
+---
+title: Get started with Claude Managed Agents
+url: https://platform.claude.com/docs/en/managed-agents/quickstart
+description: Create your first autonomous agent.
 ---
 
 This guide walks you through creating an agent, setting up an environment, starting a session, and streaming agent responses.
@@ -21,8 +21,8 @@ This guide walks you through creating an agent, setting up an environment, start
 
 ## Prerequisites
 
-* An Anthropic [Console account](https://platform.claude.com)
-* An [API key](/settings/keys)
+* A [Claude Console account](https://platform.claude.com)
+* An [API key](https://platform.claude.com/settings/keys)
 
 ## Install the CLI
 
@@ -37,7 +37,7 @@ This guide walks you through creating an agent, setting up an environment, start
     For Linux environments, download the release binary directly.
 
     ```bash
-    VERSION=1.17.0
+    VERSION=1.26.1
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     case $(uname -m) in
       x86_64) ARCH=amd64 ;;
@@ -51,7 +51,7 @@ This guide walks you through creating an agent, setting up an environment, start
   </Tab>
 
   <Tab title="Go">
-    You may also install the CLI from source using `go install`. Requires Go 1.25 or later.
+    You can also install the CLI from source using `go install`. Requires Go 1.25 or later.
 
     ```bash
     go install github.com/anthropics/anthropic-cli/cmd/ant@latest
@@ -88,7 +88,7 @@ ant --version
 
   <Tab title="Java">
     ```groovy Gradle
-    implementation("com.anthropic:anthropic-java:2.48.0")
+    implementation("com.anthropic:anthropic-java:2.57.0")
     ```
   </Tab>
 
@@ -112,7 +112,7 @@ ant --version
 
   <Tab title="PHP">
     ```bash
-    composer require anthropic-ai/sdk
+    composer require "anthropic-ai/sdk" "guzzlehttp/guzzle:^7"
     ```
   </Tab>
 </Tabs>
@@ -126,7 +126,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 ## Create your first session
 
 <Note>
-  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](/docs/en/api/beta-headers#endpoint-specific-headers).
+  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](https://platform.claude.com/docs/en/api/beta-headers#endpoint-specific-headers).
 </Note>
 
 <Steps>
@@ -134,7 +134,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
     Create an agent that defines the model, system prompt, and available tools.
 
     <CodeGroup defaultLanguage="CLI">
-      ```bash curl
+      ```bash cURL
       set -euo pipefail
 
       agent=$(
@@ -146,7 +146,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
           -d @- <<'EOF'
       {
         "name": "Coding Assistant",
-        "model": "claude-opus-4-8",
+        "model": "claude-opus-5",
         "system": "You are a helpful coding assistant. Write clean, well-documented code.",
         "tools": [
           {"type": "agent_toolset_20260401"}
@@ -161,13 +161,24 @@ export ANTHROPIC_API_KEY="your-api-key-here"
       echo "Agent ID: $AGENT_ID, version: $AGENT_VERSION"
       ```
 
-      ```bash CLI
-      ant beta:agents create \
-        --name "Coding Assistant" \
-        --model '{id: claude-opus-4-8}' \
-        --system "You are a helpful coding assistant. Write clean, well-documented code." \
-        --tool '{type: agent_toolset_20260401}'
-      ```
+      <MultiFileExample language="cli" label="CLI">
+        ```bash CLI
+        AGENT_ID=$(ant beta:agents create --transform id --raw-output < coding-assistant.agent.yaml)
+
+        echo "Agent ID: $AGENT_ID"
+        ```
+
+        <File filename="coding-assistant.agent.yaml">
+          ```yaml
+          name: Coding Assistant
+          model:
+            id: claude-opus-5
+          system: You are a helpful coding assistant. Write clean, well-documented code.
+          tools:
+            - type: agent_toolset_20260401
+          ```
+        </File>
+      </MultiFileExample>
 
       ```python Python
       from anthropic import Anthropic
@@ -176,7 +187,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 
       agent = client.beta.agents.create(
           name="Coding Assistant",
-          model="claude-opus-4-8",
+          model="claude-opus-5",
           system="You are a helpful coding assistant. Write clean, well-documented code.",
           tools=[
               {"type": "agent_toolset_20260401"},
@@ -193,7 +204,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 
       const agent = await client.beta.agents.create({
         name: "Coding Assistant",
-        model: "claude-opus-4-8",
+        model: "claude-opus-5",
         system: "You are a helpful coding assistant. Write clean, well-documented code.",
         tools: [
           { type: "agent_toolset_20260401" },
@@ -215,7 +226,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
       var agent = await client.Beta.Agents.Create(new()
       {
           Name = "Coding Assistant",
-          Model = BetaManagedAgentsModel.ClaudeOpus4_8,
+          Model = BetaManagedAgentsModel.ClaudeOpus5,
           System = "You are a helpful coding assistant. Write clean, well-documented code.",
           Tools =
           [
@@ -246,7 +257,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
       	agent, err := client.Beta.Agents.New(ctx, anthropic.BetaAgentNewParams{
       		Name: "Coding Assistant",
       		Model: anthropic.BetaManagedAgentsModelConfigParams{
-      			ID: anthropic.BetaManagedAgentsModelClaudeOpus4_8,
+      			ID: anthropic.BetaManagedAgentsModelClaudeOpus5,
       		},
       		System: anthropic.String("You are a helpful coding assistant. Write clean, well-documented code."),
       		Tools: []anthropic.BetaAgentNewParamsToolUnion{{
@@ -280,7 +291,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 
           var agent = client.beta().agents().create(AgentCreateParams.builder()
               .name("Coding Assistant")
-              .model(BetaManagedAgentsModel.CLAUDE_OPUS_4_8)
+              .model(BetaManagedAgentsModel.CLAUDE_OPUS_5)
               .system("You are a helpful coding assistant. Write clean, well-documented code.")
               .addTool(BetaManagedAgentsAgentToolset20260401Params.builder()
                   .type(BetaManagedAgentsAgentToolset20260401Params.Type.AGENT_TOOLSET_20260401)
@@ -297,7 +308,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 
       $agent = $client->beta->agents->create(
           name: 'Coding Assistant',
-          model: 'claude-opus-4-8',
+          model: 'claude-opus-5',
           system: 'You are a helpful coding assistant. Write clean, well-documented code.',
           tools: [
               ['type' => 'agent_toolset_20260401'],
@@ -314,7 +325,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 
       agent = client.beta.agents.create(
         name: "Coding Assistant",
-        model: "claude-opus-4-8",
+        model: "claude-opus-5",
         system_: "You are a helpful coding assistant. Write clean, well-documented code.",
         tools: [{type: "agent_toolset_20260401"}]
       )
@@ -323,7 +334,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
       ```
     </CodeGroup>
 
-    The `agent_toolset_20260401` tool type enables the full set of pre-built agent tools (bash, file operations, web search, and more). See [Tools](/docs/en/managed-agents/tools) for the complete list and per-tool configuration options.
+    The `agent_toolset_20260401` tool type enables the full set of pre-built agent tools (bash, file operations, web search, and more). See [Tools](https://platform.claude.com/docs/en/managed-agents/tools) for the complete list and per-tool configuration options.
 
     Save the returned `agent.id`. You'll reference it in every session you create.
   </Step>
@@ -332,7 +343,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
     An environment defines the sandbox where your agent runs.
 
     <CodeGroup defaultLanguage="CLI">
-      ```bash curl
+      ```bash cURL
       environment=$(
         curl -sS --fail-with-body https://api.anthropic.com/v1/environments \
           -H "x-api-key: $ANTHROPIC_API_KEY" \
@@ -355,11 +366,23 @@ export ANTHROPIC_API_KEY="your-api-key-here"
       echo "Environment ID: $ENVIRONMENT_ID"
       ```
 
-      ```bash CLI
-      ant beta:environments create \
-        --name "quickstart-env" \
-        --config '{type: cloud, networking: {type: unrestricted}}'
-      ```
+      <MultiFileExample language="cli" label="CLI">
+        ```bash CLI
+        ENVIRONMENT_ID=$(ant beta:environments create --transform id --raw-output < quickstart.environment.yaml)
+
+        echo "Environment ID: $ENVIRONMENT_ID"
+        ```
+
+        <File filename="quickstart.environment.yaml">
+          ```yaml
+          name: quickstart-env
+          config:
+            type: cloud
+            networking:
+              type: unrestricted
+          ```
+        </File>
+      </MultiFileExample>
 
       ```python Python
       environment = client.beta.environments.create(
@@ -446,9 +469,9 @@ export ANTHROPIC_API_KEY="your-api-key-here"
     Save the returned `environment.id`. You'll reference it in every session you create.
 
     <Tip>
-      To run the sandbox on your own infrastructure instead of a cloud sandbox, see
+      To run the sandbox on your own infrastructure instead of a cloud sandbox, see 
 
-      [Self-hosted sandboxes](/docs/en/managed-agents/self-hosted-sandboxes)
+      [Self-hosted sandboxes](https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes)
 
       .
     </Tip>
@@ -458,7 +481,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
     Create a session that references your agent and environment.
 
     <CodeGroup>
-      ```bash curl
+      ```bash cURL
       session=$(
         curl -sS --fail-with-body https://api.anthropic.com/v1/sessions \
           -H "x-api-key: $ANTHROPIC_API_KEY" \
@@ -475,6 +498,16 @@ export ANTHROPIC_API_KEY="your-api-key-here"
       )
 
       SESSION_ID=$(jq -er '.id' <<<"$session")
+
+      echo "Session ID: $SESSION_ID"
+      ```
+
+      ```bash CLI
+      SESSION_ID=$(ant beta:sessions create \
+        --agent "$AGENT_ID" \
+        --environment-id "$ENVIRONMENT_ID" \
+        --title "Quickstart session" \
+        --transform id --raw-output)
 
       echo "Session ID: $SESSION_ID"
       ```
@@ -559,54 +592,14 @@ export ANTHROPIC_API_KEY="your-api-key-here"
     Open a stream, send a user event, then process events as they arrive:
 
     <CodeGroup>
-      ```bash curl
-      # Send the user message first; the API buffers events until the stream attaches
-      curl -sS --fail-with-body \
-        "https://api.anthropic.com/v1/sessions/$SESSION_ID/events" \
-        -H "x-api-key: $ANTHROPIC_API_KEY" \
-        -H "anthropic-version: 2023-06-01" \
-        -H "anthropic-beta: managed-agents-2026-04-01" \
-        -H "content-type: application/json" \
-        -d @- >/dev/null <<'EOF'
-      {
-        "events": [
-          {
-            "type": "user.message",
-            "content": [
-              {
-                "type": "text",
-                "text": "Create a Python script that generates the first 20 Fibonacci numbers and saves them to fibonacci.txt"
-              }
-            ]
-          }
-        ]
-      }
-      EOF
+      ```bash cURL
+      # This workflow does not translate well to a one-off shell command.
+      # Use one of the SDK examples in this code group instead.
+      ```
 
-      # Open the SSE stream and process events as they arrive
-      while IFS= read -r line; do
-        [[ $line == data:* ]] || continue
-        json=${line#data: }
-        case $(jq -r '.type' <<<"$json") in
-          agent.message)
-            jq -j '.content[] | select(.type == "text") | .text' <<<"$json"
-            ;;
-          agent.tool_use)
-            printf '\n[Using tool: %s]\n' "$(jq -r '.name' <<<"$json")"
-            ;;
-          session.status_idle)
-            printf '\n\nAgent finished.\n'
-            break
-            ;;
-        esac
-      done < <(
-        curl -sS -N --fail-with-body \
-          "https://api.anthropic.com/v1/sessions/$SESSION_ID/stream" \
-          -H "x-api-key: $ANTHROPIC_API_KEY" \
-          -H "anthropic-version: 2023-06-01" \
-          -H "anthropic-beta: managed-agents-2026-04-01" \
-          -H "Accept: text/event-stream"
-      )
+      ```bash CLI
+      # This workflow does not translate well to a one-off shell command.
+      # Use one of the SDK examples in this code group instead.
       ```
 
       ```python Python
@@ -773,7 +766,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
           // Process streaming events
           for (var event : (Iterable<BetaManagedAgentsStreamSessionEvents>) stream.stream()::iterator) {
               if (event.isAgentMessage()) {
-                  event.asAgentMessage().content().forEach(block -> IO.print(block.text()));
+                  event.asAgentMessage().content().forEach(block -> block.text().ifPresent(textBlock -> IO.print(textBlock.text())));
               } else if (event.isAgentToolUse()) {
                   IO.println("\n[Using tool: " + event.asAgentToolUse().name() + "]");
               } else if (event.isSessionStatusIdle()) {
@@ -843,7 +836,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
       ```
     </CodeGroup>
 
-    The agent writes a Python script, executes it in the sandbox, and verifies the output file was created. Your output looks similar to this:
+    The agent writes a Python script, runs it in the sandbox, and verifies the output file was created. Your output looks similar to this:
 
     ```text wrap
     I'll create a Python script that generates the first 20 Fibonacci numbers and saves them to a file.
@@ -864,30 +857,52 @@ When you send a user event, Claude Managed Agents:
 
 1. **Provisions a sandbox:** Your environment configuration determines how it's built.
 2. **Runs the agent loop:** Claude determines which tools to use based on your message.
-3. **Executes tools:** File writes, bash commands, and other tool calls run inside the sandbox.
+3. **Runs tools:** File writes, bash commands, and other tool calls run inside the sandbox.
 4. **Streams events:** You receive real-time updates as the agent works.
 5. **Goes idle:** The agent emits a `session.status_idle` event when it has nothing more to do.
+
+## Build a complete app
+
+Each of these quickstarts pairs Claude Managed Agents with a popular chat framework to make a complete, runnable application. In each one, the framework renders the chat surface while a managed session runs the agent loop server-side: the session holds the transcript, runs tools in a sandbox, and streams events that the front end renders.
+
+<CardGroup cols={3}>
+  <Card title="Chat SDK" icon="github-logo" href="https://github.com/anthropics/claude-quickstarts/tree/main/managed-agents/chat-sdk">
+    A research analyst in a browser chat built with Vercel's Chat SDK. Each conversation is one persistent session that streams its reply while a live feed shows the tool calls. Swapping the Chat SDK adapter moves the same handler to Slack, Teams, Discord, or WhatsApp.
+  </Card>
+
+  <Card title="assistant-ui" icon="github-logo" href="https://github.com/anthropics/claude-quickstarts/tree/main/managed-agents/assistant-ui">
+    A spreadsheet analyst in a chat built from assistant-ui primitives. Sessions are the thread list, one reducer turns the session event log into messages and tool cards, and each bash command renders an inline Allow/Deny gate before it runs.
+  </Card>
+
+  <Card title="CopilotKit (AG-UI)" icon="github-logo" href="https://github.com/anthropics/claude-quickstarts/tree/main/managed-agents/copilot-kit-ag-ui">
+    A personal finance assistant in a CopilotKit chat. The AG-UI adapter for Claude Managed Agents maps each chat thread to a managed session and streams replies token by token, and custom tools render interactive charts inline in the conversation.
+  </Card>
+</CardGroup>
 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Define your agent" icon="brain" href="/docs/en/managed-agents/agent-setup">
+  <Card title="Define your agent" icon="brain" href="https://platform.claude.com/docs/en/managed-agents/agent-setup">
     Create reusable, versioned agent configurations
   </Card>
 
-  <Card title="Configure environments" icon="settings" href="/docs/en/managed-agents/environments">
+  <Card title="Configure environments" icon="settings" href="https://platform.claude.com/docs/en/managed-agents/environments">
     Customize networking and sandbox settings
   </Card>
 
-  <Card title="Agent tools" icon="tool" href="/docs/en/managed-agents/tools">
+  <Card title="Agent tools" icon="tool" href="https://platform.claude.com/docs/en/managed-agents/tools">
     Enable specific tools for your agent
   </Card>
 
-  <Card title="Session event stream" icon="lightning" href="/docs/en/managed-agents/events-and-streaming">
+  <Card title="Session event stream" icon="lightning" href="https://platform.claude.com/docs/en/managed-agents/events-and-streaming">
     Handle events and steer the agent mid-execution
   </Card>
 
-  <Card title="Scheduled deployments" icon="arrows-clockwise" href="/docs/en/managed-agents/scheduled-deployments">
+  <Card title="Scheduled deployments" icon="arrows-clockwise" href="https://platform.claude.com/docs/en/managed-agents/scheduled-deployments">
     Run your agent on a recurring cron schedule
+  </Card>
+
+  <Card title="Knowledge wiki quickstart" icon="github-logo" href="https://github.com/anthropics/claude-quickstarts/tree/main/managed-agents/knowledge-wiki">
+    Distill a document corpus once into a knowledge wiki, then answer repeated questions from it at a fraction of the cost
   </Card>
 </CardGroup>

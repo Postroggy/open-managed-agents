@@ -1,21 +1,21 @@
-# Cloud environment setup
-
-Customize cloud sandboxes for your sessions.
-
+---
+title: Cloud environment setup
+url: https://platform.claude.com/docs/en/managed-agents/environments
+description: Customize cloud sandboxes for your sessions.
 ---
 
 Environments define the sandbox configuration where your agent runs. You create an environment once, then reference its ID each time you start a session. Multiple sessions can share the same environment, but each session gets its own isolated sandbox (a fresh Linux container).
 
-This page covers `type: cloud` environments. To run sandboxes on your own infrastructure, see [Self-hosted sandboxes](/docs/en/managed-agents/self-hosted-sandboxes).
+This page covers `type: cloud` environments. To run sandboxes on your own infrastructure, see [Self-hosted sandboxes](https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes).
 
 <Note>
-  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](/docs/en/api/beta-headers#endpoint-specific-headers).
+  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](https://platform.claude.com/docs/en/api/beta-headers#endpoint-specific-headers).
 </Note>
 
 ## Create an environment
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   environment=$(curl -fsS https://api.anthropic.com/v1/environments \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -36,11 +36,21 @@ This page covers `type: cloud` environments. To run sandboxes on your own infras
   echo "Environment ID: $environment_id"
   ```
 
-  ```bash CLI
-  ant beta:environments create \
-    --name "python-dev" \
-    --config '{type: cloud, networking: {type: unrestricted}}'
-  ```
+  <MultiFileExample language="cli" label="CLI">
+    ```bash CLI
+    ant beta:environments create < python-dev.environment.yaml
+    ```
+
+    <File filename="python-dev.environment.yaml">
+      ```yaml
+      name: python-dev
+      config:
+        type: cloud
+        networking:
+          type: unrestricted
+      ```
+    </File>
+  </MultiFileExample>
 
   ```python Python
   environment = client.beta.environments.create(
@@ -132,10 +142,10 @@ Use a unique, descriptive `name` so you can tell environments apart.
 
 ## Use the environment in a session
 
-Pass the environment ID as a string when [creating a session](/docs/en/managed-agents/sessions).
+Pass the environment ID as a string when [creating a session](https://platform.claude.com/docs/en/managed-agents/sessions).
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   session=$(curl -fsS https://api.anthropic.com/v1/sessions \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -151,9 +161,7 @@ Pass the environment ID as a string when [creating a session](/docs/en/managed-a
   ```
 
   ```bash CLI
-  ant beta:sessions create \
-    --agent "$AGENT_ID" \
-    --environment-id "$ENVIRONMENT_ID"
+  ant beta:sessions create --agent "$AGENT_ID" --environment-id "$ENVIRONMENT_ID"
   ```
 
   ```python Python
@@ -219,7 +227,7 @@ Pass the environment ID as a string when [creating a session](/docs/en/managed-a
 The `packages` field pre-installs packages into the sandbox before the agent starts. Packages are installed by their respective package managers and cached across sessions that share the same environment. When multiple package managers are specified, they run in alphabetical order (apt, cargo, gem, go, npm, pip). You can optionally pin specific versions. Unpinned packages install the latest version.
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   environment=$(curl -fsS https://api.anthropic.com/v1/environments \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -241,22 +249,28 @@ The `packages` field pre-installs packages into the sandbox before the agent sta
   )
   ```
 
-  ```bash CLI
-  ant beta:environments create <<'YAML'
-  name: data-analysis
-  config:
-    type: cloud
-    packages:
-      pip:
-        - pandas
-        - numpy
-        - scikit-learn
-      npm:
-        - express
-    networking:
-      type: unrestricted
-  YAML
-  ```
+  <MultiFileExample language="cli" label="CLI">
+    ```bash CLI
+    ant beta:environments create < environment.yaml
+    ```
+
+    <File filename="environment.yaml">
+      ```yaml
+      name: data-analysis
+      config:
+        type: cloud
+        packages:
+          pip:
+            - pandas
+            - numpy
+            - scikit-learn
+          npm:
+            - express
+        networking:
+          type: unrestricted
+      ```
+    </File>
+  </MultiFileExample>
 
   ```python Python
   environment = client.beta.environments.create(
@@ -287,6 +301,8 @@ The `packages` field pre-installs packages into the sandbox before the agent sta
   ```
 
   ```csharp C#
+  using Anthropic.Models.Beta.Environments;
+
   var environment = await client.Beta.Environments.Create(new()
   {
       Name = "data-analysis",
@@ -324,6 +340,9 @@ The `packages` field pre-installs packages into the sandbox before the agent sta
   ```
 
   ```java Java
+  import com.anthropic.models.beta.environments.*;
+  import java.util.List;
+
   var environment = client.beta().environments().create(EnvironmentCreateParams.builder()
       .name("data-analysis")
       .config(BetaCloudConfigParams.builder()
@@ -369,16 +388,16 @@ Supported package managers:
 
 | Field   | Package manager           | Example                                     |
 | ------- | ------------------------- | ------------------------------------------- |
-| `apt`   | System packages (apt-get) | `"ffmpeg"`                                  |
-| `cargo` | Rust (cargo)              | `"ripgrep@14.0.0"`                          |
+| `apt`   | System packages (apt-get) | `"graphviz"`                                |
+| `cargo` | Rust (cargo)              | `"hyperfine@1.18.0"`                        |
 | `gem`   | Ruby (gem)                | `"rails:7.1.0"`                             |
 | `go`    | Go modules                | `"golang.org/x/tools/cmd/goimports@latest"` |
 | `npm`   | Node.js (npm)             | `"express@4.18.0"`                          |
-| `pip`   | Python (pip)              | `"pandas==2.2.0"`                           |
+| `pip`   | Python (pip)              | `"sqlalchemy==2.0.30"`                      |
 
 ### Networking
 
-The `networking` field controls the sandbox's outbound network access. It does not affect the allowed domains for the `web_search` or `web_fetch` tools.
+The `networking` field controls the sandbox's outbound network access. It does not affect the `web_search` or `web_fetch` tools, which run on Anthropic's servers; to restrict the sites those tools can reach, set `allowed_domains` or `blocked_domains` on the tool's entry in the agent toolset. See [Restrict web search and web fetch domains](https://platform.claude.com/docs/en/managed-agents/tools#restrict-web-search-and-web-fetch-domains).
 
 | Mode           | Description                                                                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -388,7 +407,7 @@ The `networking` field controls the sandbox's outbound network access. It does n
 The following example creates an environment with `limited` networking:
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   curl -fsS https://api.anthropic.com/v1/environments \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -408,19 +427,25 @@ The following example creates an environment with `limited` networking:
     }'
   ```
 
-  ```bash CLI
-  ant beta:environments create <<'YAML'
-  name: api-access
-  config:
-    type: cloud
-    networking:
-      type: limited
-      allowed_hosts:
-        - api.example.com
-      allow_mcp_servers: true
-      allow_package_managers: true
-  YAML
-  ```
+  <MultiFileExample language="cli" label="CLI">
+    ```bash CLI
+    ant beta:environments create < environment.yaml
+    ```
+
+    <File filename="environment.yaml">
+      ```yaml
+      name: api-access
+      config:
+        type: cloud
+        networking:
+          type: limited
+          allowed_hosts:
+            - api.example.com
+          allow_mcp_servers: true
+          allow_package_managers: true
+      ```
+    </File>
+  </MultiFileExample>
 
   ```python Python
   environment = client.beta.environments.create(
@@ -453,6 +478,8 @@ The following example creates an environment with `limited` networking:
   ```
 
   ```csharp C#
+  using Anthropic.Models.Beta.Environments;
+
   var environment = await client.Beta.Environments.Create(new()
   {
       Name = "api-access",
@@ -490,6 +517,9 @@ The following example creates an environment with `limited` networking:
   ```
 
   ```java Java
+  import com.anthropic.models.beta.environments.*;
+  import java.util.List;
+
   var environment = client.beta().environments().create(EnvironmentCreateParams.builder()
       .name("api-access")
       .config(BetaCloudConfigParams.builder()
@@ -552,7 +582,7 @@ When using `limited` networking:
 ## Manage environments
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   # List environments
   environments=$(curl -fsS https://api.anthropic.com/v1/environments \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
@@ -690,16 +720,16 @@ When using `limited` networking:
 
 ## Pre-installed runtimes
 
-Cloud sandboxes include common runtimes out of the box. See [Cloud sandbox reference](/docs/en/managed-agents/cloud-sandboxes-reference) for the full list of pre-installed languages, databases, and utilities.
+Cloud sandboxes include common language runtimes, databases, and command-line tools out of the box. See [Cloud sandbox reference](https://platform.claude.com/docs/en/managed-agents/cloud-sandboxes-reference) for the full list.
 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Cloud sandbox reference" icon="book" href="/docs/en/managed-agents/cloud-sandboxes-reference">
+  <Card title="Cloud sandbox reference" icon="book" href="https://platform.claude.com/docs/en/managed-agents/cloud-sandboxes-reference">
     Pre-installed packages, databases, and utilities available in cloud sandboxes.
   </Card>
 
-  <Card title="Start a session" icon="play" href="/docs/en/managed-agents/sessions">
+  <Card title="Start a session" icon="play" href="https://platform.claude.com/docs/en/managed-agents/sessions">
     Create a session to run your agent and start running tasks.
   </Card>
 </CardGroup>

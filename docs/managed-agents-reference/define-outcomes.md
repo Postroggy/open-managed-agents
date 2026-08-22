@@ -1,7 +1,7 @@
-# Define outcomes
-
-Tell the agent what 'done' looks like, and let it iterate until it gets there.
-
+---
+title: Define outcomes
+url: https://platform.claude.com/docs/en/managed-agents/define-outcomes
+description: Tell the agent what 'done' looks like, and let it iterate until it gets there.
 ---
 
 An outcome tells the session what the end result should look like and how to measure its quality. The agent works toward that target, self-evaluating and iterating until the outcome is met.
@@ -11,7 +11,7 @@ When you define an outcome, the harness automatically provisions a *grader* to e
 The grader returns an explanation summarizing which criteria passed or failed, or confirming that the artifact satisfies the rubric. That feedback is handed back to the agent for the next iteration.
 
 <Note>
-  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](/docs/en/api/beta-headers#endpoint-specific-headers).
+  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](https://platform.claude.com/docs/en/api/beta-headers#endpoint-specific-headers).
 </Note>
 
 ## Create a rubric
@@ -52,25 +52,21 @@ Example rubric:
 - Sensitivity analysis on WACC and terminal growth rate is included
 ```
 
-Pass the rubric as inline text on `user.define_outcome` (see [Create a session with an outcome](#create-a-session-with-an-outcome)), or upload it through the Files API for reuse across sessions.
-
-<Note>
-  Uploading through the Files API requires the `files-api-2025-04-14` beta header, which the SDKs send automatically. The curl example passes its headers explicitly.
-</Note>
+Pass the rubric as inline text on `user.define_outcome` (see [Create a session with an outcome](https://platform.claude.com/docs/en/managed-agents/define-outcomes#create-a-session-with-an-outcome)), or upload it through the Files API for reuse across sessions.
 
 <CodeGroup>
-  ```bash curl
+  ```bash cURL
   rubric=$(curl -fsSL https://api.anthropic.com/v1/files \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
-    -H "anthropic-beta: managed-agents-2026-04-01,files-api-2025-04-14" \
+    -H "anthropic-beta: managed-agents-2026-04-01" \
     -F file=@/tmp/rubric.md)
   rubric_id=$(jq -r '.id' <<<"$rubric")
   printf 'Uploaded rubric: %s\n' "$rubric_id"
   ```
 
   ```bash CLI
-  RUBRIC_ID=$(ant beta:files upload \
+  RUBRIC_ID=$(ant files upload \
     --file /tmp/rubric.md \
     --transform id --raw-output)
   ```
@@ -94,7 +90,7 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
   """
   Path("/tmp/rubric.md").write_text(RUBRIC)
 
-  rubric = client.beta.files.upload(file=Path("/tmp/rubric.md"))
+  rubric = client.files.upload(file=Path("/tmp/rubric.md"))
   print(f"Uploaded rubric: {rubric.id}")
   ```
 
@@ -117,7 +113,7 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
   `;
   await writeFile("/tmp/rubric.md", RUBRIC);
 
-  const rubric = await client.beta.files.upload({
+  const rubric = await client.files.upload({
     file: await toFile(readFile("/tmp/rubric.md"), "/tmp/rubric.md"),
   });
   console.log(`Uploaded rubric: ${rubric.id}`);
@@ -127,9 +123,9 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
   using Anthropic;
   using Anthropic.Models.Beta.Agents;
   using Anthropic.Models.Beta.Environments;
-  using Anthropic.Models.Beta.Files;
   using Anthropic.Models.Beta.Sessions;
   using Anthropic.Models.Beta.Sessions.Events;
+  using Anthropic.Models.Files;
 
   var client = new AnthropicClient();
 
@@ -145,7 +141,7 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
       """;
   await File.WriteAllTextAsync("/tmp/rubric.md", Rubric);
 
-  var rubric = await client.Beta.Files.Upload(new()
+  var rubric = await client.Files.Upload(new()
   {
       File = File.OpenRead("/tmp/rubric.md"),
   });
@@ -188,7 +184,7 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
   		panic(err)
   	}
 
-  	uploaded, err := client.Beta.Files.Upload(ctx, anthropic.BetaFileUploadParams{
+  	uploaded, err := client.Files.Upload(ctx, anthropic.FileUploadParams{
   		File: anthropic.File(f, "rubric.md", "text/markdown"),
   	})
   	if err != nil {
@@ -207,12 +203,12 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
   import com.anthropic.models.beta.environments.BetaCloudConfigParams;
   import com.anthropic.models.beta.environments.EnvironmentCreateParams;
   import com.anthropic.models.beta.files.FileListParams;
-  import com.anthropic.models.beta.files.FileUploadParams;
   import com.anthropic.models.beta.sessions.SessionCreateParams;
   import com.anthropic.models.beta.sessions.events.BetaManagedAgentsTextRubricParams;
   import com.anthropic.models.beta.sessions.events.BetaManagedAgentsUserDefineOutcomeEventParams;
   import com.anthropic.models.beta.sessions.events.BetaManagedAgentsUserInterruptEventParams;
   import com.anthropic.models.beta.sessions.events.EventSendParams;
+  import com.anthropic.models.files.FileUploadParams;
 
   import java.io.InputStream;
   import java.nio.file.Files;
@@ -234,7 +230,7 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
           """;
       Files.writeString(Path.of("/tmp/rubric.md"), RUBRIC);
 
-      var rubric = client.beta().files().upload(
+      var rubric = client.files().upload(
           FileUploadParams.builder()
               .file(Path.of("/tmp/rubric.md"))
               .build());
@@ -259,7 +255,7 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
   MD;
   file_put_contents('/tmp/rubric.md', $rubricText);
 
-  $rubric = $client->beta->files->upload(
+  $rubric = $client->files->upload(
       file: FileParam::fromResource(fopen('/tmp/rubric.md', 'r'), contentType: 'text/markdown'),
   );
   echo "Uploaded rubric: {$rubric->id}\n";
@@ -283,17 +279,17 @@ Pass the rubric as inline text on `user.define_outcome` (see [Create a session w
   MD
   File.write("/tmp/rubric.md", RUBRIC)
 
-  rubric = client.beta.files.upload(file: Pathname.new("/tmp/rubric.md"))
+  rubric = client.files.upload(file: Pathname.new("/tmp/rubric.md"))
   puts "Uploaded rubric: #{rubric.id}"
   ```
 </CodeGroup>
 
 ## Create a session with an outcome
 
-The following examples create a [session](/docs/en/managed-agents/sessions) for an existing [agent](/docs/en/managed-agents/agent-setup) and [environment](/docs/en/managed-agents/environments) (both created separately), then send a `user.define_outcome` event. The agent begins work immediately. No additional user message event is required.
+The following examples create a [session](https://platform.claude.com/docs/en/managed-agents/sessions) for an existing [agent](https://platform.claude.com/docs/en/managed-agents/agent-setup) and [environment](https://platform.claude.com/docs/en/managed-agents/environments) (both created separately), then send a `user.define_outcome` event. The agent begins work immediately. No additional user message event is required.
 
 <CodeGroup>
-  ```bash curl
+  ```bash cURL
   # Create a session
   session=$(curl -fsSL https://api.anthropic.com/v1/sessions \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
@@ -339,8 +335,7 @@ The following examples create a [session](/docs/en/managed-agents/sessions) for 
     --transform id --raw-output)
 
   # Define the outcome — agent starts working on receipt
-  ant beta:sessions:events send \
-    --session-id "$SESSION_ID" <<YAML
+  ant beta:sessions:events send --session-id "$SESSION_ID" <<YAML
   events:
     - type: user.define_outcome
       description: Build a DCF model for Costco in .xlsx
@@ -536,13 +531,17 @@ The following examples create a [session](/docs/en/managed-agents/sessions) for 
   ```
 </CodeGroup>
 
+<Note>
+  You can also define the outcome in the create request itself: pass a single `user.define_outcome` event in [`initial_events`](https://platform.claude.com/docs/en/managed-agents/sessions#seed-the-session-with-initial-events) to create the session and start work toward the outcome in one call.
+</Note>
+
 ## Outcome events
 
-Progress on an outcome-oriented session is surfaced on the events [stream](/docs/en/managed-agents/events-and-streaming).
+Progress on an outcome-oriented session is surfaced on the events [stream](https://platform.claude.com/docs/en/managed-agents/events-and-streaming).
 
 * `agent.*` events (such as messages and tool use) show progress toward the outcome.
 * `span.outcome_evaluation_*` events are only emitted for outcome-oriented sessions and show the number of iteration loops and the grader's feedback process.
-* You can also send `user.message` [events](/docs/en/managed-agents/reference#event-types) to an outcome-oriented session to direct the agent's work as it progresses, but it isn't required: the agent works toward the outcome on its own, iterating until it succeeds or runs out of iterations.
+* You can also send `user.message` [events](https://platform.claude.com/docs/en/managed-agents/reference#event-types) to an outcome-oriented session to direct the agent's work as it progresses, but it isn't required: the agent works toward the outcome on its own, iterating until it succeeds or runs out of iterations.
 * A `user.interrupt` event pauses work on the current outcome and marks the `span.outcome_evaluation_end.result` as `interrupted`, allowing you to kick off a new outcome.
 * After the final outcome evaluation, the session can be continued as a conversational session, or a new outcome can be started. The session retains history of the prior outcome.
 
@@ -593,15 +592,15 @@ Heartbeat emitted while the grader runs. The grader's internal reasoning is opaq
 
 ### Outcome evaluation end
 
-Emitted after the grader finishes evaluating one iteration. The `result` field indicates what happens next.
+Emitted when an outcome evaluation cycle ends: after the grader finishes evaluating one iteration, or when the session is interrupted while an outcome is active. The `result` field indicates what happens next.
 
-| Result                   | Next                                                                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `satisfied`              | Session transitions to `idle`.                                                                                                                               |
-| `needs_revision`         | Agent starts a new iteration cycle.                                                                                                                          |
-| `max_iterations_reached` | One final acknowledgment turn follows before the session transitions to `idle`. No further evaluation runs.                                                  |
-| `failed`                 | Session transitions to `idle`. Returned when the rubric does not apply to the deliverables, for example if the description and rubric contradict each other. |
-| `interrupted`            | Only emitted if `outcome_evaluation_start` already fired before the interrupt.                                                                               |
+| Result                   | Next                                                                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `satisfied`              | Session transitions to `idle`.                                                                                                                                                                                            |
+| `needs_revision`         | Agent starts a new iteration cycle.                                                                                                                                                                                       |
+| `max_iterations_reached` | One final acknowledgment turn follows before the session transitions to `idle`. No further evaluation runs.                                                                                                               |
+| `failed`                 | Session transitions to `idle`. Returned when the rubric does not apply to the deliverables, for example if the description and rubric contradict each other.                                                              |
+| `interrupted`            | Emitted when the session is interrupted while an outcome is active, even if evaluation hadn't started yet. If no `outcome_evaluation_start` fired before the interrupt, `outcome_evaluation_start_id` is an empty string. |
 
 ```json
 {
@@ -624,10 +623,10 @@ Emitted after the grader finishes evaluating one iteration. The `result` field i
 
 ## Check outcome status
 
-You can either listen on the [event stream](/docs/en/managed-agents/events-and-streaming) for `span.outcome_evaluation_end`, or poll `GET /v1/sessions/:id` and read `outcome_evaluations[].result`. Until an evaluation completes, `result` reports `pending`, `running`, or `evaluating`:
+You can either listen on the [event stream](https://platform.claude.com/docs/en/managed-agents/events-and-streaming) for `span.outcome_evaluation_end`, or poll `GET /v1/sessions/{session_id}` and read `outcome_evaluations[].result`. Until an evaluation completes, `result` reports `pending`, `running`, or `evaluating`:
 
 <CodeGroup>
-  ```bash curl
+  ```bash cURL
   session=$(curl -fsSL "https://api.anthropic.com/v1/sessions/$session_id" \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -711,20 +710,16 @@ You can either listen on the [event stream](/docs/en/managed-agents/events-and-s
 
 ## Retrieve deliverables
 
-The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Once the session is idle, fetch them through the [Files API](/docs/en/build-with-claude/files) scoped to the session.
-
-<Note>
-  Filtering by `scope_id` requires the `managed-agents-2026-04-01` beta header on the files request. The SDK files methods send only the files beta automatically, so the examples pass it explicitly.
-</Note>
+The agent writes output files to `/mnt/session/outputs/` inside the sandbox. To retrieve them, list files through the [Files API](https://platform.claude.com/docs/en/build-with-claude/files) with the session ID as the `scope_id`, then download them by ID. Filtering by `scope_id` requires the `managed-agents-2026-04-01` beta header on the list request, so the SDK and CLI examples make that call through the `beta` namespace and pass the header explicitly. Files appear in the list shortly after the agent finishes writing them, sometimes a few seconds after the session goes idle. If a file you expect is not listed yet, list again after a short delay; once it appears in the list, its upload has finished.
 
 <CodeGroup>
-  ```bash curl
+  ```bash cURL
   # List files produced by this session
-  # scope_id filtering requires the managed-agents beta alongside the files beta
+  # scope_id filtering requires the managed-agents beta
   files=$(curl -fsSL "https://api.anthropic.com/v1/files?scope_id=$session_id" \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
-    -H "anthropic-beta: managed-agents-2026-04-01,files-api-2025-04-14")
+    -H "anthropic-beta: managed-agents-2026-04-01")
   jq -r '.data[] | "\(.id) \(.filename)"' <<<"$files"
 
   # Download a file
@@ -733,7 +728,7 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
     curl -fsSL "https://api.anthropic.com/v1/files/$file_id/content" \
       -H "x-api-key: $ANTHROPIC_API_KEY" \
       -H "anthropic-version: 2023-06-01" \
-      -H "anthropic-beta: managed-agents-2026-04-01,files-api-2025-04-14" \
+      -H "anthropic-beta: managed-agents-2026-04-01" \
       -o /tmp/output.txt
   fi
   ```
@@ -741,15 +736,14 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
   ```bash CLI
   # List files produced by this session
   # scope_id filtering requires the managed-agents beta on the files request
-  ant beta:files list --scope-id "$SESSION_ID" \
-    --beta managed-agents-2026-04-01
+  ant beta:files list --scope-id "$SESSION_ID" --beta managed-agents-2026-04-01
 
   # Download a file
   FILE_ID=$(ant beta:files list --scope-id "$SESSION_ID" \
     --beta managed-agents-2026-04-01 \
     --transform 'data[0].id' --raw-output)
   if [[ -n $FILE_ID ]]; then
-    ant beta:files download --file-id "$FILE_ID" --output /tmp/output.txt
+    ant files download --file-id "$FILE_ID" --output /tmp/output.txt
   fi
   ```
 
@@ -762,7 +756,7 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
 
   # Download a file
   if files.data:
-      content = client.beta.files.download(files.data[0].id)
+      content = client.files.download(files.data[0].id)
       content.write_to_file("/tmp/output.txt")
   ```
 
@@ -779,7 +773,7 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
 
   // Download a file
   if (files.data.length > 0) {
-    const content = await client.beta.files.download(files.data[0].id);
+    const content = await client.files.download(files.data[0].id);
     await writeFile("/tmp/output.txt", new Uint8Array(await content.arrayBuffer()));
   }
   ```
@@ -800,7 +794,7 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
   // Download a file
   if (files.Items.Count > 0)
   {
-      using var download = await client.Beta.Files.Download(files.Items[0].ID);
+      using var download = await client.Files.Download(files.Items[0].ID);
       await using var output = File.Create("/tmp/output.txt");
       await (await download.ReadAsStream()).CopyToAsync(output);
   }
@@ -822,7 +816,7 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
 
   // Download a file
   if len(files.Data) > 0 {
-  	resp, err := client.Beta.Files.Download(ctx, files.Data[0].ID, anthropic.BetaFileDownloadParams{})
+  	resp, err := client.Files.Download(ctx, files.Data[0].ID)
   	if err != nil {
   		panic(err)
   	}
@@ -852,7 +846,7 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
 
   // Download a file
   if (!files.data().isEmpty()) {
-      try (HttpResponse response = client.beta().files().download(files.data().getFirst().id())) {
+      try (HttpResponse response = client.files().download(files.data().getFirst().id())) {
           try (InputStream body = response.body()) {
               Files.copy(body, Path.of("/tmp/output.txt"), StandardCopyOption.REPLACE_EXISTING);
           }
@@ -864,13 +858,13 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
   // List files produced by this session
   // scope_id filtering requires the managed-agents beta on the files request
   $files = $client->beta->files->list(scopeID: $session->id, betas: ['managed-agents-2026-04-01']);
-  foreach ($files->data as $file) {
+  foreach ($files->getItems() as $file) {
       echo "{$file->id} {$file->filename}\n";
   }
 
   // Download a file
-  if (count($files->data) > 0) {
-      $content = $client->beta->files->download($files->data[0]->id);
+  if (count($files->getItems()) > 0) {
+      $content = $client->files->download($files->getItems()[0]->id);
       file_put_contents('/tmp/output.txt', $content);
   }
   ```
@@ -883,7 +877,7 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
 
   # Download a file
   if (first = files.data.first)
-    content = client.beta.files.download(first.id)
+    content = client.files.download(first.id)
     File.binwrite("/tmp/output.txt", content.read)
   end
   ```
@@ -892,15 +886,15 @@ The agent writes output files to `/mnt/session/outputs/` inside the sandbox. Onc
 ## Next steps
 
 <CardGroup cols={3}>
-  <Card title="Authenticate with vaults" icon="fingerprint" href="/docs/en/managed-agents/vaults">
+  <Card title="Authenticate with vaults" icon="fingerprint" href="https://platform.claude.com/docs/en/managed-agents/vaults">
     Register per-user credentials when creating sessions.
   </Card>
 
-  <Card title="Session event stream" icon="lightning" href="/docs/en/managed-agents/events-and-streaming">
+  <Card title="Session event stream" icon="lightning" href="https://platform.claude.com/docs/en/managed-agents/events-and-streaming">
     Send events, stream responses, and interrupt or redirect your session mid-execution.
   </Card>
 
-  <Card title="Adding files" icon="file" href="/docs/en/managed-agents/files">
+  <Card title="Adding files" icon="file" href="https://platform.claude.com/docs/en/managed-agents/files">
     Upload files and mount them in your sandbox for reading and processing.
   </Card>
 </CardGroup>

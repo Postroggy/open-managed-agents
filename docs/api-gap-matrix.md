@@ -1,7 +1,8 @@
 # OMA vs 官方 Claude API：端点与契约对齐矩阵
 
-> 核对基准：官方 API 参考文档镜像（`docs/api-reference/`，下载于 2026-08-21）
+> 核对基准：官方 API 参考文档镜像（`docs/api-reference/`，2026-08-22 全面镜像，384 个文件）
 > 核对对象：OMA 当前代码（`internal/` 路由注册，截至 2026-08-21）
+> 端点统计基准：本节端点数量（103）与各分组来自 2026-08-21 旧镜像（114 个文件）的全量提取；2026-08-22 镜像范围更全（384 个文件，新增 admin/compliance/完整 beta 资源），端点总数待全量复核更新，第四节 4.1 的抽查结论已按新镜像复核。
 > 方法：官方 103 个唯一端点（方法+路径去重）逐条对照 OMA 路由注册
 
 ## 一、结论速览
@@ -14,7 +15,7 @@
 | 完全对齐（官方 ∩ OMA） | 80 |
 | 契约层面缺口（路径对上、语义缺） | 若干（见第四节） |
 
-> 注：官方端点从 `docs/api-reference/` 各页正文 `**method** \`/path\`` 提取并去重；`api_beta-headers.md` 等通用页的示例端点不计入。
+> 注：官方端点从 `docs/api-reference/` 各页正文 `**method** \`/path\`` 提取并去重；`beta-headers.md` 等通用页的示例端点不计入。
 
 ## 二、官方 103 端点分组
 
@@ -69,6 +70,21 @@
 | `system.message` 缺模型能力校验 | 官方仅部分模型支持，否则 400 | OMA 接受但不按模型拒绝 | 未开 |
 | `redacted` 内容块拒绝规则 | 官方用户事件带 `redacted` 块返 400 | `validateContentBlocks` 未见相关逻辑 | 未开 |
 | 上传文件 `downloadable` 语义 | 官方生成文件可下载（200），上传文件不可下载 | 对齐官方 ✅（`files/handler.go:152`） | 无 |
+
+### 4.1 按最新 API reference 复核 `docs/managed-agents-gap-issues.md`（2026-08-22）
+
+复核基准：`docs/api-reference/`（2026-08-22 全面镜像，384 个文件）为唯一文档依据，`docs/managed-agents-reference/`（2026-08-22 同步更新，27 页）不作为 API 依据。仅记录与 gap 清单不一致的复核结果。
+
+| 原清单项 | 复核结果 |
+|---|---|
+| P1 #9 `[Environments] init_script` | 最新 `environments/create` 字段仅 `name/config/description/metadata`，无 `init_script`；`deployments/create` 亦无。**依据不成立，不开 issue** |
+| P1 #10 `[Vaults] mcp_oauth 运行时自动 refresh` | 最新 `vaults/create` 字段仅 `display_name/metadata`，无 oauth/refresh 相关契约。**依据不成立，不开 issue** |
+| P1 #12 `[Rate Limits] endpoint 级限流` | 依据成立：`rate-limits.md` "Managed Agents" 章节明确 Create 端点 300 RPM、Read 端点 1,200 RPM（org 级，与 Messages API 限额独立） |
+| P2 #17 `[Sessions] resources 支持 mcp_server / attachment 类型` | 最新 `sessions/resources/retrieve` 的 `type` 仅 `github_repository`/`file`/`memory_store` 三种，无 `mcp_server`/`attachment`。**依据不成立，不开 issue** |
+| P2 #19 `[Beta] 统一 anthropic-beta header 门禁` | 依据成立：`beta-headers.md` 明确 `/v1/agents`、`/v1/sessions`、`/v1/environments` 需 `managed-agents-2026-04-01`；memory store 端点用 `agent-memory-2026-07-22` 替换，同时发送两者返回 400 |
+| P1 #8 `[Webhooks] 补齐 agent/deployment/deployment_run/environment/memory_store 事件` | 2026-08-22 镜像新增 `beta/webhooks.md`：官方 webhook 事件域类型共 **45 种**（agent ×4、deployment ×9、deployment_run ×3、environment ×4、memory_store ×3、session ×16、vault ×5、vault_credential ×4 等），**远超原清单 5 大类**。依据成立，清单项仍为"待定"（未开 issue），需按新版 45 种事件全量对表 |
+
+其余 P0 已开 issue（#250-#255）及 P1/P2 未开项（P1 #7/#11，P2 #13-#16/#18/#20-#22）与最新 API reference 一致，未另行列出。
 
 ## 五、OMA 有、官方无（20 个扩展端点）
 

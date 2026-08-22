@@ -1,8 +1,8 @@
 # Open Managed Agents vs Claude Managed Agents 官方能力差距分析
 
 > 分支: `docs/managed-agents-gap`（仅推送到 fork，不提 PR）
-> 初始生成: 2026-07-17 ｜ 全量核查更新: 2026-07-17
-> 对照来源: Claude Managed Agents 官方文档，本地镜像见 [`docs/managed-agents-reference/`](./managed-agents-reference/README.md)（26 个页面，已逐页核查）
+> 初始生成: 2026-07-17 ｜ 全量核查更新: 2026-07-17 ｜ 文档镜像更新: 2026-08-22（27 页）
+> 对照来源: Claude Managed Agents 官方文档，本地镜像见 [`docs/managed-agents-reference/`](./managed-agents-reference/README.md)（27 个页面，2026-08-22 更新）
 > 目的: 识别 oma 相对官方 Managed Agents 的能力缺失与不完善之处，作为代码贡献着力点的排序依据。
 
 ## 1. 方法
@@ -263,7 +263,7 @@ OMA 设计上要比官方严格（一个 session 同时只一个 Active Turn、�
 
 ## 7. 参考资源
 
-- 官方文档镜像: [`docs/managed-agents-reference/`](./managed-agents-reference/README.md)（26 个页面，2026-07-17 下载）
+- 官方文档镜像: [`docs/managed-agents-reference/`](./managed-agents-reference/README.md)（27 个页面，2026-08-22 更新）
 - Claude Code 逆向研究: `../claude-code-research/`
   - [`UNIFIED-INDEX.md`](../../../claude-code-research/UNIFIED-INDEX.md) — 总索引
   - `reports/prompt-cache-architecture/` — prompt caching 8 篇报告

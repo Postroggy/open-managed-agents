@@ -2,206 +2,126 @@
 
 > 来源: https://platform.claude.com/docs/en/api/overview
 
-> 下载日期: 2026-08-21
+> 下载日期: 2026-08-22
 
-> 下载方式: `curl <page>.md`（官方原始 Markdown）
+> 下载方式: `curl <page>.md`（官方原始 Markdown，目录源自官方 `llms.txt` 的 `### API reference` 与 `### API Reference` 两个分类，排除 java/python 语言变体——本站以官方默认语言页为准）
 
-> 与 `docs/managed-agents-reference/`（概念页镜像）互补；本目录为 **API 端点参考**。
+> 与 `docs/managed-agents-reference/`（Managed Agents 概念指南镜像）互补；本目录为 **API 端点参考**。
 
 > 内容版权归 Anthropic 所有；仅本地参考。
 
 
-共 114 个文件。
+共 384 个文件（2026-08-22 版本，覆盖 2026-08-21 旧镜像 114 个文件）。
 
 
 ## 索引
 
 
-### 通用 / 平台约定
+### 通用 / 平台约定（顶层）
 
 | 文件 | 官方 URL |
 |---|---|
-| [`README`](./README.md) |  |
-| [`api/beta-headers`](./api_beta-headers.md) | https://platform.claude.com/docs/en/api/beta-headers |
-| [`api/errors`](./api_errors.md) | https://platform.claude.com/docs/en/api/errors |
-| [`api/ip-addresses`](./api_ip-addresses.md) | https://platform.claude.com/docs/en/api/ip-addresses |
-| [`api/overview`](./api_overview.md) | https://platform.claude.com/docs/en/api/overview |
-| [`api/rate-limits`](./api_rate-limits.md) | https://platform.claude.com/docs/en/api/rate-limits |
-| [`api/service-tiers`](./api_service-tiers.md) | https://platform.claude.com/docs/en/api/service-tiers |
-| [`api/supported-regions`](./api_supported-regions.md) | https://platform.claude.com/docs/en/api/supported-regions |
-| [`api/versioning`](./api_versioning.md) | https://platform.claude.com/docs/en/api/versioning |
-| [`manage-claude/admin-api`](./manage-claude_admin-api.md) | https://platform.claude.com/docs/en/manage-claude/admin-api |
+| [`overview`](./overview.md) | https://platform.claude.com/docs/en/api/overview |
+| [`beta-headers`](./beta-headers.md) | https://platform.claude.com/docs/en/api/beta-headers |
+| [`errors`](./errors.md) | https://platform.claude.com/docs/en/api/errors |
+| [`ip-addresses`](./ip-addresses.md) | https://platform.claude.com/docs/en/api/ip-addresses |
+| [`rate-limits`](./rate-limits.md) | https://platform.claude.com/docs/en/api/rate-limits |
+| [`service-tiers`](./service-tiers.md) | https://platform.claude.com/docs/en/api/service-tiers |
+| [`supported-regions`](./supported-regions.md) | https://platform.claude.com/docs/en/api/supported-regions |
+| [`versioning`](./versioning.md) | https://platform.claude.com/docs/en/api/versioning |
+| [`claude-code/routines-fire`](./claude-code/routines-fire.md) | https://platform.claude.com/docs/en/api/claude-code/routines-fire |
+| [`claude-platform-on-aws-iam-actions`](./claude-platform-on-aws-iam-actions.md) | https://platform.claude.com/docs/en/api/claude-platform-on-aws-iam-actions |
 
-### Messages / Completions
+### Messages / Completions / Models / Files / Skills（非 beta）
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/messages/create`](./api_python_beta_messages_create.md) | https://platform.claude.com/docs/en/api/python/beta/messages/create |
-| [`api/python/completions/create`](./api_python_completions_create.md) | https://platform.claude.com/docs/en/api/python/completions/create |
-| [`api/python/messages/count/tokens`](./api_python_messages_count_tokens.md) | https://platform.claude.com/docs/en/api/python/messages/count_tokens |
-| [`api/python/messages/create`](./api_python_messages_create.md) | https://platform.claude.com/docs/en/api/python/messages/create |
+> 每个资源目录含 landing 页（如 `messages.md`）；顶层另有同名 landing 页副本（如 `docs/api-reference/messages.md`），两者内容一致。
 
-### Message Batches
+| 目录 | 文件数 | 官方 URL 前缀 |
+|---|---|---|
+| [`messages/`](./messages/) | 9 | https://platform.claude.com/docs/en/api/messages/ |
+| [`completions/`](./completions/) | 1 | https://platform.claude.com/docs/en/api/completions/ |
+| [`models/`](./models/) | 2 | https://platform.claude.com/docs/en/api/models/ |
+| [`files/`](./files/) | 5 | https://platform.claude.com/docs/en/api/files/ |
+| [`skills/`](./skills/) | 9 | https://platform.claude.com/docs/en/api/skills/ |
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/messages/batches/cancel`](./api_python_messages_batches_cancel.md) | https://platform.claude.com/docs/en/api/python/messages/batches/cancel |
-| [`api/python/messages/batches/create`](./api_python_messages_batches_create.md) | https://platform.claude.com/docs/en/api/python/messages/batches/create |
-| [`api/python/messages/batches/delete`](./api_python_messages_batches_delete.md) | https://platform.claude.com/docs/en/api/python/messages/batches/delete |
-| [`api/python/messages/batches/list`](./api_python_messages_batches_list.md) | https://platform.claude.com/docs/en/api/python/messages/batches/list |
-| [`api/python/messages/batches/results`](./api_python_messages_batches_results.md) | https://platform.claude.com/docs/en/api/python/messages/batches/results |
-| [`api/python/messages/batches/retrieve`](./api_python_messages_batches_retrieve.md) | https://platform.claude.com/docs/en/api/python/messages/batches/retrieve |
+### 资源 landing 页（顶层）
 
-### Models
+> 各资源分类的入口页，位于顶层，与上述目录页内容一致。
 
 | 文件 | 官方 URL |
 |---|---|
-| [`api/python/beta/models/list`](./api_python_beta_models_list.md) | https://platform.claude.com/docs/en/api/python/beta/models/list |
-| [`api/python/beta/models/retrieve`](./api_python_beta_models_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/models/retrieve |
+| [`messages`](./messages.md) | https://platform.claude.com/docs/en/api/messages |
+| [`completions`](./completions.md) | https://platform.claude.com/docs/en/api/completions |
+| [`models`](./models.md) | https://platform.claude.com/docs/en/api/models |
+| [`files`](./files.md) | https://platform.claude.com/docs/en/api/files |
+| [`skills`](./skills.md) | https://platform.claude.com/docs/en/api/skills |
+| [`beta`](./beta.md) | https://platform.claude.com/docs/en/api/beta |
+| [`admin`](./admin.md) | https://platform.claude.com/docs/en/api/admin |
+| [`compliance`](./compliance.md) | https://platform.claude.com/docs/en/api/compliance |
 
-### Files
+### Beta API（Managed Agents 等新资源）
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/files/delete`](./api_python_beta_files_delete.md) | https://platform.claude.com/docs/en/api/python/beta/files/delete |
-| [`api/python/beta/files/download`](./api_python_beta_files_download.md) | https://platform.claude.com/docs/en/api/python/beta/files/download |
-| [`api/python/beta/files/list`](./api_python_beta_files_list.md) | https://platform.claude.com/docs/en/api/python/beta/files/list |
-| [`api/python/beta/files/retrieve/metadata`](./api_python_beta_files_retrieve_metadata.md) | https://platform.claude.com/docs/en/api/python/beta/files/retrieve_metadata |
-| [`api/python/beta/files/upload`](./api_python_beta_files_upload.md) | https://platform.claude.com/docs/en/api/python/beta/files/upload |
+> 目录对应官方侧边栏 "API reference → Beta" 分组；Managed Agents 相关端点均需
+> `managed-agents-2026-04-01`（或 `agent-memory-2026-07-22` 用于 memory store 端点）beta header。
+> 每个子目录含同名 landing 页（如 `beta/agents.md`，已计入各目录文件数，不在下表单独链接）。
 
-### Skills
+| 目录 | 文件数 | 说明 |
+|---|---|---|
+| [`beta/agents/`](./beta/agents/) | 8 | 含 landing 页 + Agent CRUD + versions |
+| [`beta/sessions/`](./beta/sessions/) | 24 | 含 landing 页 + events、resources、threads 子资源 |
+| [`beta/environments/`](./beta/environments/) | 16 | 含 landing 页 + work 子资源（poll/ack/heartbeat/stop…） |
+| [`beta/deployments/`](./beta/deployments/) | 9 | 含 landing 页 + run/pause/unpause |
+| [`beta/deployment_runs/`](./beta/deployment_runs/) | 3 | 含 landing 页 |
+| [`beta/vaults/`](./beta/vaults/) | 15 | 含 landing 页 + credentials（含 mcp_oauth_validate） |
+| [`beta/memory_stores/`](./beta/memory_stores/) | 17 | 含 landing 页 + memories、memory_versions |
+| [`beta/dreams/`](./beta/dreams/) | 6 | 含 landing 页 |
+| [`beta/skills/`](./beta/skills/) | 11 | 含 landing 页 + versions |
+| [`beta/tunnels/`](./beta/tunnels/) | 12 | 含 landing 页 + certificates |
+| [`beta/user_profiles/`](./beta/user_profiles/) | 6 | 含 landing 页 |
+| [`beta/files/`](./beta/files/) | 6 | 含 landing 页 |
+| [`beta/messages/`](./beta/messages/) | 10 | 含 landing 页 + batches |
+| [`beta/models/`](./beta/models/) | 3 | 含 landing 页 |
+| [`beta/webhooks.md`](./beta/webhooks.md) | 1 | Webhooks 订阅（事件域类型定义） |
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/skills/create`](./api_python_beta_skills_create.md) | https://platform.claude.com/docs/en/api/python/beta/skills/create |
-| [`api/python/beta/skills/delete`](./api_python_beta_skills_delete.md) | https://platform.claude.com/docs/en/api/python/beta/skills/delete |
-| [`api/python/beta/skills/list`](./api_python_beta_skills_list.md) | https://platform.claude.com/docs/en/api/python/beta/skills/list |
-| [`api/python/beta/skills/retrieve`](./api_python_beta_skills_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/skills/retrieve |
-| [`api/python/beta/skills/versions/create`](./api_python_beta_skills_versions_create.md) | https://platform.claude.com/docs/en/api/python/beta/skills/versions/create |
-| [`api/python/beta/skills/versions/delete`](./api_python_beta_skills_versions_delete.md) | https://platform.claude.com/docs/en/api/python/beta/skills/versions/delete |
-| [`api/python/beta/skills/versions/list`](./api_python_beta_skills_versions_list.md) | https://platform.claude.com/docs/en/api/python/beta/skills/versions/list |
-| [`api/python/beta/skills/versions/retrieve`](./api_python_beta_skills_versions_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/skills/versions/retrieve |
+### Admin API（组织管理）
 
-### Agents
+> 每个子目录含同名 landing 页（如 `admin/workspaces.md`，已计入各目录文件数，不在下表单独链接）。
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/agents/archive`](./api_python_beta_agents_archive.md) | https://platform.claude.com/docs/en/api/python/beta/agents/archive |
-| [`api/python/beta/agents/create`](./api_python_beta_agents_create.md) | https://platform.claude.com/docs/en/api/python/beta/agents/create |
-| [`api/python/beta/agents/list`](./api_python_beta_agents_list.md) | https://platform.claude.com/docs/en/api/python/beta/agents/list |
-| [`api/python/beta/agents/retrieve`](./api_python_beta_agents_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/agents/retrieve |
-| [`api/python/beta/agents/update`](./api_python_beta_agents_update.md) | https://platform.claude.com/docs/en/api/python/beta/agents/update |
-| [`api/python/beta/agents/versions/list`](./api_python_beta_agents_versions_list.md) | https://platform.claude.com/docs/en/api/python/beta/agents/versions/list |
+| 目录 | 文件数 | 说明 |
+|---|---|---|
+| [`admin/workspaces/`](./admin/workspaces/) | 20 | 含 landing 页 |
+| [`admin/analytics/`](./admin/analytics/) | 20 | 含 landing 页 |
+| [`admin/mcp_tunnels/`](./admin/mcp_tunnels/) | 11 | 含 landing 页 |
+| [`admin/rbac_groups/`](./admin/rbac_groups/) | 10 | 含 landing 页 |
+| [`admin/service_accounts/`](./admin/service_accounts/) | 10 | 含 landing 页 |
+| [`admin/federation_rules/`](./admin/federation_rules/) | 10 | 含 landing 页 |
+| [`admin/spend_limits/`](./admin/spend_limits/) | 10 | 含 landing 页 |
+| [`admin/external_keys/`](./admin/external_keys/) | 7 | 含 landing 页 |
+| [`admin/federation_issuers/`](./admin/federation_issuers/) | 6 | 含 landing 页 |
+| [`admin/api_keys/`](./admin/api_keys/) | 4 | 含 landing 页 |
+| [`admin/invites/`](./admin/invites/) | 5 | 含 landing 页 |
+| [`admin/rbac_roles/`](./admin/rbac_roles/) | 5 | 含 landing 页 |
+| [`admin/users/`](./admin/users/) | 5 | 含 landing 页 |
+| [`admin/usage_report/`](./admin/usage_report/) | 3 | 含 landing 页 |
+| [`admin/cost_report/`](./admin/cost_report/) | 2 | 含 landing 页 |
+| [`admin/organizations/`](./admin/organizations/) | 2 | 含 landing 页 |
+| [`admin/rate_limits/`](./admin/rate_limits/) | 2 | 含 landing 页 |
 
-### Environments
+### Compliance API（合规审计）
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/environments/archive`](./api_python_beta_environments_archive.md) | https://platform.claude.com/docs/en/api/python/beta/environments/archive |
-| [`api/python/beta/environments/create`](./api_python_beta_environments_create.md) | https://platform.claude.com/docs/en/api/python/beta/environments/create |
-| [`api/python/beta/environments/delete`](./api_python_beta_environments_delete.md) | https://platform.claude.com/docs/en/api/python/beta/environments/delete |
-| [`api/python/beta/environments/list`](./api_python_beta_environments_list.md) | https://platform.claude.com/docs/en/api/python/beta/environments/list |
-| [`api/python/beta/environments/retrieve`](./api_python_beta_environments_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/environments/retrieve |
-| [`api/python/beta/environments/update`](./api_python_beta_environments_update.md) | https://platform.claude.com/docs/en/api/python/beta/environments/update |
-| [`api/python/beta/environments/work/retrieve`](./api_python_beta_environments_work_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/environments/work/retrieve |
+> 每个子目录含同名 landing 页（如 `compliance/apps.md`，已计入各目录文件数，不在下表单独链接）。
 
-### Sessions
+| 目录 | 文件数 | 说明 |
+|---|---|---|
+| [`compliance/apps/`](./compliance/apps/) | 38 | 含 landing 页 |
+| [`compliance/organizations/`](./compliance/organizations/) | 11 | 含 landing 页 |
+| [`compliance/code/`](./compliance/code/) | 5 | 含 landing 页 |
+| [`compliance/groups/`](./compliance/groups/) | 5 | 含 landing 页 |
+| [`compliance/activities.md`](./compliance/activities.md) | 1 | |
+| [`compliance/activities/list.md`](./compliance/activities/list.md) | 1 | |
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/sessions/archive`](./api_python_beta_sessions_archive.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/archive |
-| [`api/python/beta/sessions/create`](./api_python_beta_sessions_create.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/create |
-| [`api/python/beta/sessions/delete`](./api_python_beta_sessions_delete.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/delete |
-| [`api/python/beta/sessions/events/list`](./api_python_beta_sessions_events_list.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/events/list |
-| [`api/python/beta/sessions/events/send`](./api_python_beta_sessions_events_send.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/events/send |
-| [`api/python/beta/sessions/events/stream`](./api_python_beta_sessions_events_stream.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/events/stream |
-| [`api/python/beta/sessions/list`](./api_python_beta_sessions_list.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/list |
-| [`api/python/beta/sessions/resources/add`](./api_python_beta_sessions_resources_add.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/resources/add |
-| [`api/python/beta/sessions/resources/delete`](./api_python_beta_sessions_resources_delete.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/resources/delete |
-| [`api/python/beta/sessions/resources/list`](./api_python_beta_sessions_resources_list.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/resources/list |
-| [`api/python/beta/sessions/resources/retrieve`](./api_python_beta_sessions_resources_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/resources/retrieve |
-| [`api/python/beta/sessions/resources/update`](./api_python_beta_sessions_resources_update.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/resources/update |
-| [`api/python/beta/sessions/retrieve`](./api_python_beta_sessions_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/retrieve |
-| [`api/python/beta/sessions/threads/archive`](./api_python_beta_sessions_threads_archive.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/threads/archive |
-| [`api/python/beta/sessions/threads/events/list`](./api_python_beta_sessions_threads_events_list.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/threads/events/list |
-| [`api/python/beta/sessions/threads/events/stream`](./api_python_beta_sessions_threads_events_stream.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/threads/events/stream |
-| [`api/python/beta/sessions/threads/list`](./api_python_beta_sessions_threads_list.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/threads/list |
-| [`api/python/beta/sessions/threads/retrieve`](./api_python_beta_sessions_threads_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/threads/retrieve |
-| [`api/python/beta/sessions/update`](./api_python_beta_sessions_update.md) | https://platform.claude.com/docs/en/api/python/beta/sessions/update |
 
-### Deployments / Deployment Runs
+## 版本管理
 
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/deployment/runs/list`](./api_python_beta_deployment_runs_list.md) | https://platform.claude.com/docs/en/api/python/beta/deployment_runs/list |
-| [`api/python/beta/deployment/runs/retrieve`](./api_python_beta_deployment_runs_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/deployment_runs/retrieve |
-| [`api/python/beta/deployments/archive`](./api_python_beta_deployments_archive.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/archive |
-| [`api/python/beta/deployments/create`](./api_python_beta_deployments_create.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/create |
-| [`api/python/beta/deployments/list`](./api_python_beta_deployments_list.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/list |
-| [`api/python/beta/deployments/pause`](./api_python_beta_deployments_pause.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/pause |
-| [`api/python/beta/deployments/retrieve`](./api_python_beta_deployments_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/retrieve |
-| [`api/python/beta/deployments/run`](./api_python_beta_deployments_run.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/run |
-| [`api/python/beta/deployments/unpause`](./api_python_beta_deployments_unpause.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/unpause |
-| [`api/python/beta/deployments/update`](./api_python_beta_deployments_update.md) | https://platform.claude.com/docs/en/api/python/beta/deployments/update |
-
-### Vaults
-
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/vaults/archive`](./api_python_beta_vaults_archive.md) | https://platform.claude.com/docs/en/api/python/beta/vaults/archive |
-| [`api/python/beta/vaults/create`](./api_python_beta_vaults_create.md) | https://platform.claude.com/docs/en/api/python/beta/vaults/create |
-| [`api/python/beta/vaults/delete`](./api_python_beta_vaults_delete.md) | https://platform.claude.com/docs/en/api/python/beta/vaults/delete |
-| [`api/python/beta/vaults/list`](./api_python_beta_vaults_list.md) | https://platform.claude.com/docs/en/api/python/beta/vaults/list |
-| [`api/python/beta/vaults/retrieve`](./api_python_beta_vaults_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/vaults/retrieve |
-| [`api/python/beta/vaults/update`](./api_python_beta_vaults_update.md) | https://platform.claude.com/docs/en/api/python/beta/vaults/update |
-
-### Memory Stores
-
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/memory/stores/archive`](./api_python_beta_memory_stores_archive.md) | https://platform.claude.com/docs/en/api/python/beta/memory_stores/archive |
-| [`api/python/beta/memory/stores/create`](./api_python_beta_memory_stores_create.md) | https://platform.claude.com/docs/en/api/python/beta/memory_stores/create |
-| [`api/python/beta/memory/stores/delete`](./api_python_beta_memory_stores_delete.md) | https://platform.claude.com/docs/en/api/python/beta/memory_stores/delete |
-| [`api/python/beta/memory/stores/list`](./api_python_beta_memory_stores_list.md) | https://platform.claude.com/docs/en/api/python/beta/memory_stores/list |
-| [`api/python/beta/memory/stores/retrieve`](./api_python_beta_memory_stores_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/memory_stores/retrieve |
-| [`api/python/beta/memory/stores/update`](./api_python_beta_memory_stores_update.md) | https://platform.claude.com/docs/en/api/python/beta/memory_stores/update |
-
-### Dreams
-
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/dreams/archive`](./api_python_beta_dreams_archive.md) | https://platform.claude.com/docs/en/api/python/beta/dreams/archive |
-| [`api/python/beta/dreams/cancel`](./api_python_beta_dreams_cancel.md) | https://platform.claude.com/docs/en/api/python/beta/dreams/cancel |
-| [`api/python/beta/dreams/create`](./api_python_beta_dreams_create.md) | https://platform.claude.com/docs/en/api/python/beta/dreams/create |
-| [`api/python/beta/dreams/list`](./api_python_beta_dreams_list.md) | https://platform.claude.com/docs/en/api/python/beta/dreams/list |
-| [`api/python/beta/dreams/retrieve`](./api_python_beta_dreams_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/dreams/retrieve |
-
-### Tunnels / MCP Tunnels
-
-| 文件 | 官方 URL |
-|---|---|
-| [`api/admin/mcp/tunnels/archive`](./api_admin_mcp_tunnels_archive.md) | https://platform.claude.com/docs/en/api/admin/mcp_tunnels/archive |
-| [`api/admin/mcp/tunnels/list`](./api_admin_mcp_tunnels_list.md) | https://platform.claude.com/docs/en/api/admin/mcp_tunnels/list |
-| [`api/admin/mcp/tunnels/retrieve`](./api_admin_mcp_tunnels_retrieve.md) | https://platform.claude.com/docs/en/api/admin/mcp_tunnels/retrieve |
-| [`api/admin/mcp/tunnels/reveal/token`](./api_admin_mcp_tunnels_reveal_token.md) | https://platform.claude.com/docs/en/api/admin/mcp_tunnels/reveal_token |
-| [`api/admin/mcp/tunnels/rotate/token`](./api_admin_mcp_tunnels_rotate_token.md) | https://platform.claude.com/docs/en/api/admin/mcp_tunnels/rotate_token |
-| [`api/python/beta/tunnels/archive`](./api_python_beta_tunnels_archive.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/archive |
-| [`api/python/beta/tunnels/certificates/archive`](./api_python_beta_tunnels_certificates_archive.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/certificates/archive |
-| [`api/python/beta/tunnels/certificates/create`](./api_python_beta_tunnels_certificates_create.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/certificates/create |
-| [`api/python/beta/tunnels/certificates/list`](./api_python_beta_tunnels_certificates_list.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/certificates/list |
-| [`api/python/beta/tunnels/certificates/retrieve`](./api_python_beta_tunnels_certificates_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/certificates/retrieve |
-| [`api/python/beta/tunnels/create`](./api_python_beta_tunnels_create.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/create |
-| [`api/python/beta/tunnels/list`](./api_python_beta_tunnels_list.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/list |
-| [`api/python/beta/tunnels/retrieve`](./api_python_beta_tunnels_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/retrieve |
-| [`api/python/beta/tunnels/reveal/token`](./api_python_beta_tunnels_reveal_token.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/reveal_token |
-| [`api/python/beta/tunnels/rotate/token`](./api_python_beta_tunnels_rotate_token.md) | https://platform.claude.com/docs/en/api/python/beta/tunnels/rotate_token |
-
-### User Profiles
-
-| 文件 | 官方 URL |
-|---|---|
-| [`api/python/beta/user/profiles/create`](./api_python_beta_user_profiles_create.md) | https://platform.claude.com/docs/en/api/python/beta/user_profiles/create |
-| [`api/python/beta/user/profiles/create/enrollment/url`](./api_python_beta_user_profiles_create_enrollment_url.md) | https://platform.claude.com/docs/en/api/python/beta/user_profiles/create_enrollment_url |
-| [`api/python/beta/user/profiles/list`](./api_python_beta_user_profiles_list.md) | https://platform.claude.com/docs/en/api/python/beta/user_profiles/list |
-| [`api/python/beta/user/profiles/retrieve`](./api_python_beta_user_profiles_retrieve.md) | https://platform.claude.com/docs/en/api/python/beta/user_profiles/retrieve |
-| [`api/python/beta/user/profiles/update`](./api_python_beta_user_profiles_update.md) | https://platform.claude.com/docs/en/api/python/beta/user_profiles/update |
+- 本目录是 **官方原始 Markdown 快照**，随官方文档更新重新下载即可。
+- 更新步骤：`curl https://platform.claude.com/docs/llms.txt` 提取 `### API reference` 与 `### API Reference` 两个分类的全部 `.md` URL（排除 `java/`、`python/` 变体），逐个 `curl <url>` 落到对应子目录，最后更新本 README 的日期与文件数。

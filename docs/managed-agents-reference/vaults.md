@@ -1,7 +1,7 @@
-# Authenticate with vaults
-
-Register per-user credentials when creating sessions.
-
+---
+title: Authenticate with vaults
+url: https://platform.claude.com/docs/en/managed-agents/vaults
+description: Register per-user credentials when creating sessions.
 ---
 
 Vaults and credentials are authentication primitives that let you register credentials for third-party services once and reference them by ID at session creation. This means you don't need to run your own secret store, transmit tokens on every call, or lose track of which end user an agent acted on behalf of.
@@ -9,7 +9,7 @@ Vaults and credentials are authentication primitives that let you register crede
 The vault reference is a per-session parameter, so you can manage your product at the `agent` resource granularity and your users at the `session` resource granularity.
 
 <Note>
-  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](/docs/en/api/beta-headers#endpoint-specific-headers).
+  Managed Agents API requests require the `managed-agents-2026-04-01` beta header, except memory store endpoints, which use `agent-memory-2026-07-22` instead. The SDK sets the correct beta header automatically. See [Beta headers](https://platform.claude.com/docs/en/api/beta-headers#endpoint-specific-headers).
 </Note>
 
 ## Create a vault
@@ -21,7 +21,7 @@ The vault reference is a per-session parameter, so you can manage your product a
 A vault is the collection of `credentials` associated with an end user. Give it a `display_name` and optionally tag it with `metadata` so you can map it back to your own user records.
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   vault_id=$(curl --fail-with-body -sS https://api.anthropic.com/v1/vaults \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -37,13 +37,20 @@ A vault is the collection of `credentials` associated with an end user. Give it 
   echo "$vault_id"  # "vlt_01ABC..."
   ```
 
-  ```bash CLI
-  VAULT_ID=$(ant beta:vaults create \
-    --display-name "Alice" \
-    --metadata '{external_user_id: usr_abc123}' \
-    --transform id --raw-output)
-  echo "$VAULT_ID"  # "vlt_01ABC..."
-  ```
+  <MultiFileExample language="cli" label="CLI">
+    ```bash CLI
+    VAULT_ID=$(ant beta:vaults create --transform id --raw-output < alice.vault.yaml)
+    echo "$VAULT_ID"  # "vlt_01ABC..."
+    ```
+
+    <File filename="alice.vault.yaml">
+      ```yaml
+      display_name: Alice
+      metadata:
+        external_user_id: usr_abc123
+      ```
+    </File>
+  </MultiFileExample>
 
   ```python Python
   vault = client.beta.vaults.create(
@@ -132,7 +139,7 @@ Two credential categories are supported:
 The actual credential values you supply (`token`, `access_token`, `refresh_token`, `client_secret`, `secret_value`) are treated as sensitive, write-only fields and never returned in API responses.
 
 <Note>
-  Environment variable credentials (`environment_variable`) are not yet supported with [self-hosted sandboxes](/docs/en/managed-agents/self-hosted-sandboxes).
+  Environment variable credentials (`environment_variable`) are not yet supported with [self-hosted sandboxes](https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes).
 </Note>
 
 <Tabs>
@@ -146,7 +153,7 @@ The actual credential values you supply (`token`, `access_token`, `refresh_token
     * `client_secret_post`: client secret in the POST body
 
     <CodeGroup defaultLanguage="CLI">
-      ```bash curl
+      ```bash cURL
       credential_id=$(curl --fail-with-body -sS "https://api.anthropic.com/v1/vaults/$vault_id/credentials" \
         -H "x-api-key: $ANTHROPIC_API_KEY" \
         -H "anthropic-version: 2023-06-01" \
@@ -364,7 +371,7 @@ The actual credential values you supply (`token`, `access_token`, `refresh_token
     Use `static_bearer` when the MCP server accepts a fixed bearer token (API key, personal access token, or similar). No refresh flow is needed.
 
     <CodeGroup defaultLanguage="CLI">
-      ```bash curl
+      ```bash cURL
       curl --fail-with-body -sS "https://api.anthropic.com/v1/vaults/$vault_id/credentials" \
         -H "x-api-key: $ANTHROPIC_API_KEY" \
         -H "anthropic-version: 2023-06-01" \
@@ -491,13 +498,13 @@ The actual credential values you supply (`token`, `access_token`, `refresh_token
     Limiting domains is strongly recommended for security purposes, and prevents your key from ever being shared with unauthorized hosts.
 
     <Note>
-      `networking.allowed_hosts` on a vault credential controls which requests use the secret, not which requests are allowed. For the agent to actually reach a domain, it must also be allowed at the [environment level](/docs/en/managed-agents/environments). Both levels must include the domain (either through `unrestricted` networking or by explicitly listing the domain in `allowed_hosts`) for a secret-substituted request to succeed.
+      `networking.allowed_hosts` on a vault credential controls which requests use the secret, not which requests are allowed. For the agent to actually reach a domain, it must also be allowed at the [environment level](https://platform.claude.com/docs/en/managed-agents/environments). Both levels must include the domain (either through `unrestricted` networking or by explicitly listing the domain in `allowed_hosts`) for a secret-substituted request to succeed.
     </Note>
 
     The optional `injection_location` field scopes where the secret is substituted; the full semantics follow the example.
 
     <CodeGroup defaultLanguage="CLI">
-      ```bash curl
+      ```bash cURL
       curl --fail-with-body -sS "https://api.anthropic.com/v1/vaults/$vault_id/credentials" \
         -H "x-api-key: $ANTHROPIC_API_KEY" \
         -H "anthropic-version: 2023-06-01" \
@@ -708,6 +715,10 @@ The actual credential values you supply (`token`, `access_token`, `refresh_token
 
     A placeholder in a disabled location is neither substituted nor stripped. The request is sent to the third party with the literal opaque placeholder string in that location. If a request arrives at the third party containing the literal placeholder string, either that location is disabled for the credential or the destination host is not covered by the credential's `networking.allowed_hosts`.
 
+    <Note>
+      Credentials created in the Console enable header injection only. If your client sends the secret in the request body, such as a form-encoded token request, the placeholder passes through literally and the service rejects it with its own authentication error. Enable body injection in the Console form when you create the credential, or update the credential with `{"injection_location": {"body": true}}`.
+    </Note>
+
     The substitution happens at egress, not inside the sandbox. Anything that processes the credential locally sees the opaque placeholder, not the real value: clients that validate the credential format at startup may reject it, and clients that compute a request signature from the secret (for example, AWS SigV4) produce an invalid signature. Environment variable credentials work for clients that send the secret value verbatim in an outbound request, in a location the credential's `injection_location` enables.
 
     Substitution is outbound only. If a client uses the stored secret to fetch a session token (for example, an OAuth client-credentials grant), the returned token arrives in the sandbox unredacted. For exchange-based flows, perform the exchange yourself and store the resulting token in the vault instead.
@@ -731,7 +742,7 @@ Constraints:
 Pass `vault_ids` when creating a session:
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   session_id=$(curl --fail-with-body -sS https://api.anthropic.com/v1/sessions \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
@@ -831,14 +842,14 @@ Runtime behavior:
 
 * When no MCP credential matches by `mcp_server_url`, the connection is attempted unauthenticated and will error if the server requires authentication.
 * When multiple vaults contain a matching credential, the first vault with a match wins.
-* In [multiagent sessions](/docs/en/managed-agents/multiagent-orchestration), vault credentials apply to every thread. An agent whose own definition declares the matching MCP server authenticates with these credentials. See [Connect agents to MCP servers](/docs/en/managed-agents/multiagent-orchestration#connect-agents-to-mcp-servers).
+* In [multiagent sessions](https://platform.claude.com/docs/en/managed-agents/multiagent-orchestration), vault credentials apply to every thread. An agent whose own definition declares the matching MCP server authenticates with these credentials. See [Connect agents to MCP servers](https://platform.claude.com/docs/en/managed-agents/multiagent-orchestration#connect-agents-to-mcp-servers).
 
 ## Rotate a credential
 
-Secret values, `display_name`, and (on environment variable credentials) `injection_location` can be updated. `injection_location` updates merge per field, as described in the Environment variable tab of [Add a credential](#add-a-credential). For a running session, an `injection_location` update propagates the same way as a secret rotation: the session's credentials are re-resolved without a restart, as described in [Credential lifecycle](#credential-lifecycle), and the updated locations apply to the session's subsequent outbound requests. Structural fields (`mcp_server_url`, `secret_name`, `token_endpoint`, `client_id`) are locked after creation. To change them, archive the credential and create a new one.
+Secret values, `display_name`, and (on environment variable credentials) `injection_location` can be updated. `injection_location` updates merge per field, as described in the Environment variable tab of [Add a credential](https://platform.claude.com/docs/en/managed-agents/vaults#add-a-credential). For a running session, an `injection_location` update propagates the same way as a secret rotation: the session's credentials are re-resolved without a restart, as described in [Credential lifecycle](https://platform.claude.com/docs/en/managed-agents/vaults#credential-lifecycle), and the updated locations apply to the session's subsequent outbound requests. Structural fields (`mcp_server_url`, `secret_name`, `token_endpoint`, `client_id`) are locked after creation. To change them, archive the credential and create a new one.
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   curl --fail-with-body -sS \
     "https://api.anthropic.com/v1/vaults/$vault_id/credentials/$credential_id" \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
@@ -976,7 +987,7 @@ Secret values, `display_name`, and (on environment variable credentials) `inject
 
 Credentials are re-resolved periodically, both during a session and during the vault lifecycle. This ensures that credential rotation, archival, or deletion propagates to running sessions without a restart.
 
-To be notified if a credential is archived, deleted, or fails to refresh, you can subscribe to the vault and credential [webhooks](/docs/en/managed-agents/webhooks) associated with those lifecycle changes.
+To be notified if a credential is archived, deleted, or fails to refresh, you can subscribe to the vault and credential [webhooks](https://platform.claude.com/docs/en/managed-agents/webhooks) associated with those lifecycle changes.
 
 | Event                             | Trigger                                                                                                              |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -987,7 +998,7 @@ To be notified if a credential is archived, deleted, or fails to refresh, you ca
 | `vault_credential.refresh_failed` | An `mcp_oauth` credential cannot be refreshed (invalid refresh token, or irrecoverable error from the OAuth server). |
 
 <Note>
-  This is a non-exhaustive list of webhooks; see [Subscribe to webhooks](/docs/en/managed-agents/webhooks) for the complete list.
+  This is a non-exhaustive list of webhooks; see [Subscribe to webhooks](https://platform.claude.com/docs/en/managed-agents/webhooks) for the complete list.
 </Note>
 
 For `mcp_oauth` credentials, re-resolution also refreshes the access token if it has expired. If the refresh fails, a `vault_credential.refresh_failed` event is emitted.
@@ -1003,7 +1014,7 @@ The top-level `status` tells you what to do next:
 * `unknown`: a transient error (5xx, 429, or network failure). Wait and retry.
 
 <CodeGroup defaultLanguage="CLI">
-  ```bash curl
+  ```bash cURL
   curl --fail-with-body -sS -X POST \
     "https://api.anthropic.com/v1/vaults/$vault_id/credentials/$credential_id/mcp_oauth_validate?beta=true" \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
