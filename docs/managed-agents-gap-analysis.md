@@ -177,7 +177,7 @@
 
 **Dreaming 确认**：后端零实现（`grep dream` 零命中），仅前端有 `/dreams` placeholder。官方 `dreams.md` 有完整 API 定义（状态机 `pending→running→succeeded/failed/canceled` + 5 端点 + beta `dreaming-2026-04-21` + 输入 memory store/sessions、输出新 memory store），属 research preview，全新模块。
 
-**MCP tunnels 精确化**（升级自初版 P1）：管理面完整（`admin/handler.go:77-84` + `mcp_tunnels`/`mcp_tunnel_certificates` 表 + token reveal/rotate + certificate CRUD + beta `mcp-tunnels-2026-05-19`），但**运行时 tunnel client 缺失**——`internal/environments/` 零命中 tunnel 连接逻辑，整个功能无法实际工作。
+**MCP tunnels 精确化**（升级自初版 P1）：管理面完整（`admin/handler.go:77-84` + `mcp_tunnels`/`mcp_tunnel_certificates` 表 + token reveal/rotate + certificate CRUD + beta `mcp-tunnels-2026-05-19`）。**运行时无缺失**：官方 MCP Tunnels 的运行时由 Anthropic 云端提供（"how Anthropic reaches MCP servers in your network"，见 `managed-agents-reference/self-hosted-sandboxes.md`），OMA 无需在 sandbox 内实现 tunnel client；OMA 侧的 CCRv2 CONNECT 隧道（`internal/codesessions/upstream_proxy*.go`，见 `docs/design/be/ccrv2/upstream-proxy-and-model-runtime.md`）是独立的出站代理机制，与 MCP Tunnels API 无关且实现完整（2026-08-22 核实，**更正此前"运行时 tunnel client 缺失"的误判**：当时查的是缺少 codesessions 文件的 docs/api-gap 分支）。
 
 **Rate limiting**：见 4.2（endpoint 级 300/1200 RPM 完全缺失，安全/稳定性 gap）。
 
