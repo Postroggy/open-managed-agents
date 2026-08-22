@@ -1,68 +1,111 @@
 # OMA vs 官方 Claude API：端点与契约对齐矩阵
 
-> 更新日期：2026-08-22
-> 文档来源：官方 API 参考文档镜像 `docs/api-reference/`（2026-08-22 全面镜像，384 个文件）；对比旧镜像（2026-08-21，114 个文件）的 103 端点口径，本次升级为 255 端点口径
+> 更新日期：2026-08-22（第一版 2026-08-21；本版升级为 255 端点口径，并按 API 面归属分类）
+> 文档来源：官方 API 参考文档镜像 `docs/api-reference/`（2026-08-22 全面镜像，384 个文件）；对比旧镜像（2026-08-21，114 个文件）的 103 端点口径
 > 核对对象：OMA 当前代码（`internal/` 路由注册，截至 2026-08-21）
 > 依据：官方端点从 `docs/api-reference/` 各页正文 `**method** \`/path\`` 提取并按 (方法, 路径) 去重，共 **255** 个；OMA 端点从 `internal/{agents,sessions,environments,files,memory,batches,models,admin,skills,vaults,webhooks,deployments}/handler.go` 的 chi 路由注册重建完整路径（含 `internal/api/server.go` 挂载前缀），共 **149** 个；参数名归一化为 `{}` 后比对
 > 方法：缺口 = 官方集合 − OMA 集合；扩展 = OMA 集合 − 官方集合
+
+> **⚠️ API 面归属前置说明（2026-08-22 补充，重要）**：官方 255 个端点分属**多个独立 API 面**，OMA 并非全部需要对齐：
+> - **Managed Agents 面**（beta header `managed-agents-2026-04-01` / `agent-memory-2026-07-22` / `dreaming-2026-04-21` / `mcp-tunnels-2026-06-22` 等）：OMA 的核心定位，**需要对齐**。
+> - **标准 Anthropic API 面**（messages/models/files 等 GA 端点，无 beta header）：OMA 兼容层，**需要对齐**（含已实现的 batches 等）。
+> - **Admin API 面**（`/v1/organizations/*`，含 Enterprise-only 的 RBAC）：独立组织管理面，**OMA 未声明此定位**，缺口不构成必须对齐项。
+> - **Compliance API 面**（`/v1/compliance/*`，无 beta header、独立合规审计面）：**OMA 未声明此定位**，缺口不构成必须对齐项。
+> 因此下述"缺口"按归属分层：**OMA 定位相关缺口 = 19 端点（15 整组 + 4 单端点）+ User Profiles 5（跨面待确认）+ 1 契约项**；其余 92 端点为独立 API 面，记录备查但不作为对齐任务。
 
 ## 一、结论速览
 
 | 项 | 数量 |
 |---|---|
 | 官方唯一端点（方法+路径去重） | 255 |
-| 官方有、OMA 缺 | 116（整组 112 + 单端点 4） |
+| 官方有、OMA 缺（全部） | 116（整组 112 + 单端点 4） |
+| 其中：**OMA 定位相关缺口** | **19 = Tunnels 10 + Dreams 5 + messages create 1 + count_tokens 1 + models retrieve 1 + complete 1**（+ User Profiles 5 跨面待确认；+ webhook 45 种事件为契约项） |
+| 其中：独立 API 面缺口（Admin 56 + Compliance 36，不必须对齐） | 92 |
 | OMA 有、官方无（OMA 扩展） | 10 |
 | 完全对齐（官方 ∩ OMA） | 139 |
 | 契约层面缺口（路径对上、语义缺） | 若干（见第四节） |
 
 > 注：官方端点从 `docs/api-reference/` 各页正文 `**method** \`/path\`` 提取并去重；`beta-headers.md` 等通用页的示例端点不计入。
 
-## 二、官方 255 端点分组
+## 二、官方 255 端点分组（按 API 面）
+
+### 2.1 Managed Agents 面（OMA 定位，需对齐）
 
 | 资源 | 端点数 | 对齐 | 说明 |
 |---|---|---|---|
-| Admin RBAC/Federation/SA/Spend | 45 | 0 | rbac_groups、rbac_roles、federation_rules、federation_issuers、service_accounts、spend_limits、spend_limit_increase_requests（含 workspaces/service_accounts、rbac_groups/members 等子资源） |
-| Compliance | 36 | 0 | activities、apps（chats/projects/sessions/code）、groups、organizations/roles |
-| Organizations 基础管理 | 42 | 42 | api_keys、workspaces、users、invites、external_keys、rate_limits、me、usage_report、cost_report、tunnels（deprecated admin 版） |
-| Admin Analytics | 11 | 0 | analytics/*（usage_report、cost_report、user_usage、users 等） |
-| Tunnels（顶层） | 10 | 0 | 官方新版顶层 `/v1/tunnels`（含 certificates/reveal_token/rotate_token） |
 | Sessions | 19 | 19 | create/list/get/update/delete/archive + events(list/send/stream) + resources + threads |
 | Environments | 14 | 14 | 含 work 子资源（poll/stats/ack/heartbeat/stop） |
 | Memory Stores | 14 | 14 | 含 memories、memory_versions（含 redact） |
 | Vaults | 13 | 13 | 含 credentials（含 mcp_oauth_validate） |
-| Skills | 9 | 9 | 含 versions（含 content） |
-| Messages | 8 | 6 | create、count_tokens + batches 6 个 |
+| Tunnels（顶层） | 10 | 0 | research preview（`mcp-tunnels-2026-06-22`），明确取代 deprecated admin 版 |
 | Deployments | 8 | 8 | 含 run/pause/unpause |
+| Skills | 9 | 9 | 含 versions（含 content） |
 | Agents | 6 | 6 | 含 versions |
-| Files | 5 | 5 | upload/list/retrieve_metadata/content/delete |
-| Dreams | 5 | 0 | create/list/get/cancel/archive |
-| User Profiles | 5 | 0 | create/list/get/update/enrollment_url |
+| Dreams | 5 | 0 | research preview（`dreaming-2026-04-21`） |
 | Deployment Runs | 2 | 2 | list/get |
+| Files | 5 | 5 | upload/list/retrieve_metadata/content/delete |
+
+小计：95 端点，OMA 对齐 80，缺 15（Tunnels 10 + Dreams 5）。
+
+### 2.2 标准 Anthropic API 面（OMA 兼容层，需对齐）
+
+| 资源 | 端点数 | 对齐 | 说明 |
+|---|---|---|---|
+| Messages | 8 | 6 | create、count_tokens + batches 6 个 |
 | Models | 2 | 1 | list + retrieve（缺） |
 | Completions | 1 | 0 | `POST /v1/complete`（旧端点） |
 
+小计：11 端点，OMA 对齐 7，缺 4（messages create、count_tokens、models retrieve、complete）。
+
+### 2.3 Admin API 面（独立组织管理面，OMA 未声明定位）
+
+| 资源 | 端点数 | 对齐 | 说明 |
+|---|---|---|---|
+| Organizations 基础管理 | 42 | 42 | api_keys、workspaces、users、invites、external_keys、rate_limits、me、usage_report、cost_report、tunnels（deprecated admin 版） |
+| Admin RBAC/Federation/SA/Spend | 45 | 0 | rbac_groups、rbac_roles（Enterprise-only `ce-user-management-2026-07-13`）、federation_rules、federation_issuers、service_accounts、spend_limits、spend_limit_increase_requests |
+| Admin Analytics | 11 | 0 | analytics/*（usage_report、cost_report、user_usage、users 等） |
+
+小计：98 端点，OMA 对齐 42，缺 56。
+
+### 2.4 Compliance API 面（独立合规审计面，OMA 未声明定位）
+
+| 资源 | 端点数 | 对齐 | 说明 |
+|---|---|---|---|
+| Compliance | 36 | 0 | activities、apps（chats/projects/sessions/code）、groups、organizations/roles |
+
+小计：36 端点，OMA 对齐 0，缺 36。
+
 ## 三、官方有、OMA 缺（116 个端点）
 
-### 3.1 整组缺失（112 个端点）
+### 3.1 整组缺失：OMA 定位相关（15 个端点）
 
-| 资源 | 缺失端点 | 端点数 | 备注 |
+| 资源 | 缺失端点 | 端点数 | beta/状态 | 备注 |
+|---|---|---|---|---|
+| **Tunnels（顶层）** | `POST/GET /v1/tunnels`、`GET/POST .../{id}`、`archive`、`reveal_token`、`rotate_token`、`certificates`×4 | 10 | research preview `mcp-tunnels-2026-06-22` | **#288**；OMA 只实现旧版 admin `/v1/organizations/tunnels`（官方 deprecated，迁移窗口内仍可用） |
+| **Dreams** | `POST/GET /v1/dreams`、`GET /v1/dreams/{id}`、`POST .../cancel`、`POST .../archive` | 5 | research preview `dreaming-2026-04-21` | **#245** |
+
+### 3.2 整组缺失：独立 API 面（OMA 未声明定位，不必须对齐；92 个端点）
+
+| 资源 | 缺失端点 | 端点数 | 归属 | 备注 |
+|---|---|---|---|---|
+| **Admin RBAC/Federation/SA/Spend** | `rbac_groups`(CRUD+members)、`rbac_roles`(list/get/permissions)、`federation_issuers`(CRUD+archive)、`federation_rules`(CRUD+archive+workspaces)、`service_accounts`(CRUD+archive+workspaces)、`spend_limits`(CRUD+effective)、`spend_limit_increase_requests`(list/get/approve/deny)、`workspaces/{id}/service_accounts` | 45 | Admin API（rbac_groups/rbac_roles 为 **Claude Enterprise-only**，需 `ce-user-management-2026-07-13`） | 未开 issue；OMA 未声明 Admin 定位 |
+| **Compliance** | `compliance/activities`、`compliance/apps/*`（chats 含 files/generated-files、projects 含 documents/attachments/collaborators、sessions local/remote、code artifacts）、`compliance/groups`、`compliance/organizations`（roles/users/settings） | 36 | Compliance API（独立合规审计面） | 未开 issue；OMA 未声明定位 |
+| **Admin Analytics** | `organizations/analytics/*`（usage_report、cost_report、user_usage_report、user_cost_report、users、artifacts、connectors、plugins、skills、apps/chat/projects、summaries） | 11 | Admin API | 未开 issue；OMA 未声明定位 |
+
+### 3.3 整组缺失：跨面（5 个端点，待确认是否有意不做）
+
+| 资源 | 缺失端点 | 端点数 | beta/状态 | 备注 |
+|---|---|---|---|---|
+| **User Profiles** | `POST/GET /v1/user_profiles`、`GET/POST .../{id}`、`POST .../enrollment_url` | 5 | beta `user-profiles-2026-03-24` / `user-profiles-2026-08-18` | **疑似 OMA 有意不做**（未确认，待核实）；该面与 Messages（`user_profiles` 参数引用）联动 |
+
+### 3.4 单端点缺失（4 个端点，OMA 定位相关）
+
+| 端点 | 官方文档 | 归属 | 备注 |
 |---|---|---|---|
-| **Admin RBAC/Federation/SA/Spend** | `rbac_groups`(CRUD+members)、`rbac_roles`(list/get/permissions)、`federation_issuers`(CRUD+archive)、`federation_rules`(CRUD+archive+workspaces)、`service_accounts`(CRUD+archive+workspaces)、`spend_limits`(CRUD+effective)、`spend_limit_increase_requests`(list/get/approve/deny)、`workspaces/{id}/service_accounts` | 45 | **未开 issue** |
-| **Compliance** | `compliance/activities`、`compliance/apps/*`（chats 含 files/generated-files、projects 含 documents/attachments/collaborators、sessions local/remote、code artifacts）、`compliance/groups`、`compliance/organizations`（roles/users/settings） | 36 | **未开 issue** |
-| **Admin Analytics** | `organizations/analytics/*`（usage_report、cost_report、user_usage_report、user_cost_report、users、artifacts、connectors、plugins、skills、apps/chat/projects、summaries） | 11 | **未开 issue** |
-| **Tunnels（顶层）** | `POST/GET /v1/tunnels`、`GET/POST .../{id}`、`archive`、`reveal_token`、`rotate_token`、`certificates`×4 | 10 | **#288**；OMA 只实现旧版 admin `/v1/organizations/tunnels`（官方 deprecated） |
-| **Dreams** | `POST/GET /v1/dreams`、`GET /v1/dreams/{id}`、`POST .../cancel`、`POST .../archive` | 5 | **#245** |
-| **User Profiles** | `POST/GET /v1/user_profiles`、`GET/POST .../{id}`、`POST .../enrollment_url` | 5 | **疑似 OMA 有意不做**（未确认，待核实） |
-
-### 3.2 单端点缺失（4 个端点）
-
-| 端点 | 官方文档 | 备注 |
-|---|---|---|
-| `POST /v1/messages` | [messages create](https://platform.claude.com/docs/en/api/messages/create) | 官方 GA；OMA 未注册（batches 已实现） |
-| `POST /v1/messages/count_tokens` | [count_tokens](https://platform.claude.com/docs/en/api/messages/count_tokens) | 官方 GA；**#286** |
-| `GET /v1/models/{model_id}` | [models retrieve](https://platform.claude.com/docs/en/api/models/retrieve) | OMA 只有 list；**#287** |
-| `POST /v1/complete` | [completions create](https://platform.claude.com/docs/en/api/completions/create) | 旧 Completions 端点，**时代弃子，不开 issue 不实现** |
+| `POST /v1/messages` | [messages create](https://platform.claude.com/docs/en/api/messages/create) | 标准 API 面（GA） | 官方 GA；OMA 未注册（batches 已实现；`/proxy/v1/messages` 仅平台代理，非自有端点） |
+| `POST /v1/messages/count_tokens` | [count_tokens](https://platform.claude.com/docs/en/api/messages/count_tokens) | 标准 API 面（GA） | **#286** |
+| `GET /v1/models/{model_id}` | [models retrieve](https://platform.claude.com/docs/en/api/models/retrieve) | 标准 API 面（GA） | OMA 只有 list；**#287** |
+| `POST /v1/complete` | [completions create](https://platform.claude.com/docs/en/api/completions/create) | 标准 API 面（旧） | 旧 Completions 端点，**时代弃子，不开 issue 不实现** |
 
 ## 四、契约层面缺口（路径对上、语义缺）
 
@@ -121,7 +164,7 @@ Agents（6）、Sessions（19，含 events/resources/threads 全子资源）、E
 | #288 | `[Tunnels] 实现官方顶层 /v1/tunnels API（当前只实现了 deprecated 的 admin 版）` | Tunnels |
 | #245 | `[Dreams] 实现 Dreams 能力面后端（memory store 精炼 job，dreaming-2026-04-21）` | Dreams |
 
-> User Profiles 未开 issue（疑似有意不做）；Completions 未开（时代弃子）；Admin RBAC/Federation/SA/Spend（45）、Compliance（36）、Admin Analytics（11）未开 issue，为 org 管理面最大缺口。
+> **OMA 定位相关缺口 = 19 端点**（已开 issue 17：Tunnels 10 + Dreams 5 + count_tokens 1 + models retrieve 1；未开 2：messages create 1 + complete 1）+ **User Profiles 5**（跨面待确认）+ **webhook 45 种事件**（契约项，P1 #8）。Admin（56）、Compliance（36）为独立 API 面，**不构成 OMA 对齐任务**。
 
 ## 八、方法
 
@@ -129,3 +172,4 @@ Agents（6）、Sessions（19，含 events/resources/threads 全子资源）、E
 - OMA 路由：`internal/{agents,sessions,environments,files,skills,batches,memory,vaults,webhooks,deployments,models}/handler.go` 的 chi 路由注册 + `internal/api/server.go` 的挂载前缀，重建完整路径
 - 参数名归一化（`{agent_id}` → `{}`）后比对；尾斜杠不参与比对
 - 缺口 = 官方集合 − OMA 集合；扩展 = OMA 集合 − 官方集合
+- **API 面归属判定**：按各端点文档页的 `anthropic-beta` 声明与文档分组——Managed Agents 面（`managed-agents-2026-04-01`/`agent-memory-2026-07-22`/`dreaming-2026-04-21`/`mcp-tunnels-2026-06-22` 等）、标准 API 面（无 beta header 的 GA 端点）、Admin API 面（`/v1/organizations/*`）、Compliance API 面（`/v1/compliance/*`）。OMA 定位相关缺口仅含前两类。

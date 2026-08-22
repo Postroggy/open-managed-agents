@@ -181,7 +181,7 @@
 
 **Rate limiting**：见 4.2（endpoint 级 300/1200 RPM 完全缺失，安全/稳定性 gap）。
 
-> **范围边界**：Admin API（organizations / users / invites / workspaces / api_keys / external_keys / rate_limits 管理端点）是独立 API 面。2026-08-22 起其文档已镜像于 `docs/api-reference/admin/`，端点面对照见 `api-gap-matrix.md`（官方 132 个 admin 端点中 OMA 对齐 42 个基础管理，缺 RBAC/Federation/Service Accounts/Spend Limits/Analytics 等 56 个）；Compliance API（`docs/api-reference/compliance/`，36 端点）全缺。语义级核查未做。
+> **范围边界**：Admin API（organizations / users / invites / workspaces / api_keys / external_keys / rate_limits 管理端点）是独立 API 面。2026-08-22 起其文档已镜像于 `docs/api-reference/admin/`，端点面对照见 `api-gap-matrix.md`（官方 132 个 admin 端点中 OMA 对齐 42 个基础管理，缺 RBAC/Federation/Service Accounts/Spend Limits/Analytics 等 56 个）；Compliance API（`docs/api-reference/compliance/`，36 端点）全缺。**上述 Admin/Compliance 缺口为独立 API 面，不构成 OMA（Managed Agents 定位）的对齐任务**；OMA 定位相关缺口仅 19 端点 + User Profiles 5（跨面待确认）+ webhook 45 种事件（契约项），详见 `api-gap-matrix.md` 第三节。语义级核查未做。
 
 ### 4.8 issue 揭示的盲区与"有意偏离官方"的产品决策（第四轮，对照 origin issues）
 
