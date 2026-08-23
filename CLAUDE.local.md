@@ -106,3 +106,36 @@ skill 自检是软约束，以下硬门禁必须**全部通过**方可 `git push
   - 后端：`GOPROXY=https://goproxy.cn,direct bash scripts/restart-server.sh`
   - 前端：`PATH="$PATH:/Users/yueqi/.bun/bin" bash scripts/restart-web.sh`
 - 两个服务均以后台方式启动（`&`），等待端口 38080 / 5173 出现 LISTEN 状态再报告成功。
+
+## 协议 / 合同类问题的回答约束（2026-08-23 教训沉淀）
+
+> 起因：回答"OMA 是否有 outcome grader"时，我凭代码现状推断"grader 由用户/外部提供"，被用户纠正——官方文档明确是"harness 自动 provision grader"。错误根源与纠正规则如下。
+
+### 铁律 1：协议 / 合同类问题，先查文档再回答，禁止凭印象推理
+- 涉及 Anthropic 官方 API / Managed Agents 协议 / 官方行为的问题（如"官方对 X 的定义是什么"、"OMA 的 X 是否对齐官方"），**必须先查**：
+  1. 本地镜像：`docs/managed-agents-reference/`（官方文档镜像，最权威）
+  2. 本地 gap 分析：`docs/managed-agents-gap-analysis.md`、`docs/api-gap-matrix.md`
+  3. 官方文档在线（jina-read / firecrawl）
+- **禁止**在没查文档的情况下，用"我的印象"或"代码现状"直接下协议结论。
+
+### 铁律 2："仓库没有 X" ≠ "设计上不需要 X"——先怀疑是 gap
+- 仓库缺少某个官方能力时，**默认先怀疑是"未实现的 gap"**，而不是急着合理化成"设计如此"。
+- 判断依据：查 gap 分析文档、查分支名/issue 名（如 `fix/outcomes-link-and-grader` 分支名就是"grader 是缺口"的线索）、查 TODO/FIXME。
+- 只有查到明确的设计决策证据（设计文档、issue 讨论、官方说明）后，才能说"这是有意为之"。
+
+### 铁律 3："事件来源" ≠ "处理职责"
+- 客户端发起的事件（如 `user.define_outcome`）只说明**发起方是客户端**，不代表**后续处理/执行也是客户端**。收到方（OMA/harness）可能承担大量后续逻辑（如自动 provision grader）。
+- 判断"谁负责执行 X"，要看 X 的实际实现位置，不能从事件来源推断。
+
+### 铁律 4：不确定时明确说"不确定"，禁止用笃定语气包装猜测
+- 对没有验证过的结论，用"我不确定，需要查证"开头；查完再给确定性结论。
+- 回答中的"这是官方/设计如此"必须有引用依据（文档链接、代码位置、commit）。
+
+### 铁律 5：回答协议问题时的标准流程
+1. 先声明要查证（或直接查）；
+2. 查本地镜像 → gap 文档 → 在线文档；
+3. 基于文档给结论，附出处；
+4. 结论与仓库现状对比，指出 gap（如果有）。
+
+### 记忆锚点
+- "outcome grader" 案例：官方 = harness 自动 provision grader（独立上下文 + rubric 评分 + 反馈迭代）；OMA = 只有事件协议层（define_outcome / span.outcome_evaluation_* / session.outcome_evaluation_ended / OutcomEvaluations 存储），**缺 grader 本体运行时**。
