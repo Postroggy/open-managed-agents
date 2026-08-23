@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA Webhook · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef6f6 0%, #f5fafa 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #d3ecec; color: #0e7d6e;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 24px; color: #2c3550;
+    background: #fff; border: 3px dashed #8fd8cf; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #d3ecec; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #0e7d6e; }
+  .hl-blue { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(30, 90, 80, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 14px;
+    background: #fff; border-radius: 16px; padding: 14px 18px;
+    border: 3px dashed #8fd8cf;
+  }
+  .flow-step .emoji { font-size: 26px; flex-shrink: 0; }
+  .flow-step .text { font-size: 14.5px; flex: 1; }
+  .flow-step .text b { color: #0e7d6e; }
+  .flow-step .badge { background: #d3ecec; color: #0e7d6e; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 16px; color: #0e7d6e; line-height: 1; font-weight: 700; }
+
+  /* 签名 */
+  .sig { display: flex; gap: 12px; margin-top: 14px; }
+  .sig-item { flex: 1; background: #fff; border-radius: 14px; padding: 14px; border: 3px dashed #8fd8cf; text-align: center; }
+  .sig-item .emoji { font-size: 26px; }
+  .sig-item .name { font-family: Menlo, monospace; font-size: 12.5px; font-weight: 800; color: #0e7d6e; margin-top: 4px; }
+  .sig-item .desc { font-size: 12px; color: #666; margin-top: 2px; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .sig { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 22 集</span>
+    <h1>📡 internal/webhooks<br>Webhook 事件通知</h1>
+    <div class="tagline">
+      <span class="emoji">🔔</span> 事件发生时<br>主动推送给你的服务器
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>webhooks 管什么？</h2>
+    <p class="lead">
+      Session 有事件（创建/更新/归档…）。<br>
+      用户可能想 <span class="hl">实时收到通知</span> —— webhooks 就是干这个的。
+    </p>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>internal/webhooks</b> = Webhook 事件通知系统（4 个文件）：<br>
+        <br>
+        🔌 <b>handler.go</b> —— 端点 CRUD + 签名密钥<br>
+        📨 <b>enqueuer.go</b> —— 事件入队（各资源包调用）<br>
+        🏭 <b>webhooks.go</b> —— worker 投递 + 签名<br>
+        🍎 <b>errors.go</b> —— 错误清单
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：完整流程 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 事件投递流程</span>
+    <h2>一个事件的旅程</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🔌</div>
+        <div class="text"><b>创建端点</b>：用户 POST /webhooks（URL + 事件类型 + 签名密钥）</div>
+        <div class="badge">配置</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">💥</div>
+        <div class="text"><b>事件发生</b>：sessions/agents 等包调 Enqueue（wevt_ 前缀 ID）</div>
+        <div class="badge">触发</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗄️</div>
+        <div class="text"><b>入队</b>：写 webhook_delivery_jobs 表（按事件类型匹配端点）</div>
+        <div class="badge">持久化</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🏭</div>
+        <div class="text"><b>worker 领取</b>：轮询队列 → 逐个投递</div>
+        <div class="badge">后台</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">✍️</div>
+        <div class="text"><b>签名</b>：standardwebhooks 规范签名（webhook-id/timestamp/signature）</div>
+        <div class="badge">签名</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📤</div>
+        <div class="text"><b>POST 投递</b>：发到用户服务器（2xx 成功 / 3xx 禁用 / 其他重试）</div>
+        <div class="badge">投递</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：签名 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 安全签名</span>
+    <h2>三个签名头</h2>
+    <div class="sig">
+      <div class="sig-item">
+        <div class="emoji">🆔</div>
+        <div class="name">webhook-id</div>
+        <div class="desc">事件唯一 ID（wevt_xxx）</div>
+      </div>
+      <div class="sig-item">
+        <div class="emoji">🕐</div>
+        <div class="name">webhook-timestamp</div>
+        <div class="desc">发送时间（Unix）</div>
+      </div>
+      <div class="sig-item">
+        <div class="emoji">✍️</div>
+        <div class="name">webhook-signature</div>
+        <div class="desc">HMAC 签名（signing key）</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:16px;">
+        🔐 <b>标准规范</b>（standardwebhooks）：用户可以用签名密钥验证<br>
+        消息确实来自 OMA 且未被篡改 —— 防伪造 webhook。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：投递策略 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 投递策略</span>
+    <h2>失败怎么办？</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        🔁 <b>重试</b> —— 5xx/网络错误 → 指数退避重试（最多 N 次）<br>
+        🚫 <b>立即禁用</b> —— 3xx 重定向 → 立即停用端点（不该重定向）<br>
+        ✅ <b>成功</b> —— 2xx → 标记完成<br>
+        <br>
+        <span class="hl">端点失败累积</span> → 自动禁用（recordEndpointFailure）—— 防止反复打失败的 URL。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：配置 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 配置开关</span>
+    <h2>什么时候启用？</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        ⚙️ <b>enabled()</b> 三条件同时满足：<br>
+        ✅ <span class="hl">WorkerEnabled</span>（worker 开关）<br>
+        ✅ <span class="hl">EndpointURL</span>（默认端点）<br>
+        ✅ <span class="hl">SigningKey</span>（签名密钥）<br>
+        <br>
+        💡 除了全局配置，端点也存 DB（webhook_endpoints 表）——
+        用户可创建自定义端点，订阅特定事件类型。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：insight -->
+  <div class="chapter">
+    <span class="chip">第六章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        📨 <b>1. "入队即返回"</b> —— Enqueue 只写 DB 就返回，
+        投递完全异步：资源包不阻塞（和 skillprewarm 同哲学）。<br><br>
+        ✍️ <b>2. 签名是硬要求</b> —— 标准 Webhooks 规范（webhook-id/timestamp/signature）：
+        用户能验证来源 + 防重放（timestamp 窗口）。<br><br>
+        🚫 <b>3. 3xx 直接禁用</b> —— 端点不该重定向：
+        这是"配置错误"信号，反复重试无意义。<br><br>
+        🔌 <b>4. 双端点来源</b> —— 全局配置（config）+ 用户自定义（DB）：
+        灵活订阅特定事件。<br><br>
+        🔗 <b>5. 和 sessions 联动</b> —— webhook_bridge（之前 sessions 讲过）
+        把会话事件转成 webhook 事件：两个事件系统打通。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/webhooks 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

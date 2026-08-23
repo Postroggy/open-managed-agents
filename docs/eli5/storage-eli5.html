@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 对象存储 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef4ff 0%, #f5f8ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dfe9ff; color: #2743a8;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 24px; color: #2c3550;
+    background: #fff; border: 3px dashed #a8bcff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(50, 70, 140, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 两级结构 */
+  .layers { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; }
+  .layer {
+    width: 100%; border-radius: 18px; padding: 16px 20px;
+    border: 4px solid; text-align: center; background: #fff;
+  }
+  .layer .emoji { font-size: 28px; }
+  .layer .name { font-size: 19px; font-weight: 900; }
+  .layer .desc { font-size: 14px; color: #666; margin-top: 2px; }
+  .layer .mono { font-family: Menlo, monospace; font-size: 12px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 4px; }
+  .ly1 { border-color: #2743a8; } .ly1 .name { color: #2743a8; }
+  .ly2 { border-color: #2e7d32; } .ly2 .name { color: #2e7d32; }
+  .ly3 { border-color: #b45309; } .ly3 .name { color: #b45309; }
+  .l-arrow { font-size: 18px; color: #57606f; font-weight: 900; line-height: 1; }
+
+  /* 操作卡 */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .item {
+    background: #fff; border-radius: 16px; padding: 14px 14px;
+    border: 3px dashed #a8bcff; text-align: center;
+  }
+  .item .emoji { font-size: 26px; }
+  .item .name { font-family: Menlo, monospace; font-size: 13px; font-weight: 800; color: #2743a8; margin-top: 4px; }
+  .item .desc { font-size: 12px; color: #666; margin-top: 2px; }
+
+  /* 错误表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  .table th { background: #e3eeff; color: #2743a8; padding: 9px; text-align: left; border-bottom: 3px solid #a8bcff; }
+  .table td { padding: 8px 9px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 700; }
+  .table tr:hover td { background: #f8faff; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 20 集</span>
+    <h1>💾 internal/storage<br>对象存储抽象层</h1>
+    <div class="tagline">
+      <span class="emoji">📦</span> S3/MinIO 的统一封装<br>所有大文件的"仓库管理员"
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>storage 管什么？</h2>
+    <p class="lead">
+      系统里的 <span class="hl">大文件</span>（文件内容、记忆、技能包、批处理结果）<br>
+      都存对象存储 —— storage 是它们的<span class="hl">统一仓库管理员</span>。
+    </p>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>internal/storage</b> = 对象存储抽象层（AWS SDK for Go v2）：<br>
+        <br>
+        🗃️ <b>Client</b> —— 共享连接池 + 凭证<br>
+        📦 <b>ObjectStore</b> —— 绑定单个 bucket 的操作边界<br>
+        <br>
+        <span class="hl-green">被 files / memory / skills / batches / filestore 全部共享</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：两级结构 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 两级结构</span>
+    <h2>Client → ObjectStore</h2>
+    <div class="layers">
+      <div class="layer ly1">
+        <div class="emoji">🔌</div>
+        <div class="name">Client（全局唯一）</div>
+        <div class="desc">启动时创建一次：复用 AWS SDK 连接 + 凭证</div>
+        <span class="mono">storage.New(cfg)</span>
+      </div>
+      <div class="l-arrow">▼ ForBucket(name) 按名称派生</div>
+      <div class="layer ly2">
+        <div class="emoji">📦</div>
+        <div class="name">ObjectStore（绑定单 bucket）</div>
+        <div class="desc">Upload / Open / Copy / Delete / Ensure / Name</div>
+        <span class="mono">不新建网络连接，只生成 bucket 作用域对象</span>
+      </div>
+      <div class="l-arrow">▼</div>
+      <div class="layer ly3">
+        <div class="emoji">☁️</div>
+        <div class="name">S3 / MinIO</div>
+        <div class="desc">真实对象存储（生产 S3，开发 MinIO）</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:16px;">
+        💡 <b>设计</b>：一个 Client 派生出多个 ObjectStore（不同 bucket）——
+        连接不重复，bucket 隔离清晰。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：操作 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 5 个操作</span>
+    <h2>ObjectStore 接口</h2>
+    <div class="grid">
+      <div class="item"><div class="emoji">⬆️</div><div class="name">Upload</div><div class="desc">上传（已知/未知大小流，分片 16MiB）</div></div>
+      <div class="item"><div class="emoji">⬇️</div><div class="name">Open</div><div class="desc">打开（支持字节区间 Range 读取）</div></div>
+      <div class="item"><div class="emoji">📋</div><div class="name">Copy</div><div class="desc">复制（服务端复制）</div></div>
+      <div class="item"><div class="emoji">🗑️</div><div class="name">Delete</div><div class="desc">删除（普通/精确版本/全部版本）</div></div>
+      <div class="item"><div class="emoji">🛡️</div><div class="name">Ensure</div><div class="desc">确保 bucket 存在（无则创建）</div></div>
+      <div class="item"><div class="emoji">🏷️</div><div class="name">Name</div><div class="desc">返回 bucket 名</div></div>
+    </div>
+    <div class="card">
+      <p style="font-size:16px;">
+        💡 <b>版本控制支持</b>：Delete 分三种（普通删除/精确版本/同键全版本清理），
+        配合 S3 版本化 —— 这就是之前讲 filestore"不可变 blob"的底层能力。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：错误分类 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 错误分类</span>
+    <h2>统一错误映射（errors.go）</h2>
+    <table class="table">
+      <tr><th>Kind</th><th>含义</th><th>识别方式</th></tr>
+      <tr><td class="mono">ErrNotFound</td><td>对象不存在</td><td>NoSuchKey / NoSuchBucket / 404</td></tr>
+      <tr><td class="mono">ErrAccessDenied</td><td>凭证无效/无权限</td><td>AccessDenied / 401 / 403</td></tr>
+      <tr><td class="mono">ErrConflict</td><td>冲突（bucket 已存在等）</td><td>BucketAlreadyExists / 409 / 412</td></tr>
+      <tr><td class="mono">ErrInvalidRange</td><td>范围读取越界</td><td>InvalidRange / 416</td></tr>
+    </table>
+    <div class="card">
+      <p style="font-size:16px;">
+        🧩 <b>StoreError</b> 包装：保留 Operation + Bucket + Key + Code + Cause，<br>
+        通过 <span class="hl">errors.Is</span> 暴露稳定分类 —— 上层不用猜 S3 错误码。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：使用方 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 谁在用</span>
+    <h2>共享同一个仓库</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        📁 <b>files</b> —— 文件内容<br>
+        🧠 <b>memory</b> —— 记忆内容（之前讲过：内容存 S3）<br>
+        🧰 <b>skills</b> —— 技能包归档<br>
+        📦 <b>batches</b> —— 批处理结果 JSONL<br>
+        📂 <b>filestore</b> —— 沙箱文件 blob<br>
+        🧹 <b>cleanup</b> —— 清理队列消费（按任务 bucket 选择 store）<br>
+        <br>
+        <span class="hl-green">全部通过 storage.Client.ForBucket 派生自己的 ObjectStore</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：insight -->
+  <div class="chapter">
+    <span class="chip">第六章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        🔌 <b>1. "一个连接，多个 bucket"</b> —— Client 复用连接，
+        ForBucket 只生成作用域对象：资源利用最优。<br><br>
+        🎯 <b>2. 接口 = 需求清单</b> —— Upload/Open/Copy/Delete 恰好是
+        所有资源包需要的 4 个操作：不多不少。<br><br>
+        🧩 <b>3. 错误统一分类</b> —— StoreError 把 S3 各种错误码
+        归为 4 类，上层 errors.Is 判断，不碰 AWS SDK 细节。<br><br>
+        📦 <b>4. 流式优先</b> —— Upload 支持未知大小流、Open 支持 Range：
+        大文件不整读进内存（32MiB 限制配合）。<br><br>
+        🗑️ <b>5. 版本删除是"硬能力"</b> —— 精确版本删除/全版本清理
+        是 filestore 不可变 blob 的底层保障。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/storage 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

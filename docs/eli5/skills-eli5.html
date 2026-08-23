@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 技能包 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef7ee 0%, #f5faf5 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #d7f0db; color: #2e7d32;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 24px; color: #2c3550;
+    background: #fff; border: 3px dashed #81c784; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-blue { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(40, 90, 50, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 技能包结构 */
+  .pkg { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 16px; }
+  .pkg-step {
+    width: 100%; border-radius: 16px; padding: 14px 18px;
+    border: 4px solid; text-align: center; background: #fff;
+  }
+  .pkg-step .emoji { font-size: 28px; }
+  .pkg-step .name { font-size: 18px; font-weight: 800; margin-top: 4px; }
+  .pkg-step .desc { font-size: 13.5px; color: #666; }
+  .pk1 { border-color: #2e7d32; } .pk1 .name { color: #2e7d32; }
+  .pk2 { border-color: #2743a8; } .pk2 .name { color: #2743a8; }
+  .pk3 { border-color: #b45309; } .pk3 .name { color: #b45309; }
+  .pkg-arrow { font-size: 18px; color: #57606f; font-weight: 900; line-height: 1; }
+
+  /* 路由表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  .table th { background: #d7f0db; color: #2e7d32; padding: 9px; text-align: left; border-bottom: 3px solid #81c784; }
+  .table td { padding: 8px 9px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 700; }
+  .table tr:hover td { background: #f8faf8; }
+
+  /* 文件分工 */
+  .grp { margin-top: 14px; }
+  .grp h3 { font-size: 19px; color: #2e7d32; margin-bottom: 8px; font-weight: 800; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    background: #f0faf2; border: 2px solid #81c784; color: #2e7d32;
+    border-radius: 999px; padding: 5px 14px; font-size: 13px; font-weight: 700;
+  }
+  .chip .desc { font-size: 11.5px; color: #666; font-weight: 600; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 14px;
+    background: #fff; border-radius: 16px; padding: 14px 18px;
+    border: 3px dashed #81c784;
+  }
+  .flow-step .emoji { font-size: 26px; flex-shrink: 0; }
+  .flow-step .text { font-size: 14.5px; flex: 1; }
+  .flow-step .text b { color: #2e7d32; }
+  .flow-step .badge { background: #d7f0db; color: #2e7d32; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 16px; color: #2e7d32; line-height: 1; font-weight: 700; }
+
+  .note {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 19 集</span>
+    <h1>🧰 internal/skills<br>技能管理 API</h1>
+    <div class="tagline">
+      <span class="emoji">📦</span> 给 Agent 装"本领"的地方<br>上传、版本化、打包、预热
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>技能是什么？</h2>
+    <p class="lead">
+      Agent 要会干活，得有 <span class="hl">技能</span>（Skill）。<br>
+      skills 包管技能的一生：<span class="hl">上传 → 版本 → 打包 → 挂载到沙箱</span>。
+    </p>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>internal/skills</b> = 技能管理 API（7 个文件）：<br>
+        <br>
+        📦 <b>技能包</b> —— 用户上传 ZIP（SKILL.md + 资源文件）<br>
+        🔖 <b>版本化</b> —— 每个技能多个版本<br>
+        🧩 <b>打包</b> —— 校验/解析/生成归档<br>
+        🔥 <b>预热</b> —— 之前讲的 skillprewarm 就在这里解析<br>
+        🌱 <b>内置种子</b> —— 启动时种入内置技能
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：路由 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 路由</span>
+    <h2>技能 API（真实路由）</h2>
+    <table class="table">
+      <tr><th>路由</th><th>作用</th></tr>
+      <tr><td class="mono">POST /</td><td>创建技能（上传 ZIP）</td></tr>
+      <tr><td class="mono">GET /</td><td>列出技能</td></tr>
+      <tr><td class="mono">GET /{skill_id}</td><td>查看技能</td></tr>
+      <tr><td class="mono">DELETE /{skill_id}</td><td>删除技能</td></tr>
+      <tr><td class="mono">POST /{skill_id}/versions</td><td>创建新版本</td></tr>
+      <tr><td class="mono">GET /{skill_id}/versions</td><td>列出版本</td></tr>
+      <tr><td class="mono">GET /{skill_id}/versions/{v}</td><td>查看版本</td></tr>
+      <tr><td class="mono">DELETE /{skill_id}/versions/{v}</td><td>删除版本</td></tr>
+      <tr><td class="mono">GET /{skill_id}/versions/{v}/content</td><td><b>下载技能包</b></td></tr>
+    </table>
+  </div>
+
+  <!-- 第 3 章：技能包 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 技能包结构</span>
+    <h2>一个技能包长什么样？</h2>
+    <div class="pkg">
+      <div class="pkg-step pk1">
+        <div class="emoji">📦</div>
+        <div class="name">用户上传 ZIP</div>
+        <div class="desc">SKILL.md + 资源文件（≤ 8 MiB）</div>
+      </div>
+      <div class="pkg-arrow">▼ 解析</div>
+      <div class="pkg-step pk2">
+        <div class="emoji">🧩</div>
+        <div class="name">解析出元数据</div>
+        <div class="desc">frontmatter（name/description）+ 标题 + 首段</div>
+      </div>
+      <div class="pkg-arrow">▼ 打包</div>
+      <div class="pkg-step pk3">
+        <div class="emoji">🔖</div>
+        <div class="name">版本化归档</div>
+        <div class="desc">SHA-256 指纹 + 版本号 + 存对象存储</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:16px;">
+        💡 <b>限制</b>：技能包最大 <span class="hl">8 MiB</span>（MaxSkillPackageBytes），
+        上传用 multipart 的 files[] 字段，支持单 ZIP 或散文件。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：解析 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 元数据解析</span>
+    <h2>catalog.go 怎么解析？</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        📝 <b>parseFrontmatter</b> —— 解析 SKILL.md 的 YAML 头（--- name: xxx ---）<br>
+        📰 <b>firstMarkdownHeading</b> —— 第一个 Markdown 标题<br>
+        📄 <b>firstMarkdownParagraph</b> —— 第一段正文<br>
+        🎯 <b>fallback 链</b> —— name 缺失时用文件名兜底<br>
+        <br>
+        <span class="hl">目的</span>：从技能包里提取"名字 + 描述"，供目录展示。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：运行时解析 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 运行时解析</span>
+    <h2>resolver.go —— 预热的关键</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🤖</div>
+        <div class="text"><b>Agent Snapshot</b>：拿到 agent 配置快照（之前讲过）</div>
+        <div class="badge">输入</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔍</div>
+        <div class="text"><b>解析 skill 引用</b>：anthropic（内置）或 custom（自定义）</div>
+        <div class="badge">分类</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📦</div>
+        <div class="text"><b>resolveBuiltin</b>：内置技能（系统自带）</div>
+        <div class="badge">内置</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔖</div>
+        <div class="text"><b>resolveCustom</b>：自定义技能（查版本表 + 取归档）</div>
+        <div class="badge">自定义</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔥</div>
+        <div class="text"><b>输出 RuntimeSkill</b>：交给 skillprewarm 预热（之前讲过！）</div>
+        <div class="badge">输出</div>
+      </div>
+    </div>
+    <div class="note">🔗 这就是之前讲的 skillprewarm 链路：resolver.ResolveAgentSnapshot → PrepareSkillMount → E2B 卷（预热队列那集）</div>
+  </div>
+
+  <!-- 第 6 章：文件分工 -->
+  <div class="chapter">
+    <span class="chip">第六章 · 7 个文件</span>
+    <h2>分工</h2>
+    <div class="grp">
+      <div class="chips">
+        <span class="chip">handler.go 路由+CRUD</span>
+        <span class="chip">package.go 打包/解包（8MiB 限制）</span>
+        <span class="chip">catalog.go 元数据解析（frontmatter）</span>
+        <span class="chip">resolver.go 运行时解析（预热）</span>
+        <span class="chip">seed.go 内置技能种子</span>
+        <span class="chip">errors.go 错误清单</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 7 章：insight -->
+  <div class="chapter">
+    <span class="chip">第七章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        📦 <b>1. 技能 = ZIP 包</b> —— 不是配置，是完整文件包（SKILL.md + 资源）：
+        所以才有 8 MiB 限制、multipart 上传、归档存储。<br><br>
+        🔖 <b>2. 版本化 = 不可变归档</b> —— 每个版本一个 SHA-256 指纹，
+        内容不可变：Agent 引用的版本永远一致。<br><br>
+        🧩 <b>3. 双类型</b> —— anthropic（内置）+ custom（自定义）：
+        内置技能系统提供，自定义用户上传，resolver 分流处理。<br><br>
+        🔥 <b>4. 和 skillprewarm 深度耦合</b> —— resolver 的输出就是预热的输入：
+        skills 是"技能仓库"，skillprewarm 是"技能快递员"。<br><br>
+        🌱 <b>5. seed 保证开箱即用</b> —— 启动时种入内置技能，
+        新部署不需要手动创建基础技能。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/skills 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

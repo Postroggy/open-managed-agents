@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 全景关联图 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #f0f4ff 0%, #f8f6ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dfe9ff; color: #2743a8;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 46px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 23px; color: #2c3550;
+    background: #fff; border: 3px dashed #a8bcff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 70px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 34px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-yellow { background: #fff3cd; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #8a6d00; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 28px 32px;
+    box-shadow: 0 4px 20px rgba(50, 70, 140, .07);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* ===== 主线故事 ===== */
+  .story { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px; }
+  .s-node {
+    width: 100%; border-radius: 18px; padding: 16px 20px;
+    border: 4px solid; background: #fff; text-align: center;
+  }
+  .s-node .emoji { font-size: 30px; }
+  .s-node .name { font-size: 19px; font-weight: 900; margin-top: 2px; }
+  .s-node .desc { font-size: 14px; color: #666; margin-top: 2px; }
+  .s-node .pkgs { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .s-node .pkg {
+    font-family: Menlo, monospace; font-size: 12px; font-weight: 700;
+    background: #f0f6ff; border: 1.5px solid #a8bcff; color: #2743a8;
+    border-radius: 999px; padding: 2px 10px;
+  }
+  .s-arrow { font-size: 22px; color: #57606f; font-weight: 900; line-height: 1.2; text-align: center; }
+  .s-arrow .note { font-size: 12.5px; color: #888; font-weight: 600; display: block; }
+  .sn1 { border-color: #2743a8; } .sn1 .name { color: #2743a8; }
+  .sn2 { border-color: #b45309; } .sn2 .name { color: #b45309; }
+  .sn3 { border-color: #2e7d32; } .sn3 .name { color: #2e7d32; }
+  .sn4 { border-color: #7b1fa2; } .sn4 .name { color: #7b1fa2; }
+  .sn5 { border-color: #c53030; } .sn5 .name { color: #c53030; }
+  .sn6 { border-color: #0e7d6e; } .sn6 .name { color: #0e7d6e; }
+
+  /* ===== 分层 ===== */
+  .layers { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .l-row {
+    display: flex; align-items: stretch; gap: 0;
+    background: #fff; border-radius: 18px; overflow: hidden;
+    border: 3px solid;
+  }
+  .l-label {
+    writing-mode: vertical-rl; text-orientation: mixed;
+    display: flex; align-items: center; justify-content: center;
+    padding: 14px 10px; font-size: 14px; font-weight: 900; letter-spacing: 2px; color: #fff; flex-shrink: 0;
+  }
+  .l-body { flex: 1; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .l-body .pkg {
+    font-family: Menlo, monospace; font-size: 12px; font-weight: 700;
+    border-radius: 10px; padding: 4px 12px; border: 2px solid;
+  }
+  .l-body .role { font-size: 12.5px; color: #777; font-weight: 600; width: 100%; }
+  .lr1 { border-color: #2743a8; } .lr1 .l-label { background: #2743a8; } .lr1 .pkg { color: #2743a8; border-color: #a8bcff; background: #f0f6ff; }
+  .lr2 { border-color: #b45309; } .lr2 .l-label { background: #b45309; } .lr2 .pkg { color: #b45309; border-color: #ffd291; background: #fff8f0; }
+  .lr3 { border-color: #2e7d32; } .lr3 .l-label { background: #2e7d32; } .lr3 .pkg { color: #2e7d32; border-color: #81c784; background: #f0faf2; }
+  .lr4 { border-color: #7b1fa2; } .lr4 .l-label { background: #7b1fa2; } .lr4 .pkg { color: #7b1fa2; border-color: #d8a7e8; background: #fdf0ff; }
+  .lr5 { border-color: #0e7d6e; } .lr5 .l-label { background: #0e7d6e; } .lr5 .pkg { color: #0e7d6e; border-color: #8fd8cf; background: #f0faf9; }
+  .lr6 { border-color: #64748b; } .lr6 .l-label { background: #64748b; } .lr6 .pkg { color: #475569; border-color: #cbd5e1; background: #f8fafc; }
+
+  /* ===== 数据流 ===== */
+  .streams { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+  .stream {
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #a8bcff;
+  }
+  .stream .st-name { font-size: 17px; font-weight: 800; color: #2743a8; margin-bottom: 8px; }
+  .stream .st-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .stream .st-item {
+    font-family: Menlo, monospace; font-size: 12px; font-weight: 700;
+    background: #f0f6ff; border: 1.5px solid #a8bcff; color: #2743a8;
+    border-radius: 8px; padding: 3px 10px;
+  }
+  .stream .st-arrow { color: #57606f; font-weight: 900; font-size: 15px; }
+  .stream .st-role { font-size: 12.5px; color: #777; margin-top: 6px; }
+
+  .note {
+    margin-top: 12px; padding: 12px 16px; font-size: 14.5px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 全景 · 总结篇</span>
+    <h1>🗺️ OMA 全景关联图</h1>
+    <div class="tagline">
+      <span class="emoji">🔗</span> 一个用户从创建 Agent 到 Agent 干活的完整旅程<br>45 个包如何串成一台机器
+    </div>
+  </div>
+
+  <!-- ========== 第一章：主线故事 ========== -->
+  <div class="chapter">
+    <span class="chip">第一章 · 主线故事</span>
+    <h2>一条请求的完整旅程</h2>
+    <p class="lead">用<span class="hl">"用户让 Agent 干活"</span>这条主线，把所有包串起来</p>
+
+    <div class="story">
+      <div class="s-node sn1">
+        <div class="emoji">🔐</div>
+        <div class="name">① 用户登录 & 准备</div>
+        <div class="desc">平台控制台登录（邮箱/SSO）→ 选组织/工作区</div>
+        <div class="pkgs"><span class="pkg">platformapi</span><span class="pkg">platformauth</span><span class="pkg">platformsession</span><span class="pkg">redisclient</span><span class="pkg">platform</span></div>
+      </div>
+      <div class="s-arrow">▼<span class="note">登录状态存 Redis（platformsession）</span></div>
+
+      <div class="s-node sn1">
+        <div class="emoji">🤖</div>
+        <div class="name">② 创建 Agent</div>
+        <div class="desc">定义名字/模型/技能/工具/MCP（POST /agents）</div>
+        <div class="pkgs"><span class="pkg">agents</span><span class="pkg">agentsnapshot</span><span class="pkg">modelmapping</span><span class="pkg">sessioncontract</span></div>
+      </div>
+      <div class="s-arrow">▼<span class="note">Agent 配置拍成快照（agentsnapshot）</span></div>
+
+      <div class="s-node sn2">
+        <div class="emoji">🌱</div>
+        <div class="name">③ 创建 Environment（沙箱环境）</div>
+        <div class="desc">POST /environments → E2B 云端建沙箱</div>
+        <div class="pkgs"><span class="pkg">environments</span><span class="pkg">runtime/e2bruntime</span><span class="pkg">networkpolicy</span></div>
+      </div>
+      <div class="s-arrow">▼<span class="note">沙箱生命周期：创建→预热→运行→暂停→恢复→销毁</span></div>
+
+      <div class="s-node sn3">
+        <div class="emoji">💬</div>
+        <div class="name">④ 创建 Session（Agent 实例）</div>
+        <div class="desc">绑定 Agent + Environment + Vault（POST /sessions）</div>
+        <div class="pkgs"><span class="pkg">sessions</span><span class="pkg">sessionresource</span><span class="pkg">sessionfanout</span><span class="pkg">managedagentsevents</span></div>
+      </div>
+      <div class="s-arrow">▼<span class="note">一次创建 = Session + 主 Thread + Work</span></div>
+
+      <div class="s-node sn4">
+        <div class="emoji">📨</div>
+        <div class="name">⑤ 用户发消息 & 看实时流</div>
+        <div class="desc">POST /events → SSE 实时看 Agent 干活</div>
+        <div class="pkgs"><span class="pkg">sessions</span><span class="pkg">sessionfanout</span><span class="pkg">codesessions</span><span class="pkg">messages</span></div>
+      </div>
+      <div class="s-arrow">▼<span class="note">事件 → 分类（managedagentsevents）→ 广播 → SSE</span></div>
+
+      <div class="s-node sn5">
+        <div class="emoji">🚀</div>
+        <div class="name">⑥ 沙箱里的 Agent 开始干活</div>
+        <div class="desc">启动 Claude worker → 技能装载 → 文件挂载 → 网络控制</div>
+        <div class="pkgs"><span class="pkg">codesessions</span><span class="pkg">environments</span><span class="pkg">skills</span><span class="pkg">skillprewarm</span><span class="pkg">sandboxmount</span><span class="pkg">filestore</span><span class="pkg">networkpolicy</span></div>
+      </div>
+      <div class="s-arrow">▼<span class="note">技能预热（skillprewarm）+ 文件挂载（filestore/sandboxmount）</span></div>
+
+      <div class="s-node sn6">
+        <div class="emoji">🔧</div>
+        <div class="name">⑦ Agent 调工具 / 模型</div>
+        <div class="desc">MCP 代理 → 凭证注入 → 模型映射 → 上游</div>
+        <div class="pkgs"><span class="pkg">codesessions/mcp_proxy</span><span class="pkg">vaults</span><span class="pkg">secrets</span><span class="pkg">modelmapping</span><span class="pkg">messages</span><span class="pkg">networkpolicy</span></div>
+      </div>
+      <div class="s-arrow">▼<span class="note">密钥信封加密（secrets DEK/KEK）→ 注入 Authorization</span></div>
+
+      <div class="s-node sn6">
+        <div class="emoji">📡</div>
+        <div class="name">⑧ 结果通知 & 收尾</div>
+        <div class="desc">Webhook 推送事件 → 数据落库 → 过期清理</div>
+        <div class="pkgs"><span class="pkg">webhooks</span><span class="pkg">db</span><span class="pkg">storage</span><span class="pkg">cleanup</span><span class="pkg">batches</span><span class="pkg">admin</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 第二章：分层架构 ========== -->
+  <div class="chapter">
+    <span class="chip">第二章 · 六层架构</span>
+    <h2>45 个包分 6 层</h2>
+    <div class="layers">
+      <div class="l-row lr1">
+        <div class="l-label">🚪 入口层</div>
+        <div class="l-body">
+          <span class="pkg">api</span><span class="pkg">httpapi</span><span class="pkg">auth</span><span class="pkg">ids</span>
+          <span class="role">总大门：组装服务器、挂路由、中间件、鉴权入口（前面讲的"接线总站"）</span>
+        </div>
+      </div>
+      <div class="l-row lr2">
+        <div class="l-label">🎡 资源层</div>
+        <div class="l-body">
+          <span class="pkg">agents</span><span class="pkg">sessions</span><span class="pkg">skills</span><span class="pkg">files</span><span class="pkg">memory</span>
+          <span class="pkg">deployments</span><span class="pkg">environments</span><span class="pkg">models</span><span class="pkg">batches</span>
+          <span class="pkg">vaults</span><span class="pkg">webhooks</span><span class="pkg">messages</span><span class="pkg">mcpcatalogs</span><span class="pkg">workbench</span><span class="pkg">admin</span>
+          <span class="role">对外资源 API：每个包 = 一个业务领域（handler + service + errors）</span>
+        </div>
+      </div>
+      <div class="l-row lr3">
+        <div class="l-label">🎬 运行时层</div>
+        <div class="l-body">
+          <span class="pkg">codesessions</span><span class="pkg">runtime/e2bruntime</span><span class="pkg">sandboxruntime</span>
+          <span class="pkg">sandboxmount</span><span class="pkg">filestore</span><span class="pkg">filestorepath</span>
+          <span class="pkg">sessionfanout</span><span class="pkg">sessioncontract</span><span class="pkg">sessionresource</span>
+          <span class="pkg">managedagentsevents</span><span class="pkg">skillprewarm</span><span class="pkg">agentsnapshot</span><span class="pkg">cleanup</span>
+          <span class="role">Agent 真正干活的地方：沙箱、事件流、技能预热、文件挂载、清理</span>
+        </div>
+      </div>
+      <div class="l-row lr4">
+        <div class="l-label">🛰️ 平台层</div>
+        <div class="l-body">
+          <span class="pkg">platform</span><span class="pkg">platformapi</span><span class="pkg">platformauth</span>
+          <span class="pkg">platformsession</span><span class="pkg">redisclient</span>
+          <span class="role">控制台四件套：数据契约 + 总机 + 门卫 + 售票机</span>
+        </div>
+      </div>
+      <div class="l-row lr5">
+        <div class="l-label">🏗️ 基础设施</div>
+        <div class="l-body">
+          <span class="pkg">config</span><span class="pkg">db</span><span class="pkg">storage</span><span class="pkg">secrets</span>
+          <span class="pkg">networkpolicy</span><span class="pkg">modelmapping</span><span class="pkg">observability</span>
+          <span class="pkg">common/collections</span><span class="pkg">common/jsonx</span>
+          <span class="role">地基：配置 / 数据库 / 对象存储 / 加密 / 网络策略 / 日志</span>
+        </div>
+      </div>
+      <div class="l-row lr6">
+        <div class="l-label">📦 数据</div>
+        <div class="l-body">
+          <span class="pkg">PostgreSQL (db)</span><span class="pkg">S3/MinIO (storage)</span><span class="pkg">Redis (redisclient)</span>
+          <span class="role">三驾马车：元数据进 DB / 内容进 S3 / 会话状态进 Redis</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 第三章：关键数据流 ========== -->
+  <div class="chapter">
+    <span class="chip">第三章 · 关键数据流</span>
+    <h2>四股核心数据怎么流动</h2>
+
+    <div class="streams">
+      <div class="stream">
+        <div class="st-name">💬 消息流（用户 ↔ Agent）</div>
+        <div class="st-flow">
+          <span class="st-item">用户 POST /events</span><span class="st-arrow">→</span>
+          <span class="st-item">managedagentsevents 分类</span><span class="st-arrow">→</span>
+          <span class="st-item">sessionfanout 广播</span><span class="st-arrow">→</span>
+          <span class="st-item">stream_hub SSE</span><span class="st-arrow">→</span>
+          <span class="st-item">codesessions → 沙箱 worker</span>
+        </div>
+        <div class="st-role">sessions 是"对外脸面"，codesessions 是"背后发动机"，事件字典裁决每个事件去哪</div>
+      </div>
+      <div class="stream">
+        <div class="st-name">📁 文件流（沙箱 ↔ 存储）</div>
+        <div class="st-flow">
+          <span class="st-item">sandboxmount 路径合同</span><span class="st-arrow">→</span>
+          <span class="st-item">filestore（/uploads 固定根）</span><span class="st-arrow">→</span>
+          <span class="st-item">storage（S3 blob）</span><span class="st-arrow">→</span>
+          <span class="st-item">db（元数据）</span><span class="st-arrow">→</span>
+          <span class="st-item">cleanup（孤儿清理）</span>
+        </div>
+        <div class="st-role">"内容进 S3、元数据进 DB" 是统一模式；沙箱可死，数据不死</div>
+      </div>
+      <div class="stream">
+        <div class="st-name">🔑 密钥流（vault → 运行时注入）</div>
+        <div class="st-flow">
+          <span class="st-item">用户存 Credential</span><span class="st-arrow">→</span>
+          <span class="st-item">vaults.SealCredentialSecret</span><span class="st-arrow">→</span>
+          <span class="st-item">secrets.Seal（DEK/KEK 信封）</span><span class="st-arrow">→</span>
+          <span class="st-item">DB 存信封</span><span class="st-arrow">→</span>
+          <span class="st-item">Agent 调 MCP → vaults.Injector → secrets.Open → 注入 Authorization</span>
+        </div>
+        <div class="st-role">secrets = 锁匠（加密工具），vaults = 银行（业务）；明文绝不落库/缓存</div>
+      </div>
+      <div class="stream">
+        <div class="st-name">🎯 模型流（Claude 兼容 → 真实上游）</div>
+        <div class="st-flow">
+          <span class="st-item">用户请求模型名</span><span class="st-arrow">→</span>
+          <span class="st-item">modelmapping.Resolve 翻译</span><span class="st-arrow">→</span>
+          <span class="st-item">messages 代理转发</span><span class="st-arrow">→</span>
+          <span class="st-item">上游模型（BYOK）</span>
+        </div>
+        <div class="st-role">models 目录展示翻译后的模型；platformapi 组织级代理也走 modelmapping</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 第四章：包间依赖 ========== -->
+  <div class="chapter">
+    <span class="chip">第四章 · 依赖金字塔</span>
+    <h2>谁依赖谁（简化版）</h2>
+    <div class="card">
+      <p style="font-size:18px; line-height: 2.2;">
+        🎡 <b>资源层</b>（agents/sessions/skills/...）<br>
+        &nbsp;&nbsp;↓ 依赖<br>
+        🎬 <b>运行时层</b>（codesessions/environments/filestore/...）<br>
+        &nbsp;&nbsp;↓ 依赖<br>
+        🧩 <b>共享合同</b>（sessioncontract/sessionresource/sandboxmount/filestorepath/managedagentsevents）<br>
+        &nbsp;&nbsp;↓ 依赖<br>
+        🏗️ <b>基础设施</b>（db/storage/secrets/config/networkpolicy）<br>
+        &nbsp;&nbsp;↓ 依赖<br>
+        🧰 <b>纯工具</b>（common/collections · common/jsonx · ids）<br>
+        <br>
+        <span class="hl-red">铁律：依赖只能往下，不能往上</span>（db 不能 import 资源包；工具层不依赖业务层）
+      </p>
+    </div>
+    <div class="note">💡 多个"合同包"（sessioncontract/sandboxmount/filestorepath）存在的意义：让各层对"路径/上限/语义"的理解一致，防漂移。</div>
+  </div>
+
+  <!-- ========== 第五章：理解地图 ========== -->
+  <div class="chapter">
+    <span class="chip">第五章 · 理解地图</span>
+    <h2>如何记住这 45 个包</h2>
+    <div class="card">
+      <p style="font-size:18px; line-height: 2;">
+        🧠 <b>记忆锚点 1：一条主线</b> —— "用户让 Agent 干活"：<br>
+        &nbsp;&nbsp;登录(平台层) → 建 Agent(agents) → 建环境(environments) → 建会话(sessions) → 发消息 → 沙箱干活(运行时层) → 调工具(凭证) → 通知(webhooks)<br>
+        <br>
+        🧠 <b>记忆锚点 2：三驾马车</b> —— 数据去哪：<br>
+        &nbsp;&nbsp;元数据 → <span class="hl">db</span>（PostgreSQL）· 大内容 → <span class="hl">storage</span>（S3）· 会话状态 → <span class="hl">redisclient</span>（Redis）<br>
+        <br>
+        🧠 <b>记忆锚点 3：四个"合同包"</b> —— 共享语义防漂移：<br>
+        &nbsp;&nbsp;<span class="hl">sessioncontract</span>（上限）· <span class="hl">sandboxmount</span>（路径）· <span class="hl">filestorepath</span>（路径语义）· <span class="hl">managedagentsevents</span>（事件字典）<br>
+        <br>
+        🧠 <b>记忆锚点 4：三对"易混包"</b>：<br>
+        &nbsp;&nbsp;<span class="hl">secrets vs vaults</span>（工具 vs 业务）· <span class="hl">sessions vs codesessions</span>（对外 vs 发动机）· <span class="hl">platform vs platformapi</span>（数据 vs 接口）<br>
+        <br>
+        🧠 <b>记忆锚点 5：异步三兄弟</b> —— 入队即返回：<br>
+        &nbsp;&nbsp;<span class="hl">skillprewarm</span>（技能预热）· <span class="hl">cleanup</span>（对象清理）· <span class="hl">webhooks</span>（事件投递）—— 全是"队列 + worker"模式
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA 全景关联图 · 45 个包一条主线串起来 · 有代码依据</footer>
+</div>
+</body>
+</html>

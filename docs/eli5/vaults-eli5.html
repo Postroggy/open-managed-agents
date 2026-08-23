@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 密钥保险库 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdf3f3 0%, #fff8f8 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #ffd6d6; color: #c53030;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 24px; color: #2c3550;
+    background: #fff; border: 3px dashed #ff9e9e; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #ffe0e0; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-blue { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(140, 60, 60, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 两级结构 */
+  .layers { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; }
+  .layer {
+    width: 100%; border-radius: 18px; padding: 16px 20px;
+    border: 4px solid; text-align: center; background: #fff;
+  }
+  .layer .emoji { font-size: 28px; }
+  .layer .name { font-size: 19px; font-weight: 900; }
+  .layer .desc { font-size: 14px; color: #666; margin-top: 2px; }
+  .l-arrow { font-size: 18px; color: #57606f; font-weight: 900; line-height: 1; }
+  .ly1 { border-color: #c53030; } .ly1 .name { color: #c53030; }
+  .ly2 { border-color: #2743a8; } .ly2 .name { color: #2743a8; }
+
+  /* 认证类型 */
+  .auth-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .auth {
+    background: #fff; border-radius: 16px; padding: 16px 14px;
+    border: 3px dashed #ff9e9e; text-align: center;
+  }
+  .auth .emoji { font-size: 28px; }
+  .auth .name { font-family: Menlo, monospace; font-size: 13px; font-weight: 800; color: #c53030; margin-top: 4px; }
+  .auth .desc { font-size: 12px; color: #666; margin-top: 2px; }
+
+  /* 注入流程 */
+  .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 14px;
+    background: #fff; border-radius: 16px; padding: 14px 18px;
+    border: 3px dashed #ff9e9e;
+  }
+  .flow-step .emoji { font-size: 26px; flex-shrink: 0; }
+  .flow-step .text { font-size: 14.5px; flex: 1; }
+  .flow-step .text b { color: #c53030; }
+  .flow-step .badge { background: #ffd6d6; color: #c53030; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 16px; color: #c53030; line-height: 1; font-weight: 700; }
+
+  .note {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .auth-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 21 集</span>
+    <h1>🗄️ internal/vaults<br>密钥保险库</h1>
+    <div class="tagline">
+      <span class="emoji">🔐</span> 存密钥的地方<br>还能在运行时自动注入给 MCP 服务器
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>vaults 管什么？</h2>
+    <p class="lead">
+      Agent 要调用外部服务（GitHub、数据库…），需要 <span class="hl">密钥</span>。<br>
+      vaults 是存密钥的<span class="hl">保险库</span>，还能<span class="hl">自动注入</span>给运行时。
+    </p>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>internal/vaults</b> = 密钥保险库 API（10 个文件）：<br>
+        <br>
+        🔐 <b>Vault + Credential</b> 两级结构<br>
+        🔑 <b>三种认证类型</b>（static_bearer / mcp_oauth / environment_variable）<br>
+        💉 <b>Injector</b> —— 运行时把密钥注入 MCP 请求<br>
+        🔒 <b>加密</b> —— 用 secrets 包信封加密（之前讲过！）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：两级结构 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 两级结构</span>
+    <h2>Vault → Credential</h2>
+    <div class="layers">
+      <div class="layer ly1">
+        <div class="emoji">🗄️</div>
+        <div class="name">Vault（保险库）</div>
+        <div class="desc">容器：一个组织/工作区的密钥集合，可归档</div>
+      </div>
+      <div class="l-arrow">▼ 包含</div>
+      <div class="layer ly2">
+        <div class="emoji">🔑</div>
+        <div class="name">Credential（凭据）</div>
+        <div class="desc">单条密钥：认证配置（公开）+ 秘密 payload（信封加密）</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:16px;">
+        💡 <b>关键设计：认证配置与秘密分离</b><br>
+        配置（auth type/URL）明文存 DB；<br>
+        秘密（token/密码）<span class="hl">信封加密</span>后存 SecretEnvelope —— 明文绝不留存。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：三种认证 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 三种认证类型</span>
+    <h2>凭据的认证方式</h2>
+    <div class="auth-grid">
+      <div class="auth">
+        <div class="emoji">🔑</div>
+        <div class="name">static_bearer</div>
+        <div class="desc">静态 Bearer token（最简单，注入 Authorization 头）</div>
+      </div>
+      <div class="auth">
+        <div class="emoji">🔄</div>
+        <div class="name">mcp_oauth</div>
+        <div class="desc">MCP OAuth 流程（授权码换取 token）</div>
+      </div>
+      <div class="auth">
+        <div class="emoji">🌱</div>
+        <div class="name">environment_variable</div>
+        <div class="desc">环境变量（注入到沙箱环境）</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：注入流程 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 运行时注入</span>
+    <h2>Injector 怎么把密钥用起来？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🤖</div>
+        <div class="text"><b>Agent 调用 MCP</b>：沙箱里的 Claude 要访问外部服务器</div>
+        <div class="badge">触发</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔍</div>
+        <div class="text"><b>加载 vault_ids</b>：查 code session 绑定了哪些保险库</div>
+        <div class="badge">查库</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🎯</div>
+        <div class="text"><b>decideInjection</b>：按 URL 匹配（host + 路径前缀）选凭据</div>
+        <div class="badge">匹配</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔓</div>
+        <div class="text"><b>解密</b>：打开 SecretEnvelope（secrets.Open）拿到明文 token</div>
+        <div class="badge">解密</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">💉</div>
+        <div class="text"><b>注入</b>：重写 Authorization 头 → 转发给上游 MCP</div>
+        <div class="badge">注入</div>
+      </div>
+    </div>
+    <div class="note">🔒 明文 token 绝不缓存（"Plaintext tokens are never cached"）——用完即弃。</div>
+  </div>
+
+  <!-- 第 5 章：注入决策 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 注入决策</span>
+    <h2>decideInjection 三种结果</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        ✅ <b>passthrough</b> —— 无匹配凭据：头原样不动<br>
+        💉 <b>inject</b> —— 匹配 static_bearer：设置 Bearer 头<br>
+        🚫 <b>reject</b> —— 匹配但无法注入：返回 ErrInjectionRejected<br>
+        <br>
+        <span class="hl">匹配规则</span>：host 相等 + 路径前缀匹配（hostsEqual + pathPrefixMatch）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：文件分工 -->
+  <div class="chapter">
+    <span class="chip">第六章 · 10 个文件</span>
+    <h2>分工</h2>
+    <div class="card">
+      <p style="font-size:16px;">
+        🚪 <b>handler.go</b> —— 路由（Vault + Credential CRUD）<br>
+        🔑 <b>auth_schema.go</b> —— 三种认证类型 schema<br>
+        🔒 <b>credential_secret.go</b> —— 密封/解密（secrets 集成）<br>
+        💉 <b>injector.go + inject_match.go</b> —— 运行时注入<br>
+        📋 <b>secret_schema.go</b> —— 秘密 payload schema<br>
+        ✅ <b>validation.go</b> —— 校验<br>
+        🍎 <b>errors.go</b> —— 错误清单<br>
+        🧰 <b>json_utils.go</b> —— JSON 工具<br>
+        🔐 <b>credential_auth.go</b> —— 凭据认证
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 7 章：insight -->
+  <div class="chapter">
+    <span class="chip">第七章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        🧩 <b>1. 配置与秘密分离</b> —— 认证配置明文、秘密信封加密：
+        列表接口不碰秘密，只有注入时才解密。<br><br>
+        💉 <b>2. 注入是"按需解密"</b> —— 明文 token 生命周期 = 一个请求：
+        不解密不缓存，用完即弃（暴露面最小）。<br><br>
+        🎯 <b>3. URL 匹配注入</b> —— host + 路径前缀决定用哪条凭据：
+        多个 MCP 服务器共享一个 vault，自动路由。<br><br>
+        🔗 <b>4. 和之前讲的完全串起</b> —— secrets（信封加密）→ vaults（保险库）
+        → injector（注入）→ mcp_proxy（之前 codesessions 讲的凭证注入边界）。<br><br>
+        🚫 <b>5. fail closed</b> —— 匹配但无法注入 → reject：
+        绝不把"没带 key 的请求"放出去（拿不准就拒绝）。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/vaults 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

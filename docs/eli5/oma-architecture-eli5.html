@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 设计架构 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #f0f4ff 0%, #f8f6ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 60px; }
+  .cover .kicker {
+    display: inline-block; background: #dfe9ff; color: #2743a8;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 46px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 24px auto 0; font-size: 22px; color: #2c3550;
+    background: #fff; border: 3px dashed #a8bcff; border-radius: 20px;
+    padding: 14px 24px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 60px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 16px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 14px; line-height: 1.3; }
+  .chapter .sub { font-size: 17px; color: #666; margin-bottom: 20px; }
+
+  .card {
+    background: #fff; border-radius: 22px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(50, 70, 140, .07); margin-bottom: 16px;
+  }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-yellow { background: #fff3cd; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #8a6d00; }
+
+  /* 设计决策卡 */
+  .decision {
+    display: flex; gap: 18px; background: #fff; border-radius: 20px;
+    padding: 20px 24px; border: 3px solid; margin-bottom: 14px;
+  }
+  .decision .emoji { font-size: 36px; flex-shrink: 0; }
+  .decision .body { flex: 1; }
+  .decision .q { font-size: 19px; font-weight: 900; margin-bottom: 4px; }
+  .decision .a { font-size: 15.5px; color: #555; }
+  .decision .why { font-size: 14px; color: #777; margin-top: 6px; padding-top: 6px; border-top: 1.5px dashed #ddd; }
+  .dc-blue { border-color: #2743a8; } .dc-blue .q { color: #2743a8; }
+  .dc-green { border-color: #2e7d32; } .dc-green .q { color: #2e7d32; }
+  .dc-orange { border-color: #b45309; } .dc-orange .q { color: #b45309; }
+  .dc-purple { border-color: #7b1fa2; } .dc-purple .q { color: #7b1fa2; }
+  .dc-teal { border-color: #0e7d6e; } .dc-teal .q { color: #0e7d6e; }
+  .dc-red { border-color: #c53030; } .dc-red .q { color: #c53030; }
+
+  /* 核心思想横幅 */
+  .core {
+    background: linear-gradient(135deg, #2743a8, #6c5ce7);
+    color: #fff; border-radius: 24px; padding: 28px 32px; margin-bottom: 16px;
+  }
+  .core .t { font-size: 22px; font-weight: 900; margin-bottom: 10px; }
+  .core .d { font-size: 16px; opacity: .95; }
+  .core .d + .d { margin-top: 8px; }
+
+  footer { text-align: center; margin-top: 50px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 架构 · 设计思想</span>
+    <h1>🧠 OMA 设计架构</h1>
+    <div class="tagline">
+      <span class="emoji">💡</span> 不记包名<br>理解"为什么这样设计"
+    </div>
+  </div>
+
+  <!-- ===== 第一章：核心问题 ===== -->
+  <div class="chapter">
+    <span class="chip">第一章 · OMA 在解决什么问题</span>
+    <h2>先理解"要做什么"</h2>
+    <div class="core">
+      <div class="t">🎯 OMA 的核心使命</div>
+      <div class="d">做一个 <b>Anthropic Managed Agents 的兼容开源实现</b> —— 让用户能在自己的基础设施上，跑出和官方一样体验的"托管 Agent"。</div>
+      <div class="d">这意味着三件事：<b>① API 合同兼容</b>（官方 SDK 能直接连）② <b>沙箱运行时</b>（Agent 真能干活）③ <b>管理面</b>（组织/用户/密钥/监控）。</div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        🧭 <b>由此推出三个架构主轴</b>：<br>
+        <br>
+        <span class="hl">主轴 A：合同驱动</span> —— 因为是"兼容实现"，一切以官方 API 合同为锚（错误格式、事件类型、资源上限、路由语义）。<br>
+        <span class="hl">主轴 B：租户安全</span> —— 因为是"托管服务"，多租户隔离是第一优先（org/workspace 两层边界）。<br>
+        <span class="hl">主轴 C：可演进</span> —— 因为协议在快速变化（官方不断加新能力），架构必须让"加功能"容易、"改结构"不痛。
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== 第二章：六大设计决策 ===== -->
+  <div class="chapter">
+    <span class="chip">第二章 · 六大设计决策</span>
+    <h2>每个"包结构"背后都是一个决策</h2>
+    <div class="sub">（不讲包名，讲"为什么这么切"）</div>
+
+    <div class="decision dc-blue">
+      <div class="emoji">🔌</div>
+      <div class="body">
+        <div class="q">决策 1：接口驱动（依赖倒置）</div>
+        <div class="a">上层定义"要什么"，下层提供"实现"。调用方只依赖接口，不依赖具体实现。</div>
+        <div class="why">💡 为什么：沙箱提供商（E2B）可以换、会话存储（Redis/内存）可以换、加密提供商（Local/KMS）可以换 —— 换实现不动业务代码。这是整个架构的"可替换性"来源。</div>
+      </div>
+    </div>
+
+    <div class="decision dc-green">
+      <div class="emoji">🧩</div>
+      <div class="body">
+        <div class="q">决策 2：合同下沉（共享语义层）</div>
+        <div class="a">把"路径/上限/事件分类/错误格式"这些<span class="hl-green">多方共识</span>抽成独立的小包，谁都用、谁也不拥有。</div>
+        <div class="why">💡 为什么：同一份语义（如"Session 最多 500 资源"）如果每个包各写一遍，改一处漏三处 —— 用"单一事实来源"消灭漂移。也是为了避免循环依赖（db 需要路径校验但不能依赖资源包）。</div>
+      </div>
+    </div>
+
+    <div class="decision dc-orange">
+      <div class="emoji">🏗️</div>
+      <div class="body">
+        <div class="q">决策 3：分层 + 单向依赖</div>
+        <div class="a">入口 → 资源 → 运行时 → 基础设施，依赖只能向下。资源层是"对外脸"，运行时层是"执行引擎"，基础设施是"地基"。</div>
+        <div class="why">💡 为什么：可测试（每层可独立测）、可替换（换层不牵连）、可理解（新人不迷路）。db 永不 import 资源包 —— 这条铁律让架构不腐化。</div>
+      </div>
+    </div>
+
+    <div class="decision dc-purple">
+      <div class="emoji">⏳</div>
+      <div class="body">
+        <div class="q">决策 4：重活全异步（队列 + worker）</div>
+        <div class="a">所有慢操作（技能装载、文件清理、事件投递）都是"入队即返回"，后台 worker 慢慢消化。</div>
+        <div class="why">💡 为什么：用户请求必须"秒回"。技能预热 10 秒？丢队列。删文件慢？丢队列。发 webhook？丢队列。核心哲学：<span class="hl-yellow">用户请求不等待重活</span>。</div>
+      </div>
+    </div>
+
+    <div class="decision dc-teal">
+      <div class="emoji">🔐</div>
+      <div class="body">
+        <div class="q">决策 5：安全 = fail closed + 纵深防御</div>
+        <div class="a">每一层都假设"自己可能被绕过"：鉴权层管身份，资源层管租户过滤，运行时层管网络白名单，存储层管加密，出口层管签名。</div>
+        <div class="why">💡 为什么：托管服务的信任模型是"攻击者可能在沙箱里"。所以沙箱网络要白名单、密钥要信封加密、明文不出内存、拿不准就拒绝 —— <span class="hl-red">fail closed 贯穿每一层</span>。</div>
+      </div>
+    </div>
+
+    <div class="decision dc-red">
+      <div class="emoji">🗄️</div>
+      <div class="body">
+        <div class="q">决策 6：数据按类型分仓（三驾马车）</div>
+        <div class="a">元数据进关系库（可查询）、大内容进对象存储（便宜）、会话状态进缓存（快）。每张表 UUID 做稳定业务标识。</div>
+        <div class="why">💡 为什么：大内容塞 DB 会拖垮查询；状态塞 DB 会慢；只有元数据需要结构化查询。UUID 让数据可搬迁、可合并 —— 架构为"可迁移"而设计。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 第三章：设计如何映射到代码 ===== -->
+  <div class="chapter">
+    <span class="chip">第三章 · 决策 → 代码</span>
+    <h2>这些思想在代码里长什么样</h2>
+
+    <div class="card">
+      <p style="font-size:17px; line-height: 2.1;">
+        <b>决策 1（接口驱动）</b> → <span class="hl">Provider 接口 / Store 接口 / KeyProvider 接口</span> —— 沙箱、会话、加密全是"接口 + 实现"<br>
+        <b>决策 2（合同下沉）</b> → <span class="hl">contract / mount / path / events 等小包</span> —— 只有常量/纯函数，零依赖<br>
+        <b>决策 3（分层）</b> → <span class="hl">资源包 × 运行时包 × 基础包</span> —— 每个包职责单一、依赖单向<br>
+        <b>决策 4（异步）</b> → <span class="hl">Enqueue / Lease / worker 循环</span> —— 三处都是"入队 + 轮询 + 重试"模式<br>
+        <b>决策 5（安全）</b> → <span class="hl">信封加密 / 网络白名单 / 签名头 / fail closed</span> —— 贯穿所有层<br>
+        <b>决策 6（分仓）</b> → <span class="hl">"内容进 S3、元数据进 DB"</span> —— files/memory/batches 全是一个模式
+      </p>
+    </div>
+    <div class="card">
+      <p style="font-size:16px; color:#555;">
+        🎯 <b>检验方法</b>：当你看到一个新包，问三个问题 —— <br>
+        ① 它属于哪一层？（入口/资源/运行时/基础）② 它依赖谁、谁依赖它？（单向吗）③ 它解决哪个决策里的哪个问题？（职责清楚吗）<br>
+        <br>
+        如果三个都能答上，说明这个包"放对了位置"；答不上，就是架构在提醒你"这里可能有问题"。
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== 第四章：一句话 ===== -->
+  <div class="chapter">
+    <span class="chip">第四章 · 压缩成一段话</span>
+    <h2>OMA 架构的"一句话版本"</h2>
+    <div class="core">
+      <div class="t">🧠 一句话记住</div>
+      <div class="d"><b>OMA = 兼容官方合同的托管 Agent 平台</b>：</div>
+      <div class="d">· 对外 —— 用「合同下沉」保证 API 兼容（SDK 即插即用）</div>
+      <div class="d">· 对内 —— 用「分层 + 接口」保证可演进（换实现不换业务）</div>
+      <div class="d">· 底下 —— 用「三驾马车」存数据、「队列 + worker」扛重活</div>
+      <div class="d">· 全程 —— 用「fail closed」守安全（纵深防御，拿不准就拒）</div>
+    </div>
+  </div>
+
+  <footer>🎈 OMA 设计架构 · 六大决策 × 为什么 · 基于 45 个包的真实代码提炼</footer>
+</div>
+</body>
+</html>

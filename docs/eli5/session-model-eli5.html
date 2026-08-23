@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session 是什么 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #f0f4ff 0%, #f5f8ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dfe9ff; color: #2743a8;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 24px; color: #2c3550;
+    background: #fff; border: 3px dashed #a8bcff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 34px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(50, 70, 140, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 层级树 */
+  .tree { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 18px; }
+  .node {
+    width: 100%; border-radius: 18px; padding: 16px 20px;
+    border: 4px solid; text-align: center; background: #fff;
+  }
+  .node .emoji { font-size: 30px; }
+  .node .name { font-size: 20px; font-weight: 900; }
+  .node .desc { font-size: 14px; color: #666; margin-top: 2px; }
+  .node .mono { font-family: Menlo, monospace; font-size: 12px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 4px; }
+  .n1 { border-color: #64748b; } .n1 .name { color: #64748b; }
+  .n2 { border-color: #2743a8; } .n2 .name { color: #2743a8; }
+  .n3 { border-color: #2e7d32; } .n3 .name { color: #2e7d32; }
+  .n4 { border-color: #7b1fa2; } .n4 .name { color: #7b1fa2; }
+  .n5 { border-color: #c53030; } .n5 .name { color: #c53030; }
+  .n6 { border-color: #b45309; } .n6 .name { color: #b45309; }
+  .t-arrow { font-size: 18px; color: #57606f; font-weight: 900; line-height: 1; }
+  .t-arrow .note { font-size: 12px; color: #888; font-weight: 600; }
+
+  /* 对比卡 */
+  .cmp3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .cmp { background: #fff; border-radius: 16px; padding: 16px; border: 4px dashed; text-align: center; }
+  .cmp .emoji { font-size: 30px; }
+  .cmp .q { font-size: 15px; font-weight: 800; margin-top: 6px; }
+  .cmp .a { font-size: 13.5px; color: #555; margin-top: 4px; }
+  .cmp .mark { font-size: 22px; font-weight: 900; margin-top: 6px; }
+  .c-no { border-color: #ff9e9e; } .c-no .q { color: #c53030; } .c-no .mark { color: #c53030; }
+  .c-yes { border-color: #81c784; } .c-yes .q { color: #2e7d32; } .c-yes .mark { color: #2e7d32; }
+
+  /* 工位类比 */
+  .desk { display: flex; gap: 14px; margin-top: 16px; }
+  .d-item { flex: 1; background: #fff; border-radius: 16px; padding: 16px; border: 3px dashed #a8bcff; text-align: center; }
+  .d-item .emoji { font-size: 32px; }
+  .d-item .name { font-size: 15px; font-weight: 800; color: #2743a8; margin-top: 6px; }
+  .d-item .desc { font-size: 13px; color: #666; margin-top: 4px; }
+
+  /* 代码 */
+  .code {
+    background: #1c2333; color: #a8bcff; border-radius: 14px; padding: 14px 18px;
+    font-family: Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.85; overflow-x: auto; margin-top: 12px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .cmp3, .desk { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 概念澄清 · 核心问题</span>
+    <h1>💬 Session 到底是什么？</h1>
+    <div class="tagline">
+      <span class="emoji">🏛️</span> 不是"一条消息"<br>不是"一轮对话"<br>是「Agent 实例的一生」
+    </div>
+  </div>
+
+  <!-- 第 1 章：官方定义 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 官方定义</span>
+    <h2>Anthropic 怎么定义 Session？</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        📖 <b>官方文档原文</b>（docs/managed-agents-reference/sessions.md）：<br>
+        <br>
+        <span class="hl">"A session is an agent instance within an environment.
+        Each session references an agent and an environment (both created separately),
+        and maintains conversation history across multiple interactions."</span><br>
+        <br>
+        翻译：<b>Session = 环境里的一个 Agent 实例</b>，<br>
+        它跨多次交互<b>维护对话历史</b>。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：层级树 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 完整层级</span>
+    <h2>4 层层级</h2>
+    <div class="tree">
+      <div class="node n1">
+        <div class="emoji">🏢</div>
+        <div class="name">Organization 组织</div>
+        <div class="desc">公司/团队（顶层租户）</div>
+      </div>
+      <div class="t-arrow">▼ 拥有</div>
+      <div class="node n2">
+        <div class="emoji">📁</div>
+        <div class="name">Workspace 工作区</div>
+        <div class="desc">组织下的空间（隔离边界）</div>
+      </div>
+      <div class="t-arrow">▼ 包含</div>
+      <div class="node n3">
+        <div class="emoji">🌱</div>
+        <div class="name">Environment 环境</div>
+        <div class="desc">沙箱环境（Agent 跑的地方）</div>
+        <span class="mono">environment_id</span>
+      </div>
+      <div class="t-arrow">▼ 运行</div>
+      <div class="node n4">
+        <div class="emoji">🤖</div>
+        <div class="name">Session 会话（★ 本集主角）</div>
+        <div class="desc">Agent 实例：跨对话维护历史，直到归档</div>
+        <span class="mono">session_id (sesn_)</span>
+      </div>
+      <div class="t-arrow">▼ 包含</div>
+      <div class="node n5">
+        <div class="emoji">🧵</div>
+        <div class="name">Thread 线程</div>
+        <div class="desc">一轮对话/子任务（主线程 + 子线程）</div>
+        <span class="mono">thread_id (sthr_)</span>
+      </div>
+      <div class="t-arrow">▼ 由事件组成</div>
+      <div class="node n6">
+        <div class="emoji">📨</div>
+        <div class="name">Event 事件</div>
+        <div class="desc">消息/工具调用/状态变化（最小单元）</div>
+        <span class="mono">user.message / agent.message / session.status_idle</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：三个猜测 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 回答你的三个猜测</span>
+    <h2>哪个对？</h2>
+    <div class="cmp3">
+      <div class="cmp c-no">
+        <div class="emoji">📨</div>
+        <div class="q">发一次消息 = Session？</div>
+        <div class="a">消息是 Event，只是 Session 里的一个条目</div>
+        <div class="mark">❌</div>
+      </div>
+      <div class="cmp c-no">
+        <div class="emoji">🧵</div>
+        <div class="q">一轮对话 = Session？</div>
+        <div class="a">一轮对话是 Thread，Session 可以有多轮</div>
+        <div class="mark">❌</div>
+      </div>
+      <div class="cmp c-yes">
+        <div class="emoji">🤖</div>
+        <div class="q">Agent 实例的一生 = Session？</div>
+        <div class="a">从创建到归档，跨所有对话维护状态</div>
+        <div class="mark">✅</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：代码证据 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 代码证据</span>
+    <h2>创建 Session 时发生了什么？</h2>
+    <div class="code">
+<span class="c">// service.go 真实代码：一次创建 = 三个 ID 同时生成</span><br>
+sessionID, _ := ids.New(<span class="s">"sesn_"</span>)  <span class="c">// ① 会话 ID</span><br>
+threadID, _ := ids.New(<span class="s">"sthr_"</span>)   <span class="c">// ② 主线程 ID</span><br>
+workID, _ := ids.New(<span class="s">"work_"</span>)    <span class="c">// ③ 任务 ID</span><br>
+<br>
+<span class="c">// ④ 同一事务写入 Session + Thread + Work</span><br>
+db.CreateSession(ctx, CreateSessionInput{<br>
+&nbsp;&nbsp;Session: db.Session{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ExternalID: sessionID,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AgentExternalID: agent.ExternalID,  <span class="c">// 绑定 Agent</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;EnvironmentExternalID: env.ExternalID, <span class="c">// 绑定环境</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;Status: <span class="s">"idle"</span>,<br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;Thread: db.SessionThread{ ExternalID: threadID, ... },<br>
+})
+    </div>
+    <div class="card">
+      <p style="font-size:16px;">
+        💡 <b>一次创建 = Session + 主 Thread + Work 三合一</b>（同一事务），
+        所以看起来像"一轮对话"——但实际上 Session 是<b>容器</b>，Thread 才是对话单元。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：工位类比 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 生活类比</span>
+    <h2>Session = 员工的工位</h2>
+    <div class="desk">
+      <div class="d-item">
+        <div class="emoji">🤖</div>
+        <div class="name">员工 = Agent</div>
+        <div class="desc">被雇佣的人（配置快照）</div>
+      </div>
+      <div class="d-item">
+        <div class="emoji">🪑</div>
+        <div class="name">工位 = Session</div>
+        <div class="desc">固定位置，一直保留</div>
+      </div>
+      <div class="d-item">
+        <div class="emoji">📂</div>
+        <div class="name">文件夹 = Thread</div>
+        <div class="desc">每次工作的记录</div>
+      </div>
+      <div class="d-item">
+        <div class="emoji">📄</div>
+        <div class="name">文件 = Event</div>
+        <div class="desc">一条条具体内容</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        🏢 员工今天来干活（对话1）、明天再来（对话2）——<br>
+        <span class="hl-green">工位（Session）还在，文件夹（历史）都在</span>。<br>
+        员工离职（Session 归档）→ 工位收走。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：生命周期 -->
+  <div class="chapter">
+    <span class="chip">第六章 · 完整生命周期</span>
+    <h2>Session 的一生</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        ① <b>创建</b>：POST /sessions（绑定 Agent + Environment）<br>
+        ② <b>沙箱启动</b>：环境里的沙箱开始跑（之前的沙箱生命周期）<br>
+        ③ <b>发消息</b>：POST /sessions/{id}/events（用户输入 → Event）<br>
+        ④ <b>实时看</b>：GET /sessions/{id}/events/stream（SSE 流）<br>
+        ⑤ <b>跨多次交互</b>：历史一直累积（Agent 记得之前聊的）<br>
+        ⑥ <b>归档</b>：POST /sessions/{id}/archive（实例结束）<br>
+        <br>
+        <span class="hl">关键：③→⑤ 可以循环很多次，Session 始终是同一个</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 7 章：insight -->
+  <div class="chapter">
+    <span class="chip">第七章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        🏛️ <b>1. Session 是"状态容器"不是"对话单元"</b> —— 这是最核心的认知：
+        它的生命周期 = Agent 实例的生命周期。<br><br>
+        🧵 <b>2. Thread 才是对话单元</b> —— 主线程承载主要对话，
+        子线程承载 subagent 任务（之前 sessions 包讲过）。<br><br>
+        📨 <b>3. Event 是最小原子</b> —— 消息、工具调用、状态变化全是 Event，
+        Session 的历史 = Event 的累积。<br><br>
+        🔗 <b>4. Session 绑定三样东西</b> —— Agent（配置）、Environment（沙箱）、
+        Vault（密钥），是这三者的"运行实例"。<br><br>
+        💤 <b>5. 跨会话恢复的地基</b> —— 正因为 Session 是持续的，
+        沙箱"pause"才有意义：用户隔天回来，Session 还在，沙箱恢复，历史都在。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · Session 概念澄清图解 · 有官方文档和代码依据</footer>
+</div>
+</body>
+</html>
