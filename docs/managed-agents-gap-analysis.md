@@ -53,6 +53,8 @@
 | **GitHub** | ~65% | 数据模型/API 端点完整 | **authorization_token 传递链路断裂** |
 | **Outcomes** | **~25%** | 只存了"待评分项" | **完全没有 grader 引擎**；status 永远 pending |
 | **Models & AI Gateway** | ~30% | `/v1/models` 路由在、Messages 代理基础路径在 | 模型硬编码（两套，非网关同步）、无快照/stale、Usage/Cost 采集缺失、未禁公网回退（见 4.1/4.8） |
+| **Session Budgets** | **~15%** | `feat/session-budget` 分支有部分实现（max_list_cost 字段 + 暂停事件语义），**未合入 main** | main 上 budget 字段零命中；官方语义（list_cost 定价、budget_reached 暂停、改 budget 自动恢复、deployment 预算继承）全缺（2026-08-23 核查，见 9.3） |
+| **MCP Connector（连接失败事件）** | **~65%** | 声明/tool filtering/注入完整 | 官方 `session.error` + `mcp_connection_failed_error`/`mcp_authentication_failed_error` + `retry_status` + idle→running 重试语义：OMA 只有 `mcp_failure_events` 分支（未合入 main），main 上连接失败事件 + 重试缺失（2026-08-23 核查，见 9.3） |
 
 ## 4. Gap 清单（按"工作量 × 价值"分梯队）
 
@@ -290,3 +292,94 @@ OMA 设计上要比官方严格（一个 session 同时只一个 Active Turn、�
 2. **Dreaming**（research preview，全新模块，风险高）；
 3. **prompt caching / compaction** 的 host 侧控制策略（依赖 `claude-code-research` 结论）；
 4. 第 4 节各梯队 gap 的逐个确认与修复。
+
+## 9. 整体完成度评估（2026-08-23 补充）
+
+> 本节为对第 3 节能力面全景的汇总评估，回答"OMA 整体对标 Anthropic Managed Agents 完成度约多少"，并补充第五轮核查（对照官方 28 个文档页面清单逐页比对 + 本地未合入分支交叉验证）新发现的能力缺失。核查日期 2026-08-23。
+
+### 9.1 整体完成度：约 70%
+
+```
+██████████████████████████████░░░░░░░░░░  ~70%
+```
+
+**一句话判断**：OMA 把"API 合同层"做得非常扎实（SDK 兼容性好、字段级精确），但"托管运行时"（grader、scheduler、AI Gateway、沙箱内 Memory）有明显缺口——后者恰是官方"托管"价值的核心。
+
+**按能力面分档汇总**（详细表见第 3 节）：
+
+| 档位 | 能力面 | 完成度 |
+|---|---|---|
+| ✅ 完成度高 | Skills / Webhooks / Events / Environments | 90~98% |
+| 🟡 中等 | Agent 定义 / Session / Multiagent / MCP Connector / Vaults | 70~90% |
+| 🔴 缺口大 | Files / GitHub / Memory(sandbox) / Scheduled Deployments / Models·AI Gateway / Outcomes / **Session Budgets** | 15~70% |
+
+### 9.2 关键洞察：host 与 worker 边界解释了大部分 gap
+
+OMA 自身不运行 agent loop，而是启动 Claude Code 风格 worker 在沙箱中执行（见第 2 节）。因此：
+
+- **host 侧（Go 层）**：API 合同、表、事件注册 —— 做得好（90%+）；
+- **worker 侧（沙箱内 Claude Code）**：prompt caching、compaction、多 agent 委托、tool confirmation —— **寄生在 Claude Code 进程上**，Go 层只提供基础设施。这是架构分层，不是缺口。
+
+真正的缺口集中在**官方"托管服务"核心价值**：grader 引擎（Outcomes 25%）、scheduler worker（Deployments 40%）、AI Gateway（Models 30%）、沙箱内 Memory（0%）、Session Budgets（main 0%）。
+
+### 9.3 第五轮核查新发现的能力缺失（2026-08-23）
+
+对照官方 `docs/managed-agents-reference/` 28 个页面清单逐页比对，发现此前文档覆盖清单与页面清单的偏差，以及两处此前完全未覆盖的能力面：
+
+#### 9.3.1 Session Budgets —— 完全未覆盖（官方有独立页面，前四轮漏掉）
+
+官方 `budgets.md`（session budgets）：创建 session 时可选 `budget` 字段（`max_list_cost`，金额为整数美分字符串，仅支持 USD）；平台按 public list rates 持续定价（list cost），达到预算后**暂停而非终止**，状态转 idle 且 `stop_reason=budget_reached`；`session.thread_status_idle` + `usage` + `session.status_idle` 事件序列；达到预算后新事件（如 `user.message`）以 400 拒绝并列出允许的事件；`user.interrupt` 被接受但忽略；**改/删 budget 自动恢复**；Deployments 接受同样 budget 并应用到其启动的每个 session。
+
+OMA 现状（main）：
+
+| 能力点 | 代码现状 | 状态 |
+|---|---|---|
+| `budget` 字段（session create/update） | main 上 grep `budget` 在 sessions 包零命中 | ❌ |
+| list_cost 定价 / usage 采集 | 无定价引擎；`Usage` 字段是空 `{}` | ❌ |
+| budget_reached 暂停 + 事件序列 | 无 | ❌ |
+| 改 budget 自动恢复 | 无 | ❌ |
+| Deployment budget 继承 | 无 | ❌ |
+
+> 注：本地 `feat/session-budget` 分支有部分实现（max_list_cost 字段 + 暂停语义），但**未合入 main**，且该分支刚 rebase 到 origin/main（2026-08-23）。属于"分支完成、主分支缺失"的进行中工作，仍需按官方语义核对（如 stop_reason、事件序列、自动恢复、deployment 继承）。
+
+#### 9.3.2 MCP Connector 连接失败事件 —— 官方明确要求，main 缺失
+
+官方 `mcp-connector.md`："Handle connection and authentication failures"——session 创建不验证 MCP 连通性；不可达/凭证被拒时 session 仍启动，发出 `session.error` 事件，携带 `mcp_server_name` 和 `retry_status`，错误类型 `mcp_connection_failed_error`（网络/超时/非认证 HTTP 失败）与 `mcp_authentication_failed_error`（凭证被拒/需要认证但无匹配凭证/OAuth refresh 失败）；**连接在下一次 `session.status_idle` → `session.status_running` 转换时重试**。
+
+OMA 现状（main）：
+
+| 能力点 | 代码现状 | 状态 |
+|---|---|---|
+| `session.error` + `mcp_server_name` + `retry_status` | main 上 grep 零命中 | ❌ |
+| `mcp_connection_failed_error` / `mcp_authentication_failed_error` | 无 | ❌ |
+| idle→running 自动重试 | 无 | ❌ |
+
+> 注：本地 `feat/mcp-failure-events`、`feat/session-error-event` 分支有实现（MCP 连接/认证失败产生 session.error 事件），但**未合入 main**。属于"分支完成、主分支缺失"的进行中工作。
+
+#### 9.3.3 其他页面覆盖确认（无新增缺口）
+
+- `agent-setup.md`、`permission-policies.md`、`tools.md`、`multiagent-orchestration.md`、`cloud-sandboxes-reference.md`、`self-hosted-sandboxes-security.md`、`overview.md`、`quickstart.md`、`onboarding.md`、`migration.md`：内容已分散覆盖于第 3/4 节各能力面（agent 定义、permission_policy 字段级精确、tools 三类型、multiagent、environments、sandbox 安全、onboarding/migration 属 Client/平台流程），无独立新缺口。
+
+### 9.4 缺口按"官方托管核心价值"排序（修复优先级建议）
+
+| 优先级 | 缺口 | 现状 | 为什么是核心 |
+|---|---|---|---|
+| P0 | **Files 下载不可用** | `downloadable` 硬编码 false | 字段级 bug，小改即修，SDK 兼容性硬伤 |
+| P0 | **Memory 沙箱接入** | API 100% / sandbox 0% | Agent 实际读不到记忆 = 功能白做 |
+| P1 | **Outcomes grader 引擎** | ~25%，无 grader | 官方"自动 provision grader + 独立上下文评分"是 outcome 核心 |
+| P1 | **Scheduled Deployments scheduler** | ~40%，无 worker | 定时部署是托管平台核心能力 |
+| P1 | **Session Budgets** | main 0%（分支有） | 官方独立能力面，暂停/恢复语义是核心 |
+| P1 | **MCP 连接失败事件** | main 缺失（分支有） | 官方明确要求的错误处理语义 |
+| P2 | **AI Gateway** | ~30% | 模型动态管理 + Usage/Cost 采集，大工程 |
+| P2 | **GitHub authorization_token 链路** | ~65% | 凭证到沙箱的集成断链 |
+| P2 | **凭证 sandbox 集成（#52）** | 缺失 | 所有 vault credential 无法到达沙箱 |
+
+### 9.5 与官方能力面清单的最终对齐情况
+
+官方 28 个页面（`docs/managed-agents-reference/`）逐页比对结论：
+
+- ✅ 20 页内容已在第 3/4 节覆盖且无新增缺口（含本次复核的 agent-setup / permission-policies / tools / multiagent / cloud-sandboxes / security / overview / quickstart / onboarding / migration）
+- 🆕 2 页本次新发现未覆盖（budgets / mcp-connector 的失败事件语义），已在 9.3 补齐
+- 🔄 6 页为流程/参考类（README / overview / quickstart / reference / migration / onboarding），无独立实现面
+
+**结论**：能力面清单现已对齐官方全部 28 页；整体完成度约 70%（API 合同层 90%+，托管运行时 40~50%）。
