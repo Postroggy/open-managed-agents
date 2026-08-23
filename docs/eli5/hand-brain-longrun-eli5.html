@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手脑分离 + Long-run · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #f0f4ff 0%, #f8f6ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 60px; }
+  .cover .kicker {
+    display: inline-block; background: #dfe9ff; color: #2743a8;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 46px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 24px auto 0; font-size: 22px; color: #2c3550;
+    background: #fff; border: 3px dashed #a8bcff; border-radius: 20px;
+    padding: 14px 24px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 60px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 16px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 14px; line-height: 1.3; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-yellow { background: #fff3cd; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #8a6d00; }
+
+  .card {
+    background: #fff; border-radius: 22px; padding: 24px 28px;
+    box-shadow: 0 4px 20px rgba(50, 70, 140, .07); margin-bottom: 14px;
+  }
+
+  /* ===== 手脑分离主图 ===== */
+  .brain-hand { display: flex; gap: 20px; align-items: stretch; margin-top: 16px; }
+  .side {
+    flex: 1; border-radius: 22px; padding: 24px 22px;
+    border: 4px solid; text-align: center; background: #fff;
+  }
+  .side .emoji { font-size: 44px; }
+  .side .who { font-size: 20px; font-weight: 900; margin-top: 6px; }
+  .side .role { font-size: 14px; color: #666; margin-top: 2px; }
+  .side .items { margin-top: 14px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+  .side .item {
+    font-size: 13.5px; background: #f8faff; border: 1.5px solid #e2e8f0;
+    border-radius: 10px; padding: 8px 12px;
+  }
+  .side .item b { display: block; font-size: 13px; }
+  .side .item .sub { color: #777; font-size: 12px; }
+  .s-brain { border-color: #2743a8; } .s-brain .who { color: #2743a8; }
+  .s-hand { border-color: #b45309; } .s-hand .who { color: #b45309; }
+  .middle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; width: 90px; }
+  .middle .line { width: 3px; flex: 1; background: repeating-linear-gradient(180deg, #a8bcff 0 8px, transparent 8px 16px); }
+  .middle .label { font-size: 13px; font-weight: 800; color: #2743a8; text-align: center; }
+  .middle .arrow-up { font-size: 22px; color: #2e7d32; font-weight: 900; }
+  .middle .arrow-down { font-size: 22px; color: #b45309; font-weight: 900; }
+
+  /* ===== 事件流 ===== */
+  .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 14px;
+    background: #fff; border-radius: 16px; padding: 13px 18px;
+    border: 3px dashed #a8bcff;
+  }
+  .flow-step .emoji { font-size: 24px; flex-shrink: 0; }
+  .flow-step .text { font-size: 14px; flex: 1; }
+  .flow-step .text b { color: #2743a8; }
+  .flow-step .badge { background: #e3eeff; color: #2743a8; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 15px; color: #2743a8; line-height: 1; font-weight: 700; }
+
+  /* ===== Long-run 机制 ===== */
+  .grid2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+  .m-item {
+    background: #fff; border-radius: 16px; padding: 16px 14px;
+    border: 3px dashed #a8bcff; text-align: center;
+  }
+  .m-item .emoji { font-size: 30px; }
+  .m-item .name { font-size: 15px; font-weight: 800; color: #2743a8; margin-top: 4px; }
+  .m-item .desc { font-size: 12.5px; color: #666; margin-top: 4px; }
+  .m-item .code { font-family: Menlo, monospace; font-size: 11px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 6px; color: #444; }
+
+  /* ===== 时间线 ===== */
+  .timeline { display: flex; align-items: center; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+  .tl-node {
+    background: #fff; border-radius: 14px; padding: 12px 16px;
+    border: 3px solid; text-align: center; flex: 1; min-width: 110px;
+  }
+  .tl-node .emoji { font-size: 26px; }
+  .tl-node .name { font-size: 13.5px; font-weight: 800; margin-top: 2px; }
+  .tl-node .desc { font-size: 11.5px; color: #666; }
+  .tl-arrow { font-size: 18px; color: #57606f; font-weight: 900; flex-shrink: 0; }
+  .t1 { border-color: #2e7d32; } .t1 .name { color: #2e7d32; }
+  .t2 { border-color: #b45309; } .t2 .name { color: #b45309; }
+  .t3 { border-color: #2743a8; } .t3 .name { color: #2743a8; }
+  .t4 { border-color: #7b1fa2; } .t4 .name { color: #7b1fa2; }
+
+  footer { text-align: center; margin-top: 50px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .brain-hand { flex-direction: column; } .middle { width: 100%; height: 60px; } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 架构 · 灵魂三问</span>
+    <h1>🧠🖐️ 手脑分离 & Long-run</h1>
+    <div class="tagline">
+      <span class="emoji">💡</span> Managed Agents 的核心架构<br>脑想、手做、事件流连接
+    </div>
+  </div>
+
+  <!-- ===== 第一章：手脑分离 ===== -->
+  <div class="chapter">
+    <span class="chip">第一章 · 手脑分离</span>
+    <h2>脑想、手做</h2>
+    <div class="brain-hand">
+      <div class="side s-brain">
+        <div class="emoji">🧠</div>
+        <div class="who">脑（Host / 控制面）</div>
+        <div class="role">官方：Anthropic 控制面 · OMA：Go 服务</div>
+        <div class="items">
+          <div class="item"><b>🤔 想</b><span class="sub">模型推理、决定下一步做什么</span></div>
+          <div class="item"><b>🧭 状态</b><span class="sub">会话历史、事件流、Session 生命周期</span></div>
+          <div class="item"><b>⚡ 优化</b><span class="sub">prompt caching / compaction</span></div>
+          <div class="item"><b>🔐 安全</b><span class="sub">鉴权、密钥、网络策略</span></div>
+        </div>
+      </div>
+      <div class="middle">
+        <div class="arrow-down">⬇️ 指令</div>
+        <div class="line"></div>
+        <div class="label">事件流<br>（唯一通道）</div>
+        <div class="line"></div>
+        <div class="arrow-up">⬆️ 结果</div>
+      </div>
+      <div class="side s-hand">
+        <div class="emoji">🖐️</div>
+        <div class="who">手（Worker / 沙箱）</div>
+        <div class="role">官方：云沙箱 · OMA：Claude Code worker</div>
+        <div class="items">
+          <div class="item"><b>🛠️ 做</b><span class="sub">工具执行、运行代码、操作文件</span></div>
+          <div class="item"><b>💻 跑 bash</b><span class="sub">命令执行、进程管理</span></div>
+          <div class="item"><b>🌐 上网</b><span class="sub">网络访问（白名单控制）</span></div>
+          <div class="item"><b>📚 技能</b><span class="sub">skill 执行、多 agent 委托</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:15.5px; color:#555;">
+        🔑 <b>关键</b>：脑和手<b>不直接接触</b>——脑不碰你的文件系统，手不碰你的模型密钥。
+        中间只有事件流（`/v1/code/sessions/{id}/worker/*`）。这就是安全的根本。
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== 第二章：事件流循环 ===== -->
+  <div class="chapter">
+    <span class="chip">第二章 · 一次"思考-行动"循环</span>
+    <h2>Agent 怎么干活？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">👤</div>
+        <div class="text"><b>用户发消息</b>：POST /events（user.message）</div>
+        <div class="badge">输入</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧠</div>
+        <div class="text"><b>脑思考</b>：模型决定"要调工具" → 发出 agent.tool_use</div>
+        <div class="badge">脑</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🖐️</div>
+        <div class="text"><b>手执行</b>：沙箱里跑工具/代码 → 回传结果</div>
+        <div class="badge">手</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧠</div>
+        <div class="text"><b>脑再看结果</b>：决定继续干活 or 结束</div>
+        <div class="badge">脑</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔁</div>
+        <div class="text"><b>循环</b>：直到任务完成 → session.status_idle</div>
+        <div class="badge">循环</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 第三章：Long-run 机制 ===== -->
+  <div class="chapter">
+    <span class="chip">第三章 · 怎么支撑 Long-run</span>
+    <h2>6 个机制（都是之前讲过的）</h2>
+    <div class="grid2">
+      <div class="m-item">
+        <div class="emoji">💤</div>
+        <div class="name">沙箱暂停不销毁</div>
+        <div class="desc">任务挂起不丢状态，隔天回来继续</div>
+        <span class="code">OnTimeout: "pause"</span>
+      </div>
+      <div class="m-item">
+        <div class="emoji">💓</div>
+        <div class="name">心跳续命</div>
+        <div class="desc">沙箱活性由 worker 决定，可无限续</div>
+        <span class="code">SetTimeout</span>
+      </div>
+      <div class="m-item">
+        <div class="emoji">🔁</div>
+        <div class="name">Session 恢复</div>
+        <div class="desc">沙箱重建，数据不丢</div>
+        <span class="code">RecoverManagedAgentCodeSession</span>
+      </div>
+      <div class="m-item">
+        <div class="emoji">📂</div>
+        <div class="name">持久文件系统</div>
+        <div class="desc">文件跨会话保留（沙箱可死，数据不死）</div>
+        <span class="code">filestore + storage</span>
+      </div>
+      <div class="m-item">
+        <div class="emoji">🧠</div>
+        <div class="name">对话历史</div>
+        <div class="desc">Session 跨多次交互维护历史</div>
+        <span class="code">session_events</span>
+      </div>
+      <div class="m-item">
+        <div class="emoji">📦</div>
+        <div class="name">队列化</div>
+        <div class="desc">重活异步，不阻塞长任务</div>
+        <span class="code">skillprewarm/cleanup/webhooks</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 第四章：Long-run 时间线 ===== -->
+  <div class="chapter">
+    <span class="chip">第四章 · 一个 Long-run 任务的一生</span>
+    <h2>跨多天怎么跑？</h2>
+    <div class="timeline">
+      <div class="tl-node t1">
+        <div class="emoji">🚀</div>
+        <div class="name">第 1 天</div>
+        <div class="desc">创建 Session<br>任务开始</div>
+      </div>
+      <div class="tl-arrow">→</div>
+      <div class="tl-node t2">
+        <div class="emoji">💤</div>
+        <div class="name">暂停</div>
+        <div class="desc">预算到/超时<br>沙箱冻结</div>
+      </div>
+      <div class="tl-arrow">→</div>
+      <div class="tl-node t3">
+        <div class="emoji">🔁</div>
+        <div class="name">第 2 天恢复</div>
+        <div class="desc">改预算/再来<br>沙箱续命</div>
+      </div>
+      <div class="tl-arrow">→</div>
+      <div class="tl-node t4">
+        <div class="emoji">🏁</div>
+        <div class="name">完成</div>
+        <div class="desc">任务结束<br>归档 Session</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:15.5px; color:#555;">
+        📖 官方 overview 明确：Managed Agents <b>"Best for: Long-running tasks and asynchronous work"</b>——
+        长时间任务是它的<b>首选场景</b>（vs Messages API 的"自定义循环/细粒度控制"）。
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== 第五章：设计哲学 ===== -->
+  <div class="chapter">
+    <span class="chip">第五章 · 设计哲学总结</span>
+    <h2>一句话版本</h2>
+    <div class="card">
+      <p style="font-size:17px; line-height: 2;">
+        🎯 <b>Managed Agents 的设计哲学 = "手脑分离的托管 agent 基础设施"</b>：<br>
+        <br>
+        🧠 <b>脑想</b> —— 推理/状态/事件（host）<br>
+        🖐️ <b>手做</b> —— 工具/代码/文件（worker）<br>
+        🔗 <b>事件流连接</b> —— 唯一通道，安全隔离<br>
+        💤 <b>可暂停可恢复</b> —— 沙箱 pause、Session 持久<br>
+        ⏳ <b>天然 Long-run</b> —— 隔天回来任务还在原地<br>
+        <br>
+        <span class="hl-green">对比 Messages API：DIY agent loop（你写循环、你管沙箱、你处理工具）→ Managed Agents 全部托管（你只定义 Agent + 环境，然后发事件收事件）</span>
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · 手脑分离 & Long-run 图解 · 有官方文档和代码依据</footer>
+</div>
+</body>
+</html>
