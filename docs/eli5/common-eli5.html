@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 公共工具 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #f5f0ff 0%, #f8f5ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #ede3ff; color: #6c2bd9;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #c9a8ff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #f0e6ff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #6c2bd9; }
+  .hl-blue { background: #e8f0fe; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(80, 50, 130, .07);
+  }
+  .card + .card { margin-top: 18px; }
+
+  /* 两个工具包 */
+  .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+  .tool {
+    background: #fff; border-radius: 22px; padding: 26px;
+    border: 3px dashed #c9a8ff;
+  }
+  .tool .emoji { font-size: 44px; }
+  .tool .name { font-size: 24px; font-weight: 700; margin-top: 8px; color: #6c2bd9; }
+  .tool .path { font-family: Menlo, monospace; font-size: 13px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin: 6px 0; color: #444; }
+  .tool .desc { font-size: 16px; color: #666; }
+
+  /* 函数清单 */
+  .func-list { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .func {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: #fff; border-radius: 18px; padding: 16px 22px;
+    border: 3px dashed #c9a8ff;
+  }
+  .func .mark { font-size: 24px; flex-shrink: 0; }
+  .func .text { font-size: 18px; }
+  .func .text .mono { font-family: Menlo, Consolas, monospace; font-size: 15px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; }
+  .func .text b { color: #6c2bd9; }
+
+  /* 使用方 */
+  .users-box { margin-top: 20px; }
+  .users-chips { display: flex; flex-wrap: wrap; gap: 12px; }
+  .chip-u {
+    background: #f0e6ff; color: #6c2bd9; border: 2px solid #c9a8ff;
+    border-radius: 999px; padding: 6px 16px; font-size: 15px; font-weight: 700;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .tool-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 内部包探秘 · 第 9 集</span>
+    <h1>🧰 internal/common<br>公共小工具箱</h1>
+    <div class="tagline">
+      <span class="emoji">🪛</span> 像「家庭工具箱」一样<br>谁都能拿来用的小工具
+    </div>
+  </div>
+
+  <!-- 第 1 章：是什么 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>为什么要有「公共」工具？</h2>
+    <p class="lead">
+      很多包都需要 <span class="hl">处理字符串</span>、<span class="hl">转换 JSON</span>。<br>
+      与其每个包自己写一遍，不如放在一个 <span class="hl">大家都认识</span> 的地方。
+    </p>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>internal/common</b> 不是一个大包，而是 <span class="hl">两个小工具包</span>：
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        🗂️ <b>collections</b> —— 集合操作（字符串处理）<br>
+        🧩 <b>jsonx</b> —— JSON 转换工具
+      </p>
+      <p style="font-size:18px; margin-top:14px; color:#888;">
+        ⚠️ 注意：它自己<b>不依赖任何业务包</b>（领域无关），只被别人用。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：两个工具包 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 两个小工具箱</span>
+    <h2>里面有什么？</h2>
+    <div class="tool-grid">
+      <div class="tool">
+        <div class="emoji">🗂️</div>
+        <div class="name">collections</div>
+        <span class="path">internal/common/collections/strings.go</span>
+        <div class="desc" style="margin-top:10px;">
+          处理字符串集合的小帮手<br><br>
+          <span class="mono">IsBlank</span> —— 是不是空白？<br>
+          <span class="mono">UniqueTrimmedStrings</span> —— 去空白、去重复<br>
+          <span class="mono">StringSet</span> —— 变成员集合（查得快）
+        </div>
+      </div>
+      <div class="tool">
+        <div class="emoji">🧩</div>
+        <div class="name">jsonx</div>
+        <span class="path">internal/common/jsonx/jsonx.go</span>
+        <div class="desc" style="margin-top:10px;">
+          在 Go 值和 JSON 之间转换<br><br>
+          <span class="mono">Encode</span> —— 值 → JSON<br>
+          <span class="mono">Decode</span> —— JSON → 值<br>
+          <span class="mono">IsNull</span> —— 是不是 null？<br>
+          <span class="mono">Default</span> —— 空的给默认值
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：为什么这么设计 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 设计原则</span>
+    <h2>什么时候该放 common？</h2>
+    <div class="card">
+      <p style="font-size:21px;">
+        ✅ <b>放 common</b>：领域无关、多个包都用、行为稳定<br>
+        ❌ <b>不放 common</b>：跟特定业务强相关（如 agent 逻辑）、只在某个包用
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        common 里没有业务概念 —— 你看不到 "agent"、"session"、"batch" 这些词，
+        只有最通用的字符串和 JSON 操作。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：谁在用 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 谁在用</span>
+    <h2>工具箱借给了谁？</h2>
+    <div class="users-box">
+      <div class="users-chips">
+        <span class="chip-u">environments</span>
+        <span class="chip-u">networkpolicy</span>
+        <span class="chip-u">deployments</span>
+        <span class="chip-u">httpapi</span>
+        <span class="chip-u">e2bruntime</span>
+      </div>
+      <p style="font-size:17px; margin-top:14px; color:#666;">
+        这些包各自实现自己的业务，但字符串和 JSON 的小事，都找 common 借。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/common 图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>

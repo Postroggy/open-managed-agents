@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 平台会话 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdf0ff 0%, #fdf5ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #f3d9ff; color: #7b1fa2;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #d8a7e8; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #f3e0fa; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #7b1fa2; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(120, 60, 140, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 代码 */
+  .code {
+    background: #1c2333; color: #d8a7e8; border-radius: 14px; padding: 18px 22px;
+    font-family: Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.9; overflow-x: auto; margin-top: 14px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+
+  /* 文件卡 */
+  .file-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+  .file {
+    background: #fff; border-radius: 18px; padding: 18px 20px;
+    border: 3px dashed #d8a7e8; text-align: center;
+  }
+  .file .name { font-family: Menlo, monospace; font-size: 15px; font-weight: 800; color: #7b1fa2; }
+  .file .desc { font-size: 14px; color: #555; margin-top: 6px; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #d8a7e8;
+  }
+  .flow-step .emoji { font-size: 30px; flex-shrink: 0; }
+  .flow-step .text { font-size: 16.5px; flex: 1; }
+  .flow-step .text b { color: #7b1fa2; }
+  .flow-step .badge { background: #f3d9ff; color: #7b1fa2; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 22px; color: #7b1fa2; line-height: 1; font-weight: 700; }
+
+  /* 对比 */
+  .cmp2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .cmp { background: #fff; border-radius: 18px; padding: 18px 20px; border: 3px dashed #d8a7e8; }
+  .cmp .title { font-size: 17px; font-weight: 800; margin-bottom: 8px; color: #7b1fa2; }
+  .cmp .point { display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; color: #555; margin-top: 6px; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .file-grid, .cmp2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 11 集</span>
+    <h1>🎟️ internal/platformsession<br>平台登录会话</h1>
+    <div class="tagline">
+      <span class="emoji">🎫</span> 像「游乐园手环」一样<br>戴上它，全园通用 —— 但会过期
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>平台会话解决什么问题？</h2>
+    <p class="lead">
+      用户在控制台登录后，<span class="hl">怎么记住"你是谁"？</span><br>
+      platformsession 就是存储登录状态的地方（<span class="hl">会话存储</span>）。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>internal/platformsession</b> = 平台登录会话存储：<br>
+        <br>
+        🎫 3 个文件：<span class="hl">接口 + 内存实现 + Redis 实现</span><br>
+        🗝️ 会话 key → Session（谁登录的 + 哪个组织 + 哪个工作区）<br>
+        ⏰ 默认 TTL = <span class="hl">300 天</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：核心结构 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 核心结构</span>
+    <h2>Session 长什么样？</h2>
+    <div class="code">
+<span class="c">// 一个会话 = 用户 + 组织 + 工作区 + API Key 全家桶</span><br>
+<span class="k">type</span> Session <span class="k">struct</span> {<br>
+&nbsp;&nbsp;ExternalID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; string&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 会话 ID</span><br>
+&nbsp;&nbsp;OrganizationUUID&nbsp;&nbsp;string&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 组织</span><br>
+&nbsp;&nbsp;WorkspaceUUID&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 工作区</span><br>
+&nbsp;&nbsp;UserUUID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 用户</span><br>
+&nbsp;&nbsp;APIKeyUUID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 对应 API Key</span><br>
+&nbsp;&nbsp;ExpiresAt&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*time.Time <span class="c">// 过期时间</span><br>
+}<br>
+<br>
+<span class="c">// 关键：Session 能直接变成鉴权身份！</span><br>
+<span class="k">func</span> (s Session) Principal() auth.Principal
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        💡 <b>Principal() 是灵魂</b> —— 会话存的就是"一把钥匙"，
+        取出来直接变成 auth.Principal（鉴权身份），中间不用再查 DB。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：接口 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 接口</span>
+    <h2>3 个方法</h2>
+    <div class="card">
+      <p style="font-size:20px;">
+        💾 <b>Save</b>(key, session) —— 存会话<br>
+        🔍 <b>Get</b>(key) —— 取会话（过期自动删）<br>
+        🗑️ <b>Delete</b>(key) —— 删会话（退出登录）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：两种实现 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 两种实现</span>
+    <h2>内存 vs Redis</h2>
+    <div class="cmp2">
+      <div class="cmp">
+        <div class="title">🧠 MemoryStore</div>
+        <div class="point">⚡ <span>进程内 map + 互斥锁</span></div>
+        <div class="point">🏠 <span>单实例 / 开发环境用</span></div>
+        <div class="point">💥 <span>重启就丢（内存）</span></div>
+        <div class="point">🔄 <span>过期检查在 Get 时懒删除</span></div>
+      </div>
+      <div class="cmp">
+        <div class="title">🔴 RedisStore</div>
+        <div class="point">🌐 <span>Redis SET with TTL（服务端自动过期）</span></div>
+        <div class="point">🏭 <span>多实例共享（生产用）</span></div>
+        <div class="point">✅ <span>重启不丢（持久化）</span></div>
+        <div class="point">🔐 <span>key 先 hash 再存（HashSecret）</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        🔑 <b>共同的 key 设计</b>：<span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">platform:sessions:{hash(sessionKey)}</span>
+        —— 不存明文 key，先哈希。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：和兄弟的关系 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 和兄弟的关系</span>
+    <h2>平台四件套补全</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        📄 <b>platform</b> = 档案（数据模型）<br>
+        📞 <b>platformapi</b> = 总机（HTTP 接口）<br>
+        🪪 <b>platformauth</b> = 门卫（验证登录）<br>
+        🎟️ <b>platformsession</b> = <span class="hl">售票机（本集主角：存会话状态）</span><br>
+        <br>
+        <span class="hl-green">platformapi 登录成功后 → Save 到 platformsession；<br>后续请求 → Get 出来变 Principal → 放行</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：insight -->
+  <div class="chapter">
+    <span class="chip">第六章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🎫 <b>1. "会话 = 身份"一体化</b> —— Session.Principal() 把存储和鉴权打通，
+        存的东西直接能当钥匙用。<br><br>
+        🔌 <b>2. 接口隔离实现</b> —— Store 接口 + 内存/Redis 两个实现：
+        server.go 组装时选一个，业务代码不关心。<br><br>
+        ⏰ <b>3. 300 天 TTL</b> —— 登录状态保留近一年，用户体验好。<br><br>
+        🔐 <b>4. 会话 key 哈希存储</b> —— 即使 Redis 泄露，也拿不到明文 session key。<br><br>
+        🏠 <b>5. 默认内存实现</b> —— NewServer 默认 MemoryStore（开发友好），
+        生产可换 RedisStore —— 无感知切换。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/platformsession 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

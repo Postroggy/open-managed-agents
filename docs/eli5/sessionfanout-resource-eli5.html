@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 会话扇出 & 资源 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef4ff 0%, #f5f8ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dfe9ff; color: #2743a8;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 44px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 24px; color: #2c3550;
+    background: #fff; border: 3px dashed #a8bcff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(50, 70, 140, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 双包布局 */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pkg { background: #fff; border-radius: 20px; padding: 22px 22px; border: 4px dashed #a8bcff; }
+  .pkg .pname { font-family: Menlo, monospace; font-size: 17px; font-weight: 800; color: #2743a8; }
+  .pkg .pdesc { font-size: 14.5px; color: #555; margin-top: 8px; }
+
+  /* 广播图 */
+  .fanout { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
+  .f-step {
+    width: 100%; border-radius: 14px; padding: 12px 16px;
+    border: 3px solid; text-align: center; background: #fff;
+  }
+  .f-step .emoji { font-size: 26px; }
+  .f-step .txt { font-size: 14px; font-weight: 700; margin-top: 2px; }
+  .f-step .sub { font-size: 12px; color: #666; }
+  .f-arrow { font-size: 18px; color: #57606f; font-weight: 900; line-height: 1; }
+  .fs1 { border-color: #2743a8; } .fs1 .txt { color: #2743a8; }
+  .fs2 { border-color: #8a6d00; } .fs2 .txt { color: #8a6d00; }
+  .fs3 { border-color: #2e7d32; } .fs3 .txt { color: #2e7d32; }
+
+  .table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  .table th { background: #e3eeff; color: #2743a8; padding: 9px; text-align: left; border-bottom: 3px solid #a8bcff; }
+  .table td { padding: 8px 9px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 700; }
+  .table tr:hover td { background: #f8faff; }
+
+  .code {
+    background: #1c2333; color: #a8bcff; border-radius: 14px; padding: 14px 18px;
+    font-family: Menlo, Consolas, monospace; font-size: 12px; line-height: 1.8; overflow-x: auto; margin-top: 12px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .duo { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 17 集（双包）</span>
+    <h1>📢 sessionfanout + 📂 sessionresource</h1>
+    <div class="tagline">
+      <span class="emoji">🤝</span> 一个负责"广播"<br>一个负责"合同"
+    </div>
+  </div>
+
+  <!-- 第 1 章：双包概览 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 双包概览</span>
+    <h2>两个包各管什么？</h2>
+    <div class="duo">
+      <div class="pkg">
+        <div class="pname">📢 sessionfanout</div>
+        <div class="pdesc"><b>事件广播总线</b>：把 Session 事件发给多个订阅者<br><br>
+        📡 LocalBus（内存）<br>🔴 RedisBus（跨实例）<br><br>
+        <span class="hl">"一个事件 → 广播给所有关心的人"</span></div>
+      </div>
+      <div class="pkg">
+        <div class="pname">📂 sessionresource</div>
+        <div class="pdesc"><b>Session 资源合同</b>：File 资源的标准定义<br><br>
+        📄 FileSpec / SessionFileBinding<br>🧾 ParseFileID / NormalizeFileSpec<br><br>
+        <span class="hl">"Session 挂的文件长什么样、怎么校验"</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 2 章：sessionfanout -->
+  <div class="chapter">
+    <span class="chip">第二章 · sessionfanout 深讲</span>
+    <h2>广播总线怎么工作？</h2>
+    <div class="fanout">
+      <div class="f-step fs1">
+        <div class="emoji">📨</div>
+        <div class="txt">Publish(sessionID, Envelope)</div>
+        <div class="sub">发一个事件（kind + payload）</div>
+      </div>
+      <div class="f-arrow">▼</div>
+      <div class="f-step fs2">
+        <div class="emoji">📡</div>
+        <div class="txt">路由到会话频道</div>
+        <div class="sub">oma:s:{sessionID}（会话） / oma:i:{instance}（实例）</div>
+      </div>
+      <div class="f-arrow">▼</div>
+      <div class="f-step fs3">
+        <div class="emoji">👂</div>
+        <div class="txt">所有订阅者收到 → 各自的 Handler 处理</div>
+        <div class="sub">Register 注册的 handler 全被调用</div>
+      </div>
+    </div>
+    <table class="table">
+      <tr><th>维度</th><th>LocalBus（内存）</th><th>RedisBus（跨实例）</th></tr>
+      <tr><td>场景</td><td>单实例（开发/测试）</td><td>多实例（生产）</td></tr>
+      <tr><td>发布</td><td>直接调 handler</td><td>Redis Publish</td></tr>
+      <tr><td>订阅</td><td>伪订阅（只校验频道名）</td><td>Redis Subscribe + 确认</td></tr>
+      <tr><td>跨进程</td><td>❌</td><td>✅</td></tr>
+      <tr><td>关闭</td><td>无操作</td><td>解除阻塞的 receive + 清理</td></tr>
+    </table>
+    <div class="card">
+      <p style="font-size:16px;">
+        💡 <b>两种事件 Kind</b>：<span class="hl">session_events</span>（会话事件）、
+        <span class="hl">code_session_stream</span>（代码会话流）—— 不同类型走不同订阅者。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：sessionresource -->
+  <div class="chapter">
+    <span class="chip">第三章 · sessionresource 深讲</span>
+    <h2>File 资源合同</h2>
+    <div class="code">
+<span class="c">// FileSpec = 规范化的 File 资源配置（API 默认值 + 路径校验后）</span><br>
+<span class="k">type</span> FileSpec <span class="k">struct</span> {<br>
+&nbsp;&nbsp;fileID&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;&nbsp;<span class="c">// Files API 对象 ID</span><br>
+&nbsp;&nbsp;mountPath string&nbsp;&nbsp;<span class="c">// 挂载路径</span><br>
+}<br>
+<br>
+<span class="c">// SessionFileBinding = 持久化无关的映射</span><br>
+<span class="k">type</span> SessionFileBinding <span class="k">struct</span> {<br>
+&nbsp;&nbsp;ResourceID string&nbsp;&nbsp;<span class="c">// Session 资源 ID</span><br>
+&nbsp;&nbsp;FileID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;&nbsp;<span class="c">// Files API 对象</span><br>
+&nbsp;&nbsp;Path&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;&nbsp;<span class="c">// 存储路径</span><br>
+}
+    </div>
+    <table class="table">
+      <tr><th>函数</th><th>作用</th></tr>
+      <tr><td class="mono">ParseFileID</td><td>校验 file_id 必填</td></tr>
+      <tr><td class="mono">NormalizeFileSpec</td><td>API 入口：应用默认值（source=/uploads、mount_path 默认）+ 校验</td></tr>
+      <tr><td class="mono">ParseStoredFileSpec</td><td>DB 读取：严格重建（不加默认值，必须已是规范形式）</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 4 章：依赖链 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 依赖链</span>
+    <h2>sessionresource 依赖谁？</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        🔗 <b>sessioncontract</b> —— FileResourceType / MaxFileResources（合同常量）<br>
+        📂 <b>sandboxmount</b> —— NormalizeFileSource / ValidateFileMountPath（路径合同）<br>
+        <br>
+        <span class="hl-green">完整链条：</span><br>
+        sessioncontract（上限）→ sandboxmount（路径）→ sessionresource（资源合同）→ Sessions/Deployments API
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：insight -->
+  <div class="chapter">
+    <span class="chip">第五章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        📡 <b>sessionfanout：解耦的广播</b> —— 事件生产者和消费者互不认识，
+        通过总线中转：新增订阅者不用改发布者。<br><br>
+        🔴 <b>RedisBus 是生产标配</b> —— 多实例必须跨进程广播，
+        LocalBus 只是开发/测试替身（接口相同，实现可换）。<br><br>
+        📄 <b>sessionresource：两套解析</b> —— API 入口要"宽容"（补默认值），
+        DB 读取要"严格"（不加默认值）：<span class="hl">同一合同，两种边界策略</span>。<br><br>
+        🧩 <b>纯合同包</b> —— 不碰 DB/HTTP，只做"定义 + 校验"，
+        任何边界都能引用（和 sessioncontract 同哲学）。<br><br>
+        🔗 <b>多层合同叠加</b> —— 上限（contract）+ 路径（mount）+ 资源（resource）：
+        每一层都是"共享的单一事实"，防止各边界解释不一致。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · sessionfanout + sessionresource 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

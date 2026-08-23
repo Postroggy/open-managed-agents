@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA Filestore · 深入版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #e6f4ea 0%, #f0faf2 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #c8e6c9; color: #2e7d32;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #81c784; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-blue { background: #e8f0fe; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(40, 90, 50, .07);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 表格 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 15px; }
+  .table th { background: #d7f0db; color: #2e7d32; padding: 10px; text-align: left; border-bottom: 3px solid #81c784; }
+  .table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+  .table tr:hover td { background: #f8faf8; }
+
+  /* 树状 */
+  .tree { margin-top: 16px; font-family: Menlo, Consolas, monospace; font-size: 15px; background: #f8faf8; border-radius: 14px; padding: 18px; line-height: 2; }
+  .tree .dir { color: #2e7d32; font-weight: 700; }
+  .tree .ro { color: #c05621; font-weight: 700; }
+  .tree .f { color: #444; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #81c784;
+  }
+  .flow-step .emoji { font-size: 32px; flex-shrink: 0; }
+  .flow-step .text { font-size: 17px; flex: 1; }
+  .flow-step .text b { color: #2e7d32; }
+  .flow-step .badge {
+    background: #d7f0db; color: #2e7d32;
+    border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 22px; color: #2e7d32; line-height: 1; font-weight: 700; }
+
+  /* 对比 */
+  .cmp2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .cmp { background: #fff; border-radius: 18px; padding: 18px 20px; border: 3px dashed #81c784; }
+  .cmp .title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .cmp .point { display: flex; gap: 8px; align-items: flex-start; font-size: 15px; color: #555; margin-top: 6px; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .cmp2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 1 集</span>
+    <h1>📁 internal/filestore<br>沙箱文件系统</h1>
+    <div class="tagline">
+      <span class="emoji">🗂️</span> 不是"存文件的地方"<br>是「沙箱里 Agent 的专属文件柜」
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>Filestore 解决什么问题？</h2>
+    <p class="lead">
+      Agent 在沙箱里干活，要 <span class="hl">读写文件</span> —— 但这些文件在云端的临时电脑里，<br>
+      电脑一关就没了。Filestore 让这些文件 <span class="hl">持久化、可管理、有配额</span>。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>Filestore</b> = 沙箱文件系统服务。它提供 10 个接口：<br>
+        <span class="hl">listDirectory / makeDirectory / removeDirectory / createFile / copyFile / moveFile / moveDirectory / readFile / removeFile / readMetadata</span>
+      </p>
+      <p style="font-size:18px; margin-top:12px; color:#666;">
+        调用方是 <b>rclone-filestore</b> —— 沙箱里的文件挂载工具。它把 Filestore 变成虚拟磁盘，
+        让 Agent 感觉自己在操作本地文件。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：架构 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 架构分层</span>
+    <h2>谁在哪个位置？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🔗</div>
+        <div class="text"><b>rclone-filestore</b>（沙箱内）：把 Filestore 挂载成虚拟磁盘</div>
+        <div class="badge">调用方</div>
+      </div>
+      <div class="flow-arrow">▼ HTTP /v1/filestore/fs/*</div>
+      <div class="flow-step">
+        <div class="emoji">🛡️</div>
+        <div class="text"><b>专用 JWT 鉴权</b>：只有 Filestore JWT 能进（Bearer token）</div>
+        <div class="badge">鉴权边界</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🎯</div>
+        <div class="text"><b>filestore.Principal</b>：把租户/账号/filesystem/权限映射成专用身份</div>
+        <div class="badge">身份</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧠</div>
+        <div class="text"><b>Service + pathRouter</b>：业务编排 + 路由到正确的 backend</div>
+        <div class="badge">核心</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗄️</div>
+        <div class="text"><b>PostgreSQL + S3</b>：元数据在 DB，文件对象在对象存储</div>
+        <div class="badge">存储</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:18px;">
+        💡 <b>亮点：pathRouter</b> —— 普通 namespace 走「持久化 backend」，
+        <span class="hl">/skills</span> 走「只读虚拟 backend」（技能归档是动态合成的）。
+        新增只读 namespace 只需注册新 backend，不用在每个 API 入口加特例。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：数据模型 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 数据模型</span>
+    <h2>文件树长什么样？</h2>
+    <div class="card">
+      <div class="tree">
+        <span class="dir">/</span>（filesystem 合成根）<br>
+        ├── <span class="dir">outputs/</span>　<span class="ro">输出目录（rclone 只读挂载）</span><br>
+        ├── <span class="dir">skills/</span>　<span class="ro">技能归档（全树只读 ★）</span><br>
+        ├── <span class="dir">uploads/</span>　<span class="ro">上传目录</span><br>
+        ├── <span class="dir">transcripts/</span>　<span class="ro">对话记录</span><br>
+        └── <span class="dir">tool_results/</span>　<span class="ro">工具结果</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span class="f">普通文件（blob 存 S3）</span>
+      </div>
+      <p style="font-size:17px; margin-top:12px; color:#666;">
+        5 个固定一级目录是 <b>Sandbox 运行时合同</b> —— 不能移动、不能删除、不能覆盖。
+      </p>
+    </div>
+    <div class="card">
+      <p style="font-size:19px;">
+        🔑 <b>文件对象 key 固定格式：</b><br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">workspaces/{workspaceUUID}/filestores/{filesystemUUID}/blobs/{blobUUID}</span><br>
+        <br>
+        <b>不可变 blob</b>：覆盖/复制 = 写新 key，不是覆盖旧的 → 无读写竞态 ✅
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：鉴权 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 专用鉴权</span>
+    <h2>为什么需要独立的 JWT？</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        Filestore 只用 <span class="hl-blue">专用 Filestore JWT</span>（Bearer token）：<br>
+        ❌ API key、OAuth token、session-ingress JWT 都不能访问<br>
+        ✅ JWT 绑定 <b>filesystem_id + 租户 + readonly</b>
+      </p>
+      <table class="table">
+        <tr><th>Claim</th><th>约束</th></tr>
+        <tr><td class="mono">iss</td><td>固定 open-managed-agents</td></tr>
+        <tr><td class="mono">aud</td><td>必须含 filestore</td></tr>
+        <tr><td class="mono">org_uuid</td><td>匹配文件系统所属组织</td></tr>
+        <tr><td class="mono">workspace_uuid</td><td>匹配未归档工作区</td></tr>
+        <tr><td class="mono">filesystem_id</td><td>绑定唯一 filesystem，换 ID 拒绝</td></tr>
+        <tr><td class="mono">readonly</td><td>只读 token 才带，且只能为 true</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <p style="font-size:18px;">
+        💡 <b>关键设计：</b>每次请求都<b>回查数据库</b>（不是只验签名）——<br>
+        Session 归档/终止、组织 taint 变化、CMEK 变化 → <span class="hl-red">立即撤销权限</span>，不用等 token 过期。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：生命周期 -->
+  <div class="chapter">
+    <span class="chip">第五章 · Session 绑定</span>
+    <h2>filesystem 和 Session 什么关系？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🐣</div>
+        <div class="text"><b>Session 创建</b>：insertSessionTx 事务里自动建 filesystem + 5 个固定目录</div>
+        <div class="badge">一个事务</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔢</div>
+        <div class="text"><b>ID 生成</b>：claude_chat_ + 24 位 Base62（143 bit 熵，冲突概率 4.8×10⁻²⁶）</div>
+        <div class="badge">crypto/rand</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📦</div>
+        <div class="text"><b>Agent 读写</b>：rclone 挂载虚拟磁盘，Agent 像操作本地文件一样</div>
+        <div class="badge">沙箱</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔄</div>
+        <div class="text"><b>沙箱重建</b>：Code Session 换了，但 filesystem 不变 —— Session 才是所有权者</div>
+        <div class="badge">持久</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗑️</div>
+        <div class="text"><b>Session 归档</b>：JWT 立即失效；孤儿文件进 cleanup 队列清理</div>
+        <div class="badge">回收</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 6 章：配额与清理 -->
+  <div class="chapter">
+    <span class="chip">第六章 · 配额与清理</span>
+    <h2>怎么防止撑爆仓库？</h2>
+    <div class="cmp2">
+      <div class="cmp">
+        <div class="title">📊 配额账本</div>
+        <div class="point">📌 <span>workspace_storage_usage 表按工作区记账</span></div>
+        <div class="point">🔢 <span>Files API + Filestore 分开统计有效字节数</span></div>
+        <div class="point">✅ <span>写事务按增量维护，是配额判定依据</span></div>
+      </div>
+      <div class="cmp">
+        <div class="title">🧹 孤儿清理</div>
+        <div class="point">🚮 <span>写入失败/覆盖产生的孤儿 blob → 入 cleanup 队列</span></div>
+        <div class="point">🔑 <span>精确版本删除 / 同键全版本清理（DeleteOptions）</span></div>
+        <div class="point">🧩 <span>复用通用 object cleanup worker</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 7 章：insight -->
+  <div class="chapter">
+    <span class="chip">第七章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🧠 <b>1. "文件系统"是假的，是真的</b> —— 目录树是 DB 里的 resource 行，文件内容是 S3 对象；
+        但 Agent 感觉是本地磁盘（rclone 挂载）。<br><br>
+        🔒 <b>2. 每次请求都回查 DB</b> —— 不是"签名有效就放行"，而是"签名有效 + 此刻状态仍有效"，
+        实现秒级撤销。<br><br>
+        🚫 <b>3. 五个固定根 + /skills 全树只读</b> —— 运行时合同和普通用户目录严格分开，
+        mutation 永远碰不到固定根。<br><br>
+        🔗 <b>4. Session 是唯一所有者</b> —— Code Session 只是执行实例，换沙箱不换文件柜。<br><br>
+        ⚡ <b>5. 不可变 blob key</b> —— 覆盖写新 key，消灭读写竞态，历史对象天然可追溯。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/filestore 深入图解 · 有代码和设计文档依据</footer>
+</div>
+</body>
+</html>

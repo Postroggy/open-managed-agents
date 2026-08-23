@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agentsnapshot 是什么？📸</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #f0f9ff 0%, #fdf2f8 100%);
+    color: #3a3a3a;
+    padding: 36px 20px 70px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  h1 {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 900;
+    color: #6c5ce7;
+    letter-spacing: 2px;
+    text-shadow: 3px 3px 0 #ffe066;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 19px;
+    color: #57606f;
+    margin: 12px 0 40px;
+    font-weight: 600;
+  }
+
+  /* 一句话 */
+  .hero {
+    text-align: center;
+    background: #fff;
+    border: 5px solid #6c5ce7;
+    border-radius: 30px;
+    padding: 26px;
+    box-shadow: 0 8px 0 rgba(108,92,231,.12);
+    margin-bottom: 28px;
+  }
+  .hero .cam { font-size: 80px; }
+  .hero .tagline { font-size: 22px; font-weight: 900; color: #6c5ce7; margin-top: 8px; }
+  .hero .explain { font-size: 15px; color: #57606f; margin-top: 6px; }
+
+  /* 时间线：什么时候拍 */
+  .timeline {
+    background: #fff;
+    border: 4px solid #74b9ff;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 28px;
+  }
+  .tl-title {
+    text-align: center;
+    font-size: 21px;
+    font-weight: 900;
+    color: #0984e3;
+    margin-bottom: 16px;
+  }
+  .tl-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .tl-step {
+    background: #e8f7ff;
+    border: 3px solid #74b9ff;
+    border-radius: 16px;
+    padding: 10px 14px;
+    text-align: center;
+    min-width: 130px;
+  }
+  .tl-step .emoji { font-size: 30px; }
+  .tl-step .txt { font-size: 13.5px; font-weight: 800; color: #0984e3; }
+  .tl-arrow { font-size: 26px; color: #e84393; font-weight: 900; }
+
+  /* 快照里有什么 */
+  .content {
+    background: #fff;
+    border: 4px solid #a29bfe;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 28px;
+  }
+  .ct-title {
+    text-align: center;
+    font-size: 21px;
+    font-weight: 900;
+    color: #6c5ce7;
+    margin-bottom: 16px;
+  }
+  .fields { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .field {
+    background: #f4f0ff;
+    border: 2px solid #a29bfe;
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+  }
+  .field .emoji { font-size: 28px; }
+  .field .name { font-family: Menlo, monospace; font-size: 12.5px; font-weight: 800; color: #6c5ce7; }
+  .field .desc { font-size: 11.5px; color: #57606f; font-weight: 600; }
+
+  /* 快照用来干嘛：预热流程 */
+  .flow-box {
+    background: #fff;
+    border: 4px solid #ffe066;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 28px;
+  }
+  .fw-title {
+    text-align: center;
+    font-size: 21px;
+    font-weight: 900;
+    color: #8a6d00;
+    margin-bottom: 16px;
+  }
+  .fw-steps { display: flex; flex-direction: column; gap: 10px; }
+  .fw-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fffce8;
+    border: 3px solid #ffd93d;
+    border-radius: 16px;
+    padding: 12px 16px;
+  }
+  .fw-step .emoji { font-size: 32px; }
+  .fw-step .txt { font-size: 14.5px; font-weight: 700; color: #8a6d00; flex: 1; }
+  .fw-step .badge {
+    background: #e84393;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    border-radius: 20px;
+    padding: 2px 12px;
+    flex-shrink: 0;
+  }
+  .fw-arrow { text-align: center; font-size: 22px; color: #e84393; font-weight: 900; line-height: 1; }
+
+  /* insight 框 */
+  .insight {
+    background: linear-gradient(135deg, #6c5ce7, #0984e3);
+    color: #fff;
+    border-radius: 26px;
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+  .insight-title {
+    text-align: center;
+    font-size: 21px;
+    font-weight: 900;
+    margin-bottom: 14px;
+  }
+  .insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .insight-item {
+    background: rgba(255,255,255,.12);
+    border: 2px solid rgba(255,255,255,.3);
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 14px;
+  }
+  .insight-item .i-title { font-weight: 900; font-size: 15px; margin-bottom: 4px; }
+  .insight-item p { opacity: .95; }
+
+  footer { text-align: center; margin-top: 34px; font-size: 14px; color: #b2bec3; font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .fields { grid-template-columns: 1fr 1fr; }
+    .insight-grid { grid-template-columns: 1fr; }
+    .tl-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>📸 agentsnapshot 是什么？</h1>
+  <p class="subtitle">给 AI 智能体「拍一张照片」，记录它当时的样子</p>
+
+  <!-- 一句话 -->
+  <div class="hero">
+    <div class="cam">📸</div>
+    <div class="tagline">Agent Snapshot = 智能体的「定妆照」</div>
+    <div class="explain">
+      一个 agent 由 名字/大脑/人设/工具/技能 等一堆东西组成，<br>
+      快照就是把它们<b>一次性拍成一张完整的照片（JSON）</b>，方便拿去用 📷
+    </div>
+  </div>
+
+  <!-- 什么时候拍 -->
+  <div class="timeline">
+    <div class="tl-title">📅 什么时候会拍照？</div>
+    <div class="tl-row">
+      <div class="tl-step"><div class="emoji">🐣</div><div class="txt">创建 agent</div></div>
+      <div class="tl-arrow">➡️</div>
+      <div class="tl-step"><div class="emoji">🔧</div><div class="txt">修改 agent</div></div>
+      <div class="tl-arrow">➡️</div>
+      <div class="tl-step"><div class="emoji">📸</div><div class="txt">拍快照<br>FromAgent()</div></div>
+      <div class="tl-arrow">➡️</div>
+      <div class="tl-step"><div class="emoji">🚚</div><div class="txt">交给别人用</div></div>
+    </div>
+  </div>
+
+  <!-- 快照里有什么 -->
+  <div class="content">
+    <div class="ct-title">🧩 快照里有什么？（就是 agent 的「全身体检报告」）</div>
+    <div class="fields">
+      <div class="field"><div class="emoji">🏷️</div><div class="name">id / name</div><div class="desc">名字</div></div>
+      <div class="field"><div class="emoji">🧠</div><div class="name">model</div><div class="desc">大脑</div></div>
+      <div class="field"><div class="emoji">📜</div><div class="name">system</div><div class="desc">人设</div></div>
+      <div class="field"><div class="emoji">🔧</div><div class="name">tools</div><div class="desc">工具</div></div>
+      <div class="field"><div class="emoji">📚</div><div class="name">skills</div><div class="desc">技能 ★</div></div>
+      <div class="field"><div class="emoji">🌐</div><div class="name">mcp_servers</div><div class="desc">外接服务</div></div>
+      <div class="field"><div class="emoji">👥</div><div class="name">multiagent</div><div class="desc">小队</div></div>
+      <div class="field"><div class="emoji">🏷️</div><div class="name">version</div><div class="desc">版本号</div></div>
+    </div>
+    <p style="text-align:center;margin-top:12px;font-size:13px;color:#57606f;font-weight:600;">★ 技能是快照里最受关注的部分 —— 预热系统专门盯着它！</p>
+  </div>
+
+  <!-- 快照用来干嘛 -->
+  <div class="flow-box">
+    <div class="fw-title">🚀 快照拍出来干嘛用？→ 技能预热（skillprewarm）</div>
+    <div class="fw-steps">
+      <div class="fw-step">
+        <div class="emoji">📸</div>
+        <div class="txt">agent 被创建/修改/部署时，拍一张快照</div>
+        <div class="badge">1</div>
+      </div>
+      <div class="fw-arrow">▼</div>
+      <div class="fw-step">
+        <div class="emoji">📚</div>
+        <div class="txt">检查快照里有没有带技能（SnapshotHasSkills）</div>
+        <div class="badge">2</div>
+      </div>
+      <div class="fw-arrow">▼</div>
+      <div class="fw-step">
+        <div class="emoji">🎡</div>
+        <div class="txt">把快照丢进「预热队列」（EnqueueSnapshot → job）</div>
+        <div class="badge">3</div>
+      </div>
+      <div class="fw-arrow">▼</div>
+      <div class="fw-step">
+        <div class="emoji">🔍</div>
+        <div class="txt">后台 worker 解析快照，找到技能包</div>
+        <div class="badge">4</div>
+      </div>
+      <div class="fw-arrow">▼</div>
+      <div class="fw-step">
+        <div class="emoji">🔥</div>
+        <div class="txt">把技能提前装好（预热），用户一来就能用！</div>
+        <div class="badge">5</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- insight -->
+  <div class="insight">
+    <div class="insight-title">💡 看完代码的 Insight</div>
+    <div class="insight-grid">
+      <div class="insight-item">
+        <div class="i-title">🪞 快照是「镜像」，不是「人」</div>
+        <p>快照只是 agent 数据的<b>静态拷贝</b>（JSON），不是 agent 本人。它把数据库里那个会变的对象，凝固成一份能到处传递、不依赖数据库的「文件」。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🔌 它没有自己的入口</div>
+        <p>agentsnapshot 没有 handler、没有路由 —— 它是纯工具包，只被别人调用（agents 创建时拍、skillprewarm 消费）。这正是"内部零件"的典型位置。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">📚 skills 是它的 C 位明星</div>
+        <p>整个包一半的函数都围绕 skills：<b>SnapshotHasSkills</b>（有没有技能）、<b>SnapshotSkillsEqual</b>（技能变没变）、<b>SnapshotSkillsRaw</b>（取出技能）。因为预热系统最关心技能。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">⚡ 预热 = 把"第一次慢"变成"提前快"</div>
+        <p>agent 第一次用技能时加载会很慢，预热系统在后台提前把技能包加载好，用户真正使用时就像点了外卖已经送到了 —— <b>秒开</b>。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🧵 队列解耦：拍照和用照片互不等待</div>
+        <p>创建 agent 时只把快照塞进队列就返回，后台 worker 慢慢处理 —— 前端不卡，后台不慌，各干各的。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🔒 防御性解析：坏了就当没有</div>
+        <p>所有解析函数都带 fallback：JSON 是空/null/解析失败 → 返回"没有技能"，绝不让坏数据崩掉整个流程。</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>🎈 Open Managed Agents · agentsnapshot 图解 · 快照+预热全链路</footer>
+</div>
+</body>
+</html>

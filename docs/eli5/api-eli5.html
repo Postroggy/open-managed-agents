@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>internal/api 是干嘛的？🚪</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #f0f9ff 0%, #fdf2f8 100%);
+    color: #3a3a3a;
+    padding: 36px 20px 70px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  h1 {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 900;
+    color: #0984e3;
+    letter-spacing: 2px;
+    text-shadow: 3px 3px 0 #ffe066;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 19px;
+    color: #57606f;
+    margin: 12px 0 40px;
+    font-weight: 600;
+  }
+
+  /* 一句话 */
+  .hero {
+    text-align: center;
+    background: #fff;
+    border: 5px solid #0984e3;
+    border-radius: 30px;
+    padding: 26px;
+    box-shadow: 0 8px 0 rgba(9,132,227,.12);
+    margin-bottom: 30px;
+  }
+  .hero .emoji-big { font-size: 70px; }
+  .hero .tagline { font-size: 22px; font-weight: 900; color: #0984e3; margin-top: 8px; }
+  .hero .explain { font-size: 15px; color: #57606f; margin-top: 6px; }
+
+  /* 大门口示意 */
+  .gate {
+    background: #fff;
+    border: 4px solid #74b9ff;
+    border-radius: 26px;
+    padding: 24px;
+    margin-bottom: 30px;
+  }
+  .gate-title { text-align: center; font-size: 21px; font-weight: 900; color: #0984e3; margin-bottom: 16px; }
+  .traffic { display: flex; gap: 16px; }
+  .t-lane {
+    flex: 1;
+    background: #f8fafc;
+    border: 3px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+  }
+  .t-lane .emoji { font-size: 40px; }
+  .t-lane h4 { font-size: 16px; margin: 8px 0 4px; font-weight: 900; color: #334155; }
+  .t-lane .path {
+    font-family: Menlo, Consolas, monospace;
+    font-size: 14px;
+    font-weight: 800;
+    color: #0984e3;
+    background: #e8f7ff;
+    border-radius: 10px;
+    padding: 4px 10px;
+    display: inline-block;
+    margin-bottom: 6px;
+  }
+  .t-lane p { font-size: 13px; color: #57606f; font-weight: 600; }
+  .t-lane .hl { border-color: #0984e3; background: #eff6ff; }
+
+  /* 中间件 */
+  .mw-box {
+    background: #fff;
+    border: 4px solid #ffe066;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 30px;
+  }
+  .mw-title { text-align: center; font-size: 21px; font-weight: 900; color: #8a6d00; margin-bottom: 16px; }
+  .mw-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .mw-item {
+    background: #fffce8;
+    border: 3px solid #ffd93d;
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+  }
+  .mw-item .emoji { font-size: 28px; }
+  .mw-item .name { font-family: Menlo, monospace; font-size: 12.5px; font-weight: 800; color: #8a6d00; }
+  .mw-item .desc { font-size: 12px; color: #8a6d00; font-weight: 600; margin-top: 2px; }
+
+  /* 资源小屋 */
+  .houses-title { text-align: center; font-size: 21px; font-weight: 900; color: #2f3542; margin: 36px 0 16px; }
+  .houses { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .house {
+    background: #fff;
+    border: 4px solid #a29bfe;
+    border-radius: 18px;
+    padding: 14px 10px;
+    text-align: center;
+    transition: transform .15s;
+  }
+  .house:hover { transform: scale(1.05) rotate(-1deg); }
+  .house .emoji { font-size: 32px; }
+  .house .name { font-family: Menlo, monospace; font-size: 13px; font-weight: 800; color: #6c5ce7; margin-top: 4px; }
+  .house .route { font-size: 11px; color: #57606f; font-weight: 600; }
+
+  /* 关键 insight */
+  .insight {
+    background: linear-gradient(135deg, #6c5ce7, #0984e3);
+    color: #fff;
+    border-radius: 26px;
+    padding: 24px;
+    margin-top: 30px;
+  }
+  .insight-title { text-align: center; font-size: 21px; font-weight: 900; margin-bottom: 14px; }
+  .insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .insight-item {
+    background: rgba(255,255,255,.12);
+    border: 2px solid rgba(255,255,255,.3);
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 14px;
+  }
+  .insight-item .i-title { font-weight: 900; font-size: 15px; margin-bottom: 4px; }
+  .insight-item p { opacity: .95; }
+
+  footer { text-align: center; margin-top: 34px; font-size: 14px; color: #b2bec3; font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .traffic, .insight-grid { flex-direction: column; }
+    .mw-list { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🚪 internal/api 是干嘛的？</h1>
+  <p class="subtitle">它是整个后端的「总大门 + 接线总站」</p>
+
+  <!-- 一句话 -->
+  <div class="hero">
+    <div class="emoji-big">🏢</div>
+    <div class="tagline">所有请求进来，都先经过它 —— 再分门别类送进各个业务小屋</div>
+    <div class="explain">
+      它自己<b>不干活</b>，但知道<b>谁来敲门、该送进哪个房间、进门要先过哪些检查</b><br>
+      就像一个物业总台，负责把客人带到正确的房间 🗺️
+    </div>
+  </div>
+
+  <!-- 大门口 -->
+  <div class="gate">
+    <div class="gate-title">🚦 总台怎么分流？（看 server.go 真实代码）</div>
+    <div class="traffic">
+      <div class="t-lane hl">
+        <div class="emoji">🔑</div>
+        <h4>带 API Key 的客人</h4>
+        <div class="path">/v1/*</div>
+        <p>走「服务通道」→ 各资源小屋<br>（agents/sessions/files…）</p>
+      </div>
+      <div class="t-lane hl">
+        <div class="emoji">🎟️</div>
+        <h4>带平台会话的客人</h4>
+        <div class="path">/v1/*（平台通道）</div>
+        <p>走「平台通道」→ 同样的资源小屋<br>（平台身份鉴权）</p>
+      </div>
+      <div class="t-lane">
+        <div class="emoji">🖥️</div>
+        <h4>控制台客人</h4>
+        <div class="path">/api · /auth · /oauth</div>
+        <p>走「平台控制台」→ 登录/注册/组织管理/工作台</p>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:14px;font-size:13px;color:#57606f;font-weight:600;">🔑 分流依据：请求里带的是 <b>API Key</b> 还是<b>平台会话 Key</b>（apiEntrypointRouter）</p>
+  </div>
+
+  <!-- 中间件 -->
+  <div class="mw-box">
+    <div class="mw-title">🛂 进门先过 3 道检查（中间件）</div>
+    <div class="mw-list">
+      <div class="mw-item"><div class="emoji">🏷️</div><div class="name">requestIDMiddleware</div><div class="desc">给每个请求发个编号（req_xxx）</div></div>
+      <div class="mw-item"><div class="emoji">📝</div><div class="name">requestLoggingMiddleware</div><div class="desc">记录日志（结构化）</div></div>
+      <div class="mw-item"><div class="emoji">🛡️</div><div class="name">recoverMiddleware</div><div class="desc">防崩溃：出 panic 兜住不炸服务</div></div>
+    </div>
+  </div>
+
+  <!-- 资源小屋 -->
+  <div class="houses-title">🏠 总台后面的 12 间业务小屋（mountSharedV1Resources 真实挂载）</div>
+  <div class="houses">
+    <div class="house"><div class="emoji">🤖</div><div class="name">agents</div><div class="route">/agents</div></div>
+    <div class="house"><div class="emoji">💬</div><div class="name">sessions</div><div class="route">/sessions</div></div>
+    <div class="house"><div class="emoji">🧰</div><div class="name">skills</div><div class="route">/skills</div></div>
+    <div class="house"><div class="emoji">📁</div><div class="name">files</div><div class="route">/files</div></div>
+    <div class="house"><div class="emoji">🧠</div><div class="name">memory</div><div class="route">/memory_stores</div></div>
+    <div class="house"><div class="emoji">🚢</div><div class="name">deployments</div><div class="route">/deployments</div></div>
+    <div class="house"><div class="emoji">🌱</div><div class="name">environments</div><div class="route">/environments</div></div>
+    <div class="house"><div class="emoji">🏷️</div><div class="name">models</div><div class="route">/models</div></div>
+    <div class="house"><div class="emoji">📦</div><div class="name">batches</div><div class="route">/messages/batches</div></div>
+    <div class="house"><div class="emoji">🗄️</div><div class="name">vaults</div><div class="route">/vaults</div></div>
+    <div class="house"><div class="emoji">📡</div><div class="name">webhooks</div><div class="route">/webhooks</div></div>
+    <div class="house"><div class="emoji">🏢</div><div class="name">admin</div><div class="route">/organizations</div></div>
+  </div>
+
+  <!-- insight -->
+  <div class="insight">
+    <div class="insight-title">💡 看完代码的 Insight</div>
+    <div class="insight-grid">
+      <div class="insight-item">
+        <div class="i-title">🏗️ 它只「组装」，不「干活」</div>
+        <p>server.go 里没有业务逻辑 —— 只有 NewHandler、Mount、Use。真正的活儿全在 resource 包（agents/sessions/...）里。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🔀 一个 /v1 两条通道</div>
+        <p>同一套资源路由（mountSharedV1Resources）被 service 和 platform 两条鉴权通道复用 —— 一套代码，两种身份。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🩺 健康检查在最前面</div>
+        <p>GET /healthz 不挂任何中间件 —— 负载均衡探活时不能要求带 key。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🧩 依赖注入集中地</div>
+        <p>db、objectStore、logger、skillPrewarmEnqueuer 全在这里组装好，再分发给各资源包 —— 这是"组装层"的定义。</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>🎈 Open Managed Agents · internal/api 图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

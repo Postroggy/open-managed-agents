@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 配置中心 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fff8e1 0%, #fffdf5 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #ffecb3; color: #8a6d00;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #f5c844; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #fff3cd; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #8a6d00; }
+  .hl-blue { background: #e8f0fe; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(130, 100, 40, .07);
+  }
+
+  /* 配置块网格 */
+  .cfg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+  .cfg {
+    background: #fff; border-radius: 18px; padding: 20px 16px;
+    border: 3px dashed #f5c844; text-align: center;
+  }
+  .cfg .emoji { font-size: 34px; }
+  .cfg .name { font-size: 17px; font-weight: 700; margin-top: 6px; color: #8a6d00; }
+  .cfg .desc { font-size: 13px; color: #666; margin-top: 4px; }
+  .cfg .mono { font-family: Menlo, Consolas, monospace; font-size: 11px; background: #f1f5f1; border-radius: 6px; padding: 2px 6px; display: inline-block; margin-top: 6px; color: #444; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border-radius: 20px; padding: 18px 24px;
+    border: 3px dashed #f5c844;
+  }
+  .flow-step .emoji { font-size: 36px; flex-shrink: 0; }
+  .flow-step .text { font-size: 19px; }
+  .flow-step .text b { color: #8a6d00; }
+  .flow-step .badge {
+    margin-left: auto; background: #ffecb3; color: #8a6d00;
+    border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 26px; color: #8a6d00; line-height: 1; font-weight: 700; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .cfg-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 内部包探秘 · 第 10 集</span>
+    <h1>⚙️ internal/config<br>配置中心</h1>
+    <div class="tagline">
+      <span class="emoji">🗂️</span> 像「整栋楼的配电箱」一样<br>所有开关、地址、密钥都在这里
+    </div>
+  </div>
+
+  <!-- 第 1 章：是什么 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>配置都管些什么？</h2>
+    <p class="lead">
+      后端服务要跑起来，需要知道 <span class="hl">连哪个数据库、用哪个存储、对接哪个上游</span>……<br>
+      这些「跑起来的设定」全都集中在一个 <span class="hl">config.yaml</span> 文件里。
+    </p>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>internal/config</b> 负责：<br>
+        1️⃣ 读配置文件（<span class="hl">config.yaml</span>）<br>
+        2️⃣ 校验配置对不对<br>
+        3️⃣ 给所有包提供<b>统一的配置结构</b>
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        所有包都从它这里拿配置 —— 它就像是整栋楼的配电箱 🔌
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：管哪些 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 管哪些配置</span>
+    <h2>14 块配置（types.go 真实结构）</h2>
+    <div class="cfg-grid">
+      <div class="cfg"><div class="emoji">🏷️</div><div class="name">env</div><div class="desc">运行环境：dev / prod</div><span class="mono">EnvironmentDev</span></div>
+      <div class="cfg"><div class="emoji">🚪</div><div class="name">server</div><div class="desc">监听地址（addr）</div><span class="mono">ServerConfig</span></div>
+      <div class="cfg"><div class="emoji">🗄️</div><div class="name">database</div><div class="desc">数据库连接 URL、自动迁移</div><span class="mono">DatabaseConfig</span></div>
+      <div class="cfg"><div class="emoji">🔴</div><div class="name">redis</div><div class="desc">Redis 连接地址</div><span class="mono">RedisConfig</span></div>
+      <div class="cfg"><div class="emoji">💾</div><div class="name">storage</div><div class="desc">存储类型（s3）、大小限制</div><span class="mono">StorageConfig</span></div>
+      <div class="cfg"><div class="emoji">🛰️</div><div class="name">anthropic_upstream</div><div class="desc">上游 BaseURL、APIKey、模型映射</div><span class="mono">AnthropicUpstreamConfig</span></div>
+      <div class="cfg"><div class="emoji">📦</div><div class="name">batch</div><div class="desc">批量 worker 开关、并发、保留天数</div><span class="mono">BatchConfig</span></div>
+      <div class="cfg"><div class="emoji">☁️</div><div class="name">e2b</div><div class="desc">E2B 沙箱 API Key、域名、超时</div><span class="mono">E2BConfig</span></div>
+      <div class="cfg"><div class="emoji">🌱</div><div class="name">environment_runner</div><div class="desc">沙箱 runner 开关、Claude 路径</div><span class="mono">EnvironmentRunnerConfig</span></div>
+      <div class="cfg"><div class="emoji">💻</div><div class="name">code_session</div><div class="desc">JWT 密钥、MITM 开关、OTLP 日志</div><span class="mono">CodeSessionConfig</span></div>
+      <div class="cfg"><div class="emoji">📡</div><div class="name">webhook</div><div class="desc">Webhook 地址、签名 key、事件类型</div><span class="mono">WebhookConfig</span></div>
+      <div class="cfg"><div class="emoji">🔐</div><div class="name">vault</div><div class="desc">主密钥（KEK）加密保险库</div><span class="mono">VaultConfig</span></div>
+      <div class="cfg"><div class="emoji">🚀</div><div class="name">bootstrap</div><div class="desc">启动种子数据（API key、工作区）</div><span class="mono">BootstrapConfig</span></div>
+      <div class="cfg"><div class="emoji">🧪</div><div class="name">sdk_fixtures</div><div class="desc">官方 SDK 测试的固定 ID 集合</div><span class="mono">SDKFixtureConfig</span></div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：怎么用 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 配置怎么生效</span>
+    <h2>一次配置的旅程</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📄</div>
+        <div class="text"><b>读文件</b>：config.yaml（或 CONFIG_FILE 指定路径）</div>
+        <div class="badge">Load()</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔍</div>
+        <div class="text"><b>校验</b>：必填项有没有、数值正不正</div>
+        <div class="badge">validate()</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧩</div>
+        <div class="text"><b>组装</b>：NewServer(cfg, ...) 把配置分发给各资源包</div>
+        <div class="badge">internal/api</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🏃</div>
+        <div class="text"><b>运行</b>：各包按配置决定行为（连库、开 worker、开 MITM…）</div>
+        <div class="badge">运行时</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：亮点 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 设计亮点</span>
+    <h2>几个值得注意的</h2>
+    <div class="card">
+      <p style="font-size:21px;">
+        🔐 <b>vault 主密钥</b>：支持 KEK 文件注入 + 版本轮换（decrypt_only）<br>
+        ⚠️ <b>code_session.MITM</b>：默认关闭，开启需挂载 CA 私钥文件<br>
+        🧪 <b>sdk_fixtures</b>：为官方 SDK 测试准备的固定 ID（file_xxx 等）<br>
+        🛡️ <b>ssrf_protection 开关</b>：标记为「仅供本地排障，生产必须 false」
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/config 图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>沙箱生命周期 · 超详细版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef9f0 0%, #f5fbf6 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #c8e6c9; color: #2e7d32;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #81c784; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 34px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 22px; color: #333; margin-bottom: 26px; }
+  .hl { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-blue { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-yellow { background: #fff3cd; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #8a6d00; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 28px 32px;
+    box-shadow: 0 4px 20px rgba(40, 90, 50, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 生命周期主图 */
+  .life { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px; }
+  .stage {
+    width: 100%; border-radius: 20px; padding: 18px 24px;
+    border: 4px solid; text-align: center; background: #fff;
+  }
+  .stage .emoji { font-size: 34px; }
+  .stage .name { font-size: 21px; font-weight: 800; }
+  .stage .desc { font-size: 15px; color: #666; margin-top: 4px; }
+  .stage .who { font-size: 13px; margin-top: 6px; font-weight: 700; }
+  .st1 { border-color: #2e7d32; } .st1 .name { color: #2e7d32; } .st1 .who { color: #2e7d32; background: #d7f0db; border-radius: 999px; padding: 2px 14px; display: inline-block; }
+  .st2 { border-color: #8a6d00; } .st2 .name { color: #8a6d00; } .st2 .who { color: #8a6d00; background: #fff3cd; border-radius: 999px; padding: 2px 14px; display: inline-block; }
+  .st3 { border-color: #2743a8; } .st3 .name { color: #2743a8; } .st3 .who { color: #2743a8; background: #e3eeff; border-radius: 999px; padding: 2px 14px; display: inline-block; }
+  .st4 { border-color: #0077b6; } .st4 .name { color: #0077b6; } .st4 .who { color: #0077b6; background: #d8ecf5; border-radius: 999px; padding: 2px 14px; display: inline-block; }
+  .st5 { border-color: #c53030; } .st5 .name { color: #c53030; } .st5 .who { color: #c53030; background: #ffe3e3; border-radius: 999px; padding: 2px 14px; display: inline-block; }
+  .arrow { font-size: 24px; color: #57606f; font-weight: 900; line-height: 1; }
+  .arrow .note { font-size: 13px; color: #888; font-weight: 600; }
+
+  /* 暂停 vs 销毁 */
+  .cmp2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .cmp { background: #fff; border-radius: 18px; padding: 18px 20px; border: 3px dashed #81c784; }
+  .cmp .title { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+  .cmp .point { display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; color: #555; margin-top: 6px; }
+  .cmp .bad { color: #c53030; }
+  .cmp .good { color: #2e7d32; }
+
+  /* 负责人表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+  .table th { background: #d7f0db; color: #2e7d32; padding: 10px; text-align: left; border-bottom: 3px solid #81c784; }
+  .table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+  .table tr:hover td { background: #f8faf8; }
+
+  .note {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .cmp2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 沙箱系列 · 生命周期专题</span>
+    <h1>🌱 沙箱的一生</h1>
+    <div class="tagline">
+      <span class="emoji">🔄</span> 创建 → 预热 → 运行 → 心跳 → 暂停 → 恢复 → 销毁<br>7 个阶段 × 谁负责
+    </div>
+  </div>
+
+  <!-- 第 1 章：生命周期主图 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 生命周期全景</span>
+    <h2>7 个阶段</h2>
+    <div class="life">
+      <div class="stage st1">
+        <div class="emoji">🏗️</div>
+        <div class="name">① 创建（Create）</div>
+        <div class="desc">检查 API key → 模板三级兜底 → 默认超时 30s → <b>OnTimeout: "pause"</b></div>
+        <div class="who">environments + runtime</div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="stage st2">
+        <div class="emoji">📦</div>
+        <div class="name">② 预热（Provisioning）</div>
+        <div class="desc">按 manifest 预装包（apt/pip/npm）+ 技能卷准备（指纹缓存复用）</div>
+        <div class="who">package_provisioner + skillprewarm</div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="stage st3">
+        <div class="emoji">🚀</div>
+        <div class="name">③ 运行（Running）</div>
+        <div class="desc">构造启动配置（MCP/模型/OTLP）→ 启动 Claude worker → 注册 → SSE 事件流</div>
+        <div class="who">environment_manager + codesessions</div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="stage st4">
+        <div class="emoji">💓</div>
+        <div class="name">④ 心跳续命（Heartbeat）</div>
+        <div class="desc">worker 每 30s 报平安 → SetTimeout 续期沙箱寿命（<b>pause 设计的意义</b>）</div>
+        <div class="who">codesessions → runtime.SetTimeout</div>
+      </div>
+      <div class="arrow">▼<div class="note">心跳停了 / 超时到了</div></div>
+      <div class="stage st5">
+        <div class="emoji">💤</div>
+        <div class="name">⑤ 暂停（Paused）—— 不是销毁！</div>
+        <div class="desc">沙箱冻结但保留：数据、文件、进程都在原地</div>
+        <div class="who">E2B Lifecycle</div>
+      </div>
+      <div class="arrow">▼<div class="note">用户再次使用 Session</div></div>
+      <div class="stage st3">
+        <div class="emoji">🔁</div>
+        <div class="name">⑥ 恢复（Recover）</div>
+        <div class="desc">RecoverManagedAgentCodeSession → 沙箱续命继续跑（进度没丢）</div>
+        <div class="who">environments.Recover</div>
+      </div>
+      <div class="arrow">▼<div class="note">Session 归档/删除</div></div>
+      <div class="stage st5">
+        <div class="emoji">🗑️</div>
+        <div class="name">⑦ 销毁（Kill）+ 清理</div>
+        <div class="desc">Kill 沙箱 → 文件清理走 filestore + cleanup 队列</div>
+        <div class="who">runtime.Kill + filestore + cleanup</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 2 章：pause vs 销毁 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 核心设计</span>
+    <h2>为什么"暂停"而非"销毁"？</h2>
+    <div class="cmp2">
+      <div class="cmp">
+        <div class="title bad">❌ 销毁模型</div>
+        <div class="point">🗑️ <span>超时 → 删除沙箱</span></div>
+        <div class="point">📉 <span>数据全丢</span></div>
+        <div class="point">⏱️ <span>回来要重新创建 + 预热（慢）</span></div>
+        <div class="point">💸 <span>重复计费（创建/预热都花钱）</span></div>
+      </div>
+      <div class="cmp">
+        <div class="title good">✅ 暂停模型（OMA）</div>
+        <div class="point">💤 <span>超时 → 暂停（冻结）</span></div>
+        <div class="point">📂 <span>数据、文件、进程全保留</span></div>
+        <div class="point">⚡ <span>回来直接续命跑（秒级）</span></div>
+        <div class="point">💰 <span>暂停期间不烧钱（只按运行计费）</span></div>
+      </div>
+    </div>
+    <div class="note">💡 这就是 "OnTimeout: pause" 的精髓 —— Session 恢复机制的地基（前面 codesessions 讲过的 RecoverManagedAgentCodeSession）。</div>
+  </div>
+
+  <!-- 第 3 章：谁负责 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 谁负责哪个阶段</span>
+    <h2>责任分工表</h2>
+    <table class="table">
+      <tr><th>阶段</th><th>负责人</th><th>关键代码</th></tr>
+      <tr><td>① 创建</td><td>environments + runtime</td><td class="mono">E2BProvider.Create</td></tr>
+      <tr><td>② 预热</td><td>package_provisioner + skillprewarm</td><td class="mono">provisionPackages / PrepareSkillMount</td></tr>
+      <tr><td>③ 运行</td><td>environment_manager + codesessions</td><td class="mono">buildEnvironmentManagerV0Payload</td></tr>
+      <tr><td>④ 心跳</td><td>codesessions → runtime</td><td class="mono">SetTimeout</td></tr>
+      <tr><td>⑤ 暂停</td><td>E2B Lifecycle</td><td class="mono">OnTimeout: "pause"</td></tr>
+      <tr><td>⑥ 恢复</td><td>environments</td><td class="mono">RecoverManagedAgentCodeSession</td></tr>
+      <tr><td>⑦ 销毁</td><td>runtime + filestore + cleanup</td><td class="mono">Kill / cleanup 队列</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 4 章：insight -->
+  <div class="chapter">
+    <span class="chip">第四章 · Insight</span>
+    <h2>读完整个链路的深度理解</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        💤 <b>1. "暂停"是产品决策</b> —— 用户隔天回来沙箱还在原地，
+        这是"会话可恢复"体验的技术地基。<br><br>
+        💓 <b>2. 心跳 = 沙箱的"命"</b> —— 30 秒一次报平安，
+        停了就暂停：活性由 worker 决定，不是服务器。<br><br>
+        🔄 <b>3. ⑦→① 不是死循环</b> —— 销毁后文件还在（filestore），
+        重建沙箱时文件挂载回来：<b>沙箱可死，数据不死</b>。<br><br>
+        🧩 <b>4. 每个阶段都有独立负责人</b> —— environments 编排、runtime 执行、
+        codesessions 通信、skillprewarm 预热、cleanup 清理：
+        单一职责贯穿始终。<br><br>
+        ⚡ <b>5. 恢复比重建快</b> —— 暂停恢复 = 秒级（数据在）；
+        销毁重建 = 分钟级（要重新预热）。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · 沙箱生命周期图解 · 串联 runtime/environments/codesessions/skillprewarm</footer>
+</div>
+</body>
+</html>

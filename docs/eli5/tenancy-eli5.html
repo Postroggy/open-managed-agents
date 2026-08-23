@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 租户层级 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef7ff 0%, #f4faff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dbe7ff; color: #1a56db;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #a3c4ff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+
+  /* 层级图 */
+  .hierarchy { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px; }
+  .level {
+    width: 100%;
+    background: #fff; border-radius: 20px; padding: 20px 24px;
+    border: 3px solid; text-align: center;
+  }
+  .level .emoji { font-size: 36px; }
+  .level .name { font-size: 22px; font-weight: 800; }
+  .level .desc { font-size: 15px; color: #666; margin-top: 4px; }
+  .level .mono { font-family: Menlo, monospace; font-size: 13px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 6px; }
+  .lv-org { border-color: #1a56db; background: #f0f6ff; }
+  .lv-org .name { color: #1a56db; }
+  .lv-ws { border-color: #2e7d32; background: #f0faf2; }
+  .lv-ws .name { color: #2e7d32; }
+  .lv-user { border-color: #b3355e; background: #fdf5f9; }
+  .lv-user .name { color: #b3355e; }
+  .arrow { font-size: 26px; color: #57606f; font-weight: 900; line-height: 1; }
+
+  /* 表关系 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+  .table th { background: #e3eeff; color: #1a56db; padding: 10px; text-align: left; border-bottom: 3px solid #a3c4ff; }
+  .table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+  .table tr:hover td { background: #f8faff; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 架构基础</span>
+    <h1>🏢 租户层级<br>Org / Workspace / User</h1>
+    <div class="tagline">
+      <span class="emoji">🗂️</span> 一个公司 → 多个部门 → 多个员工<br>每层都有自己的 ID
+    </div>
+  </div>
+
+  <!-- 第 1 章：层级 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 三层结构</span>
+    <h2>从组织到用户</h2>
+    <div class="hierarchy">
+      <div class="level lv-org">
+        <div class="emoji">🏢</div>
+        <div class="name">Organization（组织）</div>
+        <div class="desc">最高层：一个公司/团队</div>
+        <span class="mono">organizations.uuid</span>
+      </div>
+      <div class="arrow">▼ 拥有</div>
+      <div class="level lv-ws">
+        <div class="emoji">📁</div>
+        <div class="name">Workspace（工作区）</div>
+        <div class="desc">中间层：组织下的一个部门/项目空间</div>
+        <span class="mono">workspaces.uuid + organization_uuid</span>
+      </div>
+      <div class="arrow">▼ 包含</div>
+      <div class="level lv-user">
+        <div class="emoji">👤</div>
+        <div class="name">User（用户）</div>
+        <div class="desc">底层：具体的人，通过 workspace_members 加入工作区</div>
+        <span class="mono">users.uuid + workspace_members(uuid × 3)</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <p style="font-size:18px;">
+        💡 <b>注意</b>：User 属于 Organization（users.organization_uuid），<br>
+        而 <b>User 进入 Workspace 靠 workspace_members 关联表</b>（多对多）。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：表结构 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 表怎么关联</span>
+    <h2>真实表结构（XML 确认）</h2>
+    <table class="table">
+      <tr><th>表</th><th>关键列</th><th>作用</th></tr>
+      <tr><td class="mono">organizations</td><td>uuid, name</td><td>组织（无 external_id，唯一例外）</td></tr>
+      <tr><td class="mono">users</td><td>uuid, organization_uuid, email, role</td><td>用户属于组织</td></tr>
+      <tr><td class="mono">workspaces</td><td>uuid, organization_uuid, name</td><td>工作区属于组织</td></tr>
+      <tr><td class="mono">workspace_members</td><td>organization_uuid, workspace_uuid, workspace_external_id, user_uuid, user_external_id, workspace_role</td><td>用户 ↔ 工作区 多对多关联</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 3 章：多租户边界 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 鉴权边界</span>
+    <h2>代码里怎么保证隔离？</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🔑 <b>Principal（请求身份）</b> 携带三个关键 UUID：<br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">OrganizationUUID · WorkspaceUUID · APIKeyUUID</span><br>
+        <br>
+        ✅ 所有资源查询都带 <span class="hl">workspace_uuid 过滤</span>（多租户边界）：<br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">WHERE workspace_uuid = #{workspaceUUID}</span><br>
+        <br>
+        🚫 跨工作区访问 → 查不到（返回 not found），不是权限错误
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：和 memory 的关系 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 回到 memory</span>
+    <h2>记忆在哪一层？</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🧠 <b>Memory Store 挂在 Workspace 下</b>：<br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">memory_stores.workspace_uuid</span><br>
+        <br>
+        📂 <b>Memory 对象 key 也带 workspace</b>：<br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">workspaces/{workspaceUUID}/memory_versions/...</span><br>
+        <br>
+        → 记忆是 <b>工作区级别</b> 的资源：同工作区的 Agent 共享记忆，跨工作区隔离。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · 租户层级图解 · 有代码和 XML 依据</footer>
+</div>
+</body>
+</html>

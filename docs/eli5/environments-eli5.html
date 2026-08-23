@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 运行环境 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fff0e8 0%, #fff8f2 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #ffe0c7; color: #c05621;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #ffb37e; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #ffe8d6; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c05621; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(140, 80, 40, .07);
+  }
+  .card + .card { margin-top: 18px; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border-radius: 20px; padding: 18px 24px;
+    border: 3px dashed #ffb37e;
+  }
+  .flow-step .emoji { font-size: 36px; flex-shrink: 0; }
+  .flow-step .text { font-size: 19px; }
+  .flow-step .text b { color: #c05621; }
+  .flow-step .badge {
+    margin-left: auto; background: #ffe0c7; color: #c05621;
+    border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 26px; color: #c05621; line-height: 1; font-weight: 700; }
+
+  /* 能力 */
+  .cap-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 20px; }
+  .cap {
+    background: #fff; border-radius: 20px; padding: 22px 18px;
+    border: 3px dashed #ffb37e;
+  }
+  .cap .emoji { font-size: 36px; }
+  .cap .name { font-size: 18px; font-weight: 700; margin-top: 6px; color: #c05621; }
+  .cap .desc { font-size: 14px; color: #666; margin-top: 4px; }
+  .cap .file { font-family: Menlo, monospace; font-size: 12px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 6px; color: #444; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .cap-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 内部包探秘 · 第 12 集</span>
+    <h1>🌱 internal/environments<br>运行环境</h1>
+    <div class="tagline">
+      <span class="emoji">🏗️</span> 像「工地施工队」一样<br>给 Agent 搭好沙箱小屋，再安排它干活
+    </div>
+  </div>
+
+  <!-- 第 1 章：是什么 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>Environment 是什么？</h2>
+    <p class="lead">
+      Agent 要跑代码，得有个 <span class="hl">沙箱小屋</span>（E2B 环境）。<br>
+      environments 就是负责 <span class="hl">盖房子 + 安排施工</span> 的包。
+    </p>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>Environment</b> = 一个<b>沙箱环境</b>（云端的临时小电脑）<br>
+        <b>Work</b> = 环境里的<b>一次任务</b>（跑一个 agent 会话）
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        它管「环境的一生」：创建 → 轮询任务 → 干活 → 停止 → 清理
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：流程 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 怎么工作</span>
+    <h2>一次沙箱环境的旅程</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🏗️</div>
+        <div class="text"><b>创建环境</b>：POST /environments → 在 E2B 云端建沙箱</div>
+        <div class="badge">E2B Provider</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📜</div>
+        <div class="text"><b>派发任务</b>：把 work（任务）排进环境，等 runner 领取</div>
+        <div class="badge">work/poll</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📦</div>
+        <div class="text"><b>安装包</b>：按 manifest 预装软件包（apt/pip/npm…）</div>
+        <div class="badge">package_provisioner</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🚀</div>
+        <div class="text"><b>启动 Claude</b>：构造启动配置（MCP/技能/模型）→ 启动 worker</div>
+        <div class="badge">environment_manager</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">💓</div>
+        <div class="text"><b>心跳保活</b>：worker 心跳 → 超时自动停止</div>
+        <div class="badge">heartbeat</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗑️</div>
+        <div class="text"><b>停止清理</b>：任务完成/失败 → 停沙箱、清理现场</div>
+        <div class="badge">stop</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：能力 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 内部零件</span>
+    <h2>施工队里的角色</h2>
+    <div class="cap-grid">
+      <div class="cap">
+        <div class="emoji">📋</div>
+        <div class="name">handler.go</div>
+        <div class="desc">前台：环境 CRUD + work 轮询/心跳接口</div>
+        <span class="file">/environments</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">🏃</div>
+        <div class="name">runner.go</div>
+        <div class="desc">工头：轮询任务、创建/恢复沙箱、启动 Claude</div>
+        <span class="file">Runner</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">⚙️</div>
+        <div class="name">environment_manager.go</div>
+        <div class="desc">工程师：构造启动 payload（MCP 配置、模型、OTLP）</div>
+        <span class="file">buildEnvironmentManagerV0Payload</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">📦</div>
+        <div class="name">package_config.go</div>
+        <div class="desc">物料员：校验包清单（apt/pip/npm…）</div>
+        <span class="file">PackageProvisioner</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">🔗</div>
+        <div class="name">rclone_filestore.go</div>
+        <div class="desc">仓库对接：rclone 挂载文件存储（读写/只读凭证）</div>
+        <span class="file">rclone 挂载</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">🍎</div>
+        <div class="name">errors.go</div>
+        <div class="desc">错误清单：环境创建失败、沙箱不可用等</div>
+        <span class="file">apperr 风格</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：关系和亮点 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 和兄弟配合</span>
+    <h2>它和 codesessions 什么关系？</h2>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>environments</b> = <span class="hl">盖房子的</span>（建沙箱、装包、启动）<br>
+        <b>codesessions</b> = <span class="hl">住进去的</span>（沙箱里 Claude 的会话、事件、代理）<br>
+        <b>e2bruntime</b> = <span class="hl">建材商</span>（E2B 沙箱提供商）
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        environments 通过 CodeSessionRuntime 接口调用 codesessions 创建代码会话 ——
+        两个包是「先有房、再入住」的接力关系。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/environments 图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>

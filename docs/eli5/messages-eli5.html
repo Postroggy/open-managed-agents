@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA Messages 代理 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef7ee 0%, #f4faf4 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #d7f0db; color: #2e7d32;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #81c784; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(40, 90, 50, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 流程图 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #81c784;
+  }
+  .flow-step .emoji { font-size: 30px; flex-shrink: 0; }
+  .flow-step .text { font-size: 16.5px; flex: 1; }
+  .flow-step .text b { color: #2e7d32; }
+  .flow-step .badge { background: #d7f0db; color: #2e7d32; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 22px; color: #2e7d32; line-height: 1; font-weight: 700; }
+
+  /* 头部处理 */
+  .headers { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .hd { background: #fff; border-radius: 18px; padding: 18px 20px; border: 3px dashed #81c784; }
+  .hd .title { font-size: 17px; font-weight: 700; margin-bottom: 8px; color: #2e7d32; }
+  .hd .mono { font-family: Menlo, monospace; font-size: 12.5px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin: 2px; color: #555; }
+
+  /* 代码高亮 */
+  .code {
+    background: #1c2333; color: #a5b4fc; border-radius: 14px; padding: 18px 22px;
+    font-family: Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.9; overflow-x: auto; margin-top: 14px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .headers { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 5 集</span>
+    <h1>📨 internal/messages<br>Messages 流式代理</h1>
+    <div class="tagline">
+      <span class="emoji">🔁</span> 不是"处理消息"的，是「转发消息」的<br>把请求原样转发给上游，把响应流式传回
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>这个 handler 干什么？</h2>
+    <p class="lead">
+      用户调 <span class="hl">POST /v1/messages</span>（Anthropic 的聊天 API）。<br>
+      OMA 不自己回答 —— 而是 <span class="hl">原样转发</span> 给上游（真实模型提供商）。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>internal/messages</b> 是 <span class="hl">纯流式代理</span>（235 行，只 1 个 handler）：<br>
+        <br>
+        ✅ <b>不解析</b>请求正文 · <b>不持久化</b> · <b>不修改</b>内容<br>
+        🔁 请求转发给上游 → 响应流式传回（SSE 实时）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：流程图 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 一次转发的旅程</span>
+    <h2>请求怎么走？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📥</div>
+        <div class="text"><b>接收请求</b>：POST /v1/messages（鉴权已由 API middleware 完成）</div>
+        <div class="badge">Create()</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔐</div>
+        <div class="text"><b>检查上游 key</b>：anthropic_upstream.api_key 必须配置，否则 503</div>
+        <div class="badge">凭证</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📏</div>
+        <div class="text"><b>大小限制</b>：> 32 MiB → 413（MaxBytesReader 流式限流，不预分配内存）</div>
+        <div class="badge">32 MiB</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧹</div>
+        <div class="text"><b>清洗 header</b>：删 hop-by-hop + 客户端凭证 + 租户 header</div>
+        <div class="badge">消毒</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔑</div>
+        <div class="text"><b>注入上游 key</b>：只存在于 OMA 服务端的真实上游凭证</div>
+        <div class="badge">X-Api-Key</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📡</div>
+        <div class="text"><b>转发</b>：POST {baseURL}/v1/messages（带 query）</div>
+        <div class="badge">HTTP</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🌊</div>
+        <div class="text"><b>流式回传</b>：32 KiB 缓冲逐块复制 + 每块 flush（SSE 不卡）</div>
+        <div class="badge">流式</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：header 清洗 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 安全细节</span>
+    <h2>Header 清洗（最讲究的部分）</h2>
+    <div class="headers">
+      <div class="hd">
+        <div class="title">🧹 请求删除（15 个）</div>
+        <span class="mono">Authorization</span><span class="mono">Connection</span><span class="mono">Cookie</span>
+        <span class="mono">Host</span><span class="mono">X-Api-Key</span><span class="mono">X-Organization-Uuid</span>
+        <span class="mono">X-Workspace-Id</span><span class="mono">Proxy-*</span><span class="mono">Upgrade</span>…
+        <p style="font-size:13px;color:#666;margin-top:8px;">🔑 客户端凭证 + 租户 header 全部删除，防止伪造</p>
+      </div>
+      <div class="hd">
+        <div class="title">📤 响应删除</div>
+        <span class="mono">Connection</span><span class="mono">Keep-Alive</span><span class="mono">Transfer-Encoding</span>
+        <span class="mono">Upgrade</span>…
+        <p style="font-size:13px;color:#666;margin-top:8px;">🛡️ hop-by-hop header 只对上游连接有效，不能泄漏给客户端</p>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        💡 <b>动态 hop-by-hop</b>：RFC 允许 Connection 头列出任意字段 —— 代码不是固定名单，
+        而是<b>先读 Connection 声明再删对应字段</b>（removeConnectionHeaders）。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：SSE 流式 -->
+  <div class="chapter">
+    <span class="chip">第四章 · SSE 流式秘诀</span>
+    <h2>为什么响应能实时到达？</h2>
+    <div class="card">
+      <div class="code">
+<span class="c">// 每个 32 KiB 块写完立即 flush</span><br>
+<span class="k">func</span> (w flushingResponseWriter) Write(data []byte) (int, error) {<br>
+&nbsp;&nbsp;w.writer.Write(data)<br>
+&nbsp;&nbsp;w.controller.Flush()  <span class="c">// ← 关键：每块都刷</span><br>
+}<br>
+<br>
+<span class="c">// SSE 响应加 no-cache + 关缓冲</span><br>
+Cache-Control: no-cache<br>
+X-Accel-Buffering: no
+      </div>
+      <p style="font-size:18px; margin-top:12px;">
+        🌊 <b>三个秘诀：</b><br>
+        ① <span class="hl">32 KiB 小缓冲</span>（不是整响应读入内存）<br>
+        ② <span class="hl">每块 flush</span>（flushingResponseWriter）<br>
+        ③ <span class="hl">X-Accel-Buffering: no</span>（关掉反向代理缓冲，事件立刻到达 Claude Code）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：insight -->
+  <div class="chapter">
+    <span class="chip">第五章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🪶 <b>1. 极简代理哲学</b> —— 不解析、不存储、不改内容：<br>
+        它唯一加的东西是「上游密钥」和「删除的 header」—— 一切都是为了"安全地透传"。<br><br>
+        🌐 <b>2. 凭证边界</b> —— 客户端永远看不到上游 key；<br>
+        用户用自己 OMA 的 key，OMA 用上游的 key —— 两套凭证隔离。<br><br>
+        📦 <b>3. 内存恒定</b> —— MaxBytesReader（不预分配）+ 32 KiB 缓冲：
+        不管 1MB 还是 32MB 的响应，内存占用都一样小。<br><br>
+        🔌 <b>4. 连接池复用</b> —— MaxIdleConnsPerHost=32：高并发转发不建新连接。<br><br>
+        ⏱️ <b>5. 不设超时</b> —— SSE 生命周期由请求 context 控制：
+        客户端断开 = 上游断开，无悬挂连接。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/messages 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

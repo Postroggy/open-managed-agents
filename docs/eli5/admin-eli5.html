@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>internal/admin 是干嘛的？</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef4ff 100%);
+    color: #334155;
+    padding: 40px 24px 80px;
+    line-height: 1.8;
+    font-size: 16.5px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  h1 {
+    font-size: 36px;
+    font-weight: 800;
+    text-align: center;
+    letter-spacing: 1px;
+    color: #2563eb;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 18px;
+    color: #64748b;
+    margin: 10px 0 44px;
+  }
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 800;
+    margin: 48px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #1e293b;
+  }
+  .chip {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 8px;
+    padding: 3px 12px;
+    font-size: 15px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* 1. 挂载位置 */
+  .mount {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(37,99,235,.06);
+  }
+  .server {
+    background: linear-gradient(135deg, #1e293b, #334155);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .server .chip-inline {
+    font-size: 12px;
+    font-weight: 500;
+    background: rgba(255,255,255,.15);
+    border-radius: 20px;
+    padding: 2px 10px;
+    color: #cbd5e1;
+  }
+  .routes { display: flex; gap: 16px; }
+  .route {
+    flex: 1;
+    border-radius: 12px;
+    padding: 18px;
+    border: 2px solid;
+    position: relative;
+  }
+  .route .path {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .route .desc { font-size: 14px; color: #475569; }
+  .route .tag {
+    position: absolute;
+    top: -11px;
+    right: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 20px;
+    background: #fff;
+  }
+  .r-user { border-color: #e2e8f0; background: #f8fafc; }
+  .r-user .tag { color: #64748b; border: 1px solid #e2e8f0; }
+  .r-admin { border-color: #2563eb; background: #eff6ff; }
+  .r-admin .tag { color: #2563eb; border: 1px solid #2563eb; }
+  .note {
+    margin-top: 14px;
+    padding: 12px 16px;
+    font-size: 14.5px;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px dashed #f59e0b;
+    border-radius: 10px;
+  }
+  .note b { color: #b45309; }
+
+  /* 2. 六大模块 */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(37,99,235,.1); }
+  .card .emoji { font-size: 28px; }
+  .card h3 { font-size: 16px; margin: 8px 0 4px; color: #1e293b; }
+  .card p { font-size: 14px; color: #475569; }
+  .card .mini {
+    margin-top: 10px;
+    font-size: 12px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: #f1f5f9;
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: #475569;
+  }
+  .card .mini span { color: #2563eb; font-weight: 700; }
+
+  /* 3. 三层 */
+  .layers { display: flex; flex-direction: column; }
+  .layer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    padding: 16px 18px;
+  }
+  .layer:first-child { border-radius: 12px 12px 0 0; }
+  .layer:last-child { border-radius: 0 0 12px 12px; border-top: none; }
+  .layer .name {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 14px;
+    font-weight: 700;
+    min-width: 150px;
+  }
+  .layer .role { font-size: 14.5px; color: #475569; flex: 1; }
+  .layer .role b { color: #334155; }
+  .layer .badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .n1 { color: #059669; } .b1 { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+  .n2 { color: #d97706; } .b2 { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+  .n3 { color: #db2777; } .b3 { background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; }
+  .flow { text-align: center; color: #94a3b8; font-size: 13px; padding: 6px 0; }
+  .flow .arr { color: #2563eb; font-size: 15px; }
+
+  /* 4. why internal */
+  .why {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+  }
+  .why p { font-size: 15px; color: #334155; }
+  .why p b { color: #2563eb; }
+  .keys { display: flex; gap: 14px; margin-top: 16px; }
+  .keybox {
+    flex: 1;
+    border-radius: 12px;
+    padding: 14px 16px;
+    border: 2px solid;
+    font-size: 14px;
+  }
+  .keybox .kname { font-family: "SF Mono", Menlo, monospace; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .keybox .kdesc { color: #64748b; }
+  .kb-1 { border-color: #10b981; background: #f0fdf9; }
+  .kb-1 .kname { color: #059669; }
+  .kb-2 { border-color: #3b82f6; background: #eff6ff; }
+  .kb-2 .kname { color: #2563eb; }
+
+  .summary {
+    margin-top: 52px;
+    text-align: center;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    color: #fff;
+    border-radius: 16px;
+    padding: 28px;
+  }
+  .summary .big { font-size: 24px; font-weight: 800; }
+  .summary .small { font-size: 14.5px; margin-top: 8px; opacity: .9; }
+
+  footer { text-align: center; margin-top: 32px; font-size: 12px; color: #94a3b8; }
+
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr; }
+    .routes { flex-direction: column; }
+    .keys { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>internal/admin 是干嘛的？</h1>
+  <p class="subtitle">打个比方：它就像一家公司的「行政部」</p>
+
+  <!-- 1 -->
+  <div class="section-title"><span class="chip">1</span> 它在公司的哪个位置？</div>
+  <div class="mount">
+    <div class="server">🏢 整个后端服务 = 这家公司 <span class="chip-inline">internal/api/server.go</span></div>
+    <div class="routes">
+      <div class="route r-user">
+        <span class="tag">员工入口</span>
+        <div class="path">/v1/*</div>
+        <div class="desc">普通开发者的日常工作入口<br>（调 Claude 兼容 API 干活）</div>
+      </div>
+      <div class="route r-admin">
+        <span class="tag">行政部</span>
+        <div class="path">/organizations/*</div>
+        <div class="desc">管「公司怎么运转」的地方<br>（招人、分部门、发钥匙、看账）</div>
+      </div>
+    </div>
+    <div class="note">🔑 注意：这个行政部只管<b>自己这一家公司（组织）</b>，不是管理所有公司的大总部。</div>
+  </div>
+
+  <!-- 2 -->
+  <div class="section-title"><span class="chip">2</span> 行政部都干哪些活儿？</div>
+  <div class="grid">
+    <div class="card">
+      <div class="emoji">👥</div>
+      <h3>管人</h3>
+      <p>邀请新同事入职，调整职位，让不合适的人离开。</p>
+      <div class="mini"><span>GET</span> /users · <span>POST</span> /invites</div>
+    </div>
+    <div class="card">
+      <div class="emoji">🏢</div>
+      <h3>分部门</h3>
+      <p>建新部门（workspace）、解散旧部门、安排谁的座位权限。</p>
+      <div class="mini"><span>POST</span> /workspaces · .../members</div>
+    </div>
+    <div class="card">
+      <div class="emoji">🔑</div>
+      <h3>发门禁卡</h3>
+      <p>查看公司有哪些 API key，改名、停用，谁还能进门一目了然。</p>
+      <div class="mini"><span>GET</span> /api_keys · <span>POST</span> /{id}</div>
+    </div>
+    <div class="card">
+      <div class="emoji">🌍</div>
+      <h3>管供应商</h3>
+      <p>对接外部模型/算力供应商的密钥，检查人家的货还好不好用。</p>
+      <div class="mini"><span>POST</span> /external_keys · .../validate</div>
+    </div>
+    <div class="card">
+      <div class="emoji">📊</div>
+      <h3>算账</h3>
+      <p>这个月消息用了多少、Claude Code 用了多少、花了多少钱。</p>
+      <div class="mini"><span>GET</span> /usage_report · /cost_report</div>
+    </div>
+    <div class="card">
+      <div class="emoji">🚇</div>
+      <h3>管门禁隧道</h3>
+      <p>进出外部的安全通道，定期换密码（token）、发通行证。</p>
+      <div class="mini"><span>POST</span> /tunnels/{id}/rotate_token</div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="section-title"><span class="chip">3</span> 行政部内部怎么配合？</div>
+  <div class="layers">
+    <div class="layer">
+      <span class="name n1">handler.go</span>
+      <span class="role"><b>前台接待：</b>有人来办事，先接单、登记，再把活儿转给后面的人</span>
+      <span class="badge b1">接单</span>
+    </div>
+    <div class="flow">▲ 转单 ▼ 回复 <span class="arr">⇅</span></div>
+    <div class="layer">
+      <span class="name n2">service.go</span>
+      <span class="role"><b>办事主管：</b>真正干活的人 —— 查权限、走流程、读写资料库</span>
+      <span class="badge b2">办事</span>
+    </div>
+    <div class="flow">▲ 查/写 ▼ 结果 <span class="arr">⇅</span></div>
+    <div class="layer">
+      <span class="name n3">dto.go + domain_*.go</span>
+      <span class="role"><b>档案柜：</b>各种表格（DTO）和名词定义（组织/部门/钥匙长什么样）</span>
+      <span class="badge b3">档案</span>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="section-title"><span class="chip">4</span> 为什么叫 internal（内部）？</div>
+  <div class="why">
+    <p>因为它和员工干活用的入口 <b>分开走</b>：员工从大门口进（<b>/v1/*</b>），行政部在独立的后院办公（<b>/organizations/*</b>），两边的门禁是<b>两套</b>，互不相通。</p>
+    <div class="keys">
+      <div class="keybox kb-1">
+        <div class="kname">员工卡 · /v1/*</div>
+        <div class="kdesc">普通开发者用自己的 key 调 Claude 兼容 API，只能碰自己的资源。</div>
+      </div>
+      <div class="keybox kb-2">
+        <div class="kname">行政钥匙 · /organizations/*</div>
+        <div class="kdesc">管理员用组织鉴权，管人、管部门、管 key、看账，和对外 API 隔离。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="big">一句话：internal/admin = 这家公司的行政部</div>
+    <div class="small">管人 · 分部门 · 发门禁卡 · 对接供应商 · 算账 · 管安全通道</div>
+  </div>
+
+  <footer>Open Managed Agents · internal/admin 通俗图解</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 数据库设计哲学 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef2ff 0%, #f5f7ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #e0e7ff; color: #3730a3;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #a5b4fc; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #e0e7ff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #3730a3; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(60, 70, 150, .07);
+  }
+  .card + .card { margin-top: 18px; }
+
+  /* 三件套对比表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 16px; }
+  .table th {
+    background: #e0e7ff; color: #3730a3; padding: 12px; text-align: left;
+    border-bottom: 3px solid #a5b4fc;
+  }
+  .table td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; }
+  .table .bigint { color: #d97706; }
+  .table .uuid { color: #3730a3; }
+  .table .ext { color: #059669; }
+  .table tr:hover td { background: #f8faff; }
+
+  /* 对比卡（有外键 vs 无外键） */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+  .cmp {
+    background: #fff; border-radius: 22px; padding: 26px;
+    border: 3px dashed #a5b4fc;
+  }
+  .cmp .title { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+  .cmp .good { color: #059669; }
+  .cmp .bad { color: #c53030; }
+  .cmp .desc { font-size: 16px; color: #666; }
+  .cmp .point { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; font-size: 16px; }
+  .cmp .point .mark { flex-shrink: 0; }
+
+  /* 三层防线 */
+  .lines { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+  .line {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border-radius: 20px; padding: 18px 24px;
+    border: 3px dashed #a5b4fc;
+  }
+  .line .emoji { font-size: 36px; flex-shrink: 0; }
+  .line .text { font-size: 19px; }
+  .line .text b { color: #3730a3; }
+  .line .badge {
+    margin-left: auto; background: #e0e7ff; color: #3730a3;
+    border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+
+  /* 闭环 */
+  .loop {
+    background: linear-gradient(135deg, #3730a3, #4f46e5);
+    color: #fff; border-radius: 26px; padding: 30px;
+    margin-top: 20px;
+  }
+  .loop .title { font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 18px; }
+  .loop .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .loop .item {
+    background: rgba(255,255,255,.12); border-radius: 16px; padding: 16px;
+    border: 2px solid rgba(255,255,255,.3); text-align: center;
+  }
+  .loop .item .emoji { font-size: 34px; }
+  .loop .item .name { font-weight: 800; font-size: 17px; margin-top: 6px; }
+  .loop .item .desc { font-size: 13.5px; opacity: .9; margin-top: 4px; }
+  .loop .arrows { text-align: center; font-size: 24px; margin: 10px 0 0; font-weight: 900; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .compare, .loop .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 数据库设计哲学</span>
+    <h1>🗄️ 数据库三件套<br>为什么这么设计？</h1>
+    <div class="tagline">
+      <span class="emoji">🪪</span> 一张表有三个名字<br>为什么？搬家的故事
+    </div>
+  </div>
+
+  <!-- 第 1 章：三件套 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 三个名字</span>
+    <h2>每张表都有三个名字</h2>
+    <p class="lead">
+      想象一张表是一个人 👤：他有 <span class="hl">工号</span>、<span class="hl">身份证号</span>、<span class="hl">艺名</span>。
+    </p>
+    <table class="table">
+      <tr><th>ID</th><th>类比</th><th>用途</th><th>为什么</th></tr>
+      <tr>
+        <td class="mono bigint">id bigint</td>
+        <td>🏷️ 工号</td>
+        <td>数据库内部行身份（自增）</td>
+        <td>存储最便宜，但换库就变</td>
+      </tr>
+      <tr>
+        <td class="mono uuid">uuid</td>
+        <td>🪪 身份证号</td>
+        <td>稳定业务标识</td>
+        <td><b>搬到哪里都不变</b>（备份/搬迁/合并）</td>
+      </tr>
+      <tr>
+        <td class="mono ext">external_id</td>
+        <td>🎭 艺名</td>
+        <td>Anthropic 兼容 ID（file_xxx）</td>
+        <td>对外合同，不参与内部关联</td>
+      </tr>
+    </table>
+    <div class="card" style="margin-top:18px;">
+      <p style="font-size:20px;">
+        💡 <b>核心动机：可搬运性。</b><br>
+        用户把数据导出、导入另一个实例（租户搬迁、跨库合并）——<br>
+        工号会变，但 <span class="hl">身份证号（uuid）永不变</span>，引用不会断。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：没有外键 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 没有外键</span>
+    <h2>为什么不用外键？（最反传统）</h2>
+    <p class="lead">
+      大多数数据库教你说"要用外键保护关系"。<br>
+      OMA 说 <span class="hl-red">不 —— 我用代码纪律换迁移自由</span>。
+    </p>
+    <div class="compare">
+      <div class="cmp">
+        <div class="title good">✅ 用外键（传统）</div>
+        <div class="point"><span class="mark">🛡️</span><span>数据库自己保证引用完整</span></div>
+        <div class="point"><span class="mark">🐢</span><span>每次写入多一次锁校验</span></div>
+        <div class="point"><span class="mark">🧱</span><span>改表结构要先拆外键再重建</span></div>
+      </div>
+      <div class="cmp">
+        <div class="title bad">🚫 不用外键（OMA）</div>
+        <div class="point"><span class="mark">⚡</span><span>写入快，无锁开销</span></div>
+        <div class="point"><span class="mark">🔄</span><span>42 个 migration 随意重建表</span></div>
+        <div class="point"><span class="mark">🧠</span><span>完整性靠应用层三层防线</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <p style="font-size:20px;">
+        🧱 有外键时：改 schema 要先删外键 → 迁移 → 加回来（又慢又容易错）<br>
+        ⚡ OMA 没有外键：改表像拆乐高，migration 自由飞翔
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：三层防线 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 没有外键，靠什么？</span>
+    <h2>三层防线替代外键</h2>
+    <div class="lines">
+      <div class="line">
+        <div class="emoji">✍️</div>
+        <div class="text"><b>写入带租户范围</b>：所有 SQL 都带 workspace_uuid 过滤，越权写不进去</div>
+        <div class="badge">第一层</div>
+      </div>
+      <div class="line">
+        <div class="emoji">🔍</div>
+        <div class="text"><b>migration 校验</b>：迁移时每个引用必须可解析，解析不了直接失败（绝不静默置空）</div>
+        <div class="badge">第二层</div>
+      </div>
+      <div class="line">
+        <div class="emoji">🧪</div>
+        <div class="text"><b>集成测试</b>：no-FK 守卫测试 + 真实 PostgreSQL 测试兜底</div>
+        <div class="badge">第三层</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：闭环 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 三者闭环</span>
+    <h2>三个决定如何互相成就</h2>
+    <div class="loop">
+      <div class="title">🔄 设计闭环</div>
+      <div class="grid">
+        <div class="item">
+          <div class="emoji">🚫</div>
+          <div class="name">没有外键</div>
+          <div class="desc">schema 演进快，重建表无负担</div>
+        </div>
+        <div class="item">
+          <div class="emoji">📜</div>
+          <div class="name">42 个 migration</div>
+          <div class="desc">每次变更留档，多环境一致</div>
+        </div>
+        <div class="item">
+          <div class="emoji">🪪</div>
+          <div class="name">UUID 稳定引用</div>
+          <div class="desc">迁移时引用不断，跨库搬迁安全</div>
+        </div>
+      </div>
+      <div class="arrows">▲ 相互成就 ▼</div>
+      <div class="grid">
+        <div class="item">
+          <div class="emoji">🎭</div>
+          <div class="name">external_id 只做协议</div>
+          <div class="desc">内部关联全用 UUID，迁移范围可控</div>
+        </div>
+        <div class="item">
+          <div class="emoji">⚡</div>
+          <div class="name">写入性能好</div>
+          <div class="desc">无外键锁开销，高并发不怕</div>
+        </div>
+        <div class="item">
+          <div class="emoji">🧠</div>
+          <div class="name">代码纪律</div>
+          <div class="desc">三层防线替代数据库约束</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <p style="font-size:21px;">
+        🎯 <b>一句话哲学：</b><br>
+        给数据 <span class="hl">全球身份证（UUID）</span>，对外留 <span class="hl">艺名（external_id）</span>，<br>
+        内部用 <span class="hl">工号（bigint）</span> —— 然后靠 <b>migration + 代码纪律</b> 而不是外键维护关系。<br>
+        <b>因为这是一个以「快速演进」和「可迁移」为第一优先级的系统。</b>
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · 数据库设计哲学图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>

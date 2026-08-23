@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>为什么要丢进「预热队列」？🎡</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #f0f9ff 0%, #fdf2f8 100%);
+    color: #3a3a3a;
+    padding: 36px 20px 70px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  h1 {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 900;
+    color: #e84393;
+    letter-spacing: 2px;
+    text-shadow: 3px 3px 0 #ffe066;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 19px;
+    color: #57606f;
+    margin: 12px 0 40px;
+    font-weight: 600;
+  }
+
+  /* 一句话答案 */
+  .answer {
+    text-align: center;
+    background: #fff;
+    border: 5px solid #e84393;
+    border-radius: 30px;
+    padding: 26px;
+    box-shadow: 0 8px 0 rgba(232,67,147,.12);
+    margin-bottom: 30px;
+  }
+  .answer .emoji-big { font-size: 70px; }
+  .answer .tagline { font-size: 21px; font-weight: 900; color: #e84393; margin-top: 10px; }
+  .answer .explain { font-size: 15px; color: #57606f; margin-top: 6px; }
+
+  /* 如果直接干会怎样 */
+  .bad-box {
+    background: #fff0f0;
+    border: 4px solid #ff6b6b;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 30px;
+  }
+  .bad-title { text-align: center; font-size: 21px; font-weight: 900; color: #c0392b; margin-bottom: 16px; }
+  .bad-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .bad-item {
+    background: #fff;
+    border: 3px solid #ff6b6b;
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+  }
+  .bad-item .emoji { font-size: 36px; }
+  .bad-item h4 { font-size: 16px; margin: 8px 0 4px; color: #c0392b; font-weight: 900; }
+  .bad-item p { font-size: 13.5px; color: #57606f; font-weight: 600; }
+
+  /* 队列解决：时间轴对比 */
+  .compare-title { text-align: center; font-size: 22px; font-weight: 900; color: #2f3542; margin: 36px 0 16px; }
+  .compare { display: flex; gap: 16px; }
+  .lane {
+    flex: 1;
+    background: #fff;
+    border: 4px solid #74b9ff;
+    border-radius: 24px;
+    padding: 20px;
+  }
+  .lane-noq { border-color: #ff6b6b; background: #fff5f5; }
+  .lane-q { border-color: #1dd1a1; background: #f0fdf9; }
+  .lane h3 { text-align: center; font-size: 18px; font-weight: 900; margin-bottom: 14px; }
+  .lane-noq h3 { color: #c0392b; }
+  .lane-q h3 { color: #0a8f6f; }
+  .lane .flow { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .lane .box {
+    width: 100%;
+    text-align: center;
+    border-radius: 14px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    border: 3px solid;
+  }
+  .lane .box small { display: block; font-weight: 600; font-size: 12px; opacity: .8; margin-top: 2px; }
+  .lane .arr { font-size: 20px; color: #57606f; font-weight: 900; line-height: 1; }
+  .lane-noq .box { border-color: #ff6b6b; background: #ffe3e3; color: #c0392b; }
+  .lane-q .box { border-color: #1dd1a1; background: #e6fbf5; color: #0a8f6f; }
+  .lane .b-queue {
+    border-color: #f39c12;
+    background: #fff3cd;
+    color: #8a6d00;
+    font-size: 15px;
+  }
+
+  /* 三个理由 */
+  .why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 30px; }
+  .why-item {
+    background: #fff;
+    border: 4px solid #a29bfe;
+    border-radius: 22px;
+    padding: 20px;
+    text-align: center;
+  }
+  .why-item .emoji { font-size: 44px; }
+  .why-item h4 { font-size: 17px; margin: 8px 0 6px; color: #6c5ce7; font-weight: 900; }
+  .why-item p { font-size: 14px; color: #57606f; font-weight: 600; }
+
+  /* 实际代码行为 */
+  .code-flow {
+    margin-top: 36px;
+    background: #fff;
+    border: 4px solid #ffe066;
+    border-radius: 26px;
+    padding: 22px;
+  }
+  .cf-title { text-align: center; font-size: 21px; font-weight: 900; color: #8a6d00; margin-bottom: 16px; }
+  .cf-steps { display: flex; flex-direction: column; gap: 10px; }
+  .cf-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fffce8;
+    border: 3px solid #ffd93d;
+    border-radius: 16px;
+    padding: 12px 16px;
+  }
+  .cf-step .emoji { font-size: 30px; }
+  .cf-step .txt { font-size: 14.5px; font-weight: 700; color: #8a6d00; flex: 1; }
+  .cf-step .badge {
+    background: #e84393;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    border-radius: 20px;
+    padding: 2px 12px;
+    flex-shrink: 0;
+  }
+  .cf-arrow { text-align: center; font-size: 20px; color: #e84393; font-weight: 900; line-height: 1; }
+  .cf-note {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 13.5px;
+    color: #8a6d00;
+    background: #fff3cd;
+    border-radius: 10px;
+    padding: 10px;
+    font-weight: 600;
+  }
+
+  footer { text-align: center; margin-top: 34px; font-size: 14px; color: #b2bec3; font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .bad-row, .why { grid-template-columns: 1fr; }
+    .compare { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>为什么要丢进「预热队列」？🎡</h1>
+  <p class="subtitle">而不是拍完照马上就去加载技能</p>
+
+  <!-- 一句话答案 -->
+  <div class="answer">
+    <div class="emoji-big">🎢</div>
+    <div class="tagline">因为「加载技能」很慢、可能失败，而且不是用户正等着的事</div>
+    <div class="explain">
+      拍照（创建 agent）只要 1 秒钟，加载技能可能要 10 秒甚至更久。<br>
+      队列就像一个<b>缓冲区</b>：先把活儿排上号，让后台慢慢干，谁也不卡住谁。
+    </div>
+  </div>
+
+  <!-- 如果直接干会怎样 -->
+  <div class="bad-box">
+    <div class="bad-title">❌ 如果拍照后「当场直接加载技能」，会怎样？</div>
+    <div class="bad-row">
+      <div class="bad-item">
+        <div class="emoji">🐢</div>
+        <h4>用户被卡住</h4>
+        <p>创建 agent 的请求要等技能全部加载完才返回 —— 本来 1 秒的事变 10 秒</p>
+      </div>
+      <div class="bad-item">
+        <div class="emoji">💥</div>
+        <h4>一坏全坏</h4>
+        <p>加载技能失败 → 整个创建请求直接报错，agent 都建不成了</p>
+      </div>
+      <div class="bad-item">
+        <div class="emoji">🔁</div>
+        <h4>重复干活</h4>
+        <p>同时创建 100 个 agent 就要同步加载 100 次技能，服务器累瘫</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 时间轴对比 -->
+  <div class="compare-title">⏱️ 两种方式对比</div>
+  <div class="compare">
+    <div class="lane lane-noq">
+      <h3>🚫 不排队（同步）</h3>
+      <div class="flow">
+        <div class="box">📸 创建 agent<small>快：1 秒</small></div>
+        <div class="arr">▼</div>
+        <div class="box">🔥 当场加载技能<small>慢：10 秒，用户干等</small></div>
+        <div class="arr">▼</div>
+        <div class="box">🙋 终于返回<small>用户等了好久 😩</small></div>
+      </div>
+    </div>
+    <div class="lane lane-q">
+      <h3>✅ 排进队列（异步）</h3>
+      <div class="flow">
+        <div class="box">📸 创建 agent<small>快：1 秒</small></div>
+        <div class="arr">▼</div>
+        <div class="box b-queue">🎡 丢进预热队列<small>瞬间完成，马上返回</small></div>
+        <div class="arr">▼</div>
+        <div class="box">🙋 用户立刻收到成功<small>😄 不等待</small></div>
+        <div class="arr">⋯⋯⋯ 后台悄悄进行 ⋯⋯⋯</div>
+        <div class="box">🔥 后台 worker 慢慢加载技能<small>失败还能重试</small></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 三个理由 -->
+  <div class="why">
+    <div class="why-item">
+      <div class="emoji">⚡</div>
+      <h4>响应快</h4>
+      <p>拍照 + 入队都是毫秒级，用户创建 agent 秒回，体验爽</p>
+    </div>
+    <div class="why-item">
+      <div class="emoji">🛡️</div>
+      <h4>失败可重试</h4>
+      <p>代码里 maxAttempts=5，加载失败自动重试 5 次，不炸掉主流程</p>
+    </div>
+    <div class="why-item">
+      <div class="emoji">📈</div>
+      <h4>可批量</h4>
+      <p>队列可以攒着慢慢消化（一次最多领 5 个任务），高峰期不挤爆</p>
+    </div>
+  </div>
+
+  <!-- 实际代码行为 -->
+  <div class="code-flow">
+    <div class="cf-title">🔍 代码里实际是怎么做的？</div>
+    <div class="cf-steps">
+      <div class="cf-step">
+        <div class="emoji">📸</div>
+        <div class="txt">agent 创建/修改 → 拍快照 → EnqueueSnapshot 入队（马上返回，不等待）</div>
+        <div class="badge">1</div>
+      </div>
+      <div class="cf-arrow">▼</div>
+      <div class="cf-step">
+        <div class="emoji">👀</div>
+        <div class="txt">后台 worker 每 5 秒轮询一次队列（defaultPollInterval = 5s）</div>
+        <div class="badge">2</div>
+      </div>
+      <div class="cf-arrow">▼</div>
+      <div class="cf-step">
+        <div class="emoji">🤝</div>
+        <div class="txt">一次「租约」领走最多 5 个任务（defaultJobLimit = 5），领到就标记占用</div>
+        <div class="badge">3</div>
+      </div>
+      <div class="cf-arrow">▼</div>
+      <div class="cf-step">
+        <div class="emoji">🔥</div>
+        <div class="txt">逐个加载技能，成功 → 完成任务；失败 → 等一会儿重试（最多 5 次）</div>
+        <div class="badge">4</div>
+      </div>
+    </div>
+    <div class="cf-note">💡 关键：入队（EnqueueSnapshot）是「瞬间」的，真正的重活全在后台 worker 慢慢干 —— 这就是队列的意义。</div>
+  </div>
+
+  <footer>🎈 Open Managed Agents · skillprewarm 队列原理图解</footer>
+</div>
+</body>
+</html>

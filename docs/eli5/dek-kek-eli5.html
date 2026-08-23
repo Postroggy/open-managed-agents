@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEK/KEK 双重保险箱 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fff8e1 0%, #fffdf2 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #ffe8c2; color: #b45309;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #ffd291; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 34px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 22px; color: #333; margin-bottom: 26px; }
+  .hl { background: #fdebd0; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #b45309; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 28px 32px;
+    box-shadow: 0 4px 20px rgba(140, 90, 40, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 三重嵌套图 */
+  .nested { display: flex; flex-direction: column; align-items: center; margin-top: 20px; }
+  .box {
+    width: 100%; border-radius: 22px; padding: 22px 26px;
+    border: 5px solid; text-align: center; background: #fff;
+  }
+  .box .emoji { font-size: 40px; }
+  .box .name { font-size: 22px; font-weight: 900; margin-top: 6px; }
+  .box .desc { font-size: 15px; color: #666; margin-top: 4px; }
+  .box .mono { font-family: Menlo, monospace; font-size: 13px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 8px; }
+  .bx1 { border-color: #b45309; } .bx1 .name { color: #b45309; }
+  .bx2 { border-color: #2743a8; } .bx2 .name { color: #2743a8; }
+  .bx3 { border-color: #c53030; } .bx3 .name { color: #c53030; }
+  .arrow { font-size: 22px; color: #57606f; font-weight: 900; line-height: 1; padding: 6px 0; }
+
+  /* 对比表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+  .table th { background: #fdebd0; color: #b45309; padding: 10px; text-align: left; border-bottom: 3px solid #ffd291; }
+  .table td { padding: 10px; border-bottom: 1px solid #f5e6d0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+  .table tr:hover td { background: #fffaf2; }
+
+  .note {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 加密专题</span>
+    <h1>🗄️ DEK 被 KEK 包裹<br>双重保险箱</h1>
+    <div class="tagline">
+      <span class="emoji">🔐</span> 钥匙锁在保险箱里<br>保险箱锁在更大的保险箱里
+    </div>
+  </div>
+
+  <!-- 第 1 章：三重嵌套 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 结构</span>
+    <h2>三重嵌套</h2>
+    <div class="nested">
+      <div class="box bx1">
+        <div class="emoji">💌</div>
+        <div class="name">秘密信（凭据明文）</div>
+        <div class="desc">真正的敏感数据：API key、token</div>
+        <span class="mono">SecretPayload</span>
+      </div>
+      <div class="arrow">▼ ① 用 DEK 加密（每行一把新钥匙）</div>
+      <div class="box bx2">
+        <div class="emoji">📜</div>
+        <div class="name">密文 + DEK 信封</div>
+        <div class="desc">DEK = 一次性钥匙，加密后连钥匙一起包</div>
+        <span class="mono">AES-GCM(DEK, 明文)</span>
+      </div>
+      <div class="arrow">▼ ② DEK 用 KEK 包裹（全系统只有一把主钥匙）</div>
+      <div class="box bx3">
+        <div class="emoji">🗄️</div>
+        <div class="name">最终信封（存 DB）</div>
+        <div class="desc">DB 里只有这个 —— 没有明文、没有裸 DEK</div>
+        <span class="mono">{ 密文, WrappedDEK, key_version }</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 2 章：两种方式对比 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 为什么包两层</span>
+    <h2>直接用 KEK vs 信封加密</h2>
+    <table class="table">
+      <tr><th>维度</th><th>❌ 直接用 KEK 加密数据</th><th>✅ 信封加密（DEK + KEK）</th></tr>
+      <tr><td>密钥数量</td><td>1 个全局</td><td>每行一个 DEK + 1 个 KEK</td></tr>
+      <tr><td>一行泄露</td><td class="hl-red">所有数据全泄露 💥</td><td class="hl-green">只泄露那一行 ✅</td></tr>
+      <tr><td>轮换 KEK</td><td>重加密所有数据（巨慢）</td><td>只重包 DEK（快 1000 倍）</td></tr>
+      <tr><td>KEK 暴露面</td><td>频繁使用 = 暴露面大</td><td class="hl-green">只碰"钥匙"不碰"数据" ✅</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 3 章：类比重说 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 类比</span>
+    <h2>用生活场景理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🏠 <b>你家的钥匙管理</b>：<br>
+        <br>
+        🔑 <b>DEK</b> = 每封信的信封（一次性，用完就扔）<br>
+        🗝️ <b>KEK</b> = 你家主钥匙（只有一把，藏保险柜）<br>
+        <br>
+        📮 邮局丢了一封信 → 只丢那封的钥匙 → <span class="hl-green">其他信全安全</span><br>
+        🔐 主钥匙被偷 → 全部完蛋 → <span class="hl-red">所以 KEK 要藏最深</span><br>
+        <br>
+        🏦 换主钥匙时 → 只需把每封信的钥匙重新包一层 → <span class="hl">信本身不用重写</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：OMA 代码 -->
+  <div class="chapter">
+    <span class="chip">第四章 · OMA 里怎么做</span>
+    <h2>真实代码流程</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        ① <b>SealCredentialSecret</b>（vaults/credential_secret.go）：<br>
+        &nbsp;&nbsp;· 明文 → <span class="hl">Seal</span>（生成新 DEK + 新 nonce → AES-GCM 加密 → KEK 包 DEK）<br>
+        &nbsp;&nbsp;· 立刻 <span class="hl-red">清空明文</span>（绝不留存！）<br>
+        &nbsp;&nbsp;· DB 只存信封<br>
+        <br>
+        ② <b>credentialBinding</b>：<br>
+        &nbsp;&nbsp;· 组织/工作区/vault/凭据 ID 组成 <span class="hl">AAD</span>（防"密文搬家"）<br>
+        <br>
+        ③ <b>Open</b>（读取时）：<br>
+        &nbsp;&nbsp;· 按 key_version 选 KEK → 解 DEK → 解数据 → <span class="hl-red">用完即清</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：insight -->
+  <div class="chapter">
+    <span class="chip">第五章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        🎯 <b>1. "每行一个 DEK"是安全粒度</b> —— 泄露半径 = 一行，
+        AWS KMS 信封加密同款实践。<br><br>
+        🔄 <b>2. 轮换廉价所以敢轮换</b> —— 只重包 DEK，成本低，
+        系统才能频繁换主钥匙（合规要求）。<br><br>
+        🔒 <b>3. fail closed</b> —— 未知 key_version 直接拒绝；
+        绑定不对解密失败：拿不准就拒绝。<br><br>
+        🧹 <b>4. 明文生命周期极短</b> —— 封口后立刻 clear，
+        开封后用完即清：内存里都不留。<br><br>
+        🔌 <b>5. 接口留扩展</b> —— KeyProvider 接口可接 KMS/Shamir，
+        信封格式不变（自研 → 可升级，不推翻）。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · DEK/KEK 双重保险箱图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

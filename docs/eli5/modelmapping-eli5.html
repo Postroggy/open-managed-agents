@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 模型映射 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef2ff 0%, #f5f7ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #e0e7ff; color: #3730a3;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #a5b4fc; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #e0e7ff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #3730a3; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(60, 70, 150, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 代码 */
+  .code {
+    background: #1c2333; color: #a5b4fc; border-radius: 14px; padding: 18px 22px;
+    font-family: Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.9; overflow-x: auto; margin-top: 14px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+
+  /* 映射示例 */
+  .map-ex { display: flex; align-items: center; gap: 14px; background: #fff; border-radius: 16px; padding: 14px 18px; border: 3px dashed #a5b4fc; margin-top: 10px; }
+  .map-ex .from { font-family: Menlo, monospace; font-size: 14px; font-weight: 700; color: #3730a3; background: #e0e7ff; border-radius: 8px; padding: 4px 10px; }
+  .map-ex .arrow { font-size: 22px; color: #57606f; font-weight: 900; }
+  .map-ex .to { font-family: Menlo, monospace; font-size: 14px; font-weight: 700; color: #2e7d32; background: #d7f0db; border-radius: 8px; padding: 4px 10px; }
+  .map-ex .tag { font-size: 13px; color: #888; margin-left: auto; flex-shrink: 0; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 6 集</span>
+    <h1>🔀 internal/modelmapping<br>模型 ID 映射器</h1>
+    <div class="tagline">
+      <span class="emoji">🗺️</span> 像「翻译词典」一样<br>把 Claude 模型名翻译成上游模型名
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>为什么需要模型映射？</h2>
+    <p class="lead">
+      用户对 OMA 说："我要用 <span class="hl">claude-sonnet-4-6</span>"。<br>
+      但 OMA 背后接的是 <span class="hl-green">其他模型提供商</span>（BYOK 场景）。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>modelmapping</b> 是 <span class="hl">40 行的纯函数包</span>，解决：<br>
+        <br>
+        📖 <b>Resolve</b> —— 查词典翻译模型名<br>
+        🚫 <b>Validate</b> —— 检查词典没有歧义<br>
+        <br>
+        被 <span class="hl">config / agents / models / platformapi / workbench</span> 5 个包使用。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：Resolve -->
+  <div class="chapter">
+    <span class="chip">第二章 · Resolve（翻译）</span>
+    <h2>查词典翻译模型名</h2>
+    <div class="code">
+<span class="c">// Resolve 返回 modelID 配置的部署模型 ID。</span><br>
+<span class="c">// 缺失、空白、恒等映射都保留原 ID。</span><br>
+<span class="k">func</span> Resolve(modelID string, mappings map[string]string) string {<br>
+&nbsp;&nbsp;modelID = strings.TrimSpace(modelID)<br>
+&nbsp;&nbsp;mappedID := strings.TrimSpace(mappings[modelID])<br>
+&nbsp;&nbsp;<span class="k">if</span> mappedID == "" { <span class="k">return</span> modelID }<br>
+&nbsp;&nbsp;<span class="k">return</span> mappedID<br>
+}
+    </div>
+    <div class="map-ex"><span class="from">claude-sonnet-4-6</span><span class="arrow">→</span><span class="to">glm-5-turbo</span><span class="tag">✅ 翻译</span></div>
+    <div class="map-ex"><span class="from">claude-opus-4-8</span><span class="arrow">→</span><span class="to">（空白）</span><span class="tag">🔁 保留原名</span></div>
+    <div class="map-ex"><span class="from">claude-haiku-4-5</span><span class="arrow">→</span><span class="to">（没配置）</span><span class="tag">🔁 保留原名</span></div>
+    <div class="map-ex"><span class="from">" claude-sonnet-4-6 "</span><span class="arrow">→</span><span class="to">glm-5-turbo</span><span class="tag">✨ 先 Trim 再查</span></div>
+  </div>
+
+  <!-- 第 3 章：Validate -->
+  <div class="chapter">
+    <span class="chip">第三章 · Validate（防歧义）</span>
+    <h2>检查词典会不会"翻译出歧义"</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🚫 <b>拒绝链式映射</b>（会产生歧义）：<br>
+        <span class="mono" style="background:#ffe3e3;border-radius:6px;padding:2px 8px;color:#c53030;">claude-sonnet-4-6 → glm-5-turbo → glm-5.2</span><br>
+        <br>
+        ❓ 为什么拒绝？<br>
+        A 边界查 <span class="mono">claude-sonnet-4-6</span> 得到 <span class="mono">glm-5-turbo</span>，<br>
+        B 边界查 <span class="mono">glm-5-turbo</span> 又得到 <span class="mono">glm-5.2</span> —— 同一模型在不同边界解析结果不同！
+      </p>
+    </div>
+    <div class="card">
+      <p style="font-size:18px;">
+        ✅ <b>允许"别名共享同一上游"</b>（不歧义）：<br>
+        <span class="mono" style="background:#d7f0db;border-radius:6px;padding:2px 8px;color:#2e7d32;">claude-sonnet-4-6 → glm-5-turbo</span><br>
+        <span class="mono" style="background:#d7f0db;border-radius:6px;padding:2px 8px;color:#2e7d32;">claude-sonnet-4-5-latest → glm-5-turbo</span><br>
+        <br>
+        多个 Claude 模型别名指向同一个上游模型 —— 合法！
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：使用场景 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 谁在用</span>
+    <h2>5 个使用方</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        📐 <b>config</b> —— 配置里定义 <span class="mono">anthropic_upstream.model_mappings</span><br>
+        🤖 <b>agents</b> —— Agent 创建/更新时校验模型映射合法<br>
+        🏷️ <b>models</b> —— 模型目录响应时翻译模型名<br>
+        🛰️ <b>platformapi</b> —— 平台代理转发时解析真实模型 ID<br>
+        🖥️ <b>workbench</b> —— 工作台评估时解析模型
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：insight -->
+  <div class="chapter">
+    <span class="chip">第五章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🧼 <b>1. TrimSpace 是灵魂</b> —— 源和目标都 Trim，避免 "空格导致查不到" 或 "空格导致多一个映射"。<br><br>
+        🪶 <b>2. 缺省即透传</b> —— 没映射/空白映射 = 用原名：<br>
+        不是"必须有映射"，而是"有映射就用，没有就原样"，降级友好。<br><br>
+        🚫 <b>3. 防链式 = 防"不同边界解析不同"</b> —— 这是配置正确性的关键：
+        同一模型名在不同 API 入口必须解析成同一个上游模型。<br><br>
+        💡 <b>4. 映射表是"扁平的"</b> —— 不允许 A→B→C 的间接层，
+        只允许一层直译 —— 简单、可预测、无歧义。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/modelmapping 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

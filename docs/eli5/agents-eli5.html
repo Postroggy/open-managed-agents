@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agents AI 智能体 · 卡通图解 🤖</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Comic Sans MS", -apple-system, sans-serif;
+    background: linear-gradient(180deg, #e8f7ff 0%, #f0f9ff 40%, #fff5e6 100%);
+    color: #3a3a3a;
+    padding: 36px 20px 70px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  h1 {
+    text-align: center;
+    font-size: 42px;
+    font-weight: 900;
+    color: #0984e3;
+    letter-spacing: 2px;
+    text-shadow: 3px 3px 0 #ffe066;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 20px;
+    color: #57606f;
+    margin: 12px 0 40px;
+    font-weight: 600;
+  }
+
+  /* 中央机器人 */
+  .bot-hero {
+    text-align: center;
+    background: #fff;
+    border: 5px solid #0984e3;
+    border-radius: 30px;
+    padding: 28px 24px;
+    box-shadow: 0 8px 0 rgba(9,132,227,.12);
+    margin-bottom: 30px;
+  }
+  .bot-hero .bot { font-size: 90px; }
+  .bot-hero .tagline { font-size: 20px; font-weight: 800; color: #0984e3; margin-top: 10px; }
+  .bot-hero .explain { font-size: 15px; color: #57606f; margin-top: 6px; }
+
+  /* 功能环 */
+  .ring { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px; }
+  .ring-card {
+    background: #fff;
+    border: 4px solid #74b9ff;
+    border-radius: 20px;
+    padding: 18px;
+    text-align: center;
+    transition: transform .15s;
+  }
+  .ring-card:hover { transform: scale(1.05) rotate(-1deg); }
+  .ring-card .emoji { font-size: 42px; }
+  .ring-card h3 { font-size: 18px; margin: 8px 0 4px; color: #0984e3; font-weight: 900; }
+  .ring-card p { font-size: 14px; color: #57606f; font-weight: 600; }
+
+  /* 组成部件 */
+  .parts-title {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 900;
+    color: #2f3542;
+    margin: 40px 0 18px;
+  }
+  .parts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .part {
+    background: #fff;
+    border: 4px dashed #a29bfe;
+    border-radius: 18px;
+    padding: 16px 12px;
+    text-align: center;
+  }
+  .part .emoji { font-size: 36px; }
+  .part .name {
+    font-family: Menlo, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 800;
+    color: #6c5ce7;
+    margin: 6px 0 3px;
+  }
+  .part .desc { font-size: 12.5px; color: #57606f; font-weight: 600; }
+
+  /* 生命周期 */
+  .life {
+    margin-top: 40px;
+    background: #fff;
+    border: 5px solid #ffe066;
+    border-radius: 26px;
+    padding: 22px;
+    box-shadow: 0 6px 0 rgba(255,224,102,.2);
+  }
+  .life-title {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 900;
+    color: #8a6d00;
+    margin-bottom: 16px;
+  }
+  .steps { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .step {
+    background: #fff3cd;
+    border: 3px solid #ffd93d;
+    border-radius: 18px;
+    padding: 10px 14px;
+    text-align: center;
+    min-width: 110px;
+  }
+  .step .emoji { font-size: 30px; }
+  .step .txt { font-size: 13.5px; font-weight: 800; color: #8a6d00; }
+  .step-arrow { font-size: 26px; color: #e84393; font-weight: 900; }
+
+  /* 和 sessions/files 的关系 */
+  .relation {
+    margin-top: 40px;
+    background: #fdf2f8;
+    border: 4px solid #fd79a8;
+    border-radius: 26px;
+    padding: 22px;
+  }
+  .relation-title {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 900;
+    color: #e84393;
+    margin-bottom: 16px;
+  }
+  .rel-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .rel-box {
+    flex: 1;
+    min-width: 200px;
+    background: #fff;
+    border: 3px solid #fd79a8;
+    border-radius: 16px;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #57606f;
+  }
+  .rel-box b { color: #e84393; }
+
+  /* 总结 */
+  .summary {
+    margin-top: 40px;
+    text-align: center;
+    background: linear-gradient(135deg, #0984e3, #6c5ce7);
+    color: #fff;
+    border-radius: 26px;
+    padding: 26px;
+  }
+  .summary .big { font-size: 24px; font-weight: 900; }
+  .summary .small { font-size: 15px; margin-top: 8px; opacity: .95; }
+
+  footer { text-align: center; margin-top: 34px; font-size: 14px; color: #b2bec3; font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .ring, .parts { grid-template-columns: 1fr 1fr; }
+    .steps { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🤖 agents AI 智能体</h1>
+  <p class="subtitle">就是「会自己干活的小机器人」</p>
+
+  <!-- 中央机器人 -->
+  <div class="bot-hero">
+    <div class="bot">🤖</div>
+    <div class="tagline">Agent = 一个能思考、能动手的小帮手</div>
+    <div class="explain">
+      给它一个名字、一个大脑（模型）、一些本领（技能），<br>
+      它就能自己去完成你交代的任务 💪
+    </div>
+  </div>
+
+  <!-- 能干什么 -->
+  <div class="ring-title" style="text-align:center;font-size:24px;font-weight:900;color:#2f3542;margin-bottom:14px;">🤖 它能干什么？</div>
+  <div class="ring">
+    <div class="ring-card">
+      <div class="emoji">🛠️</div>
+      <h3>配备本领</h3>
+      <p>给机器人装上工具和技能，让它会查资料、会写代码、会操作</p>
+    </div>
+    <div class="ring-card">
+      <div class="emoji">👥</div>
+      <h3>团队协作</h3>
+      <p>一个 agent 可以召唤多个小 agent（multiagent），组成团队干活</p>
+    </div>
+    <div class="ring-card">
+      <div class="emoji">🔗</div>
+      <h3>连接外部</h3>
+      <p>通过 MCP 服务器连接外面的工具，就像给它装上手和脚</p>
+    </div>
+    <div class="ring-card">
+      <div class="emoji">🧠</div>
+      <h3>有自己的记忆</h3>
+      <p>可以配一个记忆库，记住以前做过的事，越用越聪明</p>
+    </div>
+    <div class="ring-card">
+      <div class="emoji">🚀</div>
+      <h3>部署上线</h3>
+      <p>做好了可以发布出去，让其他人都能用</p>
+    </div>
+    <div class="ring-card">
+      <div class="emoji">📸</div>
+      <h3>版本留档</h3>
+      <p>每次修改都拍快照，出问题可以看之前的版本</p>
+    </div>
+  </div>
+
+  <!-- 组成部件 -->
+  <div class="parts-title">🧩 一个 agent 由什么组成？</div>
+  <div class="parts">
+    <div class="part"><div class="emoji">🏷️</div><div class="name">name</div><div class="desc">名字（就像起小名）</div></div>
+    <div class="part"><div class="emoji">🧠</div><div class="name">model</div><div class="desc">大脑：用哪个大模型思考</div></div>
+    <div class="part"><div class="emoji">📜</div><div class="name">system</div><div class="desc">人设：告诉它怎么说话、守规矩</div></div>
+    <div class="part"><div class="emoji">🔧</div><div class="name">tools</div><div class="desc">工具：能调用的 API/操作</div></div>
+    <div class="part"><div class="emoji">📚</div><div class="name">skills</div><div class="desc">技能：装上的本领包</div></div>
+    <div class="part"><div class="emoji">🌐</div><div class="name">mcp_servers</div><div class="desc">外接工具服务器</div></div>
+    <div class="part"><div class="emoji">👥</div><div class="name">multiagent</div><div class="desc">小队名单：能召唤哪些帮手</div></div>
+    <div class="part"><div class="emoji">📝</div><div class="name">metadata</div><div class="desc">小纸条：备注和标签</div></div>
+  </div>
+
+  <!-- 生命周期 -->
+  <div class="life">
+    <div class="life-title">🔄 一个 agent 的一生</div>
+    <div class="steps">
+      <div class="step"><div class="emoji">🐣</div><div class="txt">创建<br>POST /agents</div></div>
+      <div class="step-arrow">➡️</div>
+      <div class="step"><div class="emoji">🔧</div><div class="txt">修改<br>POST /{id}</div></div>
+      <div class="step-arrow">➡️</div>
+      <div class="step"><div class="emoji">💬</div><div class="txt">对话干活<br>（sessions）</div></div>
+      <div class="step-arrow">➡️</div>
+      <div class="step"><div class="emoji">📸</div><div class="txt">查版本<br>GET /{id}/versions</div></div>
+      <div class="step-arrow">➡️</div>
+      <div class="step"><div class="emoji">🗄️</div><div class="txt">归档<br>POST /{id}/archive</div></div>
+    </div>
+  </div>
+
+  <!-- 和其他包的关系 -->
+  <div class="relation">
+    <div class="relation-title">🤝 它和兄弟们怎么配合？</div>
+    <div class="rel-row">
+      <div class="rel-box">🤖 <b>agents</b> = 机器人本尊<br>负责被创建、被管理</div>
+      <div class="rel-box">💬 <b>sessions</b> = 对话记录本<br>agent 干活时说话都记在这里</div>
+      <div class="rel-box">📁 <b>files</b> = 文件柜<br>agent 生成的文件存在这里</div>
+      <div class="rel-box">🧠 <b>memory</b> = 记忆盒子<br>agent 把重要的东西记住</div>
+    </div>
+  </div>
+
+  <!-- 总结 -->
+  <div class="summary">
+    <div class="big">一句话：agents = 你雇佣的 AI 打工人 🤖💼</div>
+    <div class="small">给它大脑（model）、人设（system）、工具（tools）、本领（skills）<br>它就能自己去完成你交代的任务</div>
+  </div>
+
+  <footer>🎈 Open Managed Agents · agents AI 智能体卡通版</footer>
+</div>
+</body>
+</html>

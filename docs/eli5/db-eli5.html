@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 数据库 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #e8f7f5 0%, #f0faf9 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #d0f0ec; color: #0e7d6e;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #8fd8cf; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #d8f5f1; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #0e7d6e; }
+  .hl-blue { background: #e8f0fe; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(30, 90, 80, .07);
+  }
+
+  /* 分类 */
+  .cat { margin-top: 26px; }
+  .cat h3 { font-size: 24px; color: #0e7d6e; margin-bottom: 14px; font-weight: 700; }
+  .tbl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .tbl-item {
+    background: #fff; border-radius: 16px; padding: 14px 16px;
+    border: 3px dashed #8fd8cf;
+  }
+  .tbl-item .mono { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; color: #0e7d6e; }
+  .tbl-item .desc { font-size: 13px; color: #666; margin-top: 2px; }
+
+  /* 数据流 */
+  .flow { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border-radius: 20px; padding: 18px 24px;
+    border: 3px dashed #8fd8cf;
+  }
+  .flow-step .emoji { font-size: 36px; flex-shrink: 0; }
+  .flow-step .text { font-size: 19px; }
+  .flow-step .text b { color: #0e7d6e; }
+  .flow-step .badge {
+    margin-left: auto; background: #d0f0ec; color: #0e7d6e;
+    border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 26px; color: #0e7d6e; line-height: 1; font-weight: 700; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .tbl { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 内部包探秘 · 第 11 集</span>
+    <h1>🗄️ internal/db<br>数据库仓库</h1>
+    <div class="tagline">
+      <span class="emoji">🏬</span> 像「超市大仓库」一样<br>所有东西分类存放，整整齐齐
+    </div>
+  </div>
+
+  <!-- 第 1 章：是什么 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>数据库里存什么？</h2>
+    <p class="lead">
+      整个系统的「持久状态」都在这 —— <span class="hl">60 张表</span>（60 个 mapper），<br>
+      从账号到对话，从文件到密钥，全在这里。
+    </p>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>internal/db</b> 是唯一能访问 PostgreSQL 的地方（Yourbatis Mapper），<br>
+        其他包都通过它读写数据 —— 它是<b>数据仓库的唯二管理员</b>。
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        42 个 migration 文件管理表结构变迁（goose）。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：存哪些 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 存了哪些东西</span>
+    <h2>六大类货架</h2>
+
+    <div class="cat">
+      <h3>👥 用户与组织</h3>
+      <div class="tbl">
+        <div class="tbl-item"><div class="mono">admin_organizations</div><div class="desc">组织</div></div>
+        <div class="tbl-item"><div class="mono">admin_users</div><div class="desc">用户</div></div>
+        <div class="tbl-item"><div class="mono">admin_workspaces</div><div class="desc">工作区</div></div>
+        <div class="tbl-item"><div class="mono">admin_workspace_members</div><div class="desc">成员关系</div></div>
+        <div class="tbl-item"><div class="mono">admin_api_keys</div><div class="desc">API Key</div></div>
+        <div class="tbl-item"><div class="mono">admin_external_keys</div><div class="desc">外部供应商密钥</div></div>
+        <div class="tbl-item"><div class="mono">admin_organization_invites</div><div class="desc">邀请</div></div>
+        <div class="tbl-item"><div class="mono">admin_requests</div><div class="desc">请求记录</div></div>
+        <div class="tbl-item"><div class="mono">platform_auth_*</div><div class="desc">平台鉴权（用户/组织/工作区）</div></div>
+        <div class="tbl-item"><div class="mono">console_*</div><div class="desc">控制台（用户/组织/成员/邀请/密钥）</div></div>
+      </div>
+    </div>
+
+    <div class="cat">
+      <h3>🤖 Agent 与技能</h3>
+      <div class="tbl">
+        <div class="tbl-item"><div class="mono">agents</div><div class="desc">Agent 定义</div></div>
+        <div class="tbl-item"><div class="mono">skills</div><div class="desc">技能</div></div>
+        <div class="tbl-item"><div class="mono">skill_versions</div><div class="desc">技能版本</div></div>
+        <div class="tbl-item"><div class="mono">builtin_skills</div><div class="desc">内置技能</div></div>
+        <div class="tbl-item"><div class="mono">deployments</div><div class="desc">部署</div></div>
+        <div class="tbl-item"><div class="mono">deployment_runs</div><div class="desc">部署运行</div></div>
+      </div>
+    </div>
+
+    <div class="cat">
+      <h3>💬 会话与消息</h3>
+      <div class="tbl">
+        <div class="tbl-item"><div class="mono">sessions</div><div class="desc">会话</div></div>
+        <div class="tbl-item"><div class="mono">session_threads</div><div class="desc">线程</div></div>
+        <div class="tbl-item"><div class="mono">session_events</div><div class="desc">事件流</div></div>
+        <div class="tbl-item"><div class="mono">session_resources</div><div class="desc">资源</div></div>
+        <div class="tbl-item"><div class="mono">session_resource_files</div><div class="desc">资源文件</div></div>
+        <div class="tbl-item"><div class="mono">batches</div><div class="desc">批量任务</div></div>
+        <div class="tbl-item"><div class="mono">code_sessions</div><div class="desc">代码会话</div></div>
+        <div class="tbl-item"><div class="mono">code_session_*_events</div><div class="desc">代码会话事件</div></div>
+      </div>
+    </div>
+
+    <div class="cat">
+      <h3>📁 文件与存储</h3>
+      <div class="tbl">
+        <div class="tbl-item"><div class="mono">files</div><div class="desc">文件</div></div>
+        <div class="tbl-item"><div class="mono">filestore_filesystems</div><div class="desc">文件系统</div></div>
+        <div class="tbl-item"><div class="mono">workspace_storage_usage</div><div class="desc">存储用量</div></div>
+        <div class="tbl-item"><div class="mono">filestore_cleanup_jobs</div><div class="desc">清理任务</div></div>
+      </div>
+    </div>
+
+    <div class="cat">
+      <h3>🌱 运行环境与沙箱</h3>
+      <div class="tbl">
+        <div class="tbl-item"><div class="mono">environments</div><div class="desc">环境</div></div>
+        <div class="tbl-item"><div class="mono">environment_keys</div><div class="desc">环境密钥</div></div>
+        <div class="tbl-item"><div class="mono">environment_sandboxes</div><div class="desc">沙箱</div></div>
+        <div class="tbl-item"><div class="mono">environment_works</div><div class="desc">沙箱任务</div></div>
+        <div class="tbl-item"><div class="mono">environment_worker_polls</div><div class="desc">worker 轮询</div></div>
+      </div>
+    </div>
+
+    <div class="cat">
+      <h3>🔐 密钥与安全</h3>
+      <div class="tbl">
+        <div class="tbl-item"><div class="mono">vaults</div><div class="desc">保险库</div></div>
+        <div class="tbl-item"><div class="mono">vault_credentials</div><div class="desc">保险库凭据</div></div>
+        <div class="tbl-item"><div class="mono">admin_mcp_tunnels</div><div class="desc">MCP 隧道</div></div>
+        <div class="tbl-item"><div class="mono">admin_mcp_tunnel_certificates</div><div class="desc">隧道证书</div></div>
+        <div class="tbl-item"><div class="mono">mcp_oauth_flows</div><div class="desc">MCP OAuth 流程</div></div>
+        <div class="tbl-item"><div class="mono">mcp_tool_catalogs</div><div class="desc">MCP 工具目录</div></div>
+      </div>
+    </div>
+
+    <div class="cat">
+      <h3>📡 通知与工作台</h3>
+      <div class="tbl">
+        <div class="tbl-item"><div class="mono">webhook_endpoints</div><div class="desc">Webhook 端点</div></div>
+        <div class="tbl-item"><div class="mono">webhook_delivery_jobs</div><div class="desc">Webhook 投递任务</div></div>
+        <div class="tbl-item"><div class="mono">webhook_workspaces</div><div class="desc">Webhook 关联</div></div>
+        <div class="tbl-item"><div class="mono">workbench_prompts</div><div class="desc">工作台提示词</div></div>
+        <div class="tbl-item"><div class="mono">workbench_evaluations</div><div class="desc">工作台评估</div></div>
+        <div class="tbl-item"><div class="mono">workbench_generated_test_cases</div><div class="desc">测试用例</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：怎么访问 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 数据怎么进出</span>
+    <h2>一次数据访问的旅程</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📨</div>
+        <div class="text"><b>业务包调用</b>：agents.Handler 需要查 agent → 调 db.AgentMapper</div>
+        <div class="badge">上层调用</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧩</div>
+        <div class="text"><b>Yourbatis 生成代码</b>：SQL 在 XML 里定义，生成代码扫描 db tag</div>
+        <div class="badge">sqlmapgen</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗄️</div>
+        <div class="text"><b>PostgreSQL</b>：真正的数据落在这里</div>
+        <div class="badge">数据库</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：要点 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 设计要点</span>
+    <h2>几个记住的</h2>
+    <div class="card">
+      <p style="font-size:21px;">
+        🔑 每个表都有 <b>uuid</b> 业务标识 + <b>bigint id</b> 内部主键 + <b>external_id</b>（file_xxx 等）<br>
+        🚫 <b>没有外键</b> —— 完整性靠应用保证<br>
+        📜 所有 schema 变更走 <b>goose migration</b>（42 个）<br>
+        🧹 有专门清理任务表（filestore_cleanup_jobs）给 cleanup 用
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/db 图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>

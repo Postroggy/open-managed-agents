@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 沙箱挂载 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef6ee 0%, #f5faf5 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #d7f0db; color: #2e7d32;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #81c784; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 34px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 22px; color: #333; margin-bottom: 26px; }
+  .hl { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+  .hl-blue { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 28px 32px;
+    box-shadow: 0 4px 20px rgba(40, 90, 50, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  .code {
+    background: #1c2333; color: #a5d6a7; border-radius: 14px; padding: 16px 20px;
+    font-family: Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.85; overflow-x: auto; margin-top: 12px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+  .code .r { color: #ff9e9e; }
+
+  /* 路径映射图 */
+  .mapping { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 18px; }
+  .m-step {
+    width: 100%; border-radius: 16px; padding: 14px 18px;
+    border: 4px solid; text-align: center; background: #fff;
+  }
+  .m-step .emoji { font-size: 28px; }
+  .m-step .path { font-family: Menlo, monospace; font-size: 15px; font-weight: 800; margin-top: 4px; }
+  .m-step .desc { font-size: 13.5px; color: #666; }
+  .m-arrow { font-size: 20px; color: #57606f; font-weight: 900; line-height: 1; }
+  .ms1 { border-color: #2e7d32; } .ms1 .path { color: #2e7d32; }
+  .ms2 { border-color: #2743a8; } .ms2 .path { color: #2743a8; }
+  .ms3 { border-color: #8a6d00; } .ms3 .path { color: #8a6d00; }
+
+  /* 函数表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+  .table th { background: #d7f0db; color: #2e7d32; padding: 10px; text-align: left; border-bottom: 3px solid #81c784; }
+  .table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 700; }
+  .table tr:hover td { background: #f8faf8; }
+
+  .note {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 14 集</span>
+    <h1>📂 internal/sandboxmount<br>沙箱挂载路径合同</h1>
+    <div class="tagline">
+      <span class="emoji">🔗</span> 像「港口对接标准」一样<br>规定沙箱里的文件路径 ↔ Filestore 路径怎么对应
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>为什么需要"挂载路径合同"？</h2>
+    <p class="lead">
+      沙箱里的 Agent 看到一个 <span class="hl">文件系统</span>，实际数据在 <span class="hl">Filestore</span>。<br>
+      两边路径怎么对应？—— sandboxmount 规定这个<b>对应关系</b>。
+    </p>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>internal/sandboxmount</b> = <span class="hl">挂载路径合同</span>（2 个文件）：<br>
+        <br>
+        📐 <b>path.go</b> —— 路径映射规则 + 校验<br>
+        🧪 <b>path_test.go</b> —— 测试<br>
+        <br>
+        <b>一句话：Agent 在沙箱里看到的路径 → Filestore 里的真实存储路径</b>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：路径映射 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 路径映射</span>
+    <h2>两条路径怎么对应？</h2>
+    <div class="mapping">
+      <div class="m-step ms1">
+        <div class="emoji">🏠</div>
+        <div class="path">/mnt/session/uploads</div>
+        <div class="desc">Sandbox 挂载点（Agent 看到的真实路径）</div>
+      </div>
+      <div class="m-arrow">▲ 挂载 ▲</div>
+      <div class="m-step ms2">
+        <div class="emoji">📂</div>
+        <div class="path">/uploads</div>
+        <div class="desc">Filestore 的 uploads namespace（FileSource）</div>
+      </div>
+      <div class="m-arrow">▲ 映射 ▲</div>
+      <div class="m-step ms3">
+        <div class="emoji">📁</div>
+        <div class="path">/uploads/{filename}</div>
+        <div class="desc">Filestore 里真实存储路径</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        🔑 <b>两个关键常量</b>：<br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">FileSource = "/uploads"</span> —— 唯一允许的 Filestore source<br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">SandboxUploadsMount = "/mnt/session/uploads"</span> —— Sandbox 挂载点
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：函数详解 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 函数详解</span>
+    <h2>5 个函数</h2>
+    <table class="table">
+      <tr><th>函数</th><th>作用</th><th>要点</th></tr>
+      <tr><td class="mono">NormalizeFileSource</td><td>校验 source 必须是 /uploads</td><td>省略补默认；null/其他 namespace 拒绝</td></tr>
+      <tr><td class="mono">DefaultFileMountPath</td><td>默认挂载路径</td><td>/uploads/{filename}，没文件名用 fileID</td></tr>
+      <tr><td class="mono">ValidateFileMountPath</td><td>校验挂载路径</td><td>调用 FileBackingPath</td></tr>
+      <tr><td class="mono">FileBackingPath</td><td><b>核心：挂载路径 → Filestore 路径</b></td><td>复用 filestorepath 校验；控制字符拒绝</td></tr>
+      <tr><td class="mono">ValidateFileMountPaths</td><td>校验多个路径无冲突</td><td>查重复 + 祖先/后代冲突</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 4 章：FileBackingPath 深挖 -->
+  <div class="chapter">
+    <span class="chip">第四章 · FileBackingPath 深挖</span>
+    <h2>核心函数的逻辑</h2>
+    <div class="code">
+<span class="c">// FileBackingPath：对外 mount_path → Filestore 真实路径</span><br>
+<span class="k">func</span> FileBackingPath(mountPath string) (string, error) {<br>
+&nbsp;&nbsp;<span class="c">// ① filestorepath 校验（绝对路径/长度/控制字符）</span><br>
+&nbsp;&nbsp;<span class="k">if</span> err := filestorepath.Validate(mountPath, <span class="r">false</span>); err != nil {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">return</span> "", err<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="c">// ② 拒绝控制字符（防路径注入）</span><br>
+&nbsp;&nbsp;<span class="k">for</span> _, value := <span class="k">range</span> mountPath {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">if</span> unicode.IsControl(value) { <span class="k">return</span> "", errors.New(<span class="s">"control characters"</span>) }<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="c">// ③ 前缀补全：/uploads + mount_path</span><br>
+&nbsp;&nbsp;backingPath := FileSource + mountPath<br>
+&nbsp;&nbsp;<span class="c">// ④ 已带 /uploads/ 前缀则直接用</span><br>
+&nbsp;&nbsp;<span class="k">if</span> strings.HasPrefix(mountPath, FileSource+<span class="s">"/"</span>) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;backingPath = mountPath<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="c">// ⑤ 再校验一次组合后路径</span><br>
+&nbsp;&nbsp;<span class="k">return</span> backingPath, nil<br>
+}
+    </div>
+    <div class="note">⚡ 双重校验：单独路径合法 + 组合后路径也合法 —— 防止"单个合法、拼接后越界"的漏洞。</div>
+  </div>
+
+  <!-- 第 5 章：防冲突 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 防路径冲突</span>
+    <h2>ValidateFileMountPaths 查什么？</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        🚫 <b>重复路径</b>：两个文件挂同一个位置 → 拒绝<br>
+        <br>
+        🔗 <b>祖先/后代冲突</b>：<br>
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">/uploads/a</span> 和 <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">/uploads/a/b</span> → 一个文件在另一个"里面" → 拒绝<br>
+        <br>
+        <span class="hl">为什么？</span> 目录和文件不能互相包含，否则挂载语义混乱。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：关系 -->
+  <div class="chapter">
+    <span class="chip">第六章 · 和兄弟的关系</span>
+    <h2>sandboxmount 依赖谁？</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🔗 <b>filestorepath</b> —— 复用它做路径校验（之前讲过"共享路径语义层"）<br>
+        📂 <b>filestore</b> —— 它定义的 /uploads 是 Filestore 的固定根之一<br>
+        📦 <b>files</b> —— File resource 用它决定挂载路径<br>
+        <br>
+        <span class="hl">它是"路径合同"—— 让 Sandbox、Filestore、Files 三方对路径的理解一致</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 7 章：insight -->
+  <div class="chapter">
+    <span class="chip">第七章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        📐 <b>1. "合同"思维</b> —— 不实现挂载（那是 rclone 的事），只定义"路径长什么样"：
+        先有合同，再有实现。<br><br>
+        🔒 <b>2. 安全第一</b> —— 控制字符拒绝（防路径注入）+ 双重校验（防拼接越界）：
+        路径是攻击面，每个入口都消毒。<br><br>
+        🧩 <b>3. 复用 filestorepath</b> —— 不重复造校验轮子，
+        统一走共享路径语义层（前面讲过这个设计）。<br><br>
+        🚫 <b>4. 只允许 /uploads</b> —— source 唯一：
+        防止文件资源偷偷挂到 /skills 或其他固定根。<br><br>
+        ⚡ <b>5. 防冲突是产品需求</b> —— 祖先/后代冲突检查
+        保证挂载树永远清晰：没有文件套文件。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/sandboxmount 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 沙箱运行时 · 超详细版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #f0f4ff 0%, #f5f8ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dfe9ff; color: #2743a8;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #a8bcff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 34px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 22px; color: #333; margin-bottom: 26px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 28px 32px;
+    box-shadow: 0 4px 20px rgba(50, 70, 140, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  .code {
+    background: #1c2333; color: #a8bcff; border-radius: 14px; padding: 16px 20px;
+    font-family: Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.85; overflow-x: auto; margin-top: 12px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+  .code .r { color: #ff9e9e; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .item {
+    background: #fff; border-radius: 16px; padding: 14px 14px;
+    border: 3px dashed #a8bcff; text-align: center;
+  }
+  .item .emoji { font-size: 26px; }
+  .item .name { font-family: Menlo, monospace; font-size: 12.5px; font-weight: 800; color: #2743a8; margin-top: 4px; }
+  .item .desc { font-size: 12px; color: #666; margin-top: 2px; }
+
+  .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 14px;
+    background: #fff; border-radius: 16px; padding: 14px 18px;
+    border: 3px dashed #a8bcff;
+  }
+  .flow-step .emoji { font-size: 28px; flex-shrink: 0; }
+  .flow-step .text { font-size: 15px; flex: 1; }
+  .flow-step .text b { color: #2743a8; }
+  .flow-step .badge { background: #dfe9ff; color: #2743a8; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 18px; color: #2743a8; line-height: 1; font-weight: 700; }
+
+  .note {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 13 集（超详细版）</span>
+    <h1>🎬 internal/runtime<br>沙箱运行时全解</h1>
+    <div class="tagline">
+      <span class="emoji">🔬</span> 501 行代码逐块拆解<br>从接口到 E2B 云的每一层
+    </div>
+  </div>
+
+  <!-- 第 1 章：全景 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 全景地图</span>
+    <h2>这个包管什么？</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>internal/runtime</b> 是 <span class="hl">沙箱运行时抽象层</span>，501 行，2 个子包：<br>
+        <br>
+        🎬 <b>e2bruntime/runtime.go</b>（501 行）—— Provider 接口 + E2B 实现<br>
+        🧩 <b>sandboxruntime/errors.go</b>（1 个错误）—— 提供商无关错误<br>
+        <br>
+        <b>一句话：它把"云端沙箱"抽象成 7 个方法的插头，E2B 是目前的唯一插座。</b>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：接口 -->
+  <div class="chapter">
+    <span class="chip">第二章 · Provider 接口</span>
+    <h2>7 个方法的职责</h2>
+    <div class="grid">
+      <div class="item"><div class="emoji">📐</div><div class="name">Resolve</div><div class="desc">解析启动配置（模板/超时/网络策略）</div></div>
+      <div class="item"><div class="emoji">🏗️</div><div class="name">Create</div><div class="desc">创建沙箱</div></div>
+      <div class="item"><div class="emoji">🗑️</div><div class="name">Kill</div><div class="desc">销毁沙箱</div></div>
+      <div class="item"><div class="emoji">⏱️</div><div class="name">SetTimeout</div><div class="desc">续期沙箱寿命（心跳用）</div></div>
+      <div class="item"><div class="emoji">📝</div><div class="name">WriteFile</div><div class="desc">写文件</div></div>
+      <div class="item"><div class="emoji">🔍</div><div class="name">FileExists</div><div class="desc">查文件存在</div></div>
+      <div class="item"><div class="emoji">▶️</div><div class="name">RunCommand</div><div class="desc">跑命令</div></div>
+      <div class="item"><div class="emoji">⏸️</div><div class="name">StartBackgroundCommand</div><div class="desc">后台跑命令</div></div>
+    </div>
+    <div class="note">💡 注意：接口里其实有 8 个方法（含 SetTimeout），接口与实现解耦——调用方永远不 import E2B SDK。</div>
+  </div>
+
+  <!-- 第 3 章：Create 深挖 -->
+  <div class="chapter">
+    <span class="chip">第三章 · Create 深挖</span>
+    <h2>创建沙箱的完整逻辑</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🔐</div>
+        <div class="text"><b>检查 API key</b>：没有 key 且非 Debug → 报错（fail fast）</div>
+        <div class="badge">凭证</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📐</div>
+        <div class="text"><b>模板兜底</b>：没传 template → 重新 Resolve 一次</div>
+        <div class="badge">兜底</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">⏱️</div>
+        <div class="text"><b>超时归一</b>：timeout ≤ 0 → 用默认 30 秒</div>
+        <div class="badge">默认值</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧱</div>
+        <div class="text"><b>组装 SandboxOpts</b>：连接配置 + 元数据 + 环境变量 + 超时 + 网络策略</div>
+        <div class="badge">配置</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🌱</div>
+        <div class="text"><b>Lifecycle: OnTimeout = "pause"</b> —— 超时只"暂停"不"销毁"！</div>
+        <div class="badge">关键！</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">☁️</div>
+        <div class="text"><b>e2b.Create</b> → 返回 Sandbox{ID}</div>
+        <div class="badge">E2B</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        💡 <b>"pause" 是精髓</b>：沙箱超时不是删掉，而是<b>暂停</b>——<br>
+        Session 恢复时沙箱还能<b>续命继续跑</b>（配合 SetTimeout 心跳续期）。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：RunCommand 深挖 -->
+  <div class="chapter">
+    <span class="chip">第四章 · RunCommand 深挖</span>
+    <h2>跑命令的完整生命周期</h2>
+    <div class="card">
+      <p style="font-size:17px; margin-bottom: 10px;">
+        三层嵌套结构（最讲究的部分）：
+      </p>
+      <div class="code">
+<span class="c">// ① RunCommand 入口：校验 + 默认超时</span><br>
+<span class="k">func</span> (p *E2BProvider) RunCommand(...) {<br>
+&nbsp;&nbsp;<span class="k">if</span> sandboxID == "" { <span class="k">return</span> error }&nbsp;&nbsp;<span class="c">// 必填</span><br>
+&nbsp;&nbsp;<span class="k">if</span> command == "" { <span class="k">return</span> error }&nbsp;&nbsp;<span class="c">// 必填</span><br>
+&nbsp;&nbsp;<span class="k">if</span> timeout &lt;= 0 { timeout = cfg.RequestTimeout }<br>
+&nbsp;&nbsp;<span class="k">return</span> runConnectedCommand(...)  <span class="c">// ② 连接</span><br>
+}<br>
+<br>
+<span class="c">// ② runConnectedCommand：连接 + 执行（两次超时兜底）</span><br>
+timeout := request.Timeout<br>
+<span class="k">if</span> timeout &lt;= 0 { timeout = 60 * time.Second }&nbsp;&nbsp;<span class="c">// ← 兜底 60 秒</span><br>
+commandCtx, cancel := context.WithTimeout(ctx, timeout)<br>
+<span class="k">defer</span> cancel()<br>
+start, err := connect(commandCtx)      <span class="c">// 连接沙箱</span><br>
+<span class="k">return</span> executeCommand(commandCtx, ...) <span class="c">// ③ 执行</span>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        <b>③ executeCommand 的并发模式</b>（最精彩的部分）：
+      </p>
+      <div class="code">
+process, _ := start(commandCtx, request)  <span class="c">// 启动进程</span><br>
+<span class="k">defer</span> process.Disconnect()<br>
+<br>
+<span class="c">// 如果有 stdin → 发送 + 关闭 EOF</span><br>
+<span class="k">if</span> len(request.Stdin) != 0 { sendCommandStdin(...) }<br>
+<br>
+<span class="c">// ★ 双通道竞争：goroutine 等结果，select 等超时</span><br>
+waited := make(<span class="k">chan</span> commandWaitOutcome, 1)<br>
+<span class="k">go</span> func() { waited &lt;- process.Wait() }()&nbsp;&nbsp;<span class="c">// 后台等命令结束</span><br>
+<br>
+<span class="k">select</span> {<br>
+<span class="k">case</span> outcome := &lt;-waited:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 命令先结束 → 正常返回</span><br>
+&nbsp;&nbsp;<span class="k">return</span> outcome.result<br>
+<span class="k">case</span> &lt;-commandCtx.Done():&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 超时先到 → 杀进程！</span><br>
+&nbsp;&nbsp;<span class="k">return</span> errors.Join(ctx.Err(), killCommandProcess(process))<br>
+}
+      </div>
+      <div class="note">⚡ 为什么 select 双通道？防止"命令卡死永远不返回"——超时一到立即 Kill 兜底（killCtx 10 秒上限）。</div>
+    </div>
+  </div>
+
+  <!-- 第 5 章：Resolve 深挖 -->
+  <div class="chapter">
+    <span class="chip">第五章 · Resolve 深挖</span>
+    <h2>启动配置怎么算出来的？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🧱</div>
+        <div class="text"><b>模板</b>：env.ResolvedTemplate → cfg.E2BTemplate → "claude-code-interpreter"（三级兜底）</div>
+        <div class="badge">模板</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🏷️</div>
+        <div class="text"><b>Metadata</b>：environment_id + workspace_id（审计用）</div>
+        <div class="badge">标签</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🌐</div>
+        <div class="text"><b>环境变量</b>：ANTHROPIC_ENVIRONMENT_ID + ANTHROPIC_WORK_ID</div>
+        <div class="badge">注入</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔌</div>
+        <div class="text"><b>resolveNetwork</b>：解析网络策略（networkpolicy 接入点）</div>
+        <div class="badge">网络</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 6 章：resolveNetwork 深挖 -->
+  <div class="chapter">
+    <span class="chip">第六章 · resolveNetwork 深挖</span>
+    <h2>网络策略 → 沙箱白名单</h2>
+    <div class="code">
+<span class="k">func</span> resolveNetwork(raw, work) (*SandboxNetworkOpts, bool, error) {<br>
+&nbsp;&nbsp;<span class="k">if</span> len(raw) == 0 { <span class="k">return</span> nil, <span class="r">true</span>, nil }&nbsp;&nbsp;<span class="c">// 没配置 → 全开</span><br>
+&nbsp;&nbsp;config := networkpolicy.ParseConfig(raw)<br>
+&nbsp;&nbsp;<span class="k">if</span> config.Type == Unrestricted { <span class="k">return</span> nil, <span class="r">true</span>, nil }&nbsp;&nbsp;<span class="c">// unrestricted → 全开</span><br>
+<br>
+&nbsp;&nbsp;hosts := config.AllowedHostPatterns()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// 白名单</span><br>
+&nbsp;&nbsp;<span class="k">if</span> config.AllowPackageManagers {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;hosts += PackageManagerHosts()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c">// + 包管理器</span><br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="k">if</span> config.AllowMCPServers {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;hosts += mcpAllowedHostsFromWork(work)&nbsp;&nbsp;<span class="c">// + MCP 服务器</span><br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="k">return</span> &amp;SandboxNetworkOpts{AllowOut: UniqueTrimmedStrings(hosts)}, <span class="r">false</span>, nil<br>
+}
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        🔗 <b>联动 networkpolicy</b>：白名单 = allowed_hosts + 包管理器 + Agent 配置的 MCP 服务器 ——<br>
+        <span class="hl">E2B 沙箱层面就执行了"只能访问白名单"，网络策略的最终落地</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 7 章：其他方法 -->
+  <div class="chapter">
+    <span class="chip">第七章 · 剩余方法</span>
+    <h2>WriteFile / FileExists / BackgroundCommand</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        📝 <b>WriteFile</b> —— 写文件进沙箱（前置 shellQuote 安全转义）<br>
+        🔍 <b>FileExists</b> —— sandbox.Files.Exists 检查<br>
+        ⏸️ <b>StartBackgroundCommand</b> —— 后台命令：<br>
+        &nbsp;&nbsp;· Background: true 启动<br>
+        &nbsp;&nbsp;· 校验 PID ≠ 0（防幽灵进程）<br>
+        &nbsp;&nbsp;· stdin 非空才启用 stdin 通道<br>
+        &nbsp;&nbsp;· stdin 发送失败 → Kill 兜底<br>
+        🗑️ <b>Kill</b> —— 连接后 sandbox.Kill<br>
+        ⏱️ <b>SetTimeout</b> —— 心跳续期（timeout ≤ 0 → 用 sandboxTimeout）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 8 章：insight -->
+  <div class="chapter">
+    <span class="chip">第八章 · Insight</span>
+    <h2>读完 501 行的深度理解</h2>
+    <div class="card">
+      <p style="font-size:18px;">
+        🛡️ <b>1. 每层都有"兜底"哲学</b> —— 模板三级兜底、超时两次兜底、
+        stdin 失败 Kill 兜底、kill 有 10 秒上限：<span class="hl">绝不让一次失败卡死整个流程</span>。<br><br>
+        ⏱️ <b>2. 超时 = 一等公民</b> —— Create 30s、命令 60s、kill 10s，
+        每个动作都有明确时限，杜绝无限等待。<br><br>
+        🧵 <b>3. select 双通道是 Go 并发精髓</b> —— 命令结果 vs 超时赛跑，
+        谁先到听谁的：正常返回 or 杀进程。<br><br>
+        💤 <b>4. "pause" 而非销毁</b> —— 沙箱超时暂停、可续命，
+        这是 Session 恢复机制的地基（前面 codesessions 讲过恢复）。<br><br>
+        🔗 <b>5. 网络策略最终落地在 E2B 层</b> —— networkpolicy 解析 → 白名单 → E2B AllowOut：
+        三层串联（policy → runtime → E2B 云）完成沙箱出口管控。<br><br>
+        🔌 <b>6. 抽象的价值</b> —— 8 个方法就是"沙箱契约"，
+        换提供商（如 AWS/自建）只需新实现，environments 零改动。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/runtime 超详细图解 · 501 行代码逐块拆解</footer>
+</div>
+</body>
+</html>

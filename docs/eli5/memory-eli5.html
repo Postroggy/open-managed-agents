@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 记忆库 API · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdeef4 0%, #fdf5f9 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #fbd5e3; color: #b3355e;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #f7a8c4; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #fde3ec; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #b3355e; }
+  .hl-blue { background: #e8f0fe; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(130, 50, 80, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 三层结构 */
+  .layers { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .layer {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 18px 22px;
+    border: 3px dashed #f7a8c4;
+  }
+  .layer .emoji { font-size: 34px; flex-shrink: 0; }
+  .layer .name { font-family: Menlo, monospace; font-size: 16px; font-weight: 800; color: #b3355e; min-width: 130px; }
+  .layer .desc { font-size: 16px; color: #555; flex: 1; }
+  .layer .badge { background: #fbd5e3; color: #b3355e; border-radius: 999px; padding: 3px 12px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .layer-arrow { text-align: center; font-size: 22px; color: #b3355e; line-height: 1; font-weight: 700; }
+
+  /* 路由表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+  .table th { background: #fde3ec; color: #b3355e; padding: 10px; text-align: left; border-bottom: 3px solid #f7a8c4; }
+  .table td { padding: 8px 10px; border-bottom: 1px solid #f3d9e4; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+  .table tr:hover td { background: #fdf5f9; }
+
+  /* 流程图 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #f7a8c4;
+  }
+  .flow-step .emoji { font-size: 30px; flex-shrink: 0; }
+  .flow-step .text { font-size: 16.5px; flex: 1; }
+  .flow-step .text b { color: #b3355e; }
+  .flow-step .badge { background: #fbd5e3; color: #b3355e; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 22px; color: #b3355e; line-height: 1; font-weight: 700; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 4 集</span>
+    <h1>🧠 internal/memory<br>记忆库 API</h1>
+    <div class="tagline">
+      <span class="emoji">📚</span> Agent 的「长期记忆」<br>写下的每条记忆都有版本、可追溯、可脱敏
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>记忆库解决什么问题？</h2>
+    <p class="lead">
+      Agent 会话结束后，学到的东西就丢了。<br>
+      memory 让 Agent 把重要信息 <span class="hl">存进长期记忆</span>，下次会话还能用。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>internal/memory</b> 提供 <span class="hl">记忆库 API</span>（1834 行大文件）：<br>
+        <br>
+        📚 <b>Memory Store</b>（记忆库）→ 🧠 <b>Memory</b>（记忆条目）→ 📜 <b>Memory Version</b>（版本）<br>
+        <br>
+        三级结构，每条记忆可版本化、可脱敏、有操作审计。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：三级结构 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 三级结构</span>
+    <h2>记忆的层级</h2>
+    <div class="layers">
+      <div class="layer">
+        <div class="emoji">📚</div>
+        <div class="name">Memory Store</div>
+        <div class="desc">记忆库：一个容器（按 workspace 隔离）</div>
+        <div class="badge">store</div>
+      </div>
+      <div class="layer-arrow">▼ 包含</div>
+      <div class="layer">
+        <div class="emoji">🧠</div>
+        <div class="name">Memory</div>
+        <div class="desc">记忆条目：path + content（内容存 S3，元数据在 DB）</div>
+        <div class="badge">memory</div>
+      </div>
+      <div class="layer-arrow">▼ 每次修改生成</div>
+      <div class="layer">
+        <div class="emoji">📜</div>
+        <div class="name">Memory Version</div>
+        <div class="desc">版本：每次修改都留档（created/updated），可 redact（脱敏）</div>
+        <div class="badge">version</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：路由 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 路由全景</span>
+    <h2>13 个接口</h2>
+    <table class="table">
+      <tr><th>路由</th><th>作用</th></tr>
+      <tr><td class="mono">POST /</td><td>创建记忆库</td></tr>
+      <tr><td class="mono">GET /</td><td>列出记忆库</td></tr>
+      <tr><td class="mono">GET /{store_id}</td><td>查看记忆库</td></tr>
+      <tr><td class="mono">POST /{store_id}</td><td>更新记忆库</td></tr>
+      <tr><td class="mono">DELETE /{store_id}</td><td>删除记忆库</td></tr>
+      <tr><td class="mono">POST /{store_id}/archive</td><td>归档记忆库</td></tr>
+      <tr><td class="mono">POST /{store_id}/memories</td><td>创建记忆</td></tr>
+      <tr><td class="mono">GET /{store_id}/memories</td><td>列出记忆（支持前缀/深度视图）</td></tr>
+      <tr><td class="mono">GET /{store_id}/memories/{id}</td><td>查看记忆</td></tr>
+      <tr><td class="mono">POST /{store_id}/memories/{id}</td><td>更新记忆</td></tr>
+      <tr><td class="mono">DELETE /{store_id}/memories/{id}</td><td>删除记忆</td></tr>
+      <tr><td class="mono">GET /{store_id}/memory_versions</td><td>列出版本</td></tr>
+      <tr><td class="mono">POST /{store_id}/memory_versions/{id}/redact</td><td>脱敏版本</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 4 章：核心机制 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 核心机制</span>
+    <h2>写一条记忆发生了什么？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📝</div>
+        <div class="text"><b>校验</b>：content ≤ 100KB、path ≤ 1KB、store 未归档</div>
+        <div class="badge">限制</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔑</div>
+        <div class="text"><b>生成 ID</b>：memory UUID + version UUID + 对象 key</div>
+        <div class="badge">ids</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">☁️</div>
+        <div class="text"><b>内容传 S3</b>：Upload 到对象存储（Content-Type: text/plain）</div>
+        <div class="badge">存储</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧠</div>
+        <div class="text"><b>算 SHA-256</b>：内容指纹（用于 precondition 乐观锁）</div>
+        <div class="badge">指纹</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗄️</div>
+        <div class="text"><b>写 DB</b>：Memory 行 + MemoryVersion 行（operation: created）</div>
+        <div class="badge">原子</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧹</div>
+        <div class="text"><b>失败兜底</b>：DB 写失败 → 删除刚上传的孤儿对象</div>
+        <div class="badge">清理</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 5 章：两个亮点 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 两个亮点</span>
+    <h2>Precondition 与 Redact</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🔒 <b>1. Precondition（乐观锁）</b><br>
+        更新记忆时带 <span class="mono">content_sha256</span> —— 只有当前内容指纹匹配才更新。<br>
+        防止两个 Agent 同时改同一条记忆互相覆盖（lost update）。<br>
+        <br>
+        🚫 <b>2. Redact（脱敏）</b><br>
+        版本可以被 <span class="hl-red">redact</span> —— 把敏感内容"涂黑"，<br>
+        但保留版本记录（redacted_at + redacted_by 审计），不物理删除。
+      </p>
+    </div>
+    <div class="card">
+      <p style="font-size:18px;">
+        💡 <b>设计 insight：内容与元数据分离</b> —— 大内容（≤100KB）存对象存储，
+        DB 只存路径 + SHA-256 指纹 + 元数据。列表接口（view=basic）不读内容，快。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/memory 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

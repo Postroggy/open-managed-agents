@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 模型目录 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdf0ff 0%, #fdf5ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #f3d9ff; color: #7b1fa2;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #d8a7e8; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #f3e0fa; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #7b1fa2; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(120, 60, 140, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 模型卡网格 */
+  .model-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 16px; }
+  .model {
+    background: #fff; border-radius: 18px; padding: 16px 18px;
+    border: 3px dashed #d8a7e8;
+  }
+  .model .id { font-family: Menlo, monospace; font-size: 14px; font-weight: 800; color: #7b1fa2; }
+  .model .name { font-size: 14px; color: #666; margin-top: 2px; }
+  .model .meta { font-size: 12px; color: #999; margin-top: 4px; }
+
+  /* capabilities */
+  .cap-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  .cap-table th { background: #f3e0fa; color: #7b1fa2; padding: 8px; text-align: left; border-bottom: 3px solid #d8a7e8; }
+  .cap-table td { padding: 8px; border-bottom: 1px solid #f0e0f5; }
+  .cap-table .mono { font-family: Menlo, monospace; font-size: 12.5px; font-weight: 700; }
+  .cap-table .yes { color: #2e7d32; font-weight: 800; }
+  .cap-table .no { color: #c53030; font-weight: 800; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #d8a7e8;
+  }
+  .flow-step .emoji { font-size: 30px; flex-shrink: 0; }
+  .flow-step .text { font-size: 16.5px; flex: 1; }
+  .flow-step .text b { color: #7b1fa2; }
+  .flow-step .badge { background: #f3d9ff; color: #7b1fa2; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 22px; color: #7b1fa2; line-height: 1; font-weight: 700; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .model-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 7 集</span>
+    <h1>🏷️ internal/models<br>模型目录 API</h1>
+    <div class="tagline">
+      <span class="emoji">📇</span> 像「菜单」一样<br>告诉用户：我能用哪些模型，各有什么能力
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>模型目录解决什么问题？</h2>
+    <p class="lead">
+      用户想知道 <span class="hl">"OMA 支持哪些模型？"</span><br>
+      models 包回答这个 —— 它是 <span class="hl">GET /models</span> 的实现。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>internal/models</b> 是个 <span class="hl">轻量包</span>（只有 handler.go）：<br>
+        <br>
+        📇 内置 <span class="hl">8 个 Claude 模型</span> 的静态目录<br>
+        🔀 应用 <span class="hl">模型映射</span>（BYOK 翻译）<br>
+        ✅ 只 1 个接口：<span class="hl">GET /models</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：8 个模型 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 8 个模型</span>
+    <h2>内置菜单（真实代码）</h2>
+    <div class="model-grid">
+      <div class="model"><div class="id">claude-fable-5</div><div class="name">Claude Fable 5</div><div class="meta">1M ctx · 128k out</div></div>
+      <div class="model"><div class="id">claude-opus-4-8</div><div class="name">Claude Opus 4.8</div><div class="meta">1M ctx · 128k out</div></div>
+      <div class="model"><div class="id">claude-opus-4-7</div><div class="name">Claude Opus 4.7</div><div class="meta">1M ctx · 128k out</div></div>
+      <div class="model"><div class="id">claude-sonnet-4-6</div><div class="name">Claude Sonnet 4.6</div><div class="meta">1M ctx · 128k out</div></div>
+      <div class="model"><div class="id">claude-opus-4-6</div><div class="name">Claude Opus 4.6</div><div class="meta">1M ctx · 128k out</div></div>
+      <div class="model"><div class="id">claude-opus-4-5-20251101</div><div class="name">Claude Opus 4.5</div><div class="meta">200k ctx · 64k out</div></div>
+      <div class="model"><div class="id">claude-haiku-4-5-20251001</div><div class="name">Claude Haiku 4.5</div><div class="meta">200k ctx · 64k out</div></div>
+      <div class="model"><div class="id">claude-sonnet-4-5-20250929</div><div class="name">Claude Sonnet 4.5</div><div class="meta">1M ctx · 64k out</div></div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：能力 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 能力字段</span>
+    <h2>每个模型报什么能力？</h2>
+    <table class="cap-table">
+      <tr><th>能力</th><th>说明</th><th>例子</th></tr>
+      <tr><td class="mono">code_execution</td><td>代码执行</td><td>fable-5 ✅ / haiku-4-5 ❌</td></tr>
+      <tr><td class="mono">thinking.enabled</td><td>思考模式</td><td>sonnet-4-6 ✅</td></tr>
+      <tr><td class="mono">thinking.adaptive</td><td>自适应思考</td><td>fable-5 ✅ / opus-4-5 ❌</td></tr>
+      <tr><td class="mono">effort.low~max</td><td>努力程度档位</td><td>xhigh: sonnet-4-6 ❌</td></tr>
+      <tr><td class="mono">compact_20260112</td><td>上下文压缩</td><td>fable-5 ✅ / haiku-4-5 ❌</td></tr>
+      <tr><td class="mono">batch / citations</td><td>批量 / 引用</td><td>全部 ✅</td></tr>
+      <tr><td class="mono">image_input / pdf_input</td><td>图片 / PDF</td><td>全部 ✅</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 4 章：流程 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 怎么工作</span>
+    <h2>一次 GET /models 的旅程</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📇</div>
+        <div class="text"><b>buildPlatformModels</b>：从内置菜单生成 8 个模型（带能力字段）</div>
+        <div class="badge">静态</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔀</div>
+        <div class="text"><b>resolvePlatformModels</b>：应用 modelmapping 翻译（BYOK）</div>
+        <div class="badge">翻译</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">✨</div>
+        <div class="text"><b>被翻译的</b>：id 换成上游名，display_name 也同步</div>
+        <div class="badge">覆盖</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔍</div>
+        <div class="text"><b>去重</b>：两个模型翻译成同一上游 → 只留一个（UniqBy）</div>
+        <div class="badge">去重</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📤</div>
+        <div class="text"><b>响应</b>：data + has_more + first_id + last_id（Anthropic 兼容格式）</div>
+        <div class="badge">Anthropic 兼容</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 5 章：insight -->
+  <div class="chapter">
+    <span class="chip">第五章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        📇 <b>1. 目录是"静态内置"的</b> —— 不查 DB、不调上游，8 个模型硬编码在代码里：
+        启动零成本，响应毫秒级。<br><br>
+        🔀 <b>2. 映射是"应用层覆盖"</b> —— 内置目录是 Claude 模型，
+        用户配了映射 → 翻译成上游模型名（BYOK 无缝）。<br><br>
+        ✨ <b>3. display_name 同步</b> —— 翻译后 display_name 也换成上游名，
+        用户看到的永远是"真实可用的模型名"。<br><br>
+        🔍 <b>4. 翻译后去重</b> —— 两个 Claude 别名映射到同一上游模型时只展示一个，
+        目录保持干净。<br><br>
+        🧩 <b>5. Anthropic 兼容格式</b> —— data/has_more/first_id/last_id 完全对齐官方
+        List Models API，SDK 开箱即用。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/models 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

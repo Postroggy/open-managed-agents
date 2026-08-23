@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技能加载为什么慢？🌐</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #f0f9ff 0%, #fdf2f8 100%);
+    color: #3a3a3a;
+    padding: 36px 20px 70px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  h1 {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 900;
+    color: #0984e3;
+    letter-spacing: 2px;
+    text-shadow: 3px 3px 0 #ffe066;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 19px;
+    color: #57606f;
+    margin: 12px 0 40px;
+    font-weight: 600;
+  }
+
+  /* 你以为 vs 实际 */
+  .compare-title { text-align: center; font-size: 24px; font-weight: 900; color: #2f3542; margin-bottom: 18px; }
+  .compare { display: flex; gap: 16px; }
+  .lane {
+    flex: 1;
+    background: #fff;
+    border: 4px solid #74b9ff;
+    border-radius: 24px;
+    padding: 20px;
+  }
+  .lane-wrong { border-color: #ff6b6b; background: #fff5f5; }
+  .lane-real { border-color: #1dd1a1; background: #f0fdf9; }
+  .lane h3 { text-align: center; font-size: 19px; font-weight: 900; margin-bottom: 14px; }
+  .lane-wrong h3 { color: #c0392b; }
+  .lane-real h3 { color: #0a8f6f; }
+  .lane .flow { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .lane .box {
+    width: 100%;
+    text-align: center;
+    border-radius: 14px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    border: 3px solid;
+  }
+  .lane .box small { display: block; font-weight: 600; font-size: 12px; opacity: .8; margin-top: 2px; }
+  .lane .arr { font-size: 20px; color: #57606f; font-weight: 900; line-height: 1; }
+  .lane-wrong .box { border-color: #ff6b6b; background: #ffe3e3; color: #c0392b; }
+  .lane-real .box { border-color: #1dd1a1; background: #e6fbf5; color: #0a8f6f; }
+  .lane .b-net { border-color: #f39c12; background: #fff3cd; color: #8a6d00; }
+  .lane .b-slow { border-color: #e84393; background: #fdf2f8; color: #c2255c; }
+
+  /* 网络往返清单 */
+  .rtt-box {
+    margin-top: 30px;
+    background: #fff;
+    border: 4px solid #f39c12;
+    border-radius: 26px;
+    padding: 22px;
+  }
+  .rtt-title { text-align: center; font-size: 21px; font-weight: 900; color: #8a6d00; margin-bottom: 16px; }
+  .rtt-steps { display: flex; flex-direction: column; gap: 10px; }
+  .rtt-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fffce8;
+    border: 3px solid #ffd93d;
+    border-radius: 16px;
+    padding: 12px 16px;
+  }
+  .rtt-step .emoji { font-size: 30px; }
+  .rtt-step .txt { font-size: 14.5px; font-weight: 700; color: #8a6d00; flex: 1; }
+  .rtt-step .badge {
+    background: #e84393;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    border-radius: 20px;
+    padding: 2px 12px;
+    flex-shrink: 0;
+  }
+  .rtt-arrow { text-align: center; font-size: 20px; color: #e84393; font-weight: 900; line-height: 1; }
+  .rtt-note {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 14px;
+    color: #8a6d00;
+    background: #fff3cd;
+    border-radius: 10px;
+    padding: 10px;
+    font-weight: 700;
+  }
+
+  /* 为什么不行 */
+  .why-title { text-align: center; font-size: 22px; font-weight: 900; color: #2f3542; margin: 36px 0 16px; }
+  .why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .why-item {
+    background: #fff;
+    border: 4px solid #a29bfe;
+    border-radius: 22px;
+    padding: 20px;
+    text-align: center;
+  }
+  .why-item .emoji { font-size: 44px; }
+  .why-item h4 { font-size: 17px; margin: 8px 0 6px; color: #6c5ce7; font-weight: 900; }
+  .why-item p { font-size: 14px; color: #57606f; font-weight: 600; }
+
+  /* 缓存聪明之处 */
+  .cache {
+    margin-top: 30px;
+    background: linear-gradient(135deg, #6c5ce7, #0984e3);
+    color: #fff;
+    border-radius: 26px;
+    padding: 24px;
+  }
+  .cache-title { text-align: center; font-size: 21px; font-weight: 900; margin-bottom: 14px; }
+  .cache-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .cache-item {
+    background: rgba(255,255,255,.12);
+    border: 2px solid rgba(255,255,255,.3);
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 14px;
+  }
+  .cache-item .i-title { font-weight: 900; font-size: 15px; margin-bottom: 4px; }
+  .cache-item p { opacity: .95; }
+
+  footer { text-align: center; margin-top: 34px; font-size: 14px; color: #b2bec3; font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .compare, .why { flex-direction: column; }
+    .cache-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>技能加载为什么慢？🌐</h1>
+  <p class="subtitle">因为它根本不是「一次 IO」—— 而是一连串跨网络 RPC</p>
+
+  <!-- 你以为 vs 实际 -->
+  <div class="compare-title">🤔 你以为 vs 🔍 实际</div>
+  <div class="compare">
+    <div class="lane lane-wrong">
+      <h3>❌ 你以为的「一次 IO」</h3>
+      <div class="flow">
+        <div class="box">💾 本地磁盘<small>读一下</small></div>
+        <div class="arr">▼</div>
+        <div class="box">🧠 内存<small>搞定！毫秒级</small></div>
+      </div>
+    </div>
+    <div class="lane lane-real">
+      <h3>✅ 实际：跨网络到 E2B 沙箱</h3>
+      <div class="flow">
+        <div class="box b-net">🏢 我们的服务器</div>
+        <div class="arr">🌐 网络</div>
+        <div class="box b-net">☁️ E2B 云端沙箱服务</div>
+        <div class="arr">▼</div>
+        <div class="box b-slow">💾 远端磁盘卷(volume)<small>要在云端创建/写入</small></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 网络往返清单 -->
+  <div class="rtt-box">
+    <div class="rtt-title">📡 一次技能加载 = 一串网络往返（对应代码）</div>
+    <div class="rtt-steps">
+      <div class="rtt-step"><div class="emoji">🔢</div><div class="txt">算 manifest + sha256 指纹（本地，快）</div><div class="badge">1</div></div>
+      <div class="rtt-arrow">▼</div>
+      <div class="rtt-step"><div class="emoji">📋</div><div class="txt"><b>ListVolumes</b> 列出远端所有卷 → 看有没有现成的</div><div class="badge">2 🌐</div></div>
+      <div class="rtt-arrow">▼</div>
+      <div class="rtt-step"><div class="emoji">🔌</div><div class="txt"><b>ConnectVolume / CreateVolume</b> 连上/在云端新建一个卷（可能并发竞争再查一次）</div><div class="badge">3 🌐</div></div>
+      <div class="rtt-arrow">▼</div>
+      <div class="rtt-step"><div class="emoji">🔍</div><div class="txt"><b>Exists + ReadFile</b> 检查 ready 标记（2 次往返）</div><div class="badge">4 🌐</div></div>
+      <div class="rtt-arrow">▼</div>
+      <div class="rtt-step"><div class="emoji">📦</div><div class="txt"><b>WriteFile × N</b> 把每个技能的整个压缩包上传到远端（N 个技能 = N 次大文件上传）</div><div class="badge">5 🌐</div></div>
+      <div class="rtt-arrow">▼</div>
+      <div class="rtt-step"><div class="emoji">✅</div><div class="txt"><b>WriteFile</b> 写 ready 标记，完成！</div><div class="badge">6 🌐</div></div>
+    </div>
+    <div class="rtt-note">🌐 每次网络 RPC 都要几十到几百毫秒，5 个技能 = 5 次大文件上传 → 几秒到几十秒很正常</div>
+  </div>
+
+  <!-- 为什么不能当场做 -->
+  <div class="why-title">💥 为什么不能当场做？</div>
+  <div class="why">
+    <div class="why-item">
+      <div class="emoji">🌐</div>
+      <h4>网络不可靠</h4>
+      <p>E2B 服务可能在另一台机器/机房，随时超时断连，当场做会拖垮创建请求</p>
+    </div>
+    <div class="why-item">
+      <div class="emoji">🛠️</div>
+      <h4>是「创建」不是「读」</h4>
+      <p>卷不存在要 CreateVolume（云端建资源），有状态、可能失败、要重试</p>
+    </div>
+    <div class="why-item">
+      <div class="emoji">📦</div>
+      <h4>体积大</h4>
+      <p>技能是完整工具包（archive 压缩包），不是几 KB 配置，要整个传过去</p>
+    </div>
+  </div>
+
+  <!-- 缓存聪明之处 -->
+  <div class="cache">
+    <div class="cache-title">💡 代码里的聪明设计：卷缓存 + 指纹判断</div>
+    <div class="cache-grid">
+      <div class="cache-item">
+        <div class="i-title">🔍 先查指纹</div>
+        <p>manifest 的 sha256 当作卷名 —— 相同技能组合复用同一个卷，不用重写</p>
+      </div>
+      <div class="cache-item">
+        <div class="i-title">✅ 卷已 ready 就跳过</div>
+        <p>卷存在且 ready 标记 = 当前指纹 → 直接返回，零写入！</p>
+      </div>
+      <div class="cache-item">
+        <div class="i-title">🖊️ 不 ready 才写</div>
+        <p>标记不匹配 → 才真正把技能包写进远端卷（慢路径）</p>
+      </div>
+      <div class="cache-item">
+        <div class="i-title">🎡 慢路径交给队列</div>
+        <p>第一次加载慢 → 丢队列后台做；之后全命中缓存，秒开</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>🎈 Open Managed Agents · 技能加载为什么慢 · 有代码依据</footer>
+</div>
+</body>
+</html>

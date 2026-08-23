@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA Redis 连接 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #ffe9e9 0%, #fff5f5 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #ffd6d6; color: #c53030;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #ff9e9e; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #ffe0e0; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(140, 60, 60, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 代码 */
+  .code {
+    background: #1c2333; color: #ff9e9e; border-radius: 14px; padding: 18px 22px;
+    font-family: Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.9; overflow-x: auto; margin-top: 14px;
+  }
+  .code .c { color: #64748b; }
+  .code .k { color: #ffe066; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #ff9e9e;
+  }
+  .flow-step .emoji { font-size: 30px; flex-shrink: 0; }
+  .flow-step .text { font-size: 16.5px; flex: 1; }
+  .flow-step .text b { color: #c53030; }
+  .flow-step .badge { background: #ffd6d6; color: #c53030; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 22px; color: #c53030; line-height: 1; font-weight: 700; }
+
+  /* 代码位置 */
+  .loc {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #ff9e9e; margin-top: 14px;
+  }
+  .loc .emoji { font-size: 30px; flex-shrink: 0; }
+  .loc .text { font-size: 16px; flex: 1; }
+  .loc .text .mono { font-family: Menlo, monospace; font-size: 13px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 12 集</span>
+    <h1>🔴 internal/redisclient<br>Redis 连接工厂</h1>
+    <div class="tagline">
+      <span class="emoji">🔌</span> 26 行的小包<br>只做一件事：打开 Redis 连接
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>为什么需要单独一个包？</h2>
+    <p class="lead">
+      系统要用 Redis（比如 <span class="hl">platformsession 的生产实现</span>）。<br>
+      但连接 Redis 需要 <span class="hl">统一的创建逻辑</span> —— 就是这个包。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>internal/redisclient</b> = <span class="hl">Redis 连接工厂</span>（26 行，1 个函数）：<br>
+        <br>
+        🔌 <b>Open</b>(ctx, redisURL) → *redis.Client<br>
+        <br>
+        在 <span class="hl">main.go 组装层</span> 调用（整个项目唯一的使用点）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：代码 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 完整代码</span>
+    <h2>26 行做了什么？</h2>
+    <div class="code">
+<span class="k">func</span> Open(ctx context.Context, redisURL string) (*redis.Client, error) {<br>
+&nbsp;&nbsp;<span class="c">// ① URL 必填</span><br>
+&nbsp;&nbsp;<span class="k">if</span> strings.TrimSpace(redisURL) == "" { <span class="k">return</span> nil, errors.New(<span class="s">"redis.url is required"</span>) }<br>
+<br>
+&nbsp;&nbsp;<span class="c">// ② 解析 URL（redis://user:pass@host:port/db）</span><br>
+&nbsp;&nbsp;options, err := redis.ParseURL(redisURL)<br>
+<br>
+&nbsp;&nbsp;<span class="c">// ③ 创建客户端</span><br>
+&nbsp;&nbsp;client := redis.NewClient(options)<br>
+<br>
+&nbsp;&nbsp;<span class="c">// ④ 立即 Ping 验证连接（失败就关掉）</span><br>
+&nbsp;&nbsp;<span class="k">if</span> err := client.Ping(ctx).Err(); err != nil {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;_ = client.Close()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">return</span> nil, fmt.Errorf(<span class="s">"connect redis: %w"</span>, err)<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="k">return</span> client, nil<br>
+}
+    </div>
+  </div>
+
+  <!-- 第 3 章：调用点 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 在哪里被调用</span>
+    <h2>main.go 的组装</h2>
+    <div class="loc">
+      <div class="emoji">🖥️</div>
+      <div class="text">
+        <span class="mono">main.go:72</span> —— 启动时：
+        <span class="mono" style="background:#f1f5f1;border-radius:6px;padding:2px 8px;">redisClient, err := redisclient.Open(ctx, cfg.Redis.URL)</span>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:18px;">
+        💡 <b>组装层职责</b>：main.go 启动早期创建连接 →<br>
+        传给需要的地方（如 <span class="hl">platformsession.RedisStore</span>）。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：和兄弟的关系 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 和兄弟的关系</span>
+    <h2>Redis 相关全家桶</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🔌 <b>redisclient</b> = 插座工厂（本集主角：创建连接）<br>
+        🎟️ <b>platformsession.RedisStore</b> = 手环柜台（消费连接：存会话）<br>
+        ⚙️ <b>config.RedisConfig</b> = 配电图（redis.url 配置）<br>
+        <br>
+        <span class="hl-green">链路：config（URL）→ redisclient.Open（连接）→ RedisStore（存会话）</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：insight -->
+  <div class="chapter">
+    <span class="chip">第五章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🪶 <b>1. 极简 = 单一职责</b> —— 26 行只做"创建连接"：
+        不封装业务、不搞抽象，就是工厂。<br><br>
+        🏠 <b>2. 组装层专用</b> —— 只有 main.go 调用：
+        符合"连接池在组装层创建，业务包不自己开连接"的项目规范。<br><br>
+        ⚡ <b>3. 启动即验证</b> —— Ping 检查：
+        Redis 不可用 → 启动就失败（fail fast），而不是运行时才爆。<br><br>
+        🧹 <b>4. 失败清理</b> —— Ping 失败 Close 连接：
+        不留半开连接（资源不泄漏）。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/redisclient 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

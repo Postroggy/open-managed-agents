@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>apperr 是什么？🍎</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #f0f9ff 0%, #fdf2f8 100%);
+    color: #3a3a3a;
+    padding: 36px 20px 70px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  h1 {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 900;
+    color: #d63031;
+    letter-spacing: 2px;
+    text-shadow: 3px 3px 0 #ffe066;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 19px;
+    color: #57606f;
+    margin: 12px 0 40px;
+    font-weight: 600;
+  }
+
+  /* 一句话 */
+  .hero {
+    text-align: center;
+    background: #fff;
+    border: 5px solid #d63031;
+    border-radius: 30px;
+    padding: 26px;
+    box-shadow: 0 8px 0 rgba(214,48,49,.12);
+    margin-bottom: 30px;
+  }
+  .hero .emoji-big { font-size: 70px; }
+  .hero .tagline { font-size: 22px; font-weight: 900; color: #d63031; margin-top: 8px; }
+  .hero .explain { font-size: 15px; color: #57606f; margin-top: 6px; }
+
+  /* 关键设计：双层 */
+  .two-layer { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
+  .layer-box {
+    background: #fff;
+    border: 4px solid;
+    border-radius: 22px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .layer-box .emoji { font-size: 48px; }
+  .layer-box .info { flex: 1; }
+  .layer-box .info h3 { font-size: 19px; font-weight: 900; margin-bottom: 4px; }
+  .layer-box .info p { font-size: 14px; color: #57606f; font-weight: 600; }
+  .layer-box .info .path {
+    font-family: Menlo, monospace;
+    font-size: 12.5px;
+    font-weight: 800;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 2px 8px;
+    display: inline-block;
+    margin-top: 6px;
+  }
+  .l-apperr { border-color: #d63031; background: #fff5f5; }
+  .l-apperr h3 { color: #d63031; }
+  .l-http { border-color: #0984e3; background: #f0f9ff; }
+  .l-http h3 { color: #0984e3; }
+  .layer-arrow { text-align: center; font-size: 28px; color: #57606f; font-weight: 900; line-height: 1; }
+
+  /* apperr 结构 */
+  .struct-box {
+    background: #fff;
+    border: 4px solid #d63031;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 30px;
+  }
+  .struct-title { text-align: center; font-size: 21px; font-weight: 900; color: #d63031; margin-bottom: 16px; }
+  .struct-code {
+    background: #2d3436;
+    color: #ffe066;
+    border-radius: 14px;
+    padding: 18px;
+    font-family: Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.9;
+    overflow-x: auto;
+  }
+  .struct-code .kw { color: #74b9ff; }
+  .struct-code .c { color: #b2bec3; }
+  .struct-note {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 14px;
+    color: #d63031;
+    background: #ffe3e3;
+    border-radius: 10px;
+    padding: 10px;
+    font-weight: 700;
+  }
+
+  /* 14 种 Kind 映射表 */
+  .map-box {
+    background: #fff;
+    border: 4px solid #0984e3;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 30px;
+  }
+  .map-title { text-align: center; font-size: 21px; font-weight: 900; color: #0984e3; margin-bottom: 16px; }
+  .map-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .map-table th {
+    background: #e8f7ff;
+    color: #0984e3;
+    padding: 10px;
+    text-align: left;
+    font-weight: 800;
+    border-bottom: 3px solid #74b9ff;
+  }
+  .map-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 600;
+    color: #334155;
+  }
+  .map-table .kind { font-family: Menlo, monospace; color: #d63031; font-weight: 800; }
+  .map-table .code { font-family: Menlo, monospace; color: #0984e3; font-weight: 700; }
+  .map-table tr:hover td { background: #f8fafc; }
+
+  /* 流程 */
+  .flow-box {
+    background: #fff;
+    border: 4px solid #ffe066;
+    border-radius: 26px;
+    padding: 22px;
+    margin-bottom: 30px;
+  }
+  .flow-title { text-align: center; font-size: 21px; font-weight: 900; color: #8a6d00; margin-bottom: 16px; }
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; }
+  .flow-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fffce8;
+    border: 3px solid #ffd93d;
+    border-radius: 16px;
+    padding: 12px 16px;
+  }
+  .flow-step .emoji { font-size: 30px; }
+  .flow-step .txt { font-size: 14.5px; font-weight: 700; color: #8a6d00; flex: 1; }
+  .flow-step .badge {
+    background: #e84393;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    border-radius: 20px;
+    padding: 2px 12px;
+    flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 20px; color: #e84393; font-weight: 900; line-height: 1; }
+
+  /* 用它的资源 */
+  .users-box {
+    background: linear-gradient(135deg, #6c5ce7, #0984e3);
+    color: #fff;
+    border-radius: 26px;
+    padding: 24px;
+    margin-bottom: 30px;
+  }
+  .users-title { text-align: center; font-size: 21px; font-weight: 900; margin-bottom: 14px; }
+  .users-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .chip {
+    background: rgba(255,255,255,.15);
+    border: 2px solid rgba(255,255,255,.3);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  /* insight */
+  .insight {
+    background: #fff;
+    border: 4px solid #a29bfe;
+    border-radius: 26px;
+    padding: 24px;
+  }
+  .insight-title { text-align: center; font-size: 21px; font-weight: 900; color: #6c5ce7; margin-bottom: 14px; }
+  .insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .insight-item {
+    background: #f4f0ff;
+    border: 2px solid #a29bfe;
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 14px;
+  }
+  .insight-item .i-title { font-weight: 900; font-size: 15px; margin-bottom: 4px; color: #6c5ce7; }
+  .insight-item p { color: #57606f; font-weight: 600; }
+
+  footer { text-align: center; margin-top: 34px; font-size: 14px; color: #b2bec3; font-weight: 600; }
+
+  @media (max-width: 700px) {
+    .insight-grid { grid-template-columns: 1fr; }
+    .layer-box { flex-direction: column; text-align: center; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🍎 apperr 是什么？</h1>
+  <p class="subtitle">业务代码里的「错误」，和 HTTP 格式的「错误」，是两件事</p>
+
+  <!-- 一句话 -->
+  <div class="hero">
+    <div class="emoji-big">🍎</div>
+    <div class="tagline">apperr = 应用错误包：与 HTTP 无关的业务错误</div>
+    <div class="explain">
+      业务层只管说「<b>什么东西错了</b>」，不管「<b>该返回什么状态码</b>」<br>
+      外层（httpapi）再把错误翻译成 Anthropic 兼容的格式 🗣️
+    </div>
+  </div>
+
+  <!-- 双层设计 -->
+  <div class="two-layer">
+    <div class="layer-box l-apperr">
+      <div class="emoji">🍎</div>
+      <div class="info">
+        <h3>业务层 · internal/apperr</h3>
+        <p>定义错误的「种类」（Kind）和「能对外说的话」（PublicMessage），<b>不含任何 HTTP 状态码</b></p>
+        <span class="path">internal/apperr/error.go</span>
+      </div>
+    </div>
+    <div class="layer-arrow">▼ 翻译 ▼</div>
+    <div class="layer-box l-http">
+      <div class="emoji">🗣️</div>
+      <div class="info">
+        <h3>HTTP 层 · internal/httpapi</h3>
+        <p>ErrorAdapter 把 apperr 翻译成 Anthropic 兼容的 HTTP 错误（状态码 + error type）</p>
+        <span class="path">internal/httpapi/app_error.go</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- apperr 结构 -->
+  <div class="struct-box">
+    <div class="struct-title">🧬 apperr.Error 长什么样？（真实代码）</div>
+    <div class="struct-code">
+<span class="c">// 三个字段：种类 + 对外话术 + 内部原因</span><br>
+type Error struct {<br>
+&nbsp;&nbsp;Kind          Kind   <span class="c">// 错误种类（14 种之一）</span><br>
+&nbsp;&nbsp;PublicMessage string <span class="c">// 能告诉用户的话</span><br>
+&nbsp;&nbsp;cause         error  <span class="c">// 内部原因（对外保密）</span><br>
+}
+    </div>
+    <div class="struct-note">🔒 关键：PublicMessage 是唯一能对外暴露的；Error() 只会返回内部 cause —— 绝不泄漏内部细节</div>
+  </div>
+
+  <!-- Kind 映射表 -->
+  <div class="map-box">
+    <div class="map-title">🗺️ 14 种 Kind → HTTP 状态码映射（真实映射表）</div>
+    <table class="map-table">
+      <tr><th>Kind（业务错误种类）</th><th>HTTP 状态码</th><th>Anthropic error type</th></tr>
+      <tr><td class="kind">InvalidArgument</td><td>400</td><td class="code">invalid_request_error</td></tr>
+      <tr><td class="kind">InvalidState</td><td>409</td><td class="code">invalid_request_error</td></tr>
+      <tr><td class="kind">PreconditionFailed</td><td>412</td><td class="code">invalid_request_error</td></tr>
+      <tr><td class="kind">RequestTooLarge</td><td>413</td><td class="code">invalid_request_error</td></tr>
+      <tr><td class="kind">Unauthenticated</td><td>401</td><td class="code">authentication_error</td></tr>
+      <tr><td class="kind">Billing</td><td>402</td><td class="code">billing_error</td></tr>
+      <tr><td class="kind">PermissionDenied</td><td>403</td><td class="code">permission_error</td></tr>
+      <tr><td class="kind">NotFound</td><td>404</td><td class="code">not_found_error</td></tr>
+      <tr><td class="kind">Conflict</td><td>409</td><td class="code">conflict_error</td></tr>
+      <tr><td class="kind">RateLimited</td><td>429</td><td class="code">rate_limit_error</td></tr>
+      <tr><td class="kind">Timeout</td><td>504</td><td class="code">timeout_error</td></tr>
+      <tr><td class="kind">Internal</td><td>500</td><td class="code">api_error</td></tr>
+      <tr><td class="kind">Unavailable</td><td>503</td><td class="code">api_error</td></tr>
+      <tr><td class="kind">Overloaded</td><td>529</td><td class="code">overloaded_error</td></tr>
+    </table>
+  </div>
+
+  <!-- 流程 -->
+  <div class="flow-box">
+    <div class="flow-title">🔄 一次错误从产生到返回的完整流程</div>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="emoji">🍎</div>
+        <div class="txt">业务层发现错误：apperr.New(NotFound, "Vault not found", cause)</div>
+        <div class="badge">1</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">↩️</div>
+        <div class="txt">错误一路 return 到 HTTP 边界（不提前吞掉）</div>
+        <div class="badge">2</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗣️</div>
+        <div class="txt">ErrorAdapter.Write 识别 apperr 种类 → 查映射表</div>
+        <div class="badge">3</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📡</div>
+        <div class="txt">不是 apperr → 当作 500；是 → 用 PublicMessage 写 Anthropic 兼容响应</div>
+        <div class="badge">4</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 用它的资源 -->
+  <div class="users-box">
+    <div class="users-title">📚 哪些资源包已经用它？（每个包都有 errors.go）</div>
+    <div class="users-chips">
+      <span class="chip">agents</span><span class="chip">batches</span><span class="chip">codesessions</span>
+      <span class="chip">deployments</span><span class="chip">environments</span><span class="chip">models</span>
+      <span class="chip">sessions</span><span class="chip">skills</span><span class="chip">vaults</span>
+      <span class="chip">webhooks</span><span class="chip">+ httpapi 适配</span>
+    </div>
+  </div>
+
+  <!-- insight -->
+  <div class="insight">
+    <div class="insight-title">💡 看完代码的 Insight</div>
+    <div class="insight-grid">
+      <div class="insight-item">
+        <div class="i-title">🪶 传输无关</div>
+        <p>apperr 不含 HTTP 状态码或 wire error type —— 同一错误可用于 HTTP、队列、worker 等任何出口。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🔒 防泄漏</div>
+        <p>PublicMessage 与 cause 分离：对外只说安全的话，内部细节走 Error() 只在日志里出现。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🧩 统一边界</div>
+        <p>所有资源包集中在各自的 errors.go 定义错误合同，httpapi 只负责最后一跳翻译 —— 各管各的。</p>
+      </div>
+      <div class="insight-item">
+        <div class="i-title">🛡️ 兜底机制</div>
+        <p>不是 apperr（未知错误）→ 统一 500 + "Internal server error"，绝不把内部错误细节暴露给用户。</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>🎈 Open Managed Agents · apperr 图解 · 基于 main 分支 #230/#232</footer>
+</div>
+</body>
+</html>

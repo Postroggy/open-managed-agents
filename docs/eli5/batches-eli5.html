@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 批量消息处理 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdeeee 0%, #f9f6ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover {
+    text-align: center;
+    margin-bottom: 70px;
+  }
+  .cover .kicker {
+    display: inline-block; background: #ffe0e0; color: #c53030;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #f0a0a0; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #fdeaea; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-blue { background: #e8f0fe; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(60, 40, 80, .07);
+  }
+  .card + .card { margin-top: 18px; }
+
+  /* 步骤流 */
+  .flow { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border-radius: 20px; padding: 18px 24px;
+    border: 3px dashed #f0a0a0;
+  }
+  .flow-step .emoji { font-size: 36px; flex-shrink: 0; }
+  .flow-step .text { font-size: 19px; }
+  .flow-step .text b { color: #c53030; }
+  .flow-step .badge {
+    margin-left: auto; background: #ffe0e0; color: #c53030;
+    border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 26px; color: #c53030; line-height: 1; font-weight: 700; }
+
+  /* 状态机 */
+  .states { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 20px; }
+  .state {
+    flex: 1; min-width: 140px; text-align: center;
+    background: #fff; border-radius: 18px; padding: 20px 14px;
+    border: 3px dashed #f0a0a0;
+  }
+  .state .emoji { font-size: 34px; }
+  .state .name { font-size: 20px; font-weight: 700; margin-top: 6px; }
+  .state .desc { font-size: 14px; color: #666; margin-top: 4px; }
+  .state-arrow { display: flex; align-items: center; font-size: 24px; color: #c53030; font-weight: 700; }
+
+  /* 清单 */
+  .checklist { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .check {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: #fff; border-radius: 18px; padding: 16px 22px;
+    border: 3px dashed #f0a0a0;
+  }
+  .check .mark { font-size: 24px; flex-shrink: 0; }
+  .check .text { font-size: 18px; }
+  .check .text b { color: #c53030; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 内部包探秘 · 第 6 集</span>
+    <h1>📦 internal/batches<br>批量消息处理</h1>
+    <div class="tagline">
+      <span class="emoji">🎪</span> 像「快递驿站」一样<br>把很多小包裹攒起来，一次性发出去
+    </div>
+  </div>
+
+  <!-- 第 1 章：是什么 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>为什么需要「批量」？</h2>
+    <p class="lead">
+      你有一个 API，一次只能处理一条消息。<br>
+      但有时你有 <span class="hl">100 条</span> 消息要发 —— 一条条发太慢了！
+    </p>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>batches</b> 包帮你把这 100 条消息打包成一个 <span class="hl">批次（Batch）</span>，
+        后台 worker 慢慢一条条处理，<b>最后给你一个结果文件</b>。
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        对应 Anthropic API 的 <span class="hl-blue">/v1/messages/batches</span> 端点 —— 完全兼容。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：生命周期 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 批次的一生</span>
+    <h2>一个批次的完整旅程</h2>
+    <p class="lead">像寄快递一样：<span class="hl">下单 → 中转 → 送达 → 签收</span></p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📝</div>
+        <div class="text"><b>创建批次</b>：POST /v1/messages/batches，把 100 条消息打包</div>
+        <div class="badge">处理中 in_progress</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🏭</div>
+        <div class="text"><b>后台 worker 处理</b>：每 5 秒扫一次队列，一条条发到上游 Anthropic</div>
+        <div class="badge">可能失败重试（最多 10 次）</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📊</div>
+        <div class="text"><b>统计结果</b>：成功多少、失败多少、还在处理多少</div>
+        <div class="badge">succeeded / failed</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📦</div>
+        <div class="text"><b>生成结果文件</b>：把所有结果写成 JSONL 文件，存到对象存储</div>
+        <div class="badge">结果可下载</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗑️</div>
+        <div class="text"><b>到期清理</b>：结果保留 N 天，过期自动删除（expiry sweep）</div>
+        <div class="badge">干净收尾</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：状态机 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 状态机</span>
+    <h2>批次的状态流转</h2>
+    <p class="lead">每个批次都有个「状态」，像快递单号一样追踪</p>
+    <div class="states">
+      <div class="state">
+        <div class="emoji">🕐</div>
+        <div class="name">in_progress</div>
+        <div class="desc">正在处理</div>
+      </div>
+      <div class="state-arrow">→</div>
+      <div class="state">
+        <div class="emoji">✅</div>
+        <div class="name">succeeded</div>
+        <div class="desc">全部完成</div>
+      </div>
+      <div class="state">
+        <div class="emoji">❌</div>
+        <div class="name">failed</div>
+        <div class="desc">失败（可重试）</div>
+      </div>
+      <div class="state-arrow">→</div>
+      <div class="state">
+        <div class="emoji">⏹️</div>
+        <div class="name">cancelled</div>
+        <div class="desc">用户取消</div>
+      </div>
+      <div class="state-arrow">→</div>
+      <div class="state">
+        <div class="emoji">⌛</div>
+        <div class="name">expired</div>
+        <div class="desc">结果过期</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：能做什么 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 对外接口</span>
+    <h2>你可以对它做什么？</h2>
+    <div class="checklist">
+      <div class="check">
+        <div class="mark">➕</div>
+        <div class="text"><b>创建</b>：POST / → 提交一个新批次</div>
+      </div>
+      <div class="check">
+        <div class="mark">📋</div>
+        <div class="text"><b>查看列表</b>：GET / → 所有批次</div>
+      </div>
+      <div class="check">
+        <div class="mark">🔍</div>
+        <div class="text"><b>查看详情</b>：GET /{id} → 单个批次状态</div>
+      </div>
+      <div class="check">
+        <div class="mark">✋</div>
+        <div class="text"><b>取消</b>：POST /{id}/cancel → 取消还没处理的</div>
+      </div>
+      <div class="check">
+        <div class="mark">🗑️</div>
+        <div class="text"><b>删除</b>：DELETE /{id} → 删除批次</div>
+      </div>
+      <div class="check">
+        <div class="mark">📥</div>
+        <div class="text"><b>下载结果</b>：GET /{id}/results → 结果 JSONL 文件</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 5 章：内部结构 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 内部怎么分工</span>
+    <h2>一个包裹的旅程</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🚪</div>
+        <div class="text"><b>handler.go</b> —— 前台接待：收包裹、查状态、给结果</div>
+        <div class="badge">HTTP 层</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🏭</div>
+        <div class="text"><b>worker.go</b> —— 流水线工人：每 5 秒扫队列，处理/重试/清理过期</div>
+        <div class="badge">后台层</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📡</div>
+        <div class="text"><b>upstream.go</b> —— 送货司机：把消息发到上游 Anthropic</div>
+        <div class="badge">上游层</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🍎</div>
+        <div class="text"><b>errors.go</b> —— 错误清单：定义所有错误种类</div>
+        <div class="badge">错误层</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/batches 图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>

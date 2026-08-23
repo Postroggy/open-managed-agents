@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 平台 API · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef7ff 0%, #f4faff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dbe7ff; color: #1a56db;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #a3c4ff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(40, 70, 130, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 文件分组 */
+  .grp { margin-top: 20px; }
+  .grp h3 { font-size: 22px; color: #1a56db; margin-bottom: 10px; font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    background: #f0f6ff; border: 2px solid #a3c4ff; color: #1a56db;
+    border-radius: 999px; padding: 6px 16px; font-size: 14.5px; font-weight: 700;
+  }
+  .chip .desc { font-size: 12px; color: #666; font-weight: 600; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #a3c4ff;
+  }
+  .flow-step .emoji { font-size: 30px; flex-shrink: 0; }
+  .flow-step .text { font-size: 16.5px; flex: 1; }
+  .flow-step .text b { color: #1a56db; }
+  .flow-step .badge { background: #dbe7ff; color: #1a56db; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 22px; color: #1a56db; line-height: 1; font-weight: 700; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 10 集</span>
+    <h1>📞 internal/platformapi<br>平台控制台 API</h1>
+    <div class="tagline">
+      <span class="emoji">🎛️</span> 像「控制台总机」一样<br>平台控制台的所有接口都在这里
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>platformapi 管什么？</h2>
+    <p class="lead">
+      用户在 <span class="hl">控制台（Console）</span> 上登录、管组织、看工作区……<br>
+      所有控制台背后的 HTTP 接口，都在 <span class="hl">platformapi</span>。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>internal/platformapi</b> = 平台控制台的 <span class="hl">HTTP 接口层</span>：<br>
+        <br>
+        🎛️ 20 个文件 · <span class="hl">19 个路由注册函数</span><br>
+        📞 注册到 <span class="mono">/api · /auth · /oauth · /web-api</span><br>
+        <br>
+        <b>它消费 platform 包的数据模型</b>（上一集讲的档案层）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：功能分组 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 功能分组</span>
+    <h2>六大功能区</h2>
+    <div class="grp">
+      <h3>🔐 登录与引导（platform_auth_routes / bootstrap）</h3>
+      <div class="chips">
+        <span class="chip">邮箱登录 RegisterPlatformEmailLoginRoutes</span>
+        <span class="chip">隐私同意 RegisterPlatformPrivacyConsentRoutes</span>
+        <span class="chip">引导流程 platform_bootstrap*.go</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>🏢 组织管理（org_profile / org_sso / console_*）</h3>
+      <div class="chips">
+        <span class="chip">组织资料 RegisterOrganizationProfileRoutes</span>
+        <span class="chip">SSO RegisterOrganizationSSORoutes</span>
+        <span class="chip">成员 RegisterConsoleOrganizationMemberRoutes</span>
+        <span class="chip">邀请 RegisterConsoleOrganizationInviteRoutes</span>
+        <span class="chip">API Key RegisterConsoleOrganizationAPIKeyRoutes</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>📁 工作区（platform_backend_routes）</h3>
+      <div class="chips">
+        <span class="chip">工作区 RegisterConsoleOrganizationWorkspaceRoutes</span>
+        <span class="chip">管理请求 RegisterConsoleOrganizationAdminRequestRoutes</span>
+        <span class="chip">根路由 RegisterOrganizationRootRoutes</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>📊 计费与统计</h3>
+      <div class="chips">
+        <span class="chip">计费 RegisterOrganizationBillingRoutes</span>
+        <span class="chip">分析 RegisterOrganizationAnalyticsRoutes</span>
+        <span class="chip">费率 RegisterOrganizationOnboardingRoutes</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>🛰️ 代理（platform_proxy）</h3>
+      <div class="chips">
+        <span class="chip">模型代理 RegisterOrganizationProxyRoutes（BYOK）</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>🌍 目录（directory_routes）</h3>
+      <div class="chips">
+        <span class="chip">服务器目录 RegisterDirectoryRoutes（797KB 快照）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：核心亮点 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 亮点</span>
+    <h2>模型代理（proxy）怎么工作？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📥</div>
+        <div class="text"><b>接收</b>：POST /api/organizations/{org}/proxy/v1/messages</div>
+        <div class="badge">入口</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔍</div>
+        <div class="text"><b>验证组织</b>：visibleOrgUUID 确认当前组织可见</div>
+        <div class="badge">鉴权</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔀</div>
+        <div class="text"><b>改写模型名</b>：rewriteMappedModel 用 modelmapping 翻译</div>
+        <div class="badge">BYOK</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📡</div>
+        <div class="text"><b>转发上游</b>：POST anthropic /v1/messages（注入上游 key）</div>
+        <div class="badge">转发</div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px;">
+        💡 <b>和 internal/messages 的区别</b>：messages 是"通用"的（服务通道），
+        这个 proxy 是"组织级"的（挂 org UUID 下）—— 都做模型翻译 + 转发。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 4 章：和兄弟的关系 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 和兄弟的关系</span>
+    <h2>平台四件套</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        📄 <b>platform</b> = 档案（数据模型）→ <span class="hl">platformapi 消费它</span><br>
+        📞 <b>platformapi</b> = 接线员（本集主角，19 个路由）<br>
+        🪪 <b>platformauth</b> = 门卫（验证登录）→ <span class="hl">platformapi 调它</span><br>
+        🎟️ <b>platformsession</b> = 售票机（会话状态）→ <span class="hl">platformapi 存它</span><br>
+        <br>
+        <span class="hl-green">platformapi 是"总机"，把档案、门卫、售票机全部串起来</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：insight -->
+  <div class="chapter">
+    <span class="chip">第五章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🎛️ <b>1. 控制台全家桶</b> —— 登录/组织/工作区/计费/代理/目录，
+        平台控制台的全部 HTTP 面集中在这一个包。<br><br>
+        🪶 <b>2. 依赖 platform 数据契约</b> —— 自己不带模型，
+        全部消费 platform 包的档案 —— 分层清晰。<br><br>
+        🔀 <b>3. 组织级代理是 BYOK 的"控制台入口"</b> ——
+        用户从控制台调模型也走 modelmapping 翻译。<br><br>
+        📦 <b>4. directory_servers.json 是 797KB 快照</b> ——
+        嵌入式目录快照必须保持紧凑 JSON（项目规则）。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/platformapi 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

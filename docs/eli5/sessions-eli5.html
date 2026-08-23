@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 会话包 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fdf0ff 0%, #fdf5ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #f3d9ff; color: #7b1fa2;
+    border-radius: 999px; padding: 6px 18px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 44px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 24px; color: #2c3550;
+    background: #fff; border: 3px dashed #d8a7e8; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 32px; margin-bottom: 20px; line-height: 1.3; }
+  .lead { font-size: 21px; color: #333; margin-bottom: 24px; }
+  .hl { background: #f3e0fa; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #7b1fa2; }
+  .hl-blue { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2743a8; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  .card {
+    background: #fff; border-radius: 24px; padding: 26px 30px;
+    box-shadow: 0 4px 20px rgba(120, 60, 140, .06);
+  }
+  .card + .card { margin-top: 14px; }
+
+  /* 文件分类 */
+  .grp { margin-top: 16px; }
+  .grp h3 { font-size: 20px; color: #7b1fa2; margin-bottom: 10px; font-weight: 800; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    background: #fdf0ff; border: 2px solid #d8a7e8; color: #7b1fa2;
+    border-radius: 999px; padding: 5px 14px; font-size: 13.5px; font-weight: 700;
+  }
+  .chip .desc { font-size: 11.5px; color: #666; font-weight: 600; }
+
+  /* 路由表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  .table th { background: #f3e0fa; color: #7b1fa2; padding: 9px; text-align: left; border-bottom: 3px solid #d8a7e8; }
+  .table td { padding: 8px 9px; border-bottom: 1px solid #f0e0f5; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 700; }
+  .table tr:hover td { background: #fdf5f9; }
+
+  /* 流程 */
+  .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 14px;
+    background: #fff; border-radius: 16px; padding: 14px 18px;
+    border: 3px dashed #d8a7e8;
+  }
+  .flow-step .emoji { font-size: 26px; flex-shrink: 0; }
+  .flow-step .text { font-size: 14.5px; flex: 1; }
+  .flow-step .text b { color: #7b1fa2; }
+  .flow-step .badge { background: #f3d9ff; color: #7b1fa2; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 16px; color: #7b1fa2; line-height: 1; font-weight: 700; }
+
+  .note {
+    margin-top: 12px; padding: 10px 14px; font-size: 14px;
+    background: #fff3cd; border: 1px dashed #f59e0b; border-radius: 10px; color: #92400e;
+  }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 18 集（核心包）</span>
+    <h1>💬 internal/sessions<br>会话 API 核心</h1>
+    <div class="tagline">
+      <span class="emoji">🏛️</span> 21 个文件的大包<br>对话会话的"一站式服务"
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>sessions 包管什么？</h2>
+    <p class="lead">
+      用户和 Agent 的 <span class="hl">每一次对话</span> 都是 Session。<br>
+      sessions 包是对话的 <span class="hl">一站式服务</span>（21 个文件，核心资源包）。
+    </p>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>internal/sessions</b> 覆盖：<br>
+        <br>
+        💬 <b>会话 CRUD</b> —— 创建/查看/列表/更新/归档/删除<br>
+        📡 <b>事件流</b> —— 实时 SSE（stream_hub）<br>
+        🧵 <b>线程</b> —— 子任务线程管理<br>
+        📁 <b>资源</b> —— 文件资源挂载<br>
+        📢 <b>广播</b> —— 事件总线（之前讲的 sessionfanout）<br>
+        🔔 <b>webhook</b> —— 事件通知（webhook_bridge）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：路由全景 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 路由全景</span>
+    <h2>真实路由（transport.go）</h2>
+    <table class="table">
+      <tr><th>路由</th><th>作用</th></tr>
+      <tr><td class="mono">POST /</td><td>创建会话</td></tr>
+      <tr><td class="mono">GET /</td><td>列出会话</td></tr>
+      <tr><td class="mono">GET /{session_id}</td><td>查看会话</td></tr>
+      <tr><td class="mono">POST /{session_id}</td><td>更新会话</td></tr>
+      <tr><td class="mono">DELETE /{session_id}</td><td>删除会话</td></tr>
+      <tr><td class="mono">POST /{session_id}/archive</td><td>归档会话</td></tr>
+      <tr><td class="mono">GET /{session_id}/events</td><td>列出事件</td></tr>
+      <tr><td class="mono">POST /{session_id}/events</td><td>发送事件（用户输入）</td></tr>
+      <tr><td class="mono">GET /{session_id}/events/stream</td><td><b>SSE 实时流</b>（核心！）</td></tr>
+      <tr><td class="mono">GET/POST /{session_id}/resources</td><td>资源列表/添加</td></tr>
+      <tr><td class="mono">POST /{session_id}/resources/{id}</td><td>更新资源</td></tr>
+      <tr><td class="mono">DELETE /{session_id}/resources/{id}</td><td>删除资源</td></tr>
+      <tr><td class="mono">GET /{session_id}/threads</td><td>列出线程</td></tr>
+      <tr><td class="mono">GET /{session_id}/threads/{id}/events</td><td>线程事件</td></tr>
+      <tr><td class="mono">GET /{session_id}/threads/{id}/stream</td><td>线程 SSE 流</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 3 章：文件分工 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 21 个文件分工</span>
+    <h2>按职责分 5 组</h2>
+    <div class="grp">
+      <h3>🚪 入口与路由</h3>
+      <div class="chips">
+        <span class="chip">transport.go 路由注册</span>
+        <span class="chip">handler.go 处理器</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>💬 会话核心</h3>
+      <div class="chips">
+        <span class="chip">service.go 业务编排（~800 行）</span>
+        <span class="chip">service_helpers.go 辅助</span>
+        <span class="chip">access.go 访问控制</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>📡 事件体系</h3>
+      <div class="chips">
+        <span class="chip">event_payload.go 事件载荷</span>
+        <span class="chip">event_mapper.go 事件映射</span>
+        <span class="chip">event_effects.go 事件副作用</span>
+        <span class="chip">stream_hub.go SSE 流中枢 ★</span>
+        <span class="chip">worker_stream_preview.go worker 预览</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>🔗 外部集成</h3>
+      <div class="chips">
+        <span class="chip">code_event_bridge.go 代码会话桥</span>
+        <span class="chip">webhook_bridge.go webhook 桥</span>
+        <span class="chip">fanout.go 事件广播（sessionfanout）</span>
+      </div>
+    </div>
+    <div class="grp">
+      <h3>📁 资源与文件</h3>
+      <div class="chips">
+        <span class="chip">file_resources.go 文件资源</span>
+        <span class="chip">fixtures.go SDK 测试夹具</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：SSE 流 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 核心机制</span>
+    <h2>SSE 实时流怎么工作？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">👤</div>
+        <div class="text"><b>用户发送事件</b>：POST /events（消息/中断/工具结果）</div>
+        <div class="badge">输入</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📢</div>
+        <div class="text"><b>fanout 广播</b>：Publish → 事件总线（sessionfanout）</div>
+        <div class="badge">广播</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🎧</div>
+        <div class="text"><b>stream_hub 分发</b>：所有订阅者收到（subscribe/broadcastEvent）</div>
+        <div class="badge">中枢</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📡</div>
+        <div class="text"><b>SSE 推送</b>：浏览器/Claude Code 实时收到事件流</div>
+        <div class="badge">输出</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🤖</div>
+        <div class="text"><b>Agent 干活</b>：codesessions 的 worker 处理 → 新事件回流</div>
+        <div class="badge">回环</div>
+      </div>
+    </div>
+    <div class="note">🔁 事件闭环：用户 → 总线 → stream_hub → SSE → worker → 新事件 → 再广播（循环）</div>
+  </div>
+
+  <!-- 第 5 章：和其他包 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 和兄弟的关系</span>
+    <h2>sessions 是"对外脸面"</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        💬 <b>sessions</b> = 对外 API（用户看到的对话）<br>
+        🎬 <b>codesessions</b> = 背后发动机（沙箱 worker 通信）<br>
+        📢 <b>sessionfanout</b> = 广播总线（事件分发）<br>
+        📄 <b>sessioncontract</b> = 合同常量（上限）<br>
+        📂 <b>sessionresource</b> = 资源合同（文件）<br>
+        🏷️ <b>managedagentsevents</b> = 事件字典（分类裁决）<br>
+        <br>
+        <span class="hl-green">sessions 把这些全部串起来，对外提供完整的对话 API</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：insight -->
+  <div class="chapter">
+    <span class="chip">第六章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:17px;">
+        🏛️ <b>1. 最核心的资源包</b> —— 21 个文件、路由最多：
+        对话是产品的灵魂，sessions 是灵魂的载体。<br><br>
+        🔁 <b>2. 事件闭环设计</b> —— 用户输入 → 广播 → SSE → worker → 回流：
+        整条链路解耦（fanout 总线 + stream_hub 中枢）。<br><br>
+        🎧 <b>3. stream_hub 是 SSE 心脏</b> —— 管理所有实时连接：
+        订阅/退订/广播/重置（Session 归档时重置连接）。<br><br>
+        🧵 <b>4. 线程 = 子任务</b> —— 一个 Session 可有多个线程
+        （subagent 任务），各自有事件流。<br><br>
+        🔗 <b>5. 大量复用共享包</b> —— managedagentsevents（分类）、
+        sessionfanout（广播）、sessionresource（资源）—— sessions 是"组装者"而非"发明者"。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/sessions 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

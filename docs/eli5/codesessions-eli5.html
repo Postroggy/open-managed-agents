@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 代码会话 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #e8f0fe 0%, #f0f5ff 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #dbe7ff; color: #1a56db;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #a3c4ff; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #e3eeff; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+  .hl-green { background: #e3f5e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2f7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(40, 70, 130, .07);
+  }
+  .card + .card { margin-top: 18px; }
+
+  /* 步骤流 */
+  .flow { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border-radius: 20px; padding: 18px 24px;
+    border: 3px dashed #a3c4ff;
+  }
+  .flow-step .emoji { font-size: 36px; flex-shrink: 0; }
+  .flow-step .text { font-size: 19px; }
+  .flow-step .text b { color: #1a56db; }
+  .flow-step .badge {
+    margin-left: auto; background: #dbe7ff; color: #1a56db;
+    border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 26px; color: #1a56db; line-height: 1; font-weight: 700; }
+
+  /* 能力卡片 */
+  .cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+  .cap {
+    background: #fff; border-radius: 20px; padding: 22px 18px;
+    border: 3px dashed #a3c4ff; text-align: center;
+  }
+  .cap .emoji { font-size: 38px; }
+  .cap .name { font-size: 18px; font-weight: 700; margin-top: 8px; color: #1a56db; }
+  .cap .desc { font-size: 14px; color: #666; margin-top: 4px; }
+  .cap .file { font-family: Menlo, monospace; font-size: 12px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-top: 6px; color: #444; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .cap-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 内部包探秘 · 第 8 集</span>
+    <h1>💻 internal/codesessions<br>代码会话</h1>
+    <div class="tagline">
+      <span class="emoji">🤖</span> 像「远程驾驶室」一样<br>让 Agent 在云端沙箱里跑代码，实时回传消息
+    </div>
+  </div>
+
+  <!-- 第 1 章：是什么 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>为什么需要「代码会话」？</h2>
+    <p class="lead">
+      一个 Agent 不只会聊天 —— 它要 <span class="hl">真的跑代码、操作文件</span>。<br>
+      这些活不能在你电脑上干，要放到 <span class="hl-green">云端沙箱</span> 里。
+    </p>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>codesessions</b> 就是连接「主服务」和「沙箱里的 worker」的 <span class="hl">中枢神经</span>：
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        🖥️ 主服务 ──通讯── 🤖 沙箱 worker<br>
+        （30+ 个文件的大包，负责所有消息、事件、日志的流转）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：工作流程 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 它怎么工作</span>
+    <h2>一次代码会话的旅程</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">🐣</div>
+        <div class="text"><b>创建会话</b>：用户创建 session → 系统分配沙箱</div>
+        <div class="badge">sessions 包</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🤝</div>
+        <div class="text"><b>worker 注册</b>：沙箱里的 Claude Code 启动，向主服务报到</div>
+        <div class="badge">POST /register</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">💬</div>
+        <div class="text"><b>事件流转</b>：用户消息 → worker；worker 输出 → 用户（实时）</div>
+        <div class="badge">SSE 流</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📡</div>
+        <div class="text"><b>心跳保活</b>：worker 每 30 秒报平安，超时自动续期沙箱</div>
+        <div class="badge">heartbeat</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📊</div>
+        <div class="text"><b>状态同步</b>：worker 上报 running/idle → 同步成公开 session 状态</div>
+        <div class="badge">status_running/idle</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：能力 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 它能干什么</span>
+    <h2>六大能力</h2>
+    <div class="cap-grid">
+      <div class="cap">
+        <div class="emoji">📡</div>
+        <div class="name">事件流</div>
+        <div class="desc">SSE 实时推送 worker 事件（输入/输出/状态）</div>
+        <span class="file">service.go / events.go</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">🔗</div>
+        <div class="name">MCP 代理</div>
+        <div class="desc">转发 MCP 工具调用到外部服务器</div>
+        <span class="file">mcp_proxy.go</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">🕵️</div>
+        <div class="name">上游代理（MITM）</div>
+        <div class="desc">代理 Anthropic API 流量，证书自动续期</div>
+        <span class="file">upstream_proxy*.go</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">📝</div>
+        <div class="name">OTLP 日志</div>
+        <div class="desc">worker 遥测/metrics 收集</div>
+        <span class="file">otlp_file_log.go</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">🛡️</div>
+        <div class="name">权限控制</div>
+        <div class="desc">工具调用权限、沙箱超时管理</div>
+        <span class="file">tool_permissions.go</span>
+      </div>
+      <div class="cap">
+        <div class="emoji">🔑</div>
+        <div class="name">会话凭证</div>
+        <div class="desc">worker 认证、运行时凭证签发</div>
+        <span class="file">session_credentials.go</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：内部结构 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 内部结构</span>
+    <h2>零件清单</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        <b>ingress.go</b> —— 入口：所有 worker HTTP 请求都先进这里<br>
+        <b>service.go</b> —— 大脑：事件编排、状态同步、沙箱管理<br>
+        <b>events.go</b> —— 事件定义：session 事件怎么产生、怎么发<br>
+        <b>mapper.go</b> —— 数据库访问：code_session 表读写<br>
+        <b>routes.go</b> —— 路由注册：挂到主服务器<br>
+        <b>errors.go</b> —— 错误清单（apperr 风格）<br>
+        <b>worker_output_schema.go</b> —— worker 输出结构定义
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 5 章：和其他包的关系 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 和兄弟们配合</span>
+    <h2>它和 sessions 什么关系？</h2>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>sessions</b> = 面向用户的<b>对话会话</b>（对外 API）<br>
+        <b>codesessions</b> = 背后的<b>代码执行会话</b>（沙箱 + worker）<br>
+        <span class="hl">一个对外会话，背后可能对应一个代码会话</span>
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        codesessions 是 sessions 的「发动机」——用户看到的是 sessions，跑起来的是 codesessions。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/codesessions 图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>

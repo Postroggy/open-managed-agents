@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 网络策略 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #fef5e8 0%, #fffaf2 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #ffe8c2; color: #b45309;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 48px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #ffd291; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 36px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #fdebd0; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #b45309; }
+  .hl-red { background: #ffe3e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #c53030; }
+  .hl-green { background: #d7f0db; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2e7d32; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 30px 34px;
+    box-shadow: 0 4px 20px rgba(140, 90, 40, .06);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* 两种模式对比 */
+  .cmp2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .cmp { background: #fff; border-radius: 18px; padding: 18px 20px; border: 3px dashed #ffd291; }
+  .cmp .title { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+  .cmp .point { display: flex; gap: 8px; align-items: flex-start; font-size: 15px; color: #555; margin-top: 6px; }
+  .cmp .open { color: #2e7d32; }
+  .cmp .locked { color: #b45309; }
+
+  /* 授权流程 */
+  .flow { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 16px;
+    background: #fff; border-radius: 18px; padding: 16px 20px;
+    border: 3px dashed #ffd291;
+  }
+  .flow-step .emoji { font-size: 30px; flex-shrink: 0; }
+  .flow-step .text { font-size: 16.5px; flex: 1; }
+  .flow-step .text b { color: #b45309; }
+  .flow-step .badge { background: #ffe8c2; color: #b45309; border-radius: 999px; padding: 3px 14px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { text-align: center; font-size: 22px; color: #b45309; line-height: 1; font-weight: 700; }
+
+  /* Reason 表 */
+  .table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14.5px; }
+  .table th { background: #fdebd0; color: #b45309; padding: 10px; text-align: left; border-bottom: 3px solid #ffd291; }
+  .table td { padding: 8px 10px; border-bottom: 1px solid #f5e6d0; }
+  .table .mono { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+  .table tr:hover td { background: #fffaf2; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+  @media (max-width: 700px) { .cmp2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 深入版 · 第 8 集</span>
+    <h1>🚦 internal/networkpolicy<br>沙箱网络策略</h1>
+    <div class="tagline">
+      <span class="emoji">🛂</span> 像「海关」一样<br>决定沙箱里的 Agent 能访问哪些网站
+    </div>
+  </div>
+
+  <!-- 第 1 章：定位 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>沙箱的网络出口怎么控制？</h2>
+    <p class="lead">
+      Agent 在沙箱里跑，可以访问外网 —— 但不能<b>随便访问</b>。<br>
+      networkpolicy 是 <span class="hl">出口白名单策略引擎</span>（纯策略模块）。
+    </p>
+    <div class="card">
+      <p style="font-size:20px;">
+        <b>internal/networkpolicy</b> 是 <span class="hl">纯策略模块</span>（无 HTTP/DB）：<br>
+        <br>
+        📐 解析 Environment 的 <span class="hl">networking 配置</span>（JSON）<br>
+        🚦 裁决：<span class="hl">某个目标能不能访问？</span>（返回 Decision + Reason）<br>
+        🛡️ 供 environments / codesessions / e2bruntime 使用
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：两种模式 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 两种模式</span>
+    <h2>unrestricted vs limited</h2>
+    <div class="cmp2">
+      <div class="cmp">
+        <div class="title open">🌐 unrestricted（全开）</div>
+        <div class="point">🔓 <span>沙箱可以访问任何网站</span></div>
+        <div class="point">📭 <span>顶层 type 不是 "cloud" 或 networking 缺失时默认</span></div>
+        <div class="point">⚪ <span>所有目标 → Allow（Reason: unrestricted）</span></div>
+      </div>
+      <div class="cmp">
+        <div class="title locked">🔒 limited（白名单）</div>
+        <div class="point">📋 <span>只允许访问 allowed_hosts 列表</span></div>
+        <div class="point">🔧 <span>可选放行包管理器（allow_package_managers）</span></div>
+        <div class="point">🔗 <span>Agent snapshot 里的 MCP 服务器自动放行</span></div>
+        <div class="point">🚫 <span>其他 → Deny（Reason: host_not_allowed）</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:17px; color:#c53030;">
+        ⚠️ <b>安全要求：调用方必须 fail closed</b>（策略解析失败 → 拒绝，绝不降级为 unrestricted）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 3 章：授权流程 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 授权流程</span>
+    <h2>一次访问请求怎么裁决？</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">📐</div>
+        <div class="text"><b>ParseConfig</b>：解析 Environment 的 networking JSON</div>
+        <div class="badge">解析</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🧩</div>
+        <div class="text"><b>ParsePolicy</b>：编译成类型化 Policy（host matcher + MCP 白名单）</div>
+        <div class="badge">编译</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🚦</div>
+        <div class="text"><b>AuthorizeHTTPS(target)</b>：问"这个目标能去吗？"</div>
+        <div class="badge">裁决</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📋</div>
+        <div class="text"><b>返回 Decision</b>：Allow + Reason（用于审计日志）</div>
+        <div class="badge">结果</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🚫</div>
+        <div class="text"><b>Deny</b>：MITM 代理层拒绝连接，记录 Reason 到日志</div>
+        <div class="badge">执行</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：Reason 全表 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 裁决原因</span>
+    <h2>7 种 Decision Reason</h2>
+    <table class="table">
+      <tr><th>Reason</th><th>含义</th><th>Allow?</th></tr>
+      <tr><td class="mono">unrestricted</td><td>全开模式</td><td style="color:#2e7d32;font-weight:800;">✅</td></tr>
+      <tr><td class="mono">explicit_host</td><td>在 allowed_hosts 白名单</td><td style="color:#2e7d32;font-weight:800;">✅</td></tr>
+      <tr><td class="mono">mcp_host</td><td>Agent snapshot 里的 MCP 服务器</td><td style="color:#2e7d32;font-weight:800;">✅</td></tr>
+      <tr><td class="mono">package_manager_host</td><td>包管理器（apt/pip/npm）</td><td style="color:#2e7d32;font-weight:800;">✅</td></tr>
+      <tr><td class="mono">host_not_allowed</td><td>不在白名单</td><td style="color:#c53030;font-weight:800;">❌</td></tr>
+      <tr><td class="mono">invalid_target</td><td>目标 URL 非法</td><td style="color:#c53030;font-weight:800;">❌</td></tr>
+      <tr><td class="mono">policy_unavailable</td><td>策略不可用（fail closed）</td><td style="color:#c53030;font-weight:800;">❌</td></tr>
+    </table>
+  </div>
+
+  <!-- 第 5 章：两个入口 -->
+  <div class="chapter">
+    <span class="chip">第五章 · 两个授权入口</span>
+    <h2>HTTPS 出口 vs MCP 代理</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🚦 <b>AuthorizeHTTPS</b> —— 沙箱出站 HTTPS（environments/e2bruntime 用）<br>
+        <br>
+        🔗 <b>AuthorizeMCPURL</b>（MCPProxyPolicy）—— MCP 代理专用：<br>
+        &nbsp;&nbsp;约束 Session + 校验 AgentSnapshot 里的 MCP URL 是否合法<br>
+        <br>
+        🛡️ <b>MCP 授权 fail closed</b>：snapshot 解析失败 → 拒绝（ErrMalformedAgentSnapshot）
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 6 章：insight -->
+  <div class="chapter">
+    <span class="chip">第六章 · Insight</span>
+    <h2>读完代码的深度理解</h2>
+    <div class="card">
+      <p style="font-size:19px;">
+        🛡️ <b>1. Fail closed 是灵魂</b> —— 所有"拿不准"的情况都拒绝：
+        解析失败、策略缺失、snapshot 损坏 → 一律 Deny，绝不静默放行。<br><br>
+        🪶 <b>2. 纯策略模块</b> —— 不碰 HTTP/DB，输入 JSON 输出 Decision，
+        任何层都能安全引用（environments/codesessions/e2bruntime 共用）。<br><br>
+        🧩 <b>3. 编译一次，裁决多次</b> —— 原始 JSON 只在解析边界存在，
+        授权逻辑只处理类型化 Policy（性能 + 类型安全）。<br><br>
+        📋 <b>4. Reason 是审计契约</b> —— 每次 Deny 都有机器可读原因，
+        日志里能回答"为什么这个请求被拒"。<br><br>
+        🔗 <b>5. MCP 白名单自动派生</b> —— Agent 配置了 MCP 服务器，
+        策略自动放行对应 host —— 不用手动加白名单。
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/networkpolicy 深入图解 · 有代码依据</footer>
+</div>
+</body>
+</html>

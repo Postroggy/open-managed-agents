@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA 对象清理 · 五岁小孩深度版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(180deg, #eef8ee 0%, #f0faf0 45%, #ffffff 100%);
+    font-size: 19px;
+    color: #2c3550;
+    line-height: 1.8;
+    padding: 40px 24px 100px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* 封面 */
+  .cover { text-align: center; margin-bottom: 70px; }
+  .cover .kicker {
+    display: inline-block; background: #d8f5d8; color: #2f7d32;
+    border-radius: 999px; padding: 8px 22px; font-size: 16px; font-weight: 700;
+  }
+  .cover h1 { font-size: 52px; line-height: 1.25; margin-top: 20px; }
+  .cover .tagline {
+    margin: 26px auto 0; font-size: 25px; color: #2c3550;
+    background: #fff; border: 3px dashed #9adba0; border-radius: 20px;
+    padding: 16px 26px; display: inline-block;
+  }
+  .cover .tagline .emoji { font-size: 32px; }
+
+  /* 章节 */
+  .chapter { margin-bottom: 64px; }
+  .chapter .chip {
+    display: inline-block; background: #1c2333; color: #fff;
+    border-radius: 12px; padding: 6px 18px; font-size: 15px;
+    font-weight: 700; letter-spacing: 1px; margin-bottom: 18px;
+  }
+  .chapter h2 { font-size: 38px; margin-bottom: 26px; line-height: 1.3; }
+  .lead { font-size: 23px; color: #333; margin-bottom: 28px; }
+  .hl { background: #e3f5e3; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #2f7d32; }
+  .hl-blue { background: #e8f0fe; border-radius: 10px; padding: 2px 10px; font-weight: 700; color: #1a56db; }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 24px; padding: 34px 38px;
+    box-shadow: 0 4px 20px rgba(40, 80, 50, .07);
+  }
+  .card + .card { margin-top: 18px; }
+
+  /* 步骤流 */
+  .flow { display: flex; flex-direction: column; gap: 14px; margin-top: 20px; }
+  .flow-step {
+    display: flex; align-items: center; gap: 18px;
+    background: #fff; border-radius: 20px; padding: 18px 24px;
+    border: 3px dashed #9adba0;
+  }
+  .flow-step .emoji { font-size: 36px; flex-shrink: 0; }
+  .flow-step .text { font-size: 19px; }
+  .flow-step .text b { color: #2f7d32; }
+  .flow-step .badge {
+    margin-left: auto; background: #d8f5d8; color: #2f7d32;
+    border-radius: 999px; padding: 4px 16px; font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-arrow { text-align: center; font-size: 26px; color: #2f7d32; line-height: 1; font-weight: 700; }
+
+  /* 清单 */
+  .checklist { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .check {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: #fff; border-radius: 18px; padding: 16px 22px;
+    border: 3px dashed #9adba0;
+  }
+  .check .mark { font-size: 24px; flex-shrink: 0; }
+  .check .text { font-size: 18px; }
+  .check .text b { color: #2f7d32; }
+  .check .text .mono { font-family: Menlo, Consolas, monospace; font-size: 15px; background: #f1f5f1; border-radius: 6px; padding: 2px 8px; }
+
+  footer { text-align: center; margin-top: 60px; color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <span class="kicker">OMA 内部包探秘 · 第 7 集</span>
+    <h1>🧹 internal/cleanup<br>对象清理工人</h1>
+    <div class="tagline">
+      <span class="emoji">🗑️</span> 像「垃圾分类回收站」一样<br>定时把不要的东西清走
+    </div>
+  </div>
+
+  <!-- 第 1 章：是什么 -->
+  <div class="chapter">
+    <span class="chip">第一章 · 它是什么</span>
+    <h2>为什么要有人专门打扫？</h2>
+    <p class="lead">
+      系统里的文件放在「对象存储」（一个大仓库）。<br>
+      有些文件用完了、过期了，<span class="hl">不删会占满仓库</span>！
+    </p>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>cleanup</b> 就是一个后台 <span class="hl">清洁工</span>：
+        定时起床，看看有没有「标记要删除」的东西，<br>
+        有就删掉，然后回去睡觉，过一会儿再来。
+      </p>
+      <p style="font-size:19px; margin-top:14px; color:#666;">
+        它自己不决定删什么 —— 只负责执行 <b>别人已经标记好</b> 的删除任务（队列）。
+      </p>
+    </div>
+  </div>
+
+  <!-- 第 2 章：工作原理 -->
+  <div class="chapter">
+    <span class="chip">第二章 · 怎么工作</span>
+    <h2>清洁工的一天</h2>
+    <p class="lead">和快递驿站一样：<span class="hl">扫队列 → 逐个删 → 重试失败的</span></p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="emoji">⏰</div>
+        <div class="text"><b>定时起床</b>：每 30 秒醒来一次（默认间隔）</div>
+        <div class="badge">interval</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">📋</div>
+        <div class="text"><b>领取任务</b>：一次最多领 10 个「删除任务」（LeaseObjectCleanupJobs）</div>
+        <div class="badge">batch=10</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🗑️</div>
+        <div class="text"><b>逐个删除</b>：按任务的 bucket + key 从对象存储删除（store.Delete）</div>
+        <div class="badge">删除</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">✅</div>
+        <div class="text"><b>完成标记</b>：删除成功 → 标记任务完成（CompleteObjectCleanupJob）</div>
+        <div class="badge">完成</div>
+      </div>
+      <div class="flow-arrow">▼</div>
+      <div class="flow-step">
+        <div class="emoji">🔁</div>
+        <div class="text"><b>失败重试</b>：删除失败 → 等一会儿再来（1²、2²、3²…分钟，最多 10 次）</div>
+        <div class="badge">最多 10 次</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 3 章：谁在用 -->
+  <div class="chapter">
+    <span class="chip">第三章 · 谁往队列里塞任务</span>
+    <h2>哪些东西会被清走？</h2>
+    <div class="checklist">
+      <div class="check">
+        <div class="mark">📁</div>
+        <div class="text"><b>文件</b>：删除文件时，先标记，再由 cleanup 真正删对象</div>
+      </div>
+      <div class="check">
+        <div class="mark">🧠</div>
+        <div class="text"><b>记忆</b>：memory 删除时，对象存储里的记忆文件由它清理</div>
+      </div>
+      <div class="check">
+        <div class="mark">📦</div>
+        <div class="text"><b>批次结果</b>：batches 的过期结果文件也交给它</div>
+      </div>
+      <div class="check">
+        <div class="mark">🗃️</div>
+        <div class="text"><b>filestore</b>：会话资源文件、命名空间退役时清理</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第 4 章：设计亮点 -->
+  <div class="chapter">
+    <span class="chip">第四章 · 设计亮点</span>
+    <h2>为什么这么设计？</h2>
+    <div class="card">
+      <p style="font-size:21px;">
+        <b>1. 删除不阻塞请求</b> —— 用户删文件，请求秒回；真正的删除在后台慢慢做 ✅<br>
+        <b>2. 失败可重试</b> —— 网络抖动、存储抽风，等会儿再来，最多 10 次 🔁<br>
+        <b>3. 批量领取</b> —— 一次 10 个，不会一次扫太多把仓库挤爆 🪫<br>
+        <b>4. 有兜底</b> —— bucket 不存在直接标记失败，不会卡死队列 🛡️
+      </p>
+    </div>
+  </div>
+
+  <footer>🎈 OMA · internal/cleanup 图解 · 参考 oma-errors 风格</footer>
+</div>
+</body>
+</html>
