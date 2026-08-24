@@ -24,6 +24,7 @@ import {
   type EnvironmentApiResponse,
   type EnvironmentWorkApiResponse,
   type FileMetadataApiResponse,
+  type FileMetadataPageResponse,
   type ManagedEntityApiResponse,
   type ManagedEntityFormValues,
   type ManagedEntityListFilters,
@@ -551,6 +552,31 @@ export function listSessionResources(sessionId: string, workspaceId: string) {
 
 export function retrieveFileMetadata(fileId: string, workspaceId: string) {
   return anthropicBetaApi.files.retrieveMetadata<FileMetadataApiResponse>(fileId, workspaceId);
+}
+
+export async function listSessionFileOptions(workspaceId: string): Promise<FileMetadataPageResponse> {
+  const data: FileMetadataApiResponse[] = [];
+  let afterId: string | undefined;
+  let firstId: string | null | undefined;
+  let lastId: string | null | undefined;
+
+  for (;;) {
+    const page = (await anthropicBetaApi.files.list<FileMetadataApiResponse>(
+      { limit: 1000, ...(afterId ? { after_id: afterId } : {}) },
+      workspaceId,
+    )) as FileMetadataPageResponse;
+    data.push(...page.data);
+    firstId ??= page.first_id;
+    lastId = page.last_id;
+
+    if (!page.has_more) {
+      return { data, first_id: firstId, has_more: false, last_id: lastId };
+    }
+    if (!lastId || lastId === afterId) {
+      throw new Error('Files API pagination did not return a new cursor');
+    }
+    afterId = lastId;
+  }
 }
 
 export const SESSION_DETAIL_EVENT_PAGE_LIMIT = 500;
@@ -1589,11 +1615,14 @@ export function createManagedEntityBody(section: ManagedEntitySection, values: M
         environment_id: values.environmentId,
         vault_ids: values.vaultIds,
         metadata: {},
-        resources: values.fileResources.map((resource) => ({
-          type: 'file',
-          file_id: resource.fileId.trim(),
-          mount_path: sessionFileAPIMountPath(resource.mountPath),
-        })),
+        resources: values.fileResources.map((resource) => {
+          const mountPath = sessionFileAPIMountPath(resource.mountPath);
+          return {
+            type: 'file',
+            file_id: resource.fileId.trim(),
+            ...(mountPath ? { mount_path: mountPath } : {}),
+          };
+        }),
       };
     case 'deployments':
       return {
