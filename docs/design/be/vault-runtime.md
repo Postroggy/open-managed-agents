@@ -115,11 +115,11 @@ API 响应。`internal/vaults` 在数据库边界按 `auth.type` 判别并解析
 
 `ArchiveVault` / `DeleteVault` / `CreateVaultCredential` 在同一 Yourbatis 事务内分别构造两个 Mapper，不再使用 `sqlx.Tx`。
 运行时凭证加载先通过 `VaultMapper` 批量筛选当前 workspace 中未归档的 Vault，再通过 `VaultCredentialMapper` 按 Vault UUID 批量加载活动凭证；Go 层按原始 `vault_ids` 顺序组装结果，最多执行两次查询。
-**Credential secret update（preserve-on-omit）**：更新请求省略 secret 时，Open 现有信封 → merge 非秘密字段 → 用新 DEK reseal，并用 `version` CAS（冲突 → HTTP 409）。缺信封时无法 merge：metadata-only 或未带完整替换 secret → HTTP 400；带完整替换 secret → 直接 reseal。
+**Credential secret update（preserve-on-omit）**：更新请求省略 secret 时，Open 现有信封 → merge 非秘密字段 → 用新 DEK reseal，并用 `version` CAS（冲突 → HTTP 409）。缺信封时无法 merge：metadata-only 或未带完整替换 secret → HTTP 400；带完整替换 secret → 直接 reseal。mcp_oauth 合并后完整性只要求 `access_token`，以及配置了 refresh 时的 `refresh_token`；**不**因公开 `token_endpoint_auth.type` 为 `client_secret_*` 而强制信封内有 `client_secret`（平台 OAuth 合法地省略；BYO/DCR 的 secret 在 create / patch `token_endpoint_auth` 时校验）。
 
 KEK 版本由 config 管（`version` current + `decrypt_only` 旧列表）。每条凭证用 `key_version` 标明自己用的是哪把。KEK 本身不进库。
 
-`mcp_oauth_flows` 里的 `client_secret` / `code_verifier` 也是明文（15min TTL）。若验收要求“DB 零明文”，同样走 Secret Service（该表加一组精简信封列，两者复用同一 DEK）。生命周期短，也可拆小 issue。
+`mcp_oauth_flows` 的 `code_verifier` 与 flow-owned `client_secret`（BYO / DCR）写入 Secret envelope（与凭证同一 `secrets.Service`）；`client_credential_source` 为 `platform | sealed`。平台 client secret **不落用户 flow 行，也不写入 `vault_credentials` 的 sealed refresh payload**；token exchange（以及日后 refresh）按 `mcp_server_url` 从 `vault.platform_oauth_clients` 再解析。Complete/Fail 清空信封列。
 
 Provider/KMS 调用放在 DB 事务外。
 
@@ -182,7 +182,7 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 4. 删掉客户端带给 proxy 的 `Authorization`（session JWT），加 `Authorization: Bearer <token>`，转发真实上游。passthrough 不写上游 Authorization。
 5. 跨 origin redirect：代理不自动跟；客户端新请求重新匹配。
 
-匹配规则：凭证与请求 URL 的 scheme、hostname、effective port 必须一致；凭证 `mcp_server_url` 的 path 必须是请求 path 的**按 `/` 分段前缀**。例如 `…/mcp` 命中 `…/mcp`、`…/mcp/sse`，不命中 `…/mcp-admin`。
+匹配规则：凭证与请求 URL 的 scheme、hostname、effective port 必须一致；凭证 `mcp_server_url` 的 path 必须是请求 path 的**按 `/` 分段前缀**。例如 `…/mcp` 命中 `…/mcp`、`…/mcp/sse`，不命中 `…/mcp-admin`。`https://host` 不得匹配 `http://host:443`（避免把 Bearer 注到明文 HTTP）。
 
 后续（非本切片）：
 
@@ -203,7 +203,7 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 
 ## 验收（存库加密：已完成）
 
-- DB、日志、trace 不出现明文密码 / DEK；**主密钥只在 `config.yaml` / `kek_file`**（不进 DB/日志）；dev/prod 均须配置，无 ephemeral 兜底。*（注：`mcp_oauth_flows` 的 client_secret/code_verifier 本期仍明文，拆小 issue。）*
+- DB、日志、trace 不出现明文密码 / DEK；**主密钥只在 `config.yaml` / `kek_file`**（不进 DB/日志）；dev/prod 均须配置，无 ephemeral 兜底。`mcp_oauth_flows` 敏感字段走 Secret envelope；平台 client secret 不落 flow 表，也不复制进用户 `vault_credentials`。
 - 写统一经 Secret Service；读不返回密码；`secret_payload` 列不存在。
 - 篡改密文 / nonce / wrapped_dek / AAD 后解密失败；未知格式或 key 不可用 → fail closed（HTTP 5xx）。
 - 活动凭证缺信封且未带完整替换 secret 的 update/validate（含仅改 metadata/display_name）→ HTTP 400；带完整替换 secret 的 update → 直接 reseal；`version` CAS 冲突 → HTTP 409。
@@ -221,6 +221,18 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 - Environment / MCP proxy 网络策略仍生效；本切片不做 credential `networking`。
 
 > 注：云 KMS 自动轮换 / DisableKey 另议。
+
+## Platform OAuth Client（登记）
+
+部署方可在 `vault.platform_oauth_clients` 配置通用 registry（列表），每项绑定精确 `mcp_server_url` + `client_id` + `client_secret`（本地/dev 可内联；勿提交真实 secret）。
+
+`POST .../mcp/vault-auth/start` 解析 client 顺序：
+
+1. 请求带非空 BYO `client_id` → 用 BYO（覆盖 Platform）；`client_credential_source=sealed`，secret 进 flow 信封
+2. 否则精确匹配 Platform OAuth Client registry → 只用平台 `client_id`（secret **不**写入 flow / credential）；`client_credential_source=platform`，callback（及日后 refresh）再从配置取 secret
+3. 否则走既有 DCR；无 registration endpoint 则失败；DCR secret 进 flow 信封与最终 credential 信封（`sealed`）
+
+`code_verifier` 始终进同一信封。Redirect 仍由前端传入 `{origin}/oauth/vault/success`。控制台 Optional Client 字段保留。用户 access/refresh token 仍进个人 Credential 信封；平台 `client_secret` 不进该信封。
 
 ## 不做（注入 MVP）
 
