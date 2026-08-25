@@ -131,7 +131,7 @@ func (h *Handler) serveUpstreamProxyTunnel(connection *websocket.Conn, identity 
 		return
 	}
 	if h.cfg.CodeSession.UpstreamProxyMITMEnabled {
-		h.serveUpstreamProxyMITM(connection, connectRequest.Target, resolvedTarget)
+		h.serveUpstreamProxyMITM(connection, identity, connectRequest.Target, resolvedTarget)
 		return
 	}
 	targetConnection, err := h.upstreamProxy.dial(connection.Request().Context(), resolvedTarget)

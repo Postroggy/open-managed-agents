@@ -151,14 +151,6 @@ func (t *injectingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	if t.injector == nil {
 		return t.base.RoundTrip(req)
 	}
-	// RoundTripper contract: always close the caller's body. Clones go to base;
-	// snapshot may replace req.Body with a restored buffer — close whichever is
-	// left on req when this returns.
-	defer closeRequestBody(req)
-	body, err := snapshotRequestBody(req)
-	if err != nil {
-		return nil, err
-	}
 	plan, err := t.injector.loadInjectionPlan(
 		t.ctx,
 		t.codeSessionExternalID,
@@ -166,6 +158,25 @@ func (t *injectingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		t.workspaceUUID,
 		t.requestURL,
 	)
+	if err != nil {
+		closeRequestBody(req)
+		return nil, err
+	}
+	// No injectable URL match: stream passthrough (base closes the body). Snapshot
+	// only when inject/401-replay may run — otherwise every MITM outbound would
+	// buffer up to 32 MiB and reject larger uploads even with empty vaults.
+	if len(plan.matches) == 0 {
+		if plan.hostCovered {
+			closeRequestBody(req)
+			return nil, injectionRejected(nil)
+		}
+		return t.base.RoundTrip(req)
+	}
+	// RoundTripper contract: always close the caller's body. Clones go to base;
+	// snapshot may replace req.Body with a restored buffer — close whichever is
+	// left on req when this returns.
+	defer closeRequestBody(req)
+	body, err := snapshotRequestBody(req)
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +193,7 @@ func (t *injectingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		if result == nil {
 			return t.base.RoundTrip(out)
 		}
+		out.Header.Del("Authorization")
 		out.Header.Set("Authorization", "Bearer "+result.token)
 		resp, err := t.base.RoundTrip(out)
 		if err != nil {
@@ -352,11 +364,12 @@ func cloneRequestWithBody(req *http.Request, body []byte) *http.Request {
 	return out
 }
 
-// maxSnapshotRequestBodyBytes caps buffered MCP request bodies for 401 retry.
-// Larger bodies fail closed instead of silently truncating the replay.
+// maxSnapshotRequestBodyBytes caps buffered request bodies for MCP 401 retry
+// and Environment Variable body substitution. Larger bodies fail closed
+// instead of silently truncating replay or forwarding an unsubstituted placeholder.
 const maxSnapshotRequestBodyBytes = 32 << 20
 
-var errSnapshotRequestBodyTooLarge = fmt.Errorf("request body exceeds %d-byte MCP retry buffer", maxSnapshotRequestBodyBytes)
+var errSnapshotRequestBodyTooLarge = fmt.Errorf("request body exceeds %d-byte snapshot buffer", maxSnapshotRequestBodyBytes)
 
 func readWithinLimit(r io.Reader, max int64) ([]byte, error) {
 	if max < 0 {

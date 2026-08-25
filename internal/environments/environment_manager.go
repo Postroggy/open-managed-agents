@@ -70,8 +70,8 @@ func managedAgentSessionConfig(
 	if len(tools) > 0 {
 		body["tools"] = tools
 	}
-	if vaultIDs := rawJSONArray(session.VaultIDs); len(vaultIDs) > 0 {
-		body["vault_ids"] = vaultIDs
+	if len(session.VaultIDs) > 0 {
+		body["vault_ids"] = session.VaultIDs
 	}
 	raw, _ := json.Marshal(body)
 	return raw
@@ -201,17 +201,6 @@ func rawJSONObject(raw json.RawMessage) map[string]any {
 	return object
 }
 
-func rawJSONArray(raw json.RawMessage) []any {
-	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
-		return nil
-	}
-	var values []any
-	if err := json.Unmarshal(raw, &values); err != nil {
-		return nil
-	}
-	return values
-}
-
 func mapStringAnyValue(value any) map[string]any {
 	object, ok := value.(map[string]any)
 	if ok && object != nil {
@@ -243,7 +232,8 @@ func modelIDFromAgentSnapshot(raw json.RawMessage) string {
 }
 
 // buildEnvironmentManagerV0Payload 把 code session 映射为 environment-manager v0 合同；relay、runtime API 与 ingress 绑定同一 external ID，真实上游凭证不进入 sandbox。
-func buildEnvironmentManagerV0Payload(codeSessionID string, sessionIngressToken string, oauthAccessToken string, workerEpoch int64, workDir string, sessionConfig json.RawMessage, cfg config.Config) ([]byte, error) {
+// vaultEnvPlaceholders 为 Environment Variable Credential 的 secret_name→Opaque Placeholder；平台保留名不会被覆盖。
+func buildEnvironmentManagerV0Payload(codeSessionID string, sessionIngressToken string, oauthAccessToken string, workerEpoch int64, workDir string, sessionConfig json.RawMessage, cfg config.Config, vaultEnvPlaceholders map[string]string) ([]byte, error) {
 	startupContext := map[string]any{}
 	if len(sessionConfig) > 0 && string(sessionConfig) != "null" {
 		if err := json.Unmarshal(sessionConfig, &startupContext); err != nil {
@@ -270,6 +260,12 @@ func buildEnvironmentManagerV0Payload(codeSessionID string, sessionIngressToken 
 		environmentVariables[key] = value
 	}
 	applyCodeSessionOTLPEnvironment(environmentVariables, stringFromMap(startupContext, "api_base_url"), codeSessionID, sessionIngressToken, workerEpochText)
+	for key, placeholder := range vaultEnvPlaceholders {
+		if _, exists := environmentVariables[key]; exists {
+			continue
+		}
+		environmentVariables[key] = placeholder
+	}
 	startupContext["environment_variables"] = environmentVariables
 	if _, ok := startupContext["sources"]; !ok {
 		startupContext["sources"] = []any{}

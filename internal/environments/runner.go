@@ -21,6 +21,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/networkpolicy"
 	"github.com/superduck-ai/open-managed-agents/internal/runtime/e2bruntime"
 	skillsapi "github.com/superduck-ai/open-managed-agents/internal/skills"
+	"github.com/superduck-ai/open-managed-agents/internal/vaults"
 )
 
 var (
@@ -81,6 +82,7 @@ type managedAgentLaunchPreparation struct {
 	WorkDir               string
 	Title                 string
 	RecoveryCodeSessionID string
+	EnvPlaceholders       map[string]string
 }
 
 type managedAgentRuntimeLaunch struct {
@@ -548,6 +550,10 @@ func (r *Runner) prepareManagedAgentLaunch(
 	}
 	runtimeResources := resolveManagedAgentRuntimeResources(resources)
 	sessionConfig := managedAgentSessionConfig(session, runtimeResources)
+	envPlaceholders, err := r.prepareEnvCredentialPlaceholders(ctx, session)
+	if err != nil {
+		return nil, err
+	}
 	workDir := runtimeResources.workDir
 	title := ""
 	if session.Title != nil {
@@ -566,7 +572,23 @@ func (r *Runner) prepareManagedAgentLaunch(
 		WorkDir:               workDir,
 		Title:                 title,
 		RecoveryCodeSessionID: recoveryCodeSessionID,
+		EnvPlaceholders:       envPlaceholders,
 	}, nil
+}
+
+func (r *Runner) prepareEnvCredentialPlaceholders(ctx context.Context, session db.Session) (map[string]string, error) {
+	if len(session.VaultIDs) == 0 {
+		return nil, nil
+	}
+	credentials, err := r.db.ListActiveVaultCredentialsForVaultIDs(ctx, session.WorkspaceUUID, session.VaultIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list vault credentials for env mount: %w", err)
+	}
+	placeholders, err := vaults.PrepareEnvCredentialMount(r.cfg.CodeSession.UpstreamProxyMITMEnabled, credentials)
+	if err != nil {
+		return nil, err
+	}
+	return placeholders, nil
 }
 
 func (r *Runner) createManagedAgentRuntimeLaunch(
@@ -606,6 +628,7 @@ func (r *Runner) createManagedAgentRuntimeLaunch(
 		preparation.WorkDir,
 		preparation.SessionConfig,
 		r.cfg,
+		preparation.EnvPlaceholders,
 	)
 	if err != nil {
 		if preparation.RecoveryCodeSessionID == "" {
