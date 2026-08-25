@@ -4,6 +4,7 @@ import { StatusPill } from '../components/common';
 import { numericValueFromKeys } from '../sessions/SessionDetailPage';
 import {
   type AgentApiResponse,
+  type AgentModelInput,
   type AgentDetailCreatedFilter,
   type AgentDetailStatusFilter,
   type AgentDetailTab,
@@ -35,7 +36,7 @@ export function compactAgentId(id: string) {
   return `${id.slice(0, 12)}...${id.slice(-6)}`;
 }
 
-export function agentModelName(model: AgentApiResponse['model']) {
+export function agentModelName(model: AgentApiResponse['model'] | AgentModelInput) {
   if (typeof model === 'string') {
     return model;
   }
