@@ -20,6 +20,9 @@ func TestMemoryVersionMapperDeleteOlderThanContract(t *testing.T) {
 	assertMapperSQLContains(t, bound, "workspace_uuid = $1")
 	assertMapperSQLContains(t, bound, "memory_store_external_id = $2")
 	assertMapperSQLContains(t, bound, "created_at < $3")
+	assertMapperSQLContains(t, bound, "NOT EXISTS")
+	assertMapperSQLContains(t, bound, "current_version_external_id = memory_versions.external_id")
+	assertMapperSQLContains(t, bound, "deleted_at IS NULL")
 }
 
 func TestMemoryVersionMapperDeleteOlderThanExecution(t *testing.T) {

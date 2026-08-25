@@ -65,6 +65,9 @@ func mapResourceBuildError(err error) error {
 	if mapped, ok := mapFileResourcePersistenceError(err); ok {
 		return mapped
 	}
+	if errors.Is(err, db.ErrMemoryStoreLimit) {
+		return memoryStoreLimitExceeded(err)
+	}
 	var refErr resourceReferenceError
 	if !errors.As(err, &refErr) {
 		return invalidRequest(err)
@@ -86,12 +89,16 @@ func memoryStoreLimitMessage() string {
 	return fmt.Sprintf("at most %d memory stores are supported per session", sessioncontract.MaxMemoryStoresPerSession)
 }
 
+func memoryStoreLimitExceeded(err error) error {
+	return apperr.NewWithType(apperr.Conflict, "memory_store_limit_error", memoryStoreLimitMessage(), err)
+}
+
 func mapSessionLoadError(err error, sessionID string) error {
 	if mapped, ok := mapFileResourcePersistenceError(err); ok {
 		return mapped
 	}
 	if errors.Is(err, db.ErrMemoryStoreLimit) {
-		return apperr.New(apperr.InvalidArgument, memoryStoreLimitMessage(), err)
+		return memoryStoreLimitExceeded(err)
 	}
 	if errors.Is(err, db.ErrNotFound) {
 		return sessionNotFound(sessionID, err)
