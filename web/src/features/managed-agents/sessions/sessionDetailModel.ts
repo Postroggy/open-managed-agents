@@ -702,7 +702,8 @@ export function sessionShouldStreamEvents(session: Pick<SessionApiResponse, 'arc
   if (!session || session.archived_at) {
     return false;
   }
-  return sessionStatusIsLive(session.status);
+  const status = session.status.toLowerCase();
+  return status !== 'terminated' && status !== 'deleted';
 }
 
 export function sessionElapsedMs(session: SessionApiResponse, events: QuickstartSessionEvent[]) {

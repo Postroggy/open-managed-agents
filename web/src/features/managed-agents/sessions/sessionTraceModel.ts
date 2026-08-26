@@ -48,8 +48,12 @@ export function buildSessionTraceEntries(
   const toolResults = new Map<string, QuickstartSessionEvent[]>();
   const toolConfirmations = new Map<string, QuickstartSessionEvent[]>();
   const displayEvents = events.map(sessionCanonicalDisplayEvent);
+  if (view === 'transcript') {
+    displayEvents.sort(compareSessionTranscriptEvents);
+  }
   const requiresActionEventIDs = latestRequiresActionEventIDs(displayEvents);
   const threadHints = buildSessionThreadHints(displayEvents);
+  let latestAgentMessageText = '';
   // Transcript 使用只读回放模型：result / confirmation 先按 tool use id 建索引，
   // 之后折回对应 tool_call；Debug 仍保留原始事件用于审计。
   displayEvents.forEach((event) => {
@@ -69,6 +73,23 @@ export function buildSessionTraceEntries(
   });
 
   return displayEvents.flatMap((event, index) => {
+    const type = sessionEventType(event);
+    const eventFamily = sessionEventFamily(event);
+    const agentMessageText =
+      eventFamily === 'agent' && !sessionEventIsThinking(event) ? sessionEventTranscriptText(event).trim() : '';
+    if (
+      view === 'transcript' &&
+      type === 'session.status_idle' &&
+      sessionIsResultEvent(event) &&
+      sessionResultText(event) === latestAgentMessageText
+    ) {
+      return [];
+    }
+    if (agentMessageText) {
+      latestAgentMessageText = agentMessageText;
+    } else if (eventFamily === 'user') {
+      latestAgentMessageText = '';
+    }
     let enrichedEvent = sessionEventWithThreadHint(event, threadHints.byThreadId);
     if (requiresActionEventIDs.has(sessionEventKey(enrichedEvent))) {
       enrichedEvent = { ...enrichedEvent, requires_action: true };
@@ -91,7 +112,7 @@ export function buildSessionTraceEntries(
       return contentEntries;
     }
 
-    const family = sessionEventFamily(enrichedEvent);
+    const family = eventFamily;
     const toolUseId = sessionToolUseId(enrichedEvent);
     const matchedByPublicEventId = typeof enrichedEvent.id === 'string' && toolUseId === enrichedEvent.id;
     const resultEvent =
@@ -116,6 +137,21 @@ export function buildSessionTraceEntries(
       sessionTraceEntryFromEvent(enrichedEvent, index, family, resultEvent, confirmationEvent, traceStartMs, msg),
     ];
   });
+}
+
+function compareSessionTranscriptEvents(left: QuickstartSessionEvent, right: QuickstartSessionEvent) {
+  const chronologicalOrder = compareSessionEvents(left, right);
+  if (chronologicalOrder !== 0) {
+    return chronologicalOrder;
+  }
+  return sessionTranscriptTieRank(left) - sessionTranscriptTieRank(right);
+}
+
+function sessionTranscriptTieRank(event: QuickstartSessionEvent) {
+  if (sessionEventFamily(event) === 'agent' && !sessionEventIsThinking(event)) {
+    return 0;
+  }
+  return sessionEventType(event) === 'session.status_idle' && sessionIsResultEvent(event) ? 2 : 1;
 }
 
 export function latestRequiresActionEventIDs(events: QuickstartSessionEvent[]) {
@@ -247,7 +283,7 @@ export function buildSessionEventEntries(
   const entries: SessionEventListEntry[] = [];
   let lastIdleAt = 0;
   let queuedBoundaryInserted = false;
-  const sortedRawEvents = [...events.map(sessionCanonicalDisplayEvent)].sort(compareSessionEvents);
+  const sortedRawEvents = [...events.map(sessionCanonicalDisplayEvent)].sort(compareSessionTranscriptEvents);
   const rawCursorByKey = new Map<string, number>();
   sortedRawEvents.forEach((event, index) => {
     rawCursorByKey.set(sessionEventKey(event), index);
