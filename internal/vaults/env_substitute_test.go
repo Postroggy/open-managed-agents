@@ -19,7 +19,7 @@ func TestSubstituteEnvSecretsRejectsNilStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
-	err = NewEgressSubstitutor(nil, nil, nil).SubstituteEnvSecrets(
+	err = newEgressSubstitutor(nil, nil, nil).SubstituteEnvSecrets(
 		context.Background(),
 		"cse_test",
 		"00000000-0000-0000-0000-000000000001",

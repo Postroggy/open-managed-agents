@@ -78,6 +78,9 @@ func validate(cfg Config) error {
 	if err := validatePlatformOAuthClients(cfg.Vault.PlatformOAuthClients); err != nil {
 		return err
 	}
+	if err := validateGitSSHtoHTTPSHosts(cfg.EnvironmentRunner.GitSSHtoHTTPSHosts); err != nil {
+		return err
+	}
 	return validateCodeSessionUpstreamProxyMITMConfig(cfg.CodeSession)
 }
 
@@ -115,6 +118,59 @@ func validatePlatformOAuthClients(clients []PlatformOAuthClientConfig) error {
 			return fmt.Errorf("%s.mcp_server_url %q is duplicated", prefix, mcpURL)
 		}
 		seen[mcpURL] = struct{}{}
+	}
+	return nil
+}
+
+// validateGitSSHtoHTTPSHosts validates and normalizes hosts in place (trim + lower-case).
+// The slice header is shared with Config after YAML load, so Load observes the rewrite.
+func validateGitSSHtoHTTPSHosts(hosts []string) error {
+	seen := make(map[string]struct{}, len(hosts))
+	for i, raw := range hosts {
+		prefix := fmt.Sprintf("environment_runner.git_ssh_to_https_hosts[%d]", i)
+		host := strings.ToLower(strings.TrimSpace(raw))
+		if host == "" {
+			return fmt.Errorf("%s is empty", prefix)
+		}
+		if err := validateGitSSHtoHTTPSHost(host); err != nil {
+			return fmt.Errorf("%s: %w", prefix, err)
+		}
+		if _, ok := seen[host]; ok {
+			return fmt.Errorf("%s %q is duplicated", prefix, host)
+		}
+		seen[host] = struct{}{}
+		hosts[i] = host
+	}
+	return nil
+}
+
+// validateGitSSHtoHTTPSHost accepts only bare DNS hostnames: dot-separated
+// labels of [a-z0-9-], each starting and ending with an alphanumeric.
+// Callers must pass already lower-cased hostnames.
+func validateGitSSHtoHTTPSHost(host string) error {
+	if host == "" {
+		return errors.New("must be a bare hostname")
+	}
+	for _, label := range strings.Split(host, ".") {
+		if err := validateGitSSHtoHTTPSHostLabel(label); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateGitSSHtoHTTPSHostLabel(label string) error {
+	if label == "" {
+		return errors.New("must be a bare hostname")
+	}
+	for i := 0; i < len(label); i++ {
+		c := label[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		case c == '-' && i > 0 && i < len(label)-1:
+		default:
+			return errors.New("must be a bare hostname")
+		}
 	}
 	return nil
 }

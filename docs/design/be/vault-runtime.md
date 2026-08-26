@@ -191,12 +191,38 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 | 数据加载 | 每个 MITM HTTP 请求查库一次；不缓存明文 |
 | Open 失败 | **拒请求**（`ErrSubstitutionRejected` → 502） |
 
+### Git Smart HTTP Authorization
+
+> 用户执行 `git clone https://host/group/repo.git` 时请求常常没有 Authorization；Git 的 Basic 即使用了 Opaque Placeholder 也是 Base64，Egress Secret Substitution 看不见。
+
+| 项 | 决定 |
+|---|---|
+| 匹配 | **Git Smart HTTP 协议**，不按 GitLab/GitHub 产品。`GET …/info/refs?service=git-upload-pack\|git-receive-pack`；`POST …/git-upload-pack` 或 `…/git-receive-pack`。错误 method、LFS、dumb HTTP、REST 不匹配 |
+| 范围 | Vault/MITM **只**处理已是 HTTPS 的 Smart HTTP；**不**覆盖 Git LFS / dumb HTTP / Git REST，也**不**在 MITM 层改写 `git@` / `ssh://`。SSH→HTTPS：内置 `github.com`，另可通过 `environment_runner.git_ssh_to_https_hosts` 追加（见 [upstream-proxy-and-model-runtime](./ccrv2/upstream-proxy-and-model-runtime.md#git-私有仓库出站)），改写后再走本注入 |
+| 写入 | 第一次转发前写 `Authorization: Basic`；用户名固定 `oauth2`；密码为 Environment Variable Credential secret。已有 Authorization 一律覆盖 |
+| 选凭据 | Credential Networking 覆盖该 host 且 Injection Location 含 header；Vault Attachment Order 先到先得 |
+| 未覆盖 | passthrough |
+| Open 失败 | `ErrSubstitutionRejected` → 502 |
+| 与 substitution | 同一请求仍做 Egress Secret Substitution；随后把 Authorization 设为这条 Basic（均在 `MITMEgress.Prepare` 内、MCP inject wrap 之前；凭证只加载一次） |
+
+```mermaid
+sequenceDiagram
+    participant Git as Sandbox git
+    participant MITM as MITMEgress.Prepare
+    participant Up as Git host
+
+    Git->>MITM: GET /repo.git/info/refs?service=git-upload-pack
+    MITM->>MITM: load credentials once
+    MITM->>MITM: Egress Secret Substitution
+    MITM->>MITM: Git Smart HTTP Authorization
+    MITM->>Up: Authorization Basic oauth2:secret
+```
+
 深模块缝：
 
 - `vaults.PrepareEnvCredentialMount` — Session 挂载（env 的 MITM 门闩 + placeholder map；MCP 凭证不挡启动）
-- `vaults.MITMEgress.Prepare` — MITM 每条出站：env 替换 → MCP inject wrap
-- `vaults.Injector.WrapTransport` — Credential URL match / open / refresh / 401
-- `vaults.EgressSubstitutor.SubstituteEnvSecrets` — MITM env egress
+- `vaults.MITMEgress.Prepare` — MITM 出站深模块：一次加载凭证 → env 替换 → Git Smart HTTP Authorization → MCP inject wrap
+- `vaults.Injector.WrapTransport` — Credential URL match / open / refresh / 401（可与 MCP proxy 共用）
 - `networkpolicy.AllowsHost` — Credential Networking host 匹配
 
 ### 运行时注入决策（MCP 细节）
@@ -219,7 +245,7 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 ### 每次 MCP 出站流程
 
 1. CONNECT 已鉴权；MITM 解密出站 HTTP；Environment host allowlist 已在 CONNECT 时校验。
-2. `MITMEgress.Prepare`：先 `SubstituteEnvSecrets`；再按 CONNECT authority + path/query 拼绝对 HTTPS URL。
+2. `MITMEgress.Prepare`：一次加载凭证 → env 占位符替换 → Git Smart HTTP Authorization；再按 CONNECT authority + path/query 拼绝对 HTTPS URL。
 3. `Injector` 查 code session → `vault_ids` → 活动凭证（**每个 RoundTrip 一次**）；按绝对 URL 匹配；按 `vault_ids` 顺序 walk **可注入**凭证（`static_bearer` / `mcp_oauth`）。凭证 auth schema 无法解析 → **fail-closed**；同 scheme、host、effective port 无 path 命中 → **fail-closed**；host 不在任何凭证的 `mcp_server_url` 上 → **passthrough**。
 4. Open 信封得到 Transient secret payload。`mcp_oauth` 若已过期则 refresh（CAS reseal）后再取 access token。Open/refresh 失败 → **跳过该条**试下一条。
 5. 命中时 Del 客户端 `Authorization`，加 `Authorization: Bearer <token>`，转发上游。上游 401 时对当前 `mcp_oauth` 再 refresh 一轮并重试；仍失败则排除该凭证继续 walk。
@@ -263,7 +289,7 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 - `mcp_oauth`：无 `expires_at` 直接注入；过期则 refresh + CAS reseal；上游 401 再 refresh 一轮。
 - Open / refresh / 401 重试失败 → 跳过该凭证继续 walk；全部失败 → 502。
 - host 未覆盖 → passthrough；同 host path 不配 → 拒绝（502）。
-- 出站顺序：env 占位符替换 → MCP Authorization 注入。
+- 出站顺序：env 占位符替换（含 Git Smart HTTP Authorization）→ MCP Authorization 注入。
 - 不自动跟随跨 origin redirect 携带注入头。
 - Environment CONNECT 网络策略仍生效；MCP 注入不做 credential `networking`，也不额外卡 Snapshot 精确 URL。
 
@@ -272,6 +298,7 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 - create 签发 `oma_ph_` placeholder；响应含 `injection_location`；不回显 `secret_value`。
 - Session 挂载：MITM 关且存在活跃 env → 失败；仅 MCP 凭证不挡启动；否则 `startup_context.environment_variables` 灌入 placeholder（先到先得，不覆盖平台保留名）。
 - MITM egress：host/location 匹配时替换；未覆盖透传；Open 失败 → 502。
+- Git Smart HTTP：`GET` `info/refs?service=…` 与 `POST` `git-upload-pack` / `git-receive-pack` 在第一次转发前写入 `Authorization: Basic oauth2:<secret>`；错误 method / 未覆盖透传；Open 失败 → 502；LFS / dumb HTTP / REST 不注票。SSH→HTTPS（内置 `github.com` + `environment_runner.git_ssh_to_https_hosts`）属 Runner/environment-manager，不在本模块。
 - 旧凭证缺 placeholder / injection_location → update/挂载拒绝（archive 重建）。
 
 > 注：云 KMS 自动轮换 / DisableKey 另议。
@@ -292,6 +319,8 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 
 - `mcp_oauth_validate` 真 refresh / live MCP probe
 - `vault_credential.refresh_failed` webhook 发出
+- Git LFS、dumb HTTP、原生 git SSH 隧道；通用任意 `git@`→HTTPS 不在 Vault 切片。内置 github.com + `environment_runner.git_ssh_to_https_hosts` 的 insteadOf 见 CCRv2 upstream-proxy 文档
+- GitHub App `x-access-token` Basic 用户名
 - Expand/Backfill、`backfill_secrets`
 - Shamir / 云 KMS provider 实现
 - 重做 vault CRUD、管理页、MCP Catalog/Permission/Confirmation
@@ -302,5 +331,5 @@ KEK 不做强制退役的原因：config.yaml 模式下旧 key 很难干净销�
 - https://platform.claude.com/docs/en/managed-agents/vaults
 - https://www.anthropic.com/engineering/managed-agents
 - HashiCorp Vault：`vault/barrier_aes_gcm.go`、`shamir/`
-- Related: #65、#52、#121、#137、#142
-- Ubiquitous language: `CONTEXT.md`（Secret envelope / Runtime credential injection / Credential URL match / Platform OAuth Client）
+- Related: #65、#52、#121、#137、#142、#256
+- Ubiquitous language: `CONTEXT.md`（Secret envelope / Runtime credential injection / Credential URL match / Platform OAuth Client / Git Smart HTTP Authorization）

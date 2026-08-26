@@ -79,20 +79,18 @@ func requestNeedsPlaceholder(req *http.Request, body []byte, placeholder string,
 	return location.Body && strings.Contains(string(body), placeholder)
 }
 
-// EgressSubstitutor loads session vault credentials per outbound MITM request
-// and performs Egress Secret Substitution. Plaintext secrets are never cached.
+// envSecretOpener opens environment_variable secrets with per-request dedupe.
+// Shared by Egress Secret Substitution and Git Smart HTTP Authorization.
+type envSecretOpener interface {
+	openBoundSecret(ctx context.Context, opened map[string]string, item environmentCredential) (string, error)
+}
+
+// EgressSubstitutor performs Egress Secret Substitution for environment_variable
+// credentials. Git Smart HTTP Authorization is owned by MITMEgress, not this type.
 type EgressSubstitutor struct {
 	store     credentialStore
 	secretSvc *secrets.Service
 	logger    *slog.Logger
-}
-
-func NewEgressSubstitutor(database *db.DB, secretSvc *secrets.Service, logger *slog.Logger) *EgressSubstitutor {
-	var store credentialStore
-	if database != nil {
-		store = database
-	}
-	return newEgressSubstitutor(store, secretSvc, logger)
 }
 
 func newEgressSubstitutor(store credentialStore, secretSvc *secrets.Service, logger *slog.Logger) *EgressSubstitutor {
@@ -103,8 +101,8 @@ func newEgressSubstitutor(store credentialStore, secretSvc *secrets.Service, log
 	}
 }
 
-// SubstituteEnvSecrets rewrites Opaque Placeholders in the outbound request for
-// Environment Variable Credentials attached to the code session.
+// SubstituteEnvSecrets loads session credentials then rewrites Opaque Placeholders.
+// Prefer MITMEgress.Prepare in production; this seam remains for env-only tests.
 func (s *EgressSubstitutor) SubstituteEnvSecrets(
 	ctx context.Context,
 	codeSessionExternalID string,
@@ -114,26 +112,49 @@ func (s *EgressSubstitutor) SubstituteEnvSecrets(
 	targetHost string,
 	targetPort string,
 ) error {
-	host := strings.TrimSpace(targetHost)
-	port := strings.TrimSpace(targetPort)
-	if port == "" {
-		port = "443"
+	host, port := normalizeEgressHostPort(targetHost, targetPort)
+	credentials, err := s.loadCredentials(ctx, codeSessionExternalID, organizationUUID, workspaceUUID)
+	if err != nil {
+		return err
 	}
+	if len(credentials) == 0 {
+		return nil
+	}
+	return s.applyEnvSubstitutions(ctx, req, host, port, credentials, make(map[string]string))
+}
+
+func (s *EgressSubstitutor) loadCredentials(
+	ctx context.Context,
+	codeSessionExternalID string,
+	organizationUUID string,
+	workspaceUUID string,
+) ([]db.VaultCredential, error) {
 	if s == nil || s.store == nil {
-		return substitutionRejected(errCredentialStoreUnavailable)
+		return nil, substitutionRejected(errCredentialStoreUnavailable)
 	}
 	vaultIDs, err := s.store.GetCodeSessionVaultIDs(ctx, codeSessionExternalID, organizationUUID, workspaceUUID)
 	if err != nil {
-		return substitutionRejected(err)
+		return nil, substitutionRejected(err)
 	}
 	if len(vaultIDs) == 0 {
-		return nil
+		return nil, nil
 	}
 	credentials, err := s.store.ListActiveVaultCredentialsForVaultIDs(ctx, workspaceUUID, vaultIDs)
 	if err != nil {
-		return substitutionRejected(err)
+		return nil, substitutionRejected(err)
 	}
-	body, substitutions, err := s.buildSubstitutions(ctx, req, host, port, credentials)
+	return credentials, nil
+}
+
+func (s *EgressSubstitutor) applyEnvSubstitutions(
+	ctx context.Context,
+	req *http.Request,
+	host string,
+	port string,
+	credentials []db.VaultCredential,
+	opened map[string]string,
+) error {
+	body, substitutions, err := s.planEnvSubstitutions(ctx, req, host, port, credentials, opened)
 	if err != nil {
 		return err
 	}
@@ -141,12 +162,13 @@ func (s *EgressSubstitutor) SubstituteEnvSecrets(
 	return nil
 }
 
-func (s *EgressSubstitutor) buildSubstitutions(
+func (s *EgressSubstitutor) planEnvSubstitutions(
 	ctx context.Context,
 	req *http.Request,
 	host string,
 	port string,
 	credentials []db.VaultCredential,
+	opened map[string]string,
 ) ([]byte, []egressSubstitution, error) {
 	_, bound, err := uniqueEnvironmentCredentials(credentials)
 	if err != nil {
@@ -173,18 +195,13 @@ func (s *EgressSubstitutor) buildSubstitutions(
 		if !requestNeedsPlaceholder(req, body, item.value.Placeholder, item.value.InjectionLocation) {
 			continue
 		}
-		secretValue, err := s.openEnvironmentSecret(ctx, &item.row)
+		secret, err := s.openBoundSecret(ctx, opened, item)
 		if err != nil {
-			s.logger.WarnContext(ctx, "open environment variable credential failed",
-				"credential_id", item.row.ExternalID,
-				"auth_type", item.row.AuthType,
-				"error", err,
-			)
-			return nil, nil, substitutionRejected(err)
+			return nil, nil, err
 		}
 		out = append(out, egressSubstitution{
 			placeholder: item.value.Placeholder,
-			secretValue: secretValue,
+			secretValue: secret,
 			header:      item.value.InjectionLocation.Header,
 			body:        item.value.InjectionLocation.Body,
 		})
@@ -192,8 +209,25 @@ func (s *EgressSubstitutor) buildSubstitutions(
 	return body, out, nil
 }
 
+func (s *EgressSubstitutor) openBoundSecret(ctx context.Context, opened map[string]string, item environmentCredential) (string, error) {
+	if secret, ok := opened[item.row.ExternalID]; ok {
+		return secret, nil
+	}
+	secret, err := s.openEnvironmentSecret(ctx, &item.row)
+	if err != nil {
+		s.logger.WarnContext(ctx, "open environment variable credential failed",
+			"credential_id", item.row.ExternalID,
+			"auth_type", item.row.AuthType,
+			"error", err,
+		)
+		return "", substitutionRejected(err)
+	}
+	opened[item.row.ExternalID] = secret
+	return secret, nil
+}
+
 // credentialNetworkingCoversHost reports whether Credential Networking allows
-// Egress Secret Substitution for host:port.
+// Egress Secret Substitution or Git Smart HTTP Authorization for host:port.
 func credentialNetworkingCoversHost(networking credentialAuthNetworking, host, port string) (bool, error) {
 	if networking.Type == "unrestricted" {
 		return true, nil
@@ -219,4 +253,13 @@ func (s *EgressSubstitutor) openEnvironmentSecret(ctx context.Context, credentia
 		return "", errors.New("environment_variable secret_value is empty")
 	}
 	return secret.SecretValue, nil
+}
+
+func normalizeEgressHostPort(host, port string) (string, string) {
+	host = strings.TrimSpace(host)
+	port = strings.TrimSpace(port)
+	if port == "" {
+		port = "443"
+	}
+	return host, port
 }
