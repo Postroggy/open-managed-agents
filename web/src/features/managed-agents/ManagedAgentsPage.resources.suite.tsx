@@ -920,7 +920,17 @@ export function registerManagedAgentsResourceTests() {
     resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
     const api = mockManagedResourceApi();
     api.resources.sessions[0].status = 'idle';
-    api.resources.sessionThreads = [];
+    api.resources.sessionThreads = [
+      {
+        id: 'sthr_root_worker123456',
+        type: 'session_thread',
+        role: 'orchestrator',
+        parent_thread_id: null,
+        archived_at: null,
+        created_at: new Date(Date.now() - 45_000).toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
     api.resources.sessionThreadEvents = {};
     const base = Date.now() - 60_000;
     api.resources.sessionEvents = [
@@ -958,9 +968,17 @@ export function registerManagedAgentsResourceTests() {
       {
         id: 'evt_tool_allow_confirmation',
         type: 'user.tool_confirmation',
+        session_thread_id: 'sthr_root_worker123456',
         created_at: new Date(base + 2_500).toISOString(),
         tool_use_id: 'evt_tool_allow',
         result: 'allow',
+      },
+      {
+        id: 'evt_tool_allow_result',
+        type: 'agent.tool_result',
+        created_at: new Date(base + 2_750).toISOString(),
+        tool_use_id: 'evt_tool_allow',
+        content: 'Build completed',
       },
       {
         id: 'evt_tool_denied',
@@ -1020,6 +1038,8 @@ export function registerManagedAgentsResourceTests() {
 
     expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
     expect(await screen.findByText('npm test -- --watch=false')).toBeTruthy();
+    expect(screen.queryByTestId('session-tool-approval-card')).toBeNull();
+    expect(screen.queryByTestId('session-questionnaire-card')).toBeNull();
     const singleLaneMinimap = screen.getByTestId('events-minimap');
     expect(singleLaneMinimap.querySelectorAll('[data-lane-index]').length).toBe(0);
     const singleLaneTrack = singleLaneMinimap.querySelector<HTMLElement>('.oma-session-timeline-track-active');
@@ -1131,7 +1151,7 @@ export function registerManagedAgentsResourceTests() {
         id: 'evt_reporter_shared_confirmation',
         type: 'user.tool_confirmation',
         session_thread_id: 'sthr_reporter123456',
-        tool_use_id: 'toolu_shared_permission',
+        tool_use_id: 'evt_reporter_shared_permission',
         created_at: new Date(base + 2_500).toISOString(),
         result: 'deny',
         deny_message: 'Reporter cannot call external weather',
@@ -1189,6 +1209,157 @@ export function registerManagedAgentsResourceTests() {
     ) as HTMLElement;
     expect(confirmationDebugRow).toBeTruthy();
     expect(confirmationDebugRow.textContent).toContain('Tool confirmation submitted.');
+  });
+
+  test('allows approving and denying tool permissions from session detail action card and disables composer', async () => {
+    for (const result of ['allow', 'deny'] as const) {
+      cleanup();
+      resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+      const api = mockManagedResourceApi();
+      api.resources.sessions[0].status = 'idle';
+      const base = Date.now() - 60_000;
+      api.resources.sessionEvents = [
+        {
+          id: 'evt_user_action_msg',
+          type: 'user.message',
+          created_at: new Date(base).toISOString(),
+          content: [{ type: 'text', text: 'Please write file' }],
+        },
+        {
+          id: 'evt_tool_write_ask',
+          type: 'agent.tool_use',
+          created_at: new Date(base + 1_000).toISOString(),
+          name: 'Write',
+          evaluated_permission: 'ask',
+          input: { file_path: '/workspace/demo.ts', content: 'console.log("hello");' },
+        },
+        {
+          id: 'evt_tool_write_idle',
+          type: 'session.status_idle',
+          created_at: new Date(base + 1_001).toISOString(),
+          stop_reason: { type: 'requires_action', event_ids: ['evt_tool_write_ask'] },
+        },
+      ];
+
+      renderManagedAgentsPage('sessions');
+
+      expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
+      const detailPanel = screen.getByTestId('session-event-detail-panel');
+      const actionPanel = await screen.findByTestId('session-requires-action-panel');
+      expect(detailPanel.contains(actionPanel)).toBe(true);
+      expect(within(actionPanel).getByTestId('session-tool-approval-card')).toBeTruthy();
+      expect(actionPanel.className).toContain('overflow-y-auto');
+      expect((screen.getByLabelText('Message') as HTMLTextAreaElement).disabled).toBe(true);
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Debug' }));
+      expect(await screen.findByTestId('session-tool-approval-card')).toBeTruthy();
+      expect((screen.getByLabelText('Message') as HTMLTextAreaElement).disabled).toBe(true);
+
+      fireEvent.click(screen.getByTestId(result === 'allow' ? 'tool-allow-button' : 'tool-deny-button'));
+
+      await waitFor(() => {
+        const confirmationEvent = api.resources.sessionEvents.find(
+          (event) =>
+            event.type === 'user.tool_confirmation' &&
+            (event as any).tool_use_id === 'evt_tool_write_ask' &&
+            (event as any).result === result,
+        );
+        expect(confirmationEvent).toBeTruthy();
+      });
+      await waitFor(() => expect(screen.queryByTestId('session-tool-approval-card')).toBeNull());
+    }
+  });
+
+  test('renders AskUserQuestion questionnaire in session detail and sends answers with question keys', async () => {
+    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+    const api = mockManagedResourceApi();
+    api.resources.sessions[0].status = 'idle';
+    const base = Date.now() - 60_000;
+    api.resources.sessionEvents = [
+      {
+        id: 'evt_user_ask_start',
+        type: 'user.message',
+        created_at: new Date(base).toISOString(),
+        content: [{ type: 'text', text: 'Ask me a question' }],
+      },
+      {
+        id: 'evt_tool_ask_question',
+        type: 'agent.custom_tool_use',
+        created_at: new Date(base + 1_000).toISOString(),
+        name: 'AskUserQuestion',
+        input: {
+          questions: [
+            {
+              header: 'Color',
+              question: 'Which verification color should I use?',
+              options: [
+                { label: 'Blue', description: 'Sky blue' },
+                { label: 'Green', description: 'Grass green' },
+              ],
+              multiSelect: false,
+            },
+          ],
+        },
+      },
+      {
+        id: 'evt_tool_ask_idle',
+        type: 'session.status_idle',
+        created_at: new Date(base + 1_001).toISOString(),
+        stop_reason: { type: 'requires_action', event_ids: ['evt_tool_ask_question'] },
+      },
+    ];
+
+    renderManagedAgentsPage('sessions');
+
+    expect(await screen.findByTestId('session-detail-page')).toBeTruthy();
+    const detailPanel = screen.getByTestId('session-event-detail-panel');
+    const actionPanel = await screen.findByTestId('session-requires-action-panel');
+    expect(detailPanel.contains(actionPanel)).toBe(true);
+    expect(within(actionPanel).getByTestId('session-questionnaire-card')).toBeTruthy();
+    expect(actionPanel.className).toContain('overflow-y-auto');
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).disabled).toBe(true);
+    expect(screen.getByText('Which verification color should I use?')).toBeTruthy();
+    expect(screen.getByText('Blue')).toBeTruthy();
+    expect(screen.getByText('Green')).toBeTruthy();
+
+    const blueOption = screen.getByText('Blue');
+    fireEvent.click(blueOption);
+
+    const confirmButton = screen.getByRole('button', { name: 'Confirm' });
+    expect(confirmButton).toBeTruthy();
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      const resultEvent = api.resources.sessionEvents.find(
+        (e) => e.type === 'user.custom_tool_result' && (e as any).custom_tool_use_id === 'evt_tool_ask_question',
+      );
+      expect(resultEvent).toBeTruthy();
+      expect((resultEvent as any).is_error).toBe(false);
+      expect(JSON.parse((resultEvent as any).content[0].text)).toEqual({
+        'Which verification color should I use?': 'Blue',
+      });
+    });
+    await waitFor(() => expect(screen.queryByTestId('session-questionnaire-card')).toBeNull());
+
+    cleanup();
+    resetTestDom('https://oma.duck.ai/workspaces/default/sessions/sesn_one123456');
+    const denyApi = mockManagedResourceApi();
+    denyApi.resources.sessions[0].status = 'idle';
+    denyApi.resources.sessionEvents = structuredClone(api.resources.sessionEvents).filter(
+      (event) => event.type !== 'user.custom_tool_result',
+    );
+    renderManagedAgentsPage('sessions');
+    expect(await screen.findByTestId('session-questionnaire-card')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('questionnaire-deny-button'));
+    await waitFor(() => {
+      const resultEvent = denyApi.resources.sessionEvents.find(
+        (event) =>
+          event.type === 'user.custom_tool_result' && (event as any).custom_tool_use_id === 'evt_tool_ask_question',
+      );
+      expect(resultEvent).toBeTruthy();
+      expect((resultEvent as any).is_error).toBe(true);
+      expect((resultEvent as any).content).toBeUndefined();
+    });
   });
 
   test('keeps transcript tool batches scoped to each lane', async () => {

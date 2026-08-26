@@ -344,6 +344,12 @@ func validateToolConfirmationPayload(payload map[string]any) error {
 			return errors.New("deny_message must be a string")
 		}
 	}
+	if _, ok := payload["updated_input"]; ok {
+		return errors.New("updated_input is not supported on user.tool_confirmation")
+	}
+	if _, ok := payload["answers"]; ok {
+		return errors.New("answers is not supported on user.tool_confirmation")
+	}
 	return nil
 }
 

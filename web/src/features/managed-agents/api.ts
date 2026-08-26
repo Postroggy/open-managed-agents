@@ -44,6 +44,7 @@ import {
   type SessionEventCachePatch,
   type SessionResourceApiResponse,
   type SessionThreadApiResponse,
+  type SessionToolConfirmationInput,
   type VaultApiResponse,
   type VaultCredentialApiResponse,
 } from './types';
@@ -845,6 +846,36 @@ export function postQuickstartSessionMessage(sessionId: string, message: string,
   );
 }
 
+export function postSessionToolConfirmation(
+  sessionId: string,
+  input: SessionToolConfirmationInput,
+  workspaceId: string,
+) {
+  const denyMessage = input.denyMessage?.trim();
+  const event: Record<string, unknown> = input.customTool
+    ? {
+        type: 'user.custom_tool_result',
+        custom_tool_use_id: input.toolUseId,
+        is_error: input.result === 'deny',
+        ...(input.result === 'allow' ? { content: [{ type: 'text', text: JSON.stringify(input.answers ?? {}) }] } : {}),
+      }
+    : {
+        type: 'user.tool_confirmation',
+        tool_use_id: input.toolUseId,
+        result: input.result,
+        ...(denyMessage ? { deny_message: denyMessage } : {}),
+      };
+  const sessionThreadId = input.sessionThreadId?.trim();
+  if (sessionThreadId) {
+    event.session_thread_id = sessionThreadId;
+  }
+  return anthropicBetaApi.sessions.events.send<{ data?: QuickstartSessionEvent[] }>(
+    sessionId,
+    { events: [event] },
+    workspaceId,
+  );
+}
+
 export function interruptQuickstartSession(sessionId: string, workspaceId: string) {
   return anthropicBetaApi.sessions.events.send<unknown>(
     sessionId,
@@ -1366,9 +1397,7 @@ export function coalesceSessionCrossPostedToolEvents(events: QuickstartSessionEv
     if (existingIndex === undefined) {
       indexByKey.set(canonicalKey, output.length);
       output.push(event);
-      return;
     }
-    output[existingIndex] = event;
   });
   return output;
 }

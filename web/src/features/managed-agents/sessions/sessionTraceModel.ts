@@ -48,6 +48,7 @@ export function buildSessionTraceEntries(
   const toolResults = new Map<string, QuickstartSessionEvent[]>();
   const toolConfirmations = new Map<string, QuickstartSessionEvent[]>();
   const displayEvents = events.map(sessionCanonicalDisplayEvent);
+  const requiresActionEventIDs = latestRequiresActionEventIDs(displayEvents);
   const threadHints = buildSessionThreadHints(displayEvents);
   // Transcript 使用只读回放模型：result / confirmation 先按 tool use id 建索引，
   // 之后折回对应 tool_call；Debug 仍保留原始事件用于审计。
@@ -68,7 +69,10 @@ export function buildSessionTraceEntries(
   });
 
   return displayEvents.flatMap((event, index) => {
-    const enrichedEvent = sessionEventWithThreadHint(event, threadHints.byThreadId);
+    let enrichedEvent = sessionEventWithThreadHint(event, threadHints.byThreadId);
+    if (requiresActionEventIDs.has(sessionEventKey(enrichedEvent))) {
+      enrichedEvent = { ...enrichedEvent, requires_action: true };
+    }
     if (view === 'transcript' && !sessionEventAppearsInTranscript(event, options)) {
       return [];
     }
@@ -89,18 +93,65 @@ export function buildSessionTraceEntries(
 
     const family = sessionEventFamily(enrichedEvent);
     const toolUseId = sessionToolUseId(enrichedEvent);
+    const matchedByPublicEventId = typeof enrichedEvent.id === 'string' && toolUseId === enrichedEvent.id;
     const resultEvent =
       family === 'tool_use' && toolUseId
-        ? selectSessionToolCompanionEvent(toolResults.get(toolUseId), enrichedEvent, threadHints.byToolUseId)
+        ? selectSessionToolCompanionEvent(
+            toolResults.get(toolUseId),
+            enrichedEvent,
+            threadHints.byToolUseId,
+            matchedByPublicEventId,
+          )
         : undefined;
     const confirmationEvent =
       family === 'tool_use' && toolUseId
-        ? selectSessionToolCompanionEvent(toolConfirmations.get(toolUseId), enrichedEvent, threadHints.byToolUseId)
+        ? selectSessionToolCompanionEvent(
+            toolConfirmations.get(toolUseId) ?? toolConfirmations.get(sessionEventKey(enrichedEvent)),
+            enrichedEvent,
+            threadHints.byToolUseId,
+            matchedByPublicEventId,
+          )
         : undefined;
     return [
       sessionTraceEntryFromEvent(enrichedEvent, index, family, resultEvent, confirmationEvent, traceStartMs, msg),
     ];
   });
+}
+
+export function latestRequiresActionEventIDs(events: QuickstartSessionEvent[]) {
+  const sortedEvents = [...events].sort(compareSessionEvents);
+  let latestStatusIndex = -1;
+  for (let index = sortedEvents.length - 1; index >= 0; index -= 1) {
+    if (sessionStatusFromEventType(sessionEventType(sortedEvents[index]))) {
+      latestStatusIndex = index;
+      break;
+    }
+  }
+  const latestStatus = sortedEvents[latestStatusIndex];
+  if (!latestStatus || sessionEventType(latestStatus) !== 'session.status_idle') {
+    return new Set<string>();
+  }
+  const stopReason = toRecord(latestStatus.stop_reason);
+  if (normalizedStringValue(stopReason?.type) !== 'requires_action' || !Array.isArray(stopReason?.event_ids)) {
+    return new Set<string>();
+  }
+  const eventIDs = new Set(
+    stopReason.event_ids
+      .filter((eventID): eventID is string => typeof eventID === 'string' && Boolean(eventID.trim()))
+      .map((eventID) => eventID.trim()),
+  );
+  sortedEvents.slice(latestStatusIndex + 1).forEach((event) => {
+    const handledEventID =
+      sessionEventType(event) === 'user.tool_confirmation'
+        ? sessionToolConfirmationToolUseId(event)
+        : sessionIsToolResultEvent(event)
+          ? sessionToolResultToolUseId(event)
+          : '';
+    if (handledEventID) {
+      eventIDs.delete(handledEventID);
+    }
+  });
+  return eventIDs;
 }
 
 function addSessionToolCompanionEvent(
@@ -120,9 +171,13 @@ function selectSessionToolCompanionEvent(
   events: QuickstartSessionEvent[] | undefined,
   toolEvent: QuickstartSessionEvent,
   threadHintsByToolUseId: Map<string, SessionThreadHint>,
+  matchedByPublicEventId = false,
 ): QuickstartSessionEvent | undefined {
   if (!events?.length) {
     return undefined;
+  }
+  if (matchedByPublicEventId) {
+    return events[events.length - 1];
   }
   const toolThreadId = sessionToolCompanionThreadId(toolEvent, threadHintsByToolUseId);
   if (!toolThreadId) {
@@ -769,6 +824,7 @@ export function normalizedToolPermission(event: QuickstartSessionEvent): 'ask' |
   const requiresActionDetails = nestedEventRecord(event, data, metadata, 'requires_action_details');
   const stopReason = nestedEventRecord(event, data, metadata, 'stop_reason');
   const raw =
+    (event.requires_action === true ? 'requires_action' : '') ||
     toolPermissionValue(event, data, metadata, permissionRecord) ||
     firstNormalizedString([
       requiresActionDetails?.type,
