@@ -844,6 +844,7 @@ const managedAgentPathByHref: Record<string, string> = {
   '/quickstart': 'agent-quickstart',
   '/agents': 'agents',
   '/sessions': 'sessions',
+  '/observability': 'observability',
   '/deployments': 'deployments',
   '/environments': 'environments',
   '/credential-vaults': 'vaults',
@@ -912,7 +913,7 @@ async function navigateToMatchingWorkspacePath(currentPath: string, workspaceId:
       `/workspaces/${encodedWorkspaceId}/$1`,
     )
     .replace(
-      /^\/workspaces\/[^/]+\/(agent-quickstart|agents|sessions|deployments|environments|vaults|memory-stores|dreams)/,
+      /^\/workspaces\/[^/]+\/(agent-quickstart|agents|sessions|observability|deployments|environments|vaults|memory-stores|dreams)/,
       `/workspaces/${encodedWorkspaceId}/$1`,
     );
 
@@ -1024,13 +1025,14 @@ function isManagedAgentsPath(currentPath: string) {
       '/quickstart',
       '/agents',
       '/sessions',
+      '/observability',
       '/deployments',
       '/environments',
       '/credential-vaults',
       '/memory-stores',
       '/dreams',
     ].includes(currentPath) ||
-    /^\/workspaces\/[^/]+\/(agent-quickstart|agents|sessions|deployments|environments|vaults|memory-stores|dreams)(\/|$)/.test(
+    /^\/workspaces\/[^/]+\/(agent-quickstart|agents|sessions|observability|deployments|environments|vaults|memory-stores|dreams)(\/|$)/.test(
       currentPath,
     )
   );

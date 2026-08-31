@@ -8,6 +8,7 @@ export type ManagedAgentSection =
   | 'quickstart'
   | 'agents'
   | 'sessions'
+  | 'observability'
   | 'deployments'
   | 'environments'
   | 'credential-vaults'
@@ -126,7 +127,7 @@ export type AgentUpdateInput = {
   multiagent: unknown | null;
 };
 
-export type ManagedEntitySection = Exclude<ManagedAgentSection, 'quickstart' | 'agents' | 'dreams'>;
+export type ManagedEntitySection = Exclude<ManagedAgentSection, 'quickstart' | 'agents' | 'dreams' | 'observability'>;
 
 export type PageResponse<T> = {
   data: T[];
@@ -719,7 +720,7 @@ export type HighlightLanguage =
   'bash' | 'bash-yaml' | 'javascript' | 'json' | 'plaintext' | 'python' | 'typescript' | 'yaml';
 
 export type ResourceConfig = {
-  section: Exclude<ManagedAgentSection, 'quickstart' | 'dreams'>;
+  section: Exclude<ManagedAgentSection, 'quickstart' | 'dreams' | 'observability'>;
   title: string;
   description: string;
   createLabel?: string;
