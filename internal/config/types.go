@@ -17,6 +17,7 @@ type Config struct {
 	Auth              AuthConfig              `yaml:"auth"`
 	Storage           StorageConfig           `yaml:"storage"`
 	Batch             BatchConfig             `yaml:"batch"`
+	SandboxLifecycle  SandboxLifecycleConfig  `yaml:"sandbox_lifecycle"`
 	E2B               E2BConfig               `yaml:"e2b"`
 	EnvironmentRunner EnvironmentRunnerConfig `yaml:"environment_runner"`
 	CodeSession       CodeSessionConfig       `yaml:"code_session"`
@@ -234,4 +235,11 @@ type SDKFixtureConfig struct {
 type SeedAPIKey struct {
 	ExternalID string `yaml:"external_id"`
 	Key        string `yaml:"key"`
+}
+
+// SandboxLifecycleConfig controls long-idle managed sandbox reclamation.
+type SandboxLifecycleConfig struct {
+	Enabled     bool          `yaml:"enabled"`
+	DryRun      bool          `yaml:"dry_run"`
+	IdleTimeout time.Duration `yaml:"idle_timeout"`
 }

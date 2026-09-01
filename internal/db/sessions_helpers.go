@@ -3,7 +3,9 @@ package db
 import (
 	"bytes"
 	"context"
+	"slices"
 
+	maevents "github.com/superduck-ai/open-managed-agents/internal/managedagentsevents"
 	"github.com/superduck-ai/yourbatis"
 )
 
@@ -154,6 +156,13 @@ func insertSessionEventsTx(
 			return nil, insertErr
 		}
 		created = append(created, row.event())
+	}
+	if slices.ContainsFunc(created, func(event SessionEvent) bool {
+		return maevents.IsPublicWorkerInputEvent(event.EventType)
+	}) {
+		if err := NewCodeSessionMapper(executor).ResetIdleSinceForSession(ctx, session.OrganizationUUID, session.WorkspaceUUID, session.UUID); err != nil {
+			return nil, err
+		}
 	}
 	return created, nil
 }
