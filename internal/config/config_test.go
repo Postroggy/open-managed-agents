@@ -21,6 +21,8 @@ database:
   url: postgresql://test/database
 redis:
   url: redis://test:6379
+nats:
+  url: nats://test:4222
 auth:
   smtp:
     addr: smtp.example.com:587
@@ -48,10 +50,28 @@ const (
 type dockerComposeTestFile struct {
 	Services struct {
 		OMAServer struct {
-			Ports   []string                  `yaml:"ports"`
-			Volumes []dockerComposeTestVolume `yaml:"volumes"`
+			DependsOn map[string]dockerComposeTestDependency `yaml:"depends_on"`
+			Ports     []string                               `yaml:"ports"`
+			Volumes   []dockerComposeTestVolume              `yaml:"volumes"`
 		} `yaml:"oma-server"`
+		NATS  dockerComposeTestNATSService `yaml:"nats"`
+		NATS2 dockerComposeTestNATSService `yaml:"nats-2"`
+		NATS3 dockerComposeTestNATSService `yaml:"nats-3"`
 	} `yaml:"services"`
+}
+
+type dockerComposeTestDependency struct {
+	Condition string `yaml:"condition"`
+}
+
+type dockerComposeTestNATSService struct {
+	Image       string   `yaml:"image"`
+	Command     []string `yaml:"command"`
+	Ports       []string `yaml:"ports"`
+	Volumes     []string `yaml:"volumes"`
+	Healthcheck struct {
+		Test []string `yaml:"test"`
+	} `yaml:"healthcheck"`
 }
 
 type dockerComposeTestVolume struct {
@@ -80,6 +100,8 @@ database:
   url: postgresql://yaml/database
 redis:
   url: redis://yaml:6379
+nats:
+  url: nats://yaml:4222
 auth:
   smtp:
     addr: smtp.example.com:587
@@ -377,6 +399,7 @@ func TestLoadYAMLRejectsUnknownField(t *testing.T) {
 	}{
 		{name: "regular field", overrides: "database:\n  urll: postgresql://typo/database\n", wantField: "urll"},
 		{name: "removed process upstream", overrides: "anthropic_upstream:\n  api_key: leftover\n", wantField: "anthropic_upstream"},
+		{name: "removed NATS enable flag", overrides: "nats:\n  enabled: false\n", wantField: "enabled"},
 		{name: "optional list item field", overrides: "bootstrap:\n  seed_api_keys:\n    - external_idd: typo\n      key: secret\n", wantField: "external_idd"},
 		// D7 迁移后废弃的平铺凭据键不得被静默接受。
 		{name: "retired flat openobserve key", overrides: "observability:\n  openobserve:\n    ingestion_username: leftover\n", wantField: "ingestion_username"},
@@ -402,6 +425,7 @@ func TestLoadYAMLRequiresDeploymentFields(t *testing.T) {
 		{name: "server address", overrides: "server:\n  addr: \"\"", wantError: "server.addr is required"},
 		{name: "database URL", overrides: "database:\n  url: \"\"", wantError: "database.url is required"},
 		{name: "Redis URL", overrides: "redis:\n  url: \"\"", wantError: "redis.url is required"},
+		{name: "NATS URL", overrides: "nats:\n  url: \"\"", wantError: "nats.url is required"},
 		{name: "email SMTP address", overrides: "auth:\n  smtp:\n    addr: smtp.example.com", wantError: "auth.smtp.addr must include a host and port"},
 		{name: "email SMTP host", overrides: "auth:\n  smtp:\n    addr: :465", wantError: "auth.smtp.addr must include a host and port"},
 		{name: "email SMTP port", overrides: "auth:\n  smtp:\n    addr: 'smtp.example.com:'", wantError: "auth.smtp.addr must include a host and port"},
@@ -626,6 +650,70 @@ func TestDockerComposeSandboxCallbackUsesPublishedAPIPort(t *testing.T) {
 	compose := loadDockerComposeTestFile(t)
 	if !slices.Contains(compose.Services.OMAServer.Ports, "38080:8080") {
 		t.Fatalf("Compose oma-server ports = %v, want 38080:8080 callback mapping", compose.Services.OMAServer.Ports)
+	}
+}
+
+func TestDockerComposeNATSJetStreamTopology(t *testing.T) {
+	configPath, err := filepath.Abs(filepath.Join("..", "..", dockerComposeTemplatePath))
+	if err != nil {
+		t.Fatalf("resolve Docker Compose config path: %v", err)
+	}
+	cfg := loadValidatedConfigTestFile(t, configPath)
+	wantURL := "nats://nats:4222,nats://nats-2:4222,nats://nats-3:4222"
+	if cfg.NATS.URL != wantURL {
+		t.Fatalf("Compose NATS URL = %q, want three cluster seeds", cfg.NATS.URL)
+	}
+
+	compose := loadDockerComposeTestFile(t)
+	natsServices := []struct {
+		name        string
+		service     dockerComposeTestNATSService
+		serverName  string
+		clientPort  string
+		monitorPort string
+		volume      string
+	}{
+		{name: "nats", service: compose.Services.NATS, serverName: "nats-1", clientPort: "4222", monitorPort: "8222", volume: "natsdata:/data"},
+		{name: "nats-2", service: compose.Services.NATS2, serverName: "nats-2", clientPort: "4223", monitorPort: "8223", volume: "natsdata2:/data"},
+		{name: "nats-3", service: compose.Services.NATS3, serverName: "nats-3", clientPort: "4224", monitorPort: "8224", volume: "natsdata3:/data"},
+	}
+	for _, item := range natsServices {
+		if item.service.Image != "docker.io/library/nats:2.14.6-alpine" {
+			t.Fatalf("Compose %s image = %q, want pinned official image", item.name, item.service.Image)
+		}
+		for _, option := range []string{
+			"--name=" + item.serverName,
+			"--jetstream",
+			"--store_dir=/data",
+			"--http_port=8222",
+			"--cluster_name=oma-nats",
+			"--cluster=nats://0.0.0.0:6222",
+		} {
+			if !slices.Contains(item.service.Command, option) {
+				t.Fatalf("Compose %s command = %v, missing %q", item.name, item.service.Command, option)
+			}
+		}
+		for _, port := range []string{
+			"127.0.0.1:" + item.clientPort + ":4222",
+			"127.0.0.1:" + item.monitorPort + ":8222",
+		} {
+			if !slices.Contains(item.service.Ports, port) {
+				t.Fatalf("Compose %s ports = %v, missing loopback mapping %q", item.name, item.service.Ports, port)
+			}
+		}
+		if !slices.Contains(item.service.Volumes, item.volume) {
+			t.Fatalf("Compose %s volumes = %v, want independent JetStream storage %q", item.name, item.service.Volumes, item.volume)
+		}
+		if !strings.Contains(strings.Join(item.service.Healthcheck.Test, " "), "js-enabled-only=true") {
+			t.Fatalf("Compose %s healthcheck = %v, want JetStream readiness check", item.name, item.service.Healthcheck.Test)
+		}
+	}
+
+	for _, serviceName := range []string{"nats", "nats-2", "nats-3"} {
+		dependency, ok := compose.Services.OMAServer.DependsOn[serviceName]
+		if !ok || dependency.Condition != "service_healthy" {
+			t.Fatalf("Compose oma-server dependency %q = %+v, want service_healthy", serviceName, dependency)
+		}
 	}
 }
 

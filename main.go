@@ -22,6 +22,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/environments"
 	"github.com/superduck-ai/open-managed-agents/internal/filestore"
 	"github.com/superduck-ai/open-managed-agents/internal/logging"
+	"github.com/superduck-ai/open-managed-agents/internal/natsclient"
 	"github.com/superduck-ai/open-managed-agents/internal/platformauth"
 	"github.com/superduck-ai/open-managed-agents/internal/platformsession"
 	"github.com/superduck-ai/open-managed-agents/internal/redisclient"
@@ -79,11 +80,22 @@ func run(logger *slog.Logger) error {
 	defer redisClient.Close()
 	platformSessions := platformsession.NewRedisStore(redisClient)
 	platformAuthProvider := platformauth.New(cfg.Auth, database, redisClient, logger.With("component", "platform_auth"))
-	sessionEventBus, err := sessionfanout.NewRedis(ctx, redisClient, logger.With("component", "session_event_bus"))
+	natsConnection, err := natsclient.Open(ctx, cfg.NATS, logger.With("component", "nats"))
+	if err != nil {
+		return fmt.Errorf("open nats client: %w", err)
+	}
+	defer func() {
+		if err := natsConnection.Drain(); err != nil {
+			logger.Warn("drain nats connection", "error", err)
+			natsConnection.Close()
+		}
+	}()
+	sessionEventBus, err := sessionfanout.NewNATS(ctx, natsConnection, logger.With("component", "session_event_bus"))
 	if err != nil {
 		return fmt.Errorf("open session event fanout: %w", err)
 	}
 	defer sessionEventBus.Close()
+	logger.Info("nats messaging ready", "jetstream", true)
 
 	storageClient, err := storage.New(cfg.Storage)
 	if err != nil {

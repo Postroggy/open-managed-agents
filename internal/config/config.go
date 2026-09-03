@@ -62,6 +62,9 @@ func validate(cfg Config) error {
 	if strings.TrimSpace(cfg.Redis.URL) == "" {
 		return errors.New("redis.url is required")
 	}
+	if strings.TrimSpace(cfg.NATS.URL) == "" {
+		return errors.New("nats.url is required")
+	}
 	if err := validateAuthConfig(cfg.Auth); err != nil {
 		return err
 	}
@@ -305,6 +308,8 @@ func validatePositiveValues(cfg Config) error {
 		valid bool
 	}{
 		{name: "storage.max_file_bytes", valid: cfg.Storage.MaxFileBytes > 0},
+		{name: "nats.connect_timeout", valid: cfg.NATS.ConnectTimeout > 0},
+		{name: "nats.drain_timeout", valid: cfg.NATS.DrainTimeout > 0},
 		{name: "storage.workspace_limit_bytes", valid: cfg.Storage.WorkspaceLimitBytes > 0},
 		{name: "batch.worker_concurrency", valid: cfg.Batch.WorkerConcurrency > 0},
 		{name: "batch.max_requests", valid: cfg.Batch.MaxRequests > 0},

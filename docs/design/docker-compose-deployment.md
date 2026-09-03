@@ -11,6 +11,10 @@ docker compose
 ├── e2b-local (:3099)    — 沙箱网关（host 网络，管理 sandbox 容器）
 ├── postgres (:5432)     — 元数据存储
 ├── redis (:6379)        — 平台 session 存储
+├── nats × 3             — JetStream 三节点集群
+│   ├── node 1 (:4222/8222)
+│   ├── node 2 (:4223/8223)
+│   └── node 3 (:4224/8224)
 ├── minio (:9000/9001)   — S3 兼容对象存储
 └── openobserve (:5082)  — OTel Logs、Metrics 和 Traces 存储，仅回环地址开放调试入口
 ```
@@ -18,7 +22,7 @@ docker compose
 **依赖关系**：
 
 ```text
-caddy ──→ oma-server ──→ postgres / redis / minio
+caddy ──→ oma-server ──→ postgres / redis / nats cluster / minio
                     └──→ e2b-local (host.docker.internal:3099)
                               └──→ Docker daemon (宿主机)
                                        └──→ sandbox 容器 (managed-agent-sandbox 镜像)
@@ -31,6 +35,7 @@ caddy ──→ oma-server ──→ postgres / redis / minio
 | caddy | `docker.io/library/caddy:alpine` | 官方镜像 |
 | postgres | `docker.io/library/postgres:17` | 官方镜像 |
 | redis | `docker.io/library/redis:8` | 官方镜像 |
+| nats × 3 | `docker.io/library/nats:2.14.6-alpine` | 官方镜像，启用 JetStream 集群 |
 | minio | `docker.io/pgsty/minio:latest` | 社区维护 fork（原版已归档） |
 | oma-server | `Dockerfile`（多阶段构建） | Go 后端 + 前端 bun build |
 | e2b-local | `Dockerfile`（多阶段构建） | Go 后端 + envd 二进制 |
@@ -186,6 +191,7 @@ docker compose down -v     # 同时删除数据卷
 | oma API | `http://localhost:38080` |
 | e2b-local | `http://localhost:3099` |
 | MinIO Web | `http://localhost:9001` |
+| NATS monitoring | `http://localhost:8222` / `8223` / `8224` |
 | OpenObserve 调试入口 | `http://localhost:5082` |
 
 OpenObserve 数据保存在独立的 `openobservedata` named volume。Compose 设置
@@ -200,18 +206,18 @@ OpenObserve 本地账号。修改 Compose 账号时需同步修改该文件；�
 
 ## 8. 本地开发模式
 
-本地开发推荐只用 Docker Compose 启动 PostgreSQL、Redis 和 MinIO；e2b-local、oma-server 与 Vite 都直接从宿主机源码启动。这样 oma-server 可以直接访问 Docker Sandbox 暴露在宿主机 loopback 上的动态 envd 端口，也可以直接验证 e2b-local 的最新源码。
+本地开发推荐只用 Docker Compose 启动 PostgreSQL、Redis、NATS 和 MinIO；e2b-local、oma-server 与 Vite 都直接从宿主机源码启动。这样 oma-server 可以直接访问 Docker Sandbox 暴露在宿主机 loopback 上的动态 envd 端口，也可以直接验证 e2b-local 的最新源码。
 
 ### 8.1 启动基础设施
 
-先停止完整 Compose 拓扑中的应用进程，避免端口冲突或两个 Environment Runner 竞争同一任务，再启动三个基础设施服务：
+先停止完整 Compose 拓扑中的应用进程，避免端口冲突或两个 Environment Runner 竞争同一任务，再启动四个基础设施服务：
 
 ```bash
 docker compose stop caddy oma-server e2b-local
-docker compose up -d postgres redis minio
+docker compose up -d postgres redis nats nats-2 nats-3 minio
 ```
 
-PostgreSQL、Redis 和 MinIO 分别发布到宿主机的 `5432`、`6379`、`9000`/`9001`。
+PostgreSQL、Redis 和 MinIO 分别发布到宿主机的 `5432`、`6379`、`9000`/`9001`。NATS 三个节点的客户端端口为 `4222`、`4223`、`4224`，监控端口为 `8222`、`8223`、`8224`；监控端口仅用于本地诊断与 JetStream 健康检查。节点间通过 Compose 内网的 `6222` route 端口组成 `oma-nats` 集群，该端口不发布到宿主机。
 
 ### 8.2 从源码启动 e2b-local
 
@@ -256,6 +262,9 @@ database:
 
 redis:
   url: redis://localhost:6379
+
+nats:
+  url: nats://localhost:4222,nats://localhost:4223,nats://localhost:4224
 
 storage:
   s3:

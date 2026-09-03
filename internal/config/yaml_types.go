@@ -39,6 +39,7 @@ type yamlConfig struct {
 	Server            ServerConfig            `yaml:"server"`
 	Database          yamlDatabaseConfig      `yaml:"database"`
 	Redis             RedisConfig             `yaml:"redis"`
+	NATS              yamlNATSConfig          `yaml:"nats"`
 	Auth              AuthConfig              `yaml:"auth"`
 	Storage           StorageConfig           `yaml:"storage"`
 	Batch             BatchConfig             `yaml:"batch"`
@@ -56,6 +57,12 @@ type yamlConfig struct {
 type yamlDatabaseConfig struct {
 	URL         string         `yaml:"url"`
 	AutoMigrate optional[bool] `yaml:"auto_migrate"`
+}
+
+type yamlNATSConfig struct {
+	URL            string        `yaml:"url"`
+	ConnectTimeout time.Duration `yaml:"connect_timeout"`
+	DrainTimeout   time.Duration `yaml:"drain_timeout"`
 }
 
 type yamlCodeSessionConfig struct {
@@ -88,10 +95,15 @@ type yamlBootstrapConfig struct {
 func newYAMLConfig() yamlConfig {
 	defaults := defaultConfig()
 	return yamlConfig{
-		Env:               defaults.Env,
-		Server:            defaults.Server,
-		Database:          yamlDatabaseConfig{URL: defaults.Database.URL},
-		Redis:             defaults.Redis,
+		Env:      defaults.Env,
+		Server:   defaults.Server,
+		Database: yamlDatabaseConfig{URL: defaults.Database.URL},
+		Redis:    defaults.Redis,
+		NATS: yamlNATSConfig{
+			URL:            defaults.NATS.URL,
+			ConnectTimeout: defaults.NATS.ConnectTimeout,
+			DrainTimeout:   defaults.NATS.DrainTimeout,
+		},
 		Auth:              defaults.Auth,
 		Storage:           defaults.Storage,
 		Batch:             defaults.Batch,
@@ -128,10 +140,15 @@ func newYAMLConfig() yamlConfig {
 
 func (input yamlConfig) resolve() Config {
 	cfg := Config{
-		Env:               input.Env,
-		Server:            input.Server,
-		Database:          DatabaseConfig{URL: input.Database.URL},
-		Redis:             input.Redis,
+		Env:      input.Env,
+		Server:   input.Server,
+		Database: DatabaseConfig{URL: input.Database.URL},
+		Redis:    input.Redis,
+		NATS: NATSConfig{
+			URL:            input.NATS.URL,
+			ConnectTimeout: input.NATS.ConnectTimeout,
+			DrainTimeout:   input.NATS.DrainTimeout,
+		},
 		Auth:              input.Auth,
 		Storage:           input.Storage,
 		Batch:             input.Batch,

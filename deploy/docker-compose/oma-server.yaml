@@ -16,6 +16,10 @@ database:
 redis:
   url: redis://redis:6379
 
+nats:
+  # Comma-separated seeds let the client start when any one cluster node is down.
+  url: nats://nats:4222,nats://nats-2:4222,nats://nats-3:4222
+
 # Optional SMTP configuration is omitted, so this local template accepts any
 # non-empty email verification code. See docs/configuration-reference.yaml.
 
