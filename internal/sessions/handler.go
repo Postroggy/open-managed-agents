@@ -10,6 +10,7 @@ import (
 	"github.com/superduck-ai/open-managed-agents/internal/db"
 	"github.com/superduck-ai/open-managed-agents/internal/eventpayload"
 	"github.com/superduck-ai/open-managed-agents/internal/httpapi"
+	"github.com/superduck-ai/open-managed-agents/internal/secrets"
 	"github.com/superduck-ai/open-managed-agents/internal/sessionfanout"
 	"github.com/superduck-ai/open-managed-agents/internal/webhooks"
 
@@ -19,6 +20,7 @@ import (
 const maxSessionBodySize = 4 << 20
 
 type Handler struct {
+	secretService *secrets.Service
 	eventPayloads *eventpayload.Store
 	cfg           config.Config
 	db            *db.DB
@@ -97,17 +99,18 @@ type sessionEventsRequest struct {
 }
 
 type sessionResourceRequest struct {
-	Access        json.RawMessage `json:"access"`
-	Checkout      json.RawMessage `json:"checkout"`
-	Description   json.RawMessage `json:"description"`
-	FileID        json.RawMessage `json:"file_id"`
-	Instructions  json.RawMessage `json:"instructions"`
-	MemoryStoreID json.RawMessage `json:"memory_store_id"`
-	MountPath     json.RawMessage `json:"mount_path"`
-	Name          json.RawMessage `json:"name"`
-	Source        json.RawMessage `json:"source"`
-	Type          json.RawMessage `json:"type"`
-	URL           json.RawMessage `json:"url"`
+	AuthorizationToken json.RawMessage `json:"authorization_token"`
+	Access             json.RawMessage `json:"access"`
+	Checkout           json.RawMessage `json:"checkout"`
+	Description        json.RawMessage `json:"description"`
+	FileID             json.RawMessage `json:"file_id"`
+	Instructions       json.RawMessage `json:"instructions"`
+	MemoryStoreID      json.RawMessage `json:"memory_store_id"`
+	MountPath          json.RawMessage `json:"mount_path"`
+	Name               json.RawMessage `json:"name"`
+	Source             json.RawMessage `json:"source"`
+	Type               json.RawMessage `json:"type"`
+	URL                json.RawMessage `json:"url"`
 }
 
 type sessionResourceUpdateRequest struct {
