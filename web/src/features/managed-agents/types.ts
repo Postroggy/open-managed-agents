@@ -586,6 +586,8 @@ export type EntityOption = {
   id: string;
   label: string;
   secondary?: string;
+  /** Absolute created timestamp for vault pickers (CMA-aligned). */
+  createdAt?: string;
 };
 
 export type AgentModelInput =
@@ -694,7 +696,8 @@ export type CredentialTokenEndpointAuthType = 'none' | 'client_secret_post' | 'c
 
 export type CredentialFormValues = {
   displayName: string;
-  authType: 'static_bearer' | 'environment_variable' | 'mcp_oauth';
+  /** Empty until the user picks a type in the create dialog (CMA progressive form). */
+  authType: '' | 'static_bearer' | 'environment_variable' | 'mcp_oauth';
   mcpServerUrl: string;
   token: string;
   secretName: string;
