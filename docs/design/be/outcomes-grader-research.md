@@ -259,16 +259,23 @@ grader
 |---|---|---|---|
 | **A** | OMA 用 `Provider.RunCommand` 直接在沙箱 exec。**已否决** | 低 | 需在 OMA 重造 EM 的认证装配 / agent proxy / token fd 注入 / session URL 构造四件事；且「工具集与 writer 相同」会碎成两份实现 |
 | **B** | EM 增加「在已有沙箱内再跑一个 Claude Code」的能力，OMA 侧用新的 code session 身份承载 | 高 | 需改 EM（前置任务见 §4.4） |
-| **H** | 同 B 的 EM 改动；OMA 侧改用 **thread 形态** 承载第二个上下文 | 最高 | 同 B + OMA 侧 thread 承载方式待定 |
-| **G** | grader 跑在独立沙箱，产物拷进去。**已否决** | 低 | 与 §3.1 的 P2/P4 冲突：self-hosted 产物不可枚举，无法搬运。且官方是「同沙箱」形态 |
+| **H** | 同 B 的 EM 改动；OMA 侧改用 **thread 形态** 承载第二个上下文 | 最高 | 同 B + 对外必须屏蔽 thread 语义（§6.3） |
+| **G** | grader 跑在独立沙箱，产物拷进去。**已否决** | 低 | 与 §3.1 推理链的 P2/P4 直接冲突：self-hosted 产物**不可枚举**，无法搬运 |
 
-**B 与 H 在 EM 侧的工作量完全相同**，差异仅在 OMA 侧用什么模型承载第二个上下文。
+**B 与 H 在 EM 侧的工作量完全相同**，差异仅在 OMA 侧用什么模型承载第二个上下文：
+
+- 选 **B**：第二个上下文是一段新的 code session 身份 —— 复用现有 session 机制，但与官方的
+  「一沙箱多上下文」抽象不平行，未来若要实现 multiagent 需要再抽象一层
+- 选 **H**：第二个上下文是内部 thread —— 形态上最接近官方，但必须做 §6.3 的语义屏蔽，
+  且依赖 OMA 的 thread 是否真能承载独立执行（见 §7 Q3）
 
 ---
 
 ## 6. 官方 grader ≠ 官方 thread
 
-必须区分，避免设计时混淆：
+必须区分，避免设计时混淆。
+
+### 6.1 事件与语义对照
 
 | | 官方 thread | 官方 grader |
 |---|---|---|
@@ -278,8 +285,36 @@ grader
 | 由谁发起 | 协调者在运行时 spawn | **harness** provision |
 | 文档是否提及对方 | ❌ 未提及 grader | ❌ 未提及 thread |
 
-**官方文档中两者没有任何交叉引用。** 把 grader 实现成 thread 是**机制借用**，不是官方语义的忠实映射 ——
-对外事件必须是 `span.outcome_evaluation_*`，不能泄漏 `session.thread_*`。
+**官方文档中两者没有任何交叉引用。**
+
+### 6.2 API 级反证（更硬）
+
+来源: `docs/managed-agents-reference/webhooks.md:24`
+
+> `session.thread_created` ｜ New multiagent thread opened: **an additional agent called by the coordinator is starting work, or the session's advisor is being consulted.**
+
+官方 thread 的创建**只有两个触发源**：
+
+1. 协调者委派给 roster 里的 agent
+2. advisor 咨询
+
+**二者都不包含 grader。** 即：outcome 评估**不会**产生 `session.thread_created`。
+
+再加上 thread 是**可枚举的公开资源**（`GET /v1/sessions/{session_id}/threads`，见
+`docs/api-reference/beta/sessions/threads.md`）—— 如果 grader 是一个 thread，它就会出现在这个列表里。
+官方文档没有任何这类描述。
+
+### 6.3 由此推出的设计约束
+
+官方存在**第三类执行上下文**：既不是主 agent，也不是 multiagent thread，而是
+**harness 私下 provision 的评估执行**（对外只暴露 `span.outcome_evaluation_*`）。
+
+这给 OMA 的设计带来一条硬约束：
+
+> **若用 OMA 的 thread 机制承载 grader，必须防止它泄漏到对外的 `GET /threads` 列表与
+> `session.thread_*` 事件族中 —— 否则会产出官方契约里不存在的可观测行为。**
+
+即：thread 只能作为**内部机制**借用，对外必须完全呈现为 outcome 语义。
 
 ---
 
@@ -307,6 +342,8 @@ grader
 | §1.5 | `docs/managed-agents-reference/events-and-streaming.md` | 2379, 2382 | https://platform.claude.com/docs/en/managed-agents/events-and-streaming |
 | §1.6 | `docs/managed-agents-reference/define-outcomes.md` | 565-627 | 同上 |
 | §1.6 | `docs/managed-agents-reference/webhooks.md` | 27 | https://platform.claude.com/docs/en/managed-agents/webhooks |
+| §6.2 | `docs/managed-agents-reference/webhooks.md` | 24 | https://platform.claude.com/docs/en/managed-agents/webhooks |
+| §6.2 | `docs/api-reference/beta/sessions/threads.md` | — | https://platform.claude.com/docs/en/api/beta/sessions/threads |
 | §1.6 | `openapi/oma.en.json` | schema | `BetaManagedAgentsOutcomeEvaluationResource` 等 7 个 |
 | §4.4 | `environment-manager-rs` | 见表格 | 仓库: https://github.com/superduck-ai/environment-manager-rs |
 
