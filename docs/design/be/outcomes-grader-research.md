@@ -259,15 +259,21 @@ grader
 |---|---|---|---|
 | **A** | OMA 用 `Provider.RunCommand` 直接在沙箱 exec。**已否决** | 低 | 需在 OMA 重造 EM 的认证装配 / agent proxy / token fd 注入 / session URL 构造四件事；且「工具集与 writer 相同」会碎成两份实现 |
 | **B** | EM 增加「在已有沙箱内再跑一个 Claude Code」的能力，OMA 侧用新的 code session 身份承载 | 高 | 需改 EM（前置任务见 §4.4） |
-| **H** | 同 B 的 EM 改动；OMA 侧改用 **thread 形态** 承载第二个上下文 | 最高 | 同 B + 对外必须屏蔽 thread 语义（§6.3） |
+| **H** | 同 B 的 EM 改动；OMA 侧改用 **thread 形态** 承载第二个上下文 | 最高 | **成本已重估**：OMA 的 thread 无执行运行时（§6.4），H 等于要在 OMA 从零建 thread 级执行 |
 | **G** | grader 跑在独立沙箱，产物拷进去。**已否决** | 低 | 与 §3.1 推理链的 P2/P4 直接冲突：self-hosted 产物**不可枚举**，无法搬运 |
 
-**B 与 H 在 EM 侧的工作量完全相同**，差异仅在 OMA 侧用什么模型承载第二个上下文：
+**B 与 H 在 EM 侧的工作量完全相同**，差异在 OMA 侧用什么承载第二个上下文，而这一侧的结论在 §6.4 之后发生了变化：
 
-- 选 **B**：第二个上下文是一段新的 code session 身份 —— 复用现有 session 机制，但与官方的
-  「一沙箱多上下文」抽象不平行，未来若要实现 multiagent 需要再抽象一层
-- 选 **H**：第二个上下文是内部 thread —— 形态上最接近官方，但必须做 §6.3 的语义屏蔽，
-  且依赖 OMA 的 thread 是否真能承载独立执行（见 §7 Q3）
+- 选 **B**：第二个上下文是一段新的 code session 身份 —— **复用现有机制，无需新建执行抽象**
+  （OMA 已有 code session + worker + epoch 全套），代价是它与官方「一沙箱多上下文」的抽象不平行
+- 选 **H**：形态上最贴近官方，但 §6.4 已证明 **OMA 的 thread 只是一张表 + 事件归因**，
+  H 需要在 OMA 内新建：thread↔执行体绑定、per-thread worker/code session、per-thread 上下文隔离、
+  thread 输入投递 —— 这是**独立的大工程**，且它本身就是「实现官方 multiagent」的前置工作
+
+> **因此 §5 的结论需要修正**：H 的"贴近官方"是真的，但它的成本**不再与 B 相当**。
+> B 是「复用已有执行抽象、换一个承载身份」；H 是「先把 multiagent 的执行地基建起来」。
+> 若目标是尽快且正确地落地 grader，**B 是当前唯一成本可控的选项**；
+> H 应作为「未来实现官方 multiagent」的独立议题，而不是 grader 的落地路径。
 
 ---
 
@@ -316,17 +322,50 @@ grader
 
 即：thread 只能作为**内部机制**借用，对外必须完全呈现为 outcome 语义。
 
+### 6.4 OMA 的 thread 当前**没有执行运行时**（已核查，2026-09-16）
+
+这是决定「方案 H 成本」的关键事实。核查结论：**OMA 的 thread 是纯事件归因 / 展示 / 状态投影实体，
+不具备承载独立执行的能力。**
+
+| 事实 | 证据 |
+|---|---|
+| `internal/runtime/`（4 个文件）与 `internal/environments/`（19 个文件）中 `thread` 命中数 = **0** | 全量 grep |
+| `CreateSessionThreadIfAbsent` 全仓库只有 **2 个调用点**，都在 `event_mapper.go:401`、`:461`，且都是**懒创建**（读到事件里有 thread id 才补） | `internal/db/sessions.go:298` 定义 |
+| 子 thread ID 是**从 Claude Code 的 Task 标识确定性派生**的：`sha256(codeSessionID + "\x00claude-task\x00" + toolUseID/taskID)`，前缀 `sthr_` | `internal/managedagentsevents/identity.go:16-23` |
+| owner thread 归属靠**回查历史事件**补算（上限 500 条），是启发式补偿 | `internal/sessions/event_mapper.go:222-263` |
+| `code_sessions` 表**没有 thread 列**；worker 路由挂在 `/code/sessions/{code_session_id}/worker/*`，**无 thread 段** | `internal/db/schema.go:1094-1121`、`internal/codesessions/routes.go:38-60` |
+| HTTP 层对 thread 只有 **GET / GET / POST archive**，**没有创建入口** | `internal/sessions/transport.go:66-72` |
+| 客户端**无法**产生 `session.thread_created`：输入事件白名单不含任何 `session.thread_*` | `internal/managedagentsevents/events.go:48-55` |
+| `multiagent` 字段**只做声明与校验**，唯一消费点是 deployment 的引用存在性检查，**不传 runtime** | `internal/agents/handler.go:564-602`、`internal/deployments/handler.go:730-745` |
+| `roster` / advisor 咨询 / delegation **均无实现** | 全仓库检索 |
+
+**实际的多 agent 行为**：子 agent 由 **Claude Code 自己的 Task 工具在同一个进程内**跑出来，
+OMA 只是**事后从事件流反推** thread 并归因。一个 session 恒定对应 1 个 code session、
+1 个 sandbox、1 个 Claude Code 进程。
+
+> **⚠️ 这直接抬高了方案 H 的成本**：H 不是"借用已有 thread 机制"，
+> 而是**在 OMA 里从零构建 thread 级执行**（thread↔执行体绑定、per-thread worker/session、
+> per-thread 上下文隔离、thread 输入投递）。这部分工作量需要重新评估。
+
 ---
 
 ## 7. 待决问题
 
 | # | 问题 | 状态 |
 |---|---|---|
-| Q1 | 承载第二个上下文的模型：**B（新 code session 身份）** vs **H（thread 形态）** | 待拍板 |
+| Q1 | 承载第二个上下文的模型：**B（新 code session 身份）** vs **H（thread 形态）** | **倾向 B**（§5 成本重估后：H 需先建 multiagent 执行地基） |
 | Q2 | 接受「EM 的 5 处共享路径必须做 session 隔离」为前置任务吗 | 待拍板 |
-| Q3 | OMA 的 thread 是「真能承载独立执行」还是「只有 DB 表 + 事件归因」 | **核查中** |
+| Q3 | OMA 的 thread 是否有执行运行时 | ✅ **已核查：没有**（§6.4） |
 | Q4 | 触发信号：`session.status_idle` 会把 `requires_action` 误判为「一轮结束」，如何区分 | 待设计 |
 | Q5 | 基础设施故障（grader 超时 / 沙箱被回收）映射到哪个 result（官方 5 态无对应值） | 待设计 |
+
+### 7.1 已收敛的结论
+
+- ✅ **grader 与 writer 同沙箱**（§3，推理链闭合，官方无反例）
+- ✅ **方案 A、G 否决**（§5）
+- ✅ **官方 grader 不是 thread，也不是 multiagent**（§6.2 API 级反证）
+- ✅ **OMA thread 无执行运行时**（§6.4）
+- ⏳ **B vs H 的最终选择**（§5 已给出倾向：B）
 
 ---
 
@@ -344,6 +383,7 @@ grader
 | §1.6 | `docs/managed-agents-reference/webhooks.md` | 27 | https://platform.claude.com/docs/en/managed-agents/webhooks |
 | §6.2 | `docs/managed-agents-reference/webhooks.md` | 24 | https://platform.claude.com/docs/en/managed-agents/webhooks |
 | §6.2 | `docs/api-reference/beta/sessions/threads.md` | — | https://platform.claude.com/docs/en/api/beta/sessions/threads |
+| §6.4 | 本仓库代码 | 见表格 | `internal/managedagentsevents/identity.go:16-23` 等 |
 | §1.6 | `openapi/oma.en.json` | schema | `BetaManagedAgentsOutcomeEvaluationResource` 等 7 个 |
 | §4.4 | `environment-manager-rs` | 见表格 | 仓库: https://github.com/superduck-ai/environment-manager-rs |
 
