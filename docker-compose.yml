@@ -83,7 +83,7 @@ services:
   # ===========================================================================
 
   postgres:
-    image: docker.io/library/postgres:17
+    image: docker.io/library/postgres:18
     environment:
       POSTGRES_USER: claude
       POSTGRES_PASSWORD: "123456"
@@ -91,7 +91,9 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PG18 官方镜像改了数据布局：数据落在 <挂载点>/18/docker，挂载点必须是 /var/lib/postgresql
+      # （沿用旧的 /var/lib/postgresql/data 会被 entrypoint 以「data in /var/lib/postgresql/data」拒绝启动）
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U claude -d claude_api"]
       interval: 5s
@@ -289,7 +291,7 @@ services:
 volumes:
   # 数据持久化通过 Docker named volumes 实现，重启后数据不丢失。
   # 如需要将数据存放在宿主机指定路径，替换为 bind mount：
-  #   pgdata:   driver: local  →  - ./data/postgres:/var/lib/postgresql/data
+  #   pgdata:   driver: local  →  - ./data/postgres:/var/lib/postgresql
   pgdata:
   redisdata:
   natsdata:

@@ -33,7 +33,7 @@ caddy ──→ oma-server ──→ postgres / redis / nats cluster / minio
 | 服务 | 镜像来源 | 说明 |
 |------|----------|------|
 | caddy | `docker.io/library/caddy:alpine` | 官方镜像 |
-| postgres | `docker.io/library/postgres:17` | 官方镜像 |
+| postgres | `docker.io/library/postgres:18` | 官方镜像（PG18 镜像把数据目录放在 `/var/lib/postgresql/18/docker`，`pgdata` 卷挂载点是 `/var/lib/postgresql`） |
 | redis | `docker.io/library/redis:8` | 官方镜像 |
 | nats × 3 | `docker.io/library/nats:2.14.6-alpine` | 官方镜像，启用 JetStream 集群 |
 | minio | `docker.io/pgsty/minio:latest` | 社区维护 fork（原版已归档） |
