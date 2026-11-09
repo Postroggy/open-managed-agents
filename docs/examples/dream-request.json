@@ -1,0 +1,15 @@
+{
+  "model": "provider-slug/model-id",
+  "inputs": [
+    {
+      "type": "memory_store",
+      "memory_store_id": "memstore_REPLACE"
+    },
+    {
+      "type": "sessions",
+      "session_ids": ["sesn_REPLACE"]
+    }
+  ],
+  "instructions": "Preserve verified project decisions, successful commands and dated corrections. Keep uncertainties explicit and cite source sessions.",
+  "output_behavior": { "type": "create_new" }
+}

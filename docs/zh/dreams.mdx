@@ -1,7 +1,15 @@
 ---
 title: "梦境"
 sidebarTitle: "梦境"
-description: "梦境功能的当前状态。"
+description: "实验性独立 Dreaming 执行器及尚未完成的 API 集成。"
 ---
 
-OMA 当前未提供 Dreams API 或自动记忆整理功能。可通过[记忆存储](/docs/zh/memory)查看、编辑或删除记忆。
+OMA 目前仍未提供 `/v1/dreams` API 或自动记忆整理服务。
+
+仓库新增了实验性独立执行器 `cmd/dream`：通过 OMA API 完整导出 Session 的全部线程，复制原记忆库，为每份轨迹执行受限 Analyzer，最后运行 Organizer。实现参考 Anthropic 官方 Cookbook 与研究，不声称恢复了托管 Dreams 的私有内部机制。
+
+当前只执行 `create_new`。持久化排他锁和 worker 停写栅栏落地前，`update_existing` 会明确拒绝。执行器不创建托管 pipeline Session，也不提供进程重启后的任务恢复。
+
+研究证据、运行方法、安全边界、测试和原生 API 剩余工作见 `docs/design/be/dreaming.md`。示例请求见 `docs/examples/dream-request.json`。未加 `-execute` 时只校验，不产生远端修改或模型调用。
+
+产出是普通[记忆存储](/docs/zh/memory)。审查后再挂入后续 Session，优先使用只读权限。

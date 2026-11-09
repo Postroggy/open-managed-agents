@@ -1,7 +1,25 @@
 ---
 title: "Dreams"
 sidebarTitle: "Dreams"
-description: "Current availability of Dreams."
+description: "Experimental standalone dreaming and the remaining API integration."
 ---
 
-OMA does not currently provide a Dreams API or automatic memory consolidation. You can inspect, edit, or delete memories in [Memory stores](/docs/en/memory).
+OMA does not yet expose the `/v1/dreams` API or automatic memory consolidation.
+
+An experimental standalone runner is available at `cmd/dream`. It reads complete
+session/thread histories through OMA APIs, copies the input memory store, runs a
+restricted transcript analyzer for each session, then runs an organizer. It is
+based on Anthropic's public Cookbook and research, not a reconstruction of the
+private managed Dreams implementation.
+
+The runner supports `create_new` only. It rejects `update_existing` until durable
+store locking and worker fencing are integrated. It does not create a managed
+pipeline session or provide restartable background jobs.
+
+See `docs/design/be/dreaming.md` for the evidence ledger, invocation, limits,
+security boundaries, tests, and remaining native API work. The example request
+is `docs/examples/dream-request.json`. Without `-execute`, the command validates
+only and makes no remote changes.
+
+Output stores are ordinary [Memory stores](/docs/en/memory). Review generated
+content before mounting it into future sessions, preferably read-only.
