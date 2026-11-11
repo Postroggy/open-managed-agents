@@ -86,7 +86,9 @@ go test -race -count=10 ./internal/dreams ./internal/dreamclient ./cmd/dream
 
 52 个顶层测试、含子测试 134 个通过，零失败、零跳过；十次重复竞态回归通过。覆盖率：core 85.0%，HTTP adapter 86.6%，CLI 46.5%。包含完整 Engine → HTTP fixture → 记忆读写、合并退休清理、并发占位替换保留的集成测试；模型为脚本模型，不是真实 Claude。
 
-隔离模块只用于验证这三个无外部依赖的包，**没有修改仓库 go.mod，也没有替代原仓库的 Go 1.27、Yourbatis、PostgreSQL 和全量质量门禁**。官方 SDK、真实模型、原生 API、S3/NATS/SSE 全链路尚未验收。
+随后通过 `actions/go-versions` 官方构建产物取得 Go 1.27.4（run `42945153609`，artifact `13822456462`），校验下载 ZIP 的 SHA-256 为 `382ec6282d93500043462c5a56cf4f868edc200949d314d94fcd7d6f0e02eb02`。使用与仓库逐字节一致的原始 go.mod（Git blob `0331284b09cb44d7de0b53607d56164a8a3e5d09`），通过 `-modfile`、`-mod=readonly`、`GOPROXY=off` 再次运行上述三个包的 vet、134 个测试和十次重复竞态回归，全部通过。Go 1.27 的核心包验证不再依赖远端 runner。
+
+这些结果只覆盖三个已检出的、无外部依赖的包；**没有修改仓库 go.mod，也不代表整个 OMA、Yourbatis 生成、真实 PostgreSQL 或全量质量门禁已通过**。依赖获取和完整项目检出仍受环境限制，官方 SDK、真实模型、原生 API、S3/NATS/SSE 全链路尚未验收。
 
 当前 GitHub Actions 连不下载 Action、只执行版本检查的 runner-preflight 都在出现步骤记录前失败；后续测试作业被跳过。该记录不能算 CI 通过，失败原因也不能未经证据归因为项目代码或账单。
 
