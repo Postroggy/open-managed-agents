@@ -53,7 +53,7 @@ func TestEngineWithOMAHTTPAdapter(t *testing.T) {
 				case 0:
 					call("read", map[string]any{"target": "source", "session_id": "sesn_one"})
 					return
-				case 1:
+				case 1, 3:
 					call("read", map[string]any{"target": "memory", "path": "/note.md"})
 					return
 				case 2:
@@ -66,6 +66,9 @@ func TestEngineWithOMAHTTPAdapter(t *testing.T) {
 				}
 			} else if turn == 0 {
 				call("write", map[string]any{"path": "/_index.md", "content": "[Entrance](note.md)"})
+				return
+			} else if turn == 1 {
+				call("read", map[string]any{"target": "memory", "path": "/_index.md"})
 				return
 			}
 			emit(dreams.ModelResponse{StopReason: "end_turn", Content: []dreams.Block{{Type: "text", Text: "done"}}, Usage: dreams.Usage{InputTokens: 5, OutputTokens: 1}})
@@ -137,7 +140,7 @@ func TestEngineWithOMAHTTPAdapter(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if d.Status != dreams.Completed || d.Outputs[0].MemoryStoreID != "memstore_output" || modelCalls != 6 {
+	if d.Status != dreams.Completed || d.Outputs[0].MemoryStoreID != "memstore_output" || modelCalls != 8 {
 		t.Fatalf("unexpected run: %+v, calls=%d", d, modelCalls)
 	}
 	if *stores["memstore_source"]["mem_note"].Content != old {

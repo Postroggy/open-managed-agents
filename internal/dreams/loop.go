@@ -10,6 +10,7 @@ import (
 )
 
 func (e *Engine) stage(ctx context.Context, d *Dream, stage, sessionID, purpose string, tools *toolkit) error {
+	tools.organizer = stage == "organize"
 	system := safetyPrompt + "\n" + purpose
 	task := "Perform the " + stage + " pass. Start by discovering the memory files with glob."
 	if sessionID != "" {
@@ -25,7 +26,7 @@ func (e *Engine) stage(ctx context.Context, d *Dream, stage, sessionID, purpose 
 		return err
 	}
 	for turn := 0; turn < e.Limits.MaxTurns; turn++ {
-		if err := ctx.Err(); err != nil {
+		if err := e.validateInputs(ctx, d); err != nil {
 			return err
 		}
 		if totalTokens(d.Usage) >= e.Limits.MaxTotalTokens {
@@ -52,6 +53,9 @@ func (e *Engine) stage(ctx context.Context, d *Dream, stage, sessionID, purpose 
 		if totalTokens(d.Usage) > e.Limits.MaxTotalTokens {
 			return &Failure{Type: "token_budget_exceeded", Message: "Configured token budget exceeded; no further tools will run"}
 		}
+		if err := e.validateInputs(ctx, d); err != nil {
+			return err
+		}
 		calls, err := validateResponse(response, e.Limits.MaxToolsPerTurn)
 		if err != nil {
 			return err
@@ -60,10 +64,13 @@ func (e *Engine) stage(ctx context.Context, d *Dream, stage, sessionID, purpose 
 			if stage == "analyze" && !tools.sourceRead(sessionID) {
 				return &Failure{Type: "incomplete_transcript_read", Message: "Analyzer ended before reading its complete transcript"}
 			}
+			if len(tools.unverified) != 0 {
+				return &Failure{Type: "unverified_write", Message: "Every modified memory must be read back in full after writing"}
+			}
 			return e.record(ctx, Event{Stage: stage, SessionID: sessionID, Kind: "stage_completed"})
 		}
 		request.Messages = append(request.Messages, Message{Role: "assistant", Content: response.Content})
-		results, err := e.executeCalls(ctx, stage, sessionID, calls, tools)
+		results, err := e.executeCalls(ctx, d, stage, sessionID, calls, tools)
 		if err != nil {
 			return err
 		}
@@ -72,10 +79,11 @@ func (e *Engine) stage(ctx context.Context, d *Dream, stage, sessionID, purpose 
 	return &Failure{Type: "turn_limit_exceeded", Message: "Stage did not complete within the configured turn limit"}
 }
 
-func (e *Engine) executeCalls(ctx context.Context, stage, sessionID string, calls []Block, tools *toolkit) ([]Block, error) {
+func (e *Engine) executeCalls(ctx context.Context, d *Dream, stage, sessionID string, calls []Block, tools *toolkit) ([]Block, error) {
+	tools.turn++
 	results := make([]Block, 0, len(calls))
 	for _, call := range calls {
-		if err := ctx.Err(); err != nil {
+		if err := e.validateInputs(ctx, d); err != nil {
 			return nil, err
 		}
 		content, event, err := tools.execute(ctx, call.Name, call.Input)

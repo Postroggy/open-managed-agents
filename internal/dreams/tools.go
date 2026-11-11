@@ -65,10 +65,14 @@ type toolkit struct {
 	memoryReads map[string]*readTracker
 	versions    map[string]string
 	limits      Limits
+	organizer   bool
+	unverified  map[string]string
+	writeTurns  map[string]int
+	turn        int
 }
 
 func newToolkit(backend Backend, storeID string, transcripts map[string]Transcript, limits Limits) *toolkit {
-	return &toolkit{backend: backend, storeID: storeID, transcripts: transcripts, limits: limits, sources: map[string]*readTracker{}, memoryReads: map[string]*readTracker{}, versions: map[string]string{}}
+	return &toolkit{backend: backend, storeID: storeID, transcripts: transcripts, limits: limits, sources: map[string]*readTracker{}, memoryReads: map[string]*readTracker{}, versions: map[string]string{}, unverified: map[string]string{}, writeTurns: map[string]int{}}
 }
 
 func (t *toolkit) sourceRead(id string) bool { return t.sources[id].complete() }
@@ -161,6 +165,10 @@ func (t *toolkit) read(ctx context.Context, a toolArgs) (string, Event, error) {
 	tracker.add(start, end)
 	if a.Target == "memory" && tracker.complete() {
 		t.versions[a.Path] = hash
+		if t.unverified[a.Path] == hash && t.turn > t.writeTurns[a.Path] {
+			delete(t.unverified, a.Path)
+			delete(t.writeTurns, a.Path)
+		}
 	}
 	result := readResult{Content: string(chars[start:end]), SHA256: hash, Offset: start, NextOffset: end, TotalCharacters: len(chars), EOF: end == len(chars)}
 	return encodeResult(result), Event{Path: a.Path, Bytes: len(result.Content), SHA256: hash}, nil
@@ -190,6 +198,9 @@ func (t *toolkit) write(ctx context.Context, a toolArgs) (string, Event, error) 
 			return "", Event{}, errors.New("memory store document limit reached")
 		}
 	}
+	if err := t.validateRetirement(ctx, a); err != nil {
+		return "", Event{}, err
+	}
 	result, err := t.backend.Write(ctx, t.storeID, Memory{Path: a.Path, Content: a.Content}, a.ExpectedSHA256)
 	if err != nil {
 		return "", Event{}, errors.New("memory write failed or version changed; reread before retrying")
@@ -197,7 +208,10 @@ func (t *toolkit) write(ctx context.Context, a toolArgs) (string, Event, error) 
 	if result.SHA256 != digest(a.Content) {
 		return "", Event{}, errors.New("persisted memory hash does not match the write")
 	}
-	t.versions[a.Path] = result.SHA256
+	delete(t.versions, a.Path)
+	delete(t.memoryReads, a.Path+":"+result.SHA256)
+	t.unverified[a.Path] = result.SHA256
+	t.writeTurns[a.Path] = t.turn
 	return encodeResult(struct {
 		Path   string `json:"path"`
 		SHA256 string `json:"sha256"`
@@ -279,7 +293,7 @@ func (t *toolkit) grep(ctx context.Context, a toolArgs) (string, Event, error) {
 	sort.Slice(memories, func(i, j int) bool { return memories[i].Path < memories[j].Path })
 	matches := make([]matchResult, 0)
 	for _, item := range memories {
-		memory, err := t.backend.Read(ctx, t.storeID, item.Path)
+		memory, err := readCatalogMemory(ctx, t.backend, t.storeID, item)
 		if err != nil {
 			return "", Event{}, errors.New("memory search failed; not all pages could be read")
 		}
@@ -329,6 +343,7 @@ func validPath(p string) error {
 }
 
 func digest(s string) string { hash := sha256.Sum256([]byte(s)); return hex.EncodeToString(hash[:]) }
+
 func encodeResult(value any) string {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -342,9 +357,7 @@ func validateArguments(name string, raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
 		return errors.New("tool arguments must be an object")
 	}
-	required := map[string][]string{
-		"read": {"target"}, "write": {"path", "content"}, "edit": {"path", "old_text", "new_text", "expected_sha256"}, "glob": {}, "grep": {"query"},
-	}
+	required := map[string][]string{"read": {"target"}, "write": {"path", "content"}, "edit": {"path", "old_text", "new_text", "expected_sha256"}, "glob": {}, "grep": {"query"}}
 	keys, ok := required[name]
 	if !ok {
 		return errors.New("tool is not permitted")

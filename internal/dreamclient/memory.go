@@ -43,7 +43,6 @@ func (c *Client) Store(ctx context.Context, id string) (dreams.Store, error) {
 	}
 	return dreams.Store{ID: result.ID, Name: result.Name, Description: result.Description}, nil
 }
-
 func (c *Client) CreateStore(ctx context.Context, name, description string) (dreams.Store, error) {
 	var result storeResponse
 	body := struct {
@@ -58,7 +57,6 @@ func (c *Client) CreateStore(ctx context.Context, name, description string) (dre
 	}
 	return dreams.Store{ID: result.ID, Name: result.Name, Description: result.Description}, nil
 }
-
 func (c *Client) List(ctx context.Context, id string) ([]dreams.Memory, error) {
 	endpoint, err := resourcePath("memory_stores", id)
 	if err != nil {
@@ -80,32 +78,42 @@ func (c *Client) List(ctx context.Context, id string) ([]dreams.Memory, error) {
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, nil
 }
-
-func (c *Client) lookup(ctx context.Context, storeID, path string) (dreams.Memory, error) {
+func (c *Client) lookup(ctx context.Context, storeID, p string) (dreams.Memory, error) {
 	items, err := c.List(ctx, storeID)
 	if err != nil {
 		return dreams.Memory{}, err
 	}
 	for _, item := range items {
-		if item.Path == path {
+		if item.Path == p {
 			return item, nil
 		}
 	}
 	return dreams.Memory{}, &APIError{Status: http.StatusNotFound, Type: "not_found_error"}
 }
-
-func (c *Client) Read(ctx context.Context, storeID, path string) (dreams.Memory, error) {
-	item, err := c.lookup(ctx, storeID, path)
+func (c *Client) Read(ctx context.Context, storeID, p string) (dreams.Memory, error) {
+	item, err := c.lookup(ctx, storeID, p)
 	if err != nil {
 		return dreams.Memory{}, err
 	}
-	endpoint, _ := resourcePath("memory_stores", storeID)
+	return c.ReadMemory(ctx, storeID, item)
+}
+func (c *Client) ReadMemory(ctx context.Context, storeID string, item dreams.Memory) (dreams.Memory, error) {
+	endpoint, err := resourcePath("memory_stores", storeID)
+	if err != nil {
+		return dreams.Memory{}, err
+	}
+	if !safeID(item.ID) {
+		return dreams.Memory{}, errors.New("invalid memory ID")
+	}
 	var result memoryResponse
 	if err := c.request(ctx, http.MethodGet, endpoint+"/memories/"+item.ID, memoryBeta, url.Values{"view": {"full"}}, nil, &result); err != nil {
 		return dreams.Memory{}, err
 	}
-	if result.ID != item.ID || result.Path != path {
+	if result.ID != item.ID || result.Path != item.Path {
 		return dreams.Memory{}, errors.New("memory identity changed during read")
+	}
+	if item.SHA256 != "" && result.SHA256 != item.SHA256 {
+		return dreams.Memory{}, errors.New("memory version changed during read")
 	}
 	return fullMemory(result)
 }
@@ -159,7 +167,6 @@ func fullMemory(result memoryResponse) (dreams.Memory, error) {
 	}
 	return dreams.Memory{ID: result.ID, Path: result.Path, Content: *result.Content, SHA256: result.SHA256}, nil
 }
-
 func (c *Client) Complete(ctx context.Context, request dreams.ModelRequest) (dreams.ModelResponse, error) {
 	var response dreams.ModelResponse
 	err := c.request(ctx, http.MethodPost, "/v1/messages", "", nil, request, &response)

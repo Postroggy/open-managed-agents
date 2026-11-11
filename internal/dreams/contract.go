@@ -40,7 +40,7 @@ type createEnvelope struct {
 	Inputs         []Input         `json:"inputs"`
 	Model          json.RawMessage `json:"model"`
 	Instructions   *string         `json:"instructions"`
-	OutputBehavior *OutputBehavior `json:"output_behavior"`
+	OutputBehavior json.RawMessage `json:"output_behavior"`
 }
 
 func DecodeRequest(r io.Reader) (Request, error) {
@@ -59,10 +59,19 @@ func DecodeRequest(r io.Reader) (Request, error) {
 	}
 	req := Request{Inputs: wire.Inputs, Model: model, Instructions: wire.Instructions, OutputBehavior: OutputBehavior{Type: "create_new"}}
 	if wire.OutputBehavior != nil {
-		if wire.OutputBehavior.Type == "" {
+		if bytes.Equal(bytes.TrimSpace(wire.OutputBehavior), []byte("null")) {
+			return Request{}, invalid("output_behavior must be an object when provided")
+		}
+		var behavior OutputBehavior
+		decoder := json.NewDecoder(bytes.NewReader(wire.OutputBehavior))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&behavior); err != nil {
+			return Request{}, invalid("invalid output_behavior")
+		}
+		if behavior.Type == "" {
 			return Request{}, invalid("output_behavior.type is required")
 		}
-		req.OutputBehavior = *wire.OutputBehavior
+		req.OutputBehavior = behavior
 	}
 	return Normalize(req)
 }
@@ -76,13 +85,21 @@ func decodeModel(raw json.RawMessage) (Model, error) {
 		model.Speed = "standard"
 		return model, nil
 	}
+	var wire struct {
+		ID    string  `json:"id"`
+		Speed *string `json:"speed"`
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&model); err != nil {
+	if err := decoder.Decode(&wire); err != nil {
 		return model, invalid("model must be a string or an object with id and speed")
 	}
-	if model.Speed == "" {
-		model.Speed = "standard"
+	model.ID, model.Speed = wire.ID, "standard"
+	if wire.Speed != nil {
+		if *wire.Speed != "standard" {
+			return model, invalid("model speed must be standard")
+		}
+		model.Speed = *wire.Speed
 	}
 	return model, nil
 }

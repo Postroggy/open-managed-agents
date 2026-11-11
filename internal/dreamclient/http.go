@@ -72,7 +72,6 @@ type APIError struct {
 func (e *APIError) Error() string {
 	return fmt.Sprintf("OMA API request failed (HTTP %d, %s)", e.Status, e.Type)
 }
-
 func (c *Client) request(ctx context.Context, method, endpoint, beta string, query url.Values, body, result any) error {
 	var payload []byte
 	var err error
@@ -176,6 +175,9 @@ func pages[T any](ctx context.Context, c *Client, endpoint, beta string, query u
 		var result page[T]
 		if err := c.request(ctx, http.MethodGet, endpoint, beta, query, nil, &result); err != nil {
 			return err
+		}
+		if result.Data == nil {
+			return errors.New("OMA omitted the pagination data array")
 		}
 		for _, item := range result.Data {
 			count++

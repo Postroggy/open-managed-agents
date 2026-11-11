@@ -91,6 +91,9 @@ func (e *Engine) run(ctx context.Context, d *Dream) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := e.validateInputs(ctx, d); err != nil {
+		return err
+	}
 	source, err := e.Backend.Store(ctx, d.Inputs[0].MemoryStoreID)
 	if err != nil {
 		return inputFailure(ctx, "input_memory_store_unavailable", "Input memory store is unavailable")
@@ -99,12 +102,12 @@ func (e *Engine) run(ctx context.Context, d *Dream) error {
 	if err != nil {
 		return fmt.Errorf("create output store: %w", err)
 	}
+	if output.ID == source.ID || !validID(output.ID) {
+		return errors.New("backend did not create an independent output store")
+	}
 	d.Outputs = []Output{{Type: "memory_store", MemoryStoreID: output.ID}}
 	if err := e.record(ctx, Event{Stage: "copy", Kind: "output_created", StoreID: output.ID}); err != nil {
 		return err
-	}
-	if output.ID == source.ID {
-		return errors.New("backend returned the input store as the new output")
 	}
 	if err := e.copyStore(ctx, source.ID, output.ID); err != nil {
 		return err
@@ -139,7 +142,13 @@ func (e *Engine) run(ctx context.Context, d *Dream) error {
 	if err := e.stage(ctx, d, "organize", "", organizerPrompt, tools); err != nil {
 		return err
 	}
-	return e.validateOutput(ctx, output.ID)
+	if err := e.validateInputs(ctx, d); err != nil {
+		return err
+	}
+	if err := e.validateOutput(ctx, output.ID); err != nil {
+		return err
+	}
+	return e.validateInputs(ctx, d)
 }
 
 func (e *Engine) copyStore(ctx context.Context, sourceID, targetID string) error {
@@ -150,23 +159,44 @@ func (e *Engine) copyStore(ctx context.Context, sourceID, targetID string) error
 	if len(memories) > e.Limits.MaxMemories {
 		return &Failure{Type: "input_memory_store_too_large", Message: "Input store exceeds the configured document limit"}
 	}
+	manifest, err := memoryManifest(memories)
+	if err != nil {
+		return err
+	}
 	sort.Slice(memories, func(i, j int) bool { return memories[i].Path < memories[j].Path })
 	for _, item := range memories {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		memory, err := e.Backend.Read(ctx, sourceID, item.Path)
+		memory, err := readCatalogMemory(ctx, e.Backend, sourceID, item)
 		if err != nil {
 			return err
-		}
-		if item.SHA256 != "" && memory.SHA256 != item.SHA256 {
-			return &Failure{Type: "input_memory_store_changed", Message: "Input changed while its copy was being made; retry from a stable store"}
 		}
 		if len(memory.Content) > e.Limits.MaxMemoryBytes {
 			return &Failure{Type: "input_memory_store_too_large", Message: "Input document exceeds the configured size limit"}
 		}
-		if _, err := e.Backend.Write(ctx, targetID, Memory{Path: memory.Path, Content: memory.Content}, ""); err != nil {
+		written, err := e.Backend.Write(ctx, targetID, Memory{Path: memory.Path, Content: memory.Content}, "")
+		if err != nil {
 			return err
+		}
+		if written.Path != memory.Path || written.SHA256 != memory.SHA256 {
+			return errors.New("copied memory identity or hash mismatch")
+		}
+	}
+	current, err := e.Backend.List(ctx, sourceID)
+	if err != nil {
+		return err
+	}
+	next, err := memoryManifest(current)
+	if err != nil {
+		return err
+	}
+	if len(next) != len(manifest) {
+		return changedInputStore()
+	}
+	for name, expected := range manifest {
+		if next[name] != expected {
+			return changedInputStore()
 		}
 	}
 	return nil
@@ -187,33 +217,5 @@ func inputFailure(ctx context.Context, kind, message string) error {
 }
 
 func (e *Engine) validateOutput(ctx context.Context, storeID string) error {
-	items, err := e.Backend.List(ctx, storeID)
-	if err != nil {
-		return err
-	}
-	if len(items) == 0 {
-		return nil
-	}
-	if len(items) > e.Limits.MaxMemories {
-		return &Failure{Type: "invalid_output", Message: "Output exceeds the memory count limit"}
-	}
-	indexed := false
-	for _, item := range items {
-		if err := validPath(item.Path); err != nil {
-			return err
-		}
-		if item.Path == "/_index.md" {
-			index, err := e.Backend.Read(ctx, storeID, item.Path)
-			if err != nil {
-				return err
-			}
-			if index.Content != "" {
-				indexed = true
-			}
-		}
-	}
-	if indexed {
-		return nil
-	}
-	return &Failure{Type: "invalid_output", Message: "Organizer did not produce a nonempty /_index.md"}
+	return e.inspectAndCleanOutput(ctx, storeID)
 }

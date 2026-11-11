@@ -60,7 +60,7 @@ func (b *fakeBackend) List(ctx context.Context, id string) ([]Memory, error) {
 	}
 	return items, nil
 }
-func (b *fakeBackend) Read(ctx context.Context, id, path string) (Memory, error) {
+func (b *fakeBackend) Read(ctx context.Context, id, p string) (Memory, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -69,7 +69,7 @@ func (b *fakeBackend) Read(ctx context.Context, id, path string) (Memory, error)
 	if b.failRead {
 		return Memory{}, errors.New("unavailable")
 	}
-	m, ok := b.stores[id][path]
+	m, ok := b.stores[id][p]
 	if !ok {
 		return Memory{}, errors.New("missing")
 	}
@@ -118,14 +118,13 @@ type eventLog struct {
 	fail   bool
 }
 
-func (l *eventLog) Record(_ context.Context, event Event) error {
+func (l *eventLog) Record(_ context.Context, e Event) error {
 	if l.fail {
 		return errors.New("audit unavailable")
 	}
-	l.events = append(l.events, event)
+	l.events = append(l.events, e)
 	return nil
 }
-
 func toolResponse(id, name string, args any) ModelResponse {
 	raw, _ := json.Marshal(args)
 	return ModelResponse{Content: []Block{{Type: "tool_use", ID: id, Name: name, Input: raw}}, StopReason: "tool_use", Usage: Usage{InputTokens: 10, OutputTokens: 2, CacheReadInputTokens: 1}}
@@ -141,23 +140,22 @@ func newDream(t *testing.T) *Dream {
 	}
 	return &d
 }
-
 func scriptedModel(t *testing.T) modelFunc {
 	return func(ctx context.Context, r ModelRequest) (ModelResponse, error) {
 		t.Helper()
 		if strings.Contains(r.System, "event_1") || strings.Contains(r.Messages[0].Content[0].Text, "event_1") {
 			t.Fatal("transcript injected into system or initial task")
 		}
-		stageTurn := (len(r.Messages) - 1) / 2
+		turn := (len(r.Messages) - 1) / 2
 		if strings.Contains(r.System, analyzerPrompt) {
 			id := "sesn_a"
 			if strings.Contains(r.Messages[0].Content[0].Text, "sesn_b") {
 				id = "sesn_b"
 			}
-			switch stageTurn {
+			switch turn {
 			case 0:
 				return toolResponse("call_source", "read", toolArgs{Target: "source", SessionID: id}), nil
-			case 1:
+			case 1, 3:
 				return toolResponse("call_read", "read", toolArgs{Target: "memory", Path: "/note.md"}), nil
 			case 2:
 				var result readResult
@@ -169,31 +167,33 @@ func scriptedModel(t *testing.T) modelFunc {
 				return doneResponse(), nil
 			}
 		}
-		if stageTurn == 0 {
+		if turn == 0 {
 			return toolResponse("call_index", "write", toolArgs{Path: "/_index.md", Content: "[Entrance](note.md)"}), nil
+		}
+		if turn == 1 {
+			return toolResponse("verify_index", "read", toolArgs{Target: "memory", Path: "/_index.md"}), nil
 		}
 		return doneResponse(), nil
 	}
 }
-
 func TestEngineEndToEndCreatesIndependentOutput(t *testing.T) {
-	backend := fixtureBackend()
+	b := fixtureBackend()
 	events := &eventLog{}
 	d := newDream(t)
-	engine := Engine{Backend: backend, Model: scriptedModel(t), Observer: events, Limits: DefaultLimits()}
-	if err := engine.Run(context.Background(), d); err != nil {
+	e := Engine{Backend: b, Model: scriptedModel(t), Observer: events, Limits: DefaultLimits()}
+	if err := e.Run(context.Background(), d); err != nil {
 		t.Fatal(err)
 	}
 	if d.Status != Completed || len(d.Outputs) != 1 {
 		t.Fatalf("unexpected result %+v", d)
 	}
-	if backend.stores["memstore_source"]["/note.md"].Content != "Old claim: east" {
+	if b.stores["memstore_source"]["/note.md"].Content != "Old claim: east" {
 		t.Fatal("source mutated")
 	}
-	if !strings.Contains(backend.stores[d.Outputs[0].MemoryStoreID]["/note.md"].Content, "west") {
+	if !strings.Contains(b.stores[d.Outputs[0].MemoryStoreID]["/note.md"].Content, "west") {
 		t.Fatal("output not persisted")
 	}
-	if d.Usage.InputTokens != 85 || d.Usage.OutputTokens != 17 || d.Usage.CacheReadInputTokens != 7 {
+	if d.Usage.InputTokens != 115 || d.Usage.OutputTokens != 23 || d.Usage.CacheReadInputTokens != 10 {
 		t.Fatalf("usage not fully accounted: %+v", d.Usage)
 	}
 	var stages []string
@@ -210,37 +210,34 @@ func TestEngineEndToEndCreatesIndependentOutput(t *testing.T) {
 		t.Fatal("audit contains memory body")
 	}
 }
-
 func TestEngineRefusesIncompleteTranscriptAndPreservesPartial(t *testing.T) {
-	backend := fixtureBackend()
+	b := fixtureBackend()
 	d := newDream(t)
-	engine := Engine{Backend: backend, Model: modelFunc(func(context.Context, ModelRequest) (ModelResponse, error) { return doneResponse(), nil }), Limits: DefaultLimits()}
-	err := engine.Run(context.Background(), d)
+	e := Engine{Backend: b, Model: modelFunc(func(context.Context, ModelRequest) (ModelResponse, error) { return doneResponse(), nil }), Limits: DefaultLimits()}
+	err := e.Run(context.Background(), d)
 	if err == nil || d.Status != Failed || d.Error.Type != "incomplete_transcript_read" {
 		t.Fatalf("unexpected result %+v %v", d, err)
 	}
-	if len(d.Outputs) != 1 || backend.stores[d.Outputs[0].MemoryStoreID]["/note.md"].Content == "" {
+	if len(d.Outputs) != 1 || b.stores[d.Outputs[0].MemoryStoreID]["/note.md"].Content == "" {
 		t.Fatal("partial output discarded")
 	}
 }
-
 func TestEngineCancellationPreventsFurtherWrites(t *testing.T) {
-	backend := fixtureBackend()
+	b := fixtureBackend()
 	d := newDream(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	engine := Engine{Backend: backend, Limits: DefaultLimits(), Model: modelFunc(func(context.Context, ModelRequest) (ModelResponse, error) {
+	e := Engine{Backend: b, Limits: DefaultLimits(), Model: modelFunc(func(context.Context, ModelRequest) (ModelResponse, error) {
 		cancel()
 		return toolResponse("write", "write", toolArgs{Path: "/bad.md", Content: "must not be written"}), nil
 	})}
-	err := engine.Run(ctx, d)
+	err := e.Run(ctx, d)
 	if !errors.Is(err, context.Canceled) || d.Status != Canceled {
 		t.Fatalf("unexpected cancellation %v %+v", err, d)
 	}
-	if _, ok := backend.stores[d.Outputs[0].MemoryStoreID]["/bad.md"]; ok {
+	if _, ok := b.stores[d.Outputs[0].MemoryStoreID]["/bad.md"]; ok {
 		t.Fatal("write executed after cancellation")
 	}
 }
-
 func TestEngineRejectsUnsafeUpdateBeforeSideEffects(t *testing.T) {
 	b := fixtureBackend()
 	d := newDream(t)
@@ -253,7 +250,6 @@ func TestEngineRejectsUnsafeUpdateBeforeSideEffects(t *testing.T) {
 		t.Fatal("unsupported mode had side effects")
 	}
 }
-
 func TestEngineFailureBudgets(t *testing.T) {
 	for _, test := range []struct {
 		name, kind string
@@ -281,7 +277,6 @@ func TestEngineFailureBudgets(t *testing.T) {
 		})
 	}
 }
-
 func TestEngineAuditFailureStopsBeforeCopy(t *testing.T) {
 	b := fixtureBackend()
 	d := newDream(t)
@@ -293,7 +288,6 @@ func TestEngineAuditFailureStopsBeforeCopy(t *testing.T) {
 		t.Fatal("wrote without output checkpoint")
 	}
 }
-
 func TestResponseValidation(t *testing.T) {
 	valid := toolResponse("a", "read", toolArgs{Target: "source", SessionID: "s"})
 	tests := []ModelResponse{{StopReason: "max_tokens"}, {StopReason: "end_turn"}, {StopReason: "end_turn", Content: valid.Content}, {StopReason: "tool_use", Content: []Block{{Type: "text", Text: "no calls"}}}, {StopReason: "tool_use", Content: append(valid.Content, valid.Content...)}, {StopReason: "end_turn", Content: []Block{{Type: "thinking"}}}}

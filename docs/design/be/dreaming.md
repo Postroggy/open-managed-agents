@@ -1,103 +1,93 @@
-# Dreaming：公开合同与可执行核心
+# Dreaming：可执行核心、来源与验收边界
 
-状态：实验性独立 runner；**不是已完成的 `/v1/dreams` 服务**。
-研究基线：2026-11-09；代码基线：OMA `37f58f35837db48a6ca6c4058750e7646a282f1e`。
+更新时间：2026-11-11。OMA 基线：`37f58f3`；首批核心：`fb9ac1a`。
 
-## 研究边界
+**当前交付仍是独立 `create_new` runner，不是完整的原生 `/v1/dreams` 服务。**
+之前未推送的原生服务草稿无法从本分支检出，不计入已实现能力。这里只记录可从分支检出的代码和实际执行的验证。
 
-只以 Anthropic 官方 API、研究和官方 Cookbook 作为机制依据，不移植其他 Memory 系统。此次二手检索主要找到 Cookbook 的转述、镜像与解读；没有找到足以证明托管 Dreams 私有 prompt、调度策略或内部模型调用图的独立证据，因而没有把这些推测写成实现事实。
+## 来源边界
 
-| 来源 | 可确认内容 | 不能据此声称 |
+| 来源 | 对应实现 | 明确不作的推断 |
 | --- | --- | --- |
-| [Create a Dream](https://platform.claude.com/docs/en/api/http/beta/dreams/create) | 一个 store、1–100 个不重复 session；排序后的响应 IDs；standard speed；instructions 1–4096 字符；create_new/update_existing | 私有整理算法 |
-| [Dreams guide](https://platform.claude.com/docs/en/managed-agents/dreams) | 异步状态、保留部分输出、pipeline session 可观察性 | cookbook 等于托管实现 |
-| [Cancel](https://platform.claude.com/docs/en/api/http/beta/dreams/cancel) / [Archive](https://platform.claude.com/docs/en/api/http/beta/dreams/archive) | canceled 幂等；completed/failed 不能取消；仅终态可归档，状态不变 | canceled 返回时 worker 已彻底停写 |
-| [官方 Cookbook](https://platform.claude.com/cookbook/managed-agents-cma-dreaming-with-a-dynamic-workflow) | 每份 transcript 的 analyzer，全部结束后的 organizer；有限文件工具；wiki 和索引；不可信输入隔离 | 托管 API 必然使用这些角色、模型或 prompt |
-| [Components of agent memory](https://www.anthropic.com/research/components-of-agent-memory) | 用原始轨迹校正笔记；形成可检索的表示；不要用僵硬保存规则替代模型判断 | 任意记忆提炼都能改善后续任务 |
+| [官方 Create Reference](https://platform.claude.com/docs/en/api/http/beta/dreams/create) | 一个 Store、1–100 个唯一 Session、模型标准速度、instructions 边界、请求归一化 | 请求校验认识 `update_existing` 不代表执行器已支持 |
+| [官方 Dreams guide](https://platform.claude.com/docs/en/managed-agents/dreams) | 输入失效、部分产出、失败和取消的资源状态 | 本地日志不冒充服务端 Session 事件流 |
+| [官方 Analyzer](https://github.com/anthropics/claude-cookbooks/blob/ce8b2629efe8b24048b127b4c79af1e9cbab93d4/managed_agents/example_data/memory_distill/prompts/analyzer_system.md) | 完整读取、证据核验、保留不确定性、按主题组织、独立写后读回 | 串行实现不冒充官方示例的并行调度 |
+| [官方 Organizer](https://github.com/anthropics/claude-cookbooks/blob/ce8b2629efe8b24048b127b4c79af1e9cbab93d4/managed_agents/example_data/memory_distill/prompts/organizer_system.md) | 合并后验证目标、退休占位、重定向链接、维护索引 | 文件结构正确不证明语义事实没有损失 |
+| [官方清理工具](https://github.com/anthropics/claude-cookbooks/blob/ce8b2629efe8b24048b127b4c79af1e9cbab93d4/managed_agents/memory_distill_utils.py) | 模型无删除工具，宿主清理严格单行 `MOVED TO [[slug]]` 占位 | Cookbook 是公开示例，不是托管 Dreams 私有源码 |
 
-官方 guide 的部分段落仍只描述默认的复制输出；`update_existing` 的请求结构和并发排他语义以当前 API Reference 为准。没有以 guide 的旧段落否定新版 Reference。
+没有引入 Letta、Mem0、MemOS 等第三方记忆框架。当前没有足以复现托管 Dreams 私有提示词或内部调用图的独立逆向证据，不能宣称“所有内部机制已逆向对齐”。提示词是依据上述公开来源独立撰写；CAS、预算、结构检查和失效检查频率属于本实现的工程选择。
 
-## 已实现范围
-
-`internal/dreams` 提供请求校验、资源状态转换、双阶段工具驱动执行器和受限工具。`internal/dreamclient` 通过 OMA 现有 Memory Stores、Sessions、Threads、Events、Messages HTTP API 执行真实读写和模型调用。`cmd/dream` 提供可执行入口，不需要另外引入依赖。
+## 执行与组件通信
 
 ```mermaid
-flowchart LR
-  A[请求校验] --> B[新建输出 Store]
-  B --> C[复制原记忆]
-  C --> D[完整导出每个 Session 的全部线程]
-  D --> E[每份轨迹一个独立 Analyzer 上下文]
-  E --> F[全部 Analyzer 成功后执行 Organizer]
-  F --> G[验证非空 Store 存在索引]
-  G --> H[输出 Store 与私有运行记录]
+flowchart TD
+    Request[CLI 请求校验] --> Check[检查 Store 与全部输入 Session]
+    Check --> Copy[新输出库与输入清单校验]
+    Copy --> Analyze[每个 Transcript 独立 Analyzer 上下文]
+    Analyze --> Organize[全部分析结束后 Organizer]
+    Organize --> Validate[目录、索引、链接与退休目标检查]
+    Validate --> Cleanup[带内容哈希前置条件的占位清理]
+    Cleanup --> Final[重新加载并验证输出]
+    Analyze --> Messages[OMA Messages API]
+    Organize --> Messages
+    Analyze --> Memory[OMA Memory API 与不可变版本]
+    Organize --> Memory
+    Check --> Sessions[OMA Session 元数据]
+    Analyze --> History[全部线程与分页事件]
 ```
 
-这不是“一次把所有历史塞进 summarization prompt”。Analyzer 通过 read 工具读取原始输入；每个 Analyzer 有独立上下文，只有共享的输出记忆延续。Organizer 可以回查本次加载的原始轨迹。工具执行器记录每份轨迹实际读取的 Unicode 字符区间，遗漏任何区间都不能把 Analyzer 标为完成。
+`internal/dreams` 不依赖 HTTP 或数据库，定义受限执行器及能力接口；`internal/dreamclient` 映射 OMA 的 Memory、Session、Threads、Events 和 Messages HTTP 合同；`cmd/dream` 负责显式执行授权、信号取消及私有运行记录。
 
-### 与官方示例的明确差异
+每次模型调用前、返回后和工具执行前检查输入可用性。HTTP 适配器只读元数据，不为检查重复导出 transcript；没有批量元数据接口时调用量与输入 Session 数成正比。原生实现将需要租户范围内的批量查询及与写入一致的校验，不能把这些 HTTP 检查说成原子撤权栅栏。
 
-- 当前使用确定性的串行调度，不使用 lead agent 动态生成 workflow，也不并行写同一 store。串行是本实现的并发安全取舍，不是关于 Anthropic 私有架构的结论。
-- 调用 OMA `/v1/messages` 驱动工具循环，而非 Brain/Sandbox 的 Managed Session。因此当前 `session_id` 为 `null`；本地 `events.jsonl` 不是官方 Session event stream，不能冒充。
-- 提示词是依据官方公开原则独立撰写，并非提取、恢复或复制出的托管 Dreams 私有提示词。
-- 没有自动注入未来 session 的“高优先级记忆层”。文章讨论该能力，但当前 OMA harness 尚未接入，不能只写一个 Markdown 文件便声称已实现。
-- 当前执行器只允许 `create_new`。请求校验认识 `update_existing`，但执行时在产生任何副作用前明确拒绝。
+目录遍历使用已经取得的 Memory ID 直接读取正文，并验证路径和哈希；`grep`、复制和最终检查不会为每个文件再拉取整个目录。回归测试验证 40 个文件只需一次目录查询及 40 次正文读取。
 
-## 安全与失败语义
+## 核心不变量
 
-模型只获得 read/write/edit/glob/grep 五个逻辑工具。它们访问的是指定 source 集合与输出 Store 的 API，不是主机文件系统；不存在 shell、web、任意 URL 或任意输入 store 写入工具。原始轨迹和旧记忆不插入 system prompt；作为 tool result 提供并标为不可信数据。提示词要求不复制秘密，但这不是可证明的语义注入防护或 DLP。产出仍需审查，未来使用时优先只读挂载。
+- `create_new` 的输出必须与原 Store 不同，失败仍保留输出引用及已写入的部分内容。`update_existing` 在任何远端副作用前明确拒绝。
+- 复制前记录路径、身份和内容哈希，复制后再次比较全部清单，检测新增、删除、改名及内容变化。它不是 PostgreSQL 事务快照，也不宣称输入在 Dream 创建时被冻结。
+- Transcript 导出覆盖全部线程和分页，保留事件身份、工具错误及附件引用，不读取附件字节。独立 runner 要求导出期间 Session 稳定；后续持续检查输入是否仍可读取。
+- 写已有文件前必须完整读过当前版本，并携带服务端 SHA-256 前置条件。Edit 要求唯一匹配。每次写入都产生新的验证义务，即使内容没有改变。
+- 写后必须在后续模型轮次完整读回。同一回复里的 write/read 并列调用、旧的读覆盖记录和只读一部分都不能解除义务。模型未验证就结束时任务失败；不自动伪造模型检查。
+- Analyzer 不能生成退休占位。Organizer 必须先完整读取并验证唯一、非空、非退休的目标，再替换旧页；不能退休索引、建立链或环。
+- 宿主先检查整个输出，再清理严格单行退休占位；删除附带旧内容哈希，发生并发替换则失败并保留新内容。清理后重新读取检查整个输出。
 
-覆盖已有文档前必须完整读过对应版本，写入使用 OMA 的 `content_sha256` 前置条件；Edit 必须唯一匹配。写新路径遇到已有文件不自动改成覆盖。服务端前置条件才是并发校验边界，不能用客户端预读替代。
+## 输出结构检查的范围
 
-**Session 导出必须枚举 threads。** OMA `internal/sessions/service.go:listEvents` 在没有 thread ID 时使用 `PrimaryOnly=true`。只读取 `/sessions/{id}/events` 会漏掉子 Agent 的证据。当前导出逐线程、逐页读取，并保留 event ID、事件类型、工具错误和附件引用；不获取附件内容，文件头明确声明此限制。运行中或导出期间发生变化的 Session 会被拒绝。
+非空输出需要 `/_index.md`。检查每个活动文件是否被索引，wiki 引用是否唯一且存在，索引里的本地 Markdown 目标是否存在，活动页面是否仍链接退休页，退休目标是否有效。代码围栏、行内代码及转义示例不作为 wiki 引用。
 
-- 创建的输出 ID 在复制/模型写入前记录，失败和 SIGINT/SIGTERM 取消不删除部分输出。
-- 取消在下一安全检查点阻止后续工具，不能把已完成的网络写入回滚；没有声称具备分布式取消栅栏。
-- 对截断回复、未读全轨迹、重复分页游标、丢失正文、hash 不一致和上下文超限均显式失败，不把残缺内容当成完成。
-- 消息写请求不自动重试，避免不确定结果造成重复计费或重复写入。
-- 限制总时长、每阶段 turns、每回复 tool 数量、模型请求字节数、总输入轨迹字节数、文档数量与大小。
-- token 限额在回复之间检查，包含实际输入、输出和缓存 token；不是精确美元上限，一次已发出的请求可能令总量超过阈值。
-- HTTP 默认要求 TLS；本地明文必须显式授权；禁止重定向携带 API key；所有 API 请求绑定同一 key 和可选 workspace header。
-- 日志只保存操作元数据、路径、大小、hash 与 usage，不保存 transcript 或模型回复正文。result 中仍含用户 instructions，应按私密数据保存。目录 0700，文件 0600。
+正文普通 Markdown 相对链接可能引用项目源码而非记忆，因此不会凭空把不存在于记忆库的项目路径视为缺失记忆。Wiki 链接则始终按记忆内部引用处理。支持简单 Markdown 及带尖括号的路径，不宣称实现完整 CommonMark 解析。
+
+新提示词要求 frontmatter 和稳定 slug；有 frontmatter 时验证 name/description 与重复字段。旧的无 frontmatter 页面保持可读，不以格式迁移为由删除它们。结构检查不证明事实真实性、完整信息保留、提示注入免疫或下游任务收益。
+
+清理目标读取和旧页删除是分开的 HTTP 请求，不是跨文件原子事务。独立 runner 的输出不应挂给其他 Agent 同时写。原生 `update_existing` 必须另行实现全写入口协调、租约栅栏和事务化恢复，不能直接复用这里的检查宣称分布式并发安全。
 
 ## 使用
 
-在 OMA 已启动、workspace 已配置模型的环境中，从仓库根目录执行。仅校验不产生远端副作用，也不需要 API key：
-
 ```sh
 go run ./cmd/dream -request docs/examples/dream-request.json
+export OMA_API_KEY='workspace-key'
+go run ./cmd/dream -request /private/request.json \
+  -base-url http://localhost:38080 -allow-insecure-http \
+  -records-dir /private/new-run -execute
 ```
 
-先替换示例中的真实 store/session/model IDs，再授权执行：
+未加 `-execute` 只校验。HTTPS 不加明文授权参数。目录必须新建，权限 0700；结果和日志为 0600。不得把 API key、真实 transcript 或运行记录推入仓库。日志记录操作元数据，不记录记忆正文。归档/记录不等于安全删除。
+
+## 已执行验证
+
+2026-11-11，在 Go 1.23.2 隔离模块中对本次实际源码运行：
 
 ```sh
-export OMA_API_KEY='your-workspace-key'
-go run ./cmd/dream \
-  -request /private/path/dream-request.json \
-  -base-url http://localhost:38080 \
-  -allow-insecure-http \
-  -records-dir /private/path/new-dream-run \
-  -execute
-```
-
-HTTPS 部署不要加 `-allow-insecure-http`。`-records-dir` 必须是不存在的新目录；未指定则创建私有临时目录。`result.json` 保存状态、输出 Store ID、usage 与错误；`events.jsonl` 保存执行事件。检查完成的输出，再把它只读挂到后续 Agent。不要把任何真实运行记录、API key 或业务 transcript 提交进仓库。
-
-这些本地记录是检查点和审计，不是可恢复的任务队列。进程被硬杀、机器故障或不确定网络结果之后不能安全地自动续跑；可能需要依据记录检查和清理输出 Store。
-
-## 测试与证据边界
-
-```sh
-go test -race -count=1 ./internal/dreams ./internal/dreamclient ./cmd/dream
 go vet ./internal/dreams ./internal/dreamclient ./cmd/dream
+go test -race -count=1 -cover ./internal/dreams ./internal/dreamclient ./cmd/dream
+go test -race -count=10 ./internal/dreams ./internal/dreamclient ./cmd/dream
 ```
 
-测试覆盖请求边界、Unicode、状态机、输入/输出隔离、CAS、工具权限、完整读取、各预算、取消、部分产出、全线程与分页导出、重定向及错误文本泄露；还用本地 HTTP OMA fixture 与 scripted model 跑完整 Engine → HTTP → Memory 流程。
+52 个顶层测试、含子测试 134 个通过，零失败、零跳过；十次重复竞态回归通过。覆盖率：core 85.0%，HTTP adapter 86.6%，CLI 46.5%。包含完整 Engine → HTTP fixture → 记忆读写、合并退休清理、并发占位替换保留的集成测试；模型为脚本模型，不是真实 Claude。
 
-这些测试证明编排与协议适配，不证明真实模型的事实纠错能力、任务收益、生产 OMA 联调或官方 Dreams 等价性。本次开发环境不能解析 github.com，验证使用只含新增 stdlib 包的隔离工作目录及 Go 1.23.2；没有修改仓库 Go 版本。原仓库 Go 1.27 的全量构建、Yourbatis 生成、质量 hook 和真实基础设施验证不在本次已验证范围。新增独立 CI 在仓库原 Go 版本下验证这三个包；其结果以实际运行记录为准。
+隔离模块只用于验证这三个无外部依赖的包，**没有修改仓库 go.mod，也没有替代原仓库的 Go 1.27、Yourbatis、PostgreSQL 和全量质量门禁**。官方 SDK、真实模型、原生 API、S3/NATS/SSE 全链路尚未验收。
 
-## 完整 API 仍需完成的集成
+当前 GitHub Actions 连不下载 Action、只执行版本检查的 runner-preflight 都在出现步骤记录前失败；后续测试作业被跳过。该记录不能算 CI 通过，失败原因也不能未经证据归因为项目代码或账单。
 
-1. 基于 Yourbatis/PostgreSQL 的 Dream 持久化、租户范围和事务内入队；API handler 注册到原有 chi 鉴权路由，提供创建、读取、列表、取消和归档。
-2. 复用 OMA durable worker、服务端模型凭证和计量，并用真实 Managed Session 承载可观察的 pipeline；不把这个 CLI 的本地 ID 冒充已持久化的资源。
-3. `update_existing` 的数据库排他锁、租约所有权栅栏、取消后的停写确认、原子 CAS 与恢复策略；旧 worker 完全停止之前不得允许新 dream 获取同一 Store。
-4. 原始输入快照/中途资源失效检查、可恢复 checkpoint、取消与提交的竞争测试，以及真实 PostgreSQL/对象存储/Brain 集成验证。
-5. 官方 SDK 端到端合同测试与真实模型评测；比较原始 memory、普通摘要和本实现对后续任务的影响。没有这些证据不宣称质量对齐。
+原生 API、持久化 River 作业、真实 pipeline Session、`update_existing` 与所有写入口协调、崩溃恢复、迟到计量、官方 SDK 和真实模型质量评测仍属于未交付范围；没有用不存在的草稿或文档宣称完成这些功能。
